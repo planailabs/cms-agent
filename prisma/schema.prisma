@@ -100,8 +100,9 @@ model Branch {
   id          String   @id @default(cuid())
   // DNS-safe label; doubles as git branch name and preview subdomain
   name        String   @unique
-  createdById String
-  createdBy   User     @relation(fields: [createdById], references: [id])
+  // Null for branches synced from the git repo (incl. the default branch)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
 
   chats        Chat[]
@@ -118,9 +119,13 @@ model Chat {
   // The chat's own git work branch (own worktree + preview subdomain),
   // based on the target branch and merged back into it on publish
   workBranch  String @unique
-  title       String @default("New chat")
-  createdById String
-  createdBy   User   @relation(fields: [createdById], references: [id])
+  // 'workflow' = normal plan/execute/preview/publish chat;
+  // 'deployments' = system chat over publication state (read-only tools)
+  kind        String @default("workflow")
+  title       String  @default("New chat")
+  // Null for system chats (kind 'deployments')
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
 
   // Workflow phase: 'plan' | 'execute' | 'preview' | 'published'
   workflowPhase String @default("plan")

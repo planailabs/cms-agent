@@ -29,6 +29,7 @@ function ctx(phase: ToolContext['workflowPhase']): ToolContext {
     branchName: 'sec',
     userId,
     workflowPhase: phase,
+    chatKind: 'workflow',
     worktreePath: tmp,
     userContext: new Map(),
     modifiedPaths: new Set(),

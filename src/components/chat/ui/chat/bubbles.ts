@@ -39,7 +39,7 @@ export const renderMessageBubbles = (mc: AiChat): string =>
       if (msg.role === 'cancel') {
         return `
             <div class="flex justify-end">
-              <p class="max-w-[min(100%,640px)] rounded-3xl px-5 py-3 text-sm italic text-(--text-muted)">
+              <p class="max-w-[85%] rounded-2xl px-3.5 py-2 text-xs italic text-(--text-muted)">
                 ${escapeHtml(msg.content)}
               </p>
             </div>
@@ -48,7 +48,7 @@ export const renderMessageBubbles = (mc: AiChat): string =>
       if (msg.role === 'user') {
         return `
             <div class="flex justify-end">
-              <p class="max-w-[min(100%,640px)] rounded-3xl bg-(--surface-elevated) px-5 py-3 text-base text-(--text-primary)">
+              <p class="max-w-[85%] rounded-2xl bg-(--surface-elevated) px-3.5 py-2 text-sm text-(--text-primary)">
                 ${escapeHtml(msg.content)}
               </p>
             </div>
@@ -56,7 +56,7 @@ export const renderMessageBubbles = (mc: AiChat): string =>
       }
       return `
           <div class="flex justify-start">
-            <div class="chat-markdown max-w-[min(100%,640px)] text-base leading-relaxed text-(--text-primary)">
+            <div class="chat-markdown max-w-full text-sm leading-relaxed text-(--text-primary)">
               ${renderMarkdown(msg.content)}
             </div>
           </div>

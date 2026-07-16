@@ -42,6 +42,14 @@ export function worktreeDir(branch: string): string {
   return path.join(path.resolve(env().VAR_DIR), 'worktrees', branch);
 }
 
+/** Local git branches eligible as CMS target branches (no work/system refs). */
+export async function listRepoBranches(): Promise<string[]> {
+  const branches = await repoGit().branchLocal();
+  return branches.all.filter(
+    (b) => !b.startsWith('c-') && !b.startsWith('v-') && BRANCH_RE.test(b),
+  );
+}
+
 export async function defaultBranch(): Promise<string> {
   const git = repoGit();
   const branches = await git.branchLocal();

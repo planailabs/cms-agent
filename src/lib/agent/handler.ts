@@ -14,7 +14,7 @@ import {
 } from './persistence';
 import { checkTokenBudget } from './tokenBudget';
 import { buildQuestionToolResults, runToolLoop } from './toolLoop';
-import { isClientSideTool, type ToolContext } from './tools/registry';
+import { isClientSideTool, type ChatKind, type ToolContext } from './tools/registry';
 import { registerClientTools } from './tools/clientTools';
 import { registerFsTools } from './tools/fsTools';
 import { registerUploadTools } from './tools/uploadTools';
@@ -22,6 +22,7 @@ import { registerMemoryTools } from './tools/memoryTools';
 import { registerContentTools } from '@/lib/content/tools';
 import { registerLintTools } from './tools/lintTools';
 import { registerStructureTools } from './tools/structureTools';
+import { registerDeployTools } from './tools/deployTools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
@@ -40,6 +41,7 @@ registerMemoryTools();
 registerContentTools();
 registerLintTools();
 registerStructureTools();
+registerDeployTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
@@ -77,6 +79,7 @@ export async function handleChatMessage(
   let branchId = '';
   let branchName = '';
   let targetBranchName = 'main';
+  let chatKind: ChatKind = 'workflow';
   let workflowPhase: WorkflowPhase = 'plan';
   let planJson: unknown;
   let nextOrdinal = 0;
@@ -107,11 +110,12 @@ export async function handleChatMessage(
       prisma.branch.findUniqueOrThrow({ where: { id: record.branchId } }),
       prisma.chat.findUniqueOrThrow({
         where: { id: chatId },
-        select: { planJson: true, workBranch: true },
+        select: { planJson: true, workBranch: true, kind: true },
       }),
     ]);
     targetBranchName = branch.name;
     branchName = chat.workBranch; // the chat's own work branch
+    chatKind = chat.kind as ChatKind;
     planJson = chat.planJson ?? undefined;
   }
 
@@ -168,10 +172,13 @@ export async function handleChatMessage(
     return;
   }
 
-  // ── Tool context: the chat's own worktree, based on its target branch ─────
+  // ── Tool context: the chat's own worktree, based on its target branch.
+  // System chats (deployments) have no repo tools and need no worktree. ─────
   const worktreePath = opts.skipPersistence
     ? (opts.worktreePath ?? '')
-    : await ensureWorktree(branchName, targetBranchName);
+    : chatKind === 'deployments'
+      ? ''
+      : await ensureWorktree(branchName, targetBranchName);
 
   const toolContext: ToolContext = {
     chatId,
@@ -179,6 +186,7 @@ export async function handleChatMessage(
     branchName,
     userId,
     workflowPhase,
+    chatKind,
     worktreePath,
     userContext: getUserContextStore(chatId),
     modifiedPaths: new Set(),
@@ -198,6 +206,7 @@ export async function handleChatMessage(
     phase,
     toolContext,
     promptInput: {
+      kind: chatKind,
       phase: workflowPhase,
       branchName: opts.skipPersistence ? branchName : `${branchName} (merges into ${targetBranchName})`,
       locale,

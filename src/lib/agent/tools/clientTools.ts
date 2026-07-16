@@ -16,6 +16,7 @@ export const askQuestionTool: ToolDef = {
     options: z.array(z.string()).optional().describe('Options for multiple_choice. Omit for text.'),
   }),
   phases: ['plan', 'execute', 'preview', 'published'],
+  kinds: ['workflow', 'deployments'],
 };
 
 export const proposePlanTool: ToolDef = {

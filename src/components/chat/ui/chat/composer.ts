@@ -65,19 +65,33 @@ export const renderChatComposer = (
     : '';
 };
 
-// ── Hero Header ─────────────────────────────────────────────────────────
+// ── Empty state (sidebar first-run view, before any message) ────────────
 
-export const renderHeroHeader = (
+export const renderEmptyState = (
   mc: AiChat,
   modeLocale: ChatModeLocale,
 ): string => {
-  const isEmptyState = mc.messages.length === 0;
-  return `<div class="space-y-3 text-center md:space-y-4">
-        <p class="text-[0.65rem] uppercase tracking-[0.35em] text-(--text-muted) md:text-xs md:tracking-[0.4em]">
-          ${escapeHtml(modeLocale.heroBadgeLabel)}
-        </p>
-        <h1 class="${isEmptyState ? 'text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl' : 'text-xl font-semibold tracking-tight sm:text-2xl md:text-3xl'}">
+  if (mc.messages.length > 0) return '';
+
+  const chips = modeLocale.examplePrompts
+    .map(
+      (prompt) => `<button
+          type="button"
+          class="chat-example-chip"
+          data-action="chat-example-prompt"
+          data-prompt="${escapeHtml(prompt)}"
+        >${escapeHtml(prompt)}</button>`,
+    )
+    .join('');
+
+  return `<div class="chat-empty-state">
+        <span class="chat-empty-state__glyph" aria-hidden="true">✦</span>
+        <h2 class="text-sm font-semibold tracking-tight text-(--text-primary)">
           ${escapeHtml(modeLocale.heading)}
-        </h1>
+        </h2>
+        <p class="text-xs leading-relaxed text-(--text-muted)">
+          ${escapeHtml(modeLocale.emptyHint)}
+        </p>
+        ${chips ? `<div class="chat-empty-state__chips">${chips}</div>` : ''}
       </div>`;
 };

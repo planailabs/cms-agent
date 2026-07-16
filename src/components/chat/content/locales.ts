@@ -7,8 +7,11 @@ export interface StreamConfig {
 }
 
 export interface ChatModeLocale {
-  heroBadgeLabel: string;
   heading: string;
+  /** 1-2 line hint under the empty-state heading (what the agent can do now) */
+  emptyHint: string;
+  /** Example prompts shown as chips in the empty state; click fills the composer */
+  examplePrompts: string[];
   placeholder: string;
   cancelLabel: string;
   configuringLabel: string;
@@ -100,8 +103,14 @@ const en: LocaleContent = {
     },
   },
   chatMode: {
-    heroBadgeLabel: 'CMS Agent',
     heading: 'What should change on your site?',
+    emptyHint:
+      'Describe a change and the agent drafts a plan for you to approve before anything is touched.',
+    examplePrompts: [
+      'Update the hero text on the start page',
+      'Add a blog post about our latest release',
+      'Tweak the footer layout and links',
+    ],
     placeholder: 'Update the hero text, add a blog post, tweak the layout...',
     cancelLabel: 'Skip',
     configuringLabel: 'Working…',
@@ -147,8 +156,14 @@ const de: LocaleContent = {
     },
   },
   chatMode: {
-    heroBadgeLabel: 'CMS Agent',
     heading: 'Was soll sich auf deiner Website ändern?',
+    emptyHint:
+      'Beschreibe eine Änderung — der Agent entwirft zuerst einen Plan, den du freigibst, bevor etwas passiert.',
+    examplePrompts: [
+      'Hero-Text auf der Startseite aktualisieren',
+      'Blogpost über unser neuestes Release hinzufügen',
+      'Footer-Layout und Links anpassen',
+    ],
     placeholder: 'Hero-Text aktualisieren, Blogpost hinzufügen, Layout anpassen...',
     cancelLabel: 'Überspringen',
     configuringLabel: 'Arbeite…',

@@ -6,6 +6,8 @@
 import type { WorkflowPhase } from './types';
 
 export interface PromptInput {
+  /** 'deployments' system chats get their own prompt, phase-independent. */
+  kind?: 'workflow' | 'deployments';
   phase: WorkflowPhase;
   branchName: string;
   locale: string;
@@ -46,7 +48,19 @@ publishing and requesting changes. You cannot edit files in this phase.`,
 planning the next change (a new plan round begins automatically with the next request).`,
 };
 
+const DEPLOYMENTS_PROMPT = `You are the deployment monitor of a CMS that manages an Astro website.
+Answer questions about deployments and publications using your tools:
+list_publications, get_publication (full logs), check_deployment_status
+(live re-verification). Be precise about statuses and shas; never invent
+deployment state — always read it from the tools. Answer in the user's
+language (locale: {locale}).`;
+
 export function buildSystemPrompt(input: PromptInput): string {
+  if (input.kind === 'deployments') {
+    let p = DEPLOYMENTS_PROMPT.replace('{locale}', input.locale);
+    if (input.extension) p += `\n\n${input.extension}`;
+    return p;
+  }
   let prompt =
     COMMON.replace('{locale}', input.locale).replace('{branch}', input.branchName) +
     '\n\n' +

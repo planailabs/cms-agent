@@ -26,6 +26,7 @@ function makeCtx(overrides: Partial<ToolContext> = {}): ToolContext {
     branchName: 'test',
     userId: 'u1',
     workflowPhase: 'plan',
+    chatKind: 'workflow',
     worktreePath: tmpRepo,
     userContext: new Map(),
     modifiedPaths: new Set(),

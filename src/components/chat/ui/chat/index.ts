@@ -15,7 +15,7 @@ import { escapeHtml } from '../../utils/html';
 import { renderMessageBubbles } from './bubbles';
 import { renderStreamingBubble, renderThinkingIndicator, renderToolIndicator, renderErrorMessage } from './indicators';
 import { renderQuestionUI } from './prompts';
-import { renderChatComposer, renderHeroHeader } from './composer';
+import { renderChatComposer, renderEmptyState } from './composer';
 import { renderWorkflowCards, renderContextChip } from './cards';
 
 export const renderChatSection = (
@@ -28,12 +28,12 @@ export const renderChatSection = (
   const { userPrompt, assistantVisibleText, isStreaming } = state.chat;
   const userBubbleClasses = [
     'bubble-animate',
-    'max-w-[min(100%,640px)]',
-    'rounded-3xl',
+    'max-w-[85%]',
+    'rounded-2xl',
     'bg-(--surface-elevated)',
-    'px-5',
-    'py-3',
-    'text-base',
+    'px-3.5',
+    'py-2',
+    'text-sm',
     'text-(--text-primary)',
   ];
   if (state.chat.userBubbleJustAppeared) {
@@ -41,8 +41,8 @@ export const renderChatSection = (
   }
   const assistantBubbleClasses = [
     'bubble-animate',
-    'max-w-[min(100%,640px)]',
-    'text-base',
+    'max-w-full',
+    'text-sm',
     'leading-relaxed',
     'text-(--text-primary)',
   ];
@@ -67,16 +67,11 @@ export const renderChatSection = (
     const workflowCards = renderWorkflowCards(state);
     const contextChip = renderContextChip(state);
     const inputField = renderChatComposer(mc, locale, modeLocale);
-    const heroHeader = renderHeroHeader(mc, modeLocale);
-
-    const isEmptyState = mc.messages.length === 0;
-    const sectionClasses = isEmptyState
-      ? 'flex w-full max-w-3xl flex-col gap-4 text-center md:gap-6'
-      : 'flex w-full max-w-3xl flex-col gap-8 text-left';
+    const emptyState = renderEmptyState(mc, modeLocale);
 
     return `
-      <section class="${sectionClasses}">
-        ${heroHeader}
+      <section class="chat-section flex w-full flex-col gap-4 text-left">
+        ${emptyState}
         ${messageBubbles}
         ${streamingBubble}
         ${thinkingIndicator}
@@ -93,7 +88,7 @@ export const renderChatSection = (
 
   // ─── Scripted-stream fallback (used by streamingController) ──────────
   return `
-    <section class="flex w-full max-w-3xl flex-col gap-8 text-left">
+    <section class="chat-section flex w-full flex-col gap-4 text-left">
       <div class="flex justify-end">
         <p class="${userBubbleClasses.join(' ')}">
           ${escapeHtml(userPrompt)}

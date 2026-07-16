@@ -77,6 +77,38 @@ export const registerChatEvents = (app: HTMLElement) => {
     },
   );
 
+  // Chat: Example-prompt chip (empty state) — fills the composer
+  delegateEvent(
+    app,
+    'click',
+    '[data-action="chat-example-prompt"]',
+    (_event, target) => {
+      const promptText = target.getAttribute('data-prompt');
+      if (!promptText) return;
+      const input = getMachineConfigInput();
+      if (!input) return;
+      input.textContent = promptText;
+      input.setAttribute('data-empty', 'false');
+      const btn = app.querySelector<HTMLButtonElement>(
+        '[data-action="machine-config-send"]',
+      );
+      if (btn) {
+        btn.disabled = false;
+        btn.setAttribute('aria-disabled', 'false');
+      }
+      input.focus();
+      // Place the caret at the end of the filled text
+      const selection = window.getSelection();
+      if (selection) {
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    },
+  );
+
   // Chat: Question Choice (multiple-choice buttons)
   delegateEvent(
     app,

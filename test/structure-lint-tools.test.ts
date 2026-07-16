@@ -17,6 +17,7 @@ const ctx = (): ToolContext => ({
   branchName: 'test',
   userId: 'u',
   workflowPhase: 'plan',
+    chatKind: 'workflow',
   worktreePath: repo,
   userContext: new Map(),
   modifiedPaths: new Set(),

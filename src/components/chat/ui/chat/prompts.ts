@@ -24,13 +24,13 @@ export const renderQuestionUI = (
     const aqInput = prompt.input as { type?: string; question?: string; options?: string[] };
     if (aqInput.question) {
       questionLabel = `<div class="flex justify-start">
-          <p class="max-w-[min(100%,640px)] text-sm leading-relaxed text-(--text-muted)">
+          <p class="max-w-full text-sm leading-relaxed text-(--text-muted)">
             ${escapeHtml(aqInput.question)}
           </p>
         </div>`;
     }
     if (aqInput.type === 'multiple_choice' && aqInput.options) {
-      questionButtons = `<div class="flex flex-wrap gap-3 text-sm text-(--text-primary)">
+      questionButtons = `<div class="flex flex-wrap gap-2 text-sm text-(--text-primary)">
             ${aqInput.options
               .map(
                 (opt) => `

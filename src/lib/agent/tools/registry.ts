@@ -6,6 +6,9 @@
 import type { z } from 'zod';
 import type { WorkflowPhase } from '../types';
 
+/** Chat kinds: normal workflow chats vs. the deployments system chat. */
+export type ChatKind = 'workflow' | 'deployments';
+
 /** Context passed to every server-side tool execution. */
 export interface ToolContext {
   chatId: string;
@@ -13,6 +16,8 @@ export interface ToolContext {
   branchName: string;
   userId: string;
   workflowPhase: WorkflowPhase;
+  /** Chat kind — gates the tool set alongside the phase. */
+  chatKind: ChatKind;
   /** Absolute path of the branch worktree (path jail root). */
   worktreePath: string;
   /** Live user context per connected editor (fed by the preview overlay). */
@@ -27,6 +32,8 @@ export interface ToolDef<Schema extends z.ZodTypeAny = z.ZodTypeAny> {
   schema: Schema;
   /** Phases in which the tool is exposed AND allowed to execute. */
   phases: WorkflowPhase[];
+  /** Chat kinds the tool belongs to (default: workflow chats only). */
+  kinds?: ChatKind[];
   /** Client-side tools have no execute — they pause the turn for the browser. */
   execute?: (input: z.infer<Schema>, ctx: ToolContext) => Promise<string>;
 }
@@ -41,8 +48,10 @@ export function getTool(name: string): ToolDef | undefined {
   return registry.get(name);
 }
 
-export function toolsForPhase(phase: WorkflowPhase): ToolDef[] {
-  return [...registry.values()].filter((t) => t.phases.includes(phase));
+export function toolsForPhase(phase: WorkflowPhase, kind: ChatKind = 'workflow'): ToolDef[] {
+  return [...registry.values()].filter(
+    (t) => t.phases.includes(phase) && (t.kinds ?? ['workflow']).includes(kind),
+  );
 }
 
 export function isClientSideTool(name: string): boolean {
@@ -61,6 +70,9 @@ export async function executeTool(
 ): Promise<string> {
   const tool = registry.get(name);
   if (!tool) return JSON.stringify({ error: `Unknown tool: ${name}` });
+  if (!(tool.kinds ?? ['workflow']).includes(ctx.chatKind)) {
+    return JSON.stringify({ error: `Tool "${name}" is not available in this chat.` });
+  }
   if (!tool.phases.includes(ctx.workflowPhase)) {
     return JSON.stringify({
       error: `Tool "${name}" is not allowed in the ${ctx.workflowPhase} phase.`,

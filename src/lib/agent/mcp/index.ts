@@ -23,7 +23,7 @@ export interface McpBridge {
 export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   const server = new McpServer({ name: 'cms-agent', version: '1.0.0' });
 
-  for (const tool of toolsForPhase(ctx.workflowPhase)) {
+  for (const tool of toolsForPhase(ctx.workflowPhase, ctx.chatKind)) {
     const shape =
       tool.schema instanceof z.ZodObject ? (tool.schema as z.AnyZodObject).shape : undefined;
     server.registerTool(
