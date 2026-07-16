@@ -54,11 +54,40 @@ export default defineConfig({
 fs.rmSync(tmpDir, { recursive: true, force: true });
 fs.mkdirSync(tmpDir, { recursive: true });
 
+// NixOS: Prisma can't download engines (no binaries for linux-nixos) —
+// resolve them from nixpkgs when they're not already provided (the flake
+// dev shell and scripts/prisma-env.sh set these too).
+function nixosEngineEnv() {
+  if (process.env.PRISMA_SCHEMA_ENGINE_BINARY) return {};
+  if (!fs.existsSync('/etc/NIXOS')) return {};
+  try {
+    const out = execFileSync(
+      'nix',
+      ['build', 'nixpkgs#prisma-engines_7', '--no-link', '--print-out-paths'],
+      { encoding: 'utf8' },
+    )
+      .trim()
+      .split('\n')
+      .pop();
+    console.log(`prepare-test-db: using prisma engines from ${out}`);
+    return {
+      PRISMA_SCHEMA_ENGINE_BINARY: path.join(out, 'bin', 'schema-engine'),
+      PRISMA_QUERY_ENGINE_BINARY: path.join(out, 'bin', 'query-engine'),
+      PRISMA_QUERY_ENGINE_LIBRARY: path.join(out, 'lib', 'libquery_engine.node'),
+      PRISMA_FMT_BINARY: path.join(out, 'bin', 'prisma-fmt'),
+    };
+  } catch {
+    console.warn('prepare-test-db: could not resolve nixpkgs prisma engines — trying without');
+    return {};
+  }
+}
+
+const engineEnv = nixosEngineEnv();
 const runPrisma = (args) =>
   execFileSync('npx', ['prisma', ...args, '--config', testConfigPath], {
     cwd: root,
     stdio: 'inherit',
-    env: { ...process.env, CMS_TEST_DB: dbUrl },
+    env: { ...process.env, ...engineEnv, CMS_TEST_DB: dbUrl },
     shell: process.platform === 'win32',
   });
 
