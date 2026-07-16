@@ -9,7 +9,7 @@
     "build": "astro build",
     "start": "node server.mjs",
     "preview": "astro preview",
-    "test": "node scripts/prepare-test-db.mjs && vitest run --exclude test/integration",
+    "test": "node scripts/prepare-test-db.mjs && vitest run --exclude 'test/integration/**'",
     "test:integration": "node scripts/prepare-test-db.mjs && vitest run test/integration",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
