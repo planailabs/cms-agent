@@ -18,6 +18,8 @@ import { isClientSideTool, type ToolContext } from './tools/registry';
 import { registerClientTools } from './tools/clientTools';
 import { registerFsTools } from './tools/fsTools';
 import { registerUploadTools } from './tools/uploadTools';
+import { registerMemoryTools } from './tools/memoryTools';
+import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
 import type {
@@ -31,6 +33,7 @@ import type {
 registerClientTools();
 registerFsTools();
 registerUploadTools();
+registerMemoryTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
@@ -163,9 +166,12 @@ export async function handleChatMessage(
     modifiedPaths: new Set(),
   };
 
-  const extension = opts.skipPersistence
-    ? undefined
-    : (await prisma.systemPromptExtension.findUnique({ where: { userId } }))?.content;
+  const [extension, approvedMemories] = opts.skipPersistence
+    ? [undefined, undefined]
+    : await Promise.all([
+        prisma.systemPromptExtension.findUnique({ where: { userId } }).then((r) => r?.content),
+        getApprovedMemories(),
+      ]);
 
   await runToolLoop({
     chatId,
@@ -173,7 +179,7 @@ export async function handleChatMessage(
     messages,
     phase,
     toolContext,
-    promptInput: { phase: workflowPhase, branchName, locale, planJson, extension },
+    promptInput: { phase: workflowPhase, branchName, locale, planJson, extension, approvedMemories },
     setPhase,
     appendMsg,
     skipTokenAccounting: opts.skipPersistence,

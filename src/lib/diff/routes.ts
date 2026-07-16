@@ -23,7 +23,7 @@ export interface RouteResolution {
 }
 
 /** Minimal glob → regex: ** crosses directories, * stays within one. */
-function globToRegExp(glob: string): RegExp {
+export function globToRegExp(glob: string): RegExp {
   const DOUBLE_STAR = '\u0000';
   const escaped = glob
     .replace(/[.+^${}()|[\]\\]/g, '\\$&')

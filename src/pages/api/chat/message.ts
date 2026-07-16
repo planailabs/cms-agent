@@ -37,6 +37,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
   void (async () => {
     try {
       await handleChatMessage(user.id, locale, body);
+      // Autonomy grants may auto-approve a plan the turn just proposed
+      const { maybeAutoApprovePlan } = await import('@/lib/autonomy');
+      await maybeAutoApprovePlan(body.chatId, user.id);
     } catch (err) {
       console.error('[chat/message] Handler error:', err);
       broadcast(body.chatId, 'error', {
