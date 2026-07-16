@@ -9,7 +9,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/db';
 import { acquireTurnLock, broadcast, releaseTurnLock, withBranchLock } from './bus';
 import { handleChatMessage } from './handler';
-import { commitExecution, branchSha, revertCommit as gitRevert } from '@/lib/git/engine';
+import { commitExecution, branchSha, ensureWorktree, revertCommit as gitRevert } from '@/lib/git/engine';
+import { hasErrors, validateWorktree } from '@/lib/validate';
 import type { WorkflowPhase } from './types';
 
 export class WorkflowError extends Error {
@@ -174,6 +175,23 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
     (pending?.toolName === 'finish_execution' ? pending.input.summary : undefined) ??
     plan?.summary ??
     'CMS change';
+
+  // Pre-commit validation of the dirty worktree (secret scan, binaries,
+  // symlinks, dependency changes) — errors block the commit (medved §21).
+  const worktree = await ensureWorktree(chat.branch.name);
+  const issues = await validateWorktree(worktree);
+  if (issues.length > 0) {
+    broadcast(opts.chatId, 'validation_result', { type: 'validation_result', issues });
+  }
+  if (hasErrors(issues)) {
+    throw new WorkflowError(
+      `Validation failed:\n${issues
+        .filter((i) => i.severity === 'error')
+        .map((i) => `- ${i.message}`)
+        .join('\n')}`,
+      422,
+    );
+  }
 
   const sha = await withBranchLock(chat.branchId, () =>
     commitExecution(chat.branch.name, `${summary}\n\nChat: ${chat.id}`, {

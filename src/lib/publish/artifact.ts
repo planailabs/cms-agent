@@ -11,6 +11,7 @@ import path from 'node:path';
 import * as tar from 'tar';
 import { simpleGit } from 'simple-git';
 import { env } from '@/lib/env';
+import { hasErrors, validateDist } from '@/lib/validate';
 
 export interface ArtifactInfo {
   sha: string;
@@ -76,6 +77,14 @@ export async function sealArtifact(sha: string, log: (l: string) => void): Promi
 
     const builtDist = path.join(buildDir, 'dist');
     if (!fs.existsSync(builtDist)) throw new Error('Build produced no dist/ directory');
+
+    // Pre-publish validation: no CMS/overlay code in production output,
+    // local links resolve (medved §21.2)
+    const distIssues = validateDist(builtDist);
+    for (const issue of distIssues) log(`[validate:${issue.severity}] ${issue.message}`);
+    if (hasErrors(distIssues)) {
+      throw new Error('Pre-publish validation failed — see log for details');
+    }
 
     // Manifest with per-file hashes
     const manifest: ArtifactInfo['manifest'] = [];

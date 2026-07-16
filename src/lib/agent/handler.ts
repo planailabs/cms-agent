@@ -17,6 +17,7 @@ import { buildQuestionToolResults, runToolLoop } from './toolLoop';
 import { isClientSideTool, type ToolContext } from './tools/registry';
 import { registerClientTools } from './tools/clientTools';
 import { registerFsTools } from './tools/fsTools';
+import { registerUploadTools } from './tools/uploadTools';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
 import type {
@@ -29,6 +30,7 @@ import type {
 
 registerClientTools();
 registerFsTools();
+registerUploadTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
