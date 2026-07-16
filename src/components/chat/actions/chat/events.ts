@@ -6,12 +6,78 @@ import { store } from '../../app/store';
 import type { WorkflowPhase } from '../../app/state';
 import { cacheAIChatMessages } from './cache';
 import { transition } from './stateMachine';
+import { publishCardReducer } from '../../../workspace/publishCard';
+import { createInitialDiffState } from '../../../workspace/state';
+
+/**
+ * Handles workspace-level events (execution/publish lifecycle). These don't
+ * need chat state, so they run before the aiChat guard.
+ * Returns true when the event was consumed.
+ */
+const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): boolean => {
+  const ws = store.state.workspace;
+
+  switch (type) {
+    case 'execution_committed': {
+      const sha = data.sha as string;
+      const summary = (data.summary as string) ?? '';
+      if (!ws.executions.some((e) => e.sha === sha)) {
+        ws.executions.push({ sha, summary });
+      }
+      ws.executionSha = sha;
+      store.notify();
+      return true;
+    }
+
+    case 'execution_reverted': {
+      const sha = data.sha as string;
+      const revertSha = data.revertSha as string;
+      const by = (data.by as string) ?? '';
+      const card = ws.executions.find((e) => e.sha === sha);
+      if (card) {
+        card.reverted = { revertSha, by };
+        card.busy = false;
+      }
+      // A reverted sha must not be published
+      if (ws.executionSha === sha) ws.executionSha = null;
+      store.notify();
+      return true;
+    }
+
+    case 'publish_log': {
+      ws.publish = publishCardReducer(ws.publish, {
+        type: 'log',
+        publicationId: data.publicationId as string,
+        line: (data.line as string) ?? '',
+      });
+      store.notify();
+      return true;
+    }
+
+    case 'publish_done': {
+      ws.publish = publishCardReducer(ws.publish, {
+        type: 'done',
+        publicationId: data.publicationId as string,
+        ok: Boolean(data.ok),
+        sha: data.sha as string | undefined,
+        error: data.error as string | undefined,
+        externalUrl: data.externalUrl as string | undefined,
+      });
+      store.notify();
+      return true;
+    }
+  }
+  return false;
+};
 
 /**
  * Handles all server → client events from the SSE stream.
  */
 export const handleServerEvent = (type: string, data: Record<string, unknown>) => {
   console.log('[sse-client] Received:', type);
+
+  if (handleWorkspaceEvent(type, data)) return;
+
   const currentMc = store.state.chat?.aiChat;
   if (!currentMc) {
     console.warn('[sse-client] No aiChat in state, ignoring');
@@ -100,6 +166,13 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
         const chat = branch.chats.find((c) => c.id === activeChatId);
         if (chat) chat.workflowPhase = workflowPhase;
       }
+      // Workspace: remember the reviewed sha (used by the Publish action) and
+      // reset the diff viewer so it reloads on (re-)entering PREVIEW.
+      const ws = store.state.workspace;
+      if (typeof data.executionSha === 'string' && data.executionSha) {
+        ws.executionSha = data.executionSha;
+      }
+      ws.diff = createInitialDiffState();
       store.notify();
       break;
     }

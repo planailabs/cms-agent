@@ -16,6 +16,7 @@ import { renderMessageBubbles } from './bubbles';
 import { renderStreamingBubble, renderThinkingIndicator, renderToolIndicator, renderErrorMessage } from './indicators';
 import { renderQuestionUI } from './prompts';
 import { renderChatComposer, renderHeroHeader } from './composer';
+import { renderWorkflowCards, renderContextChip } from './cards';
 
 export const renderChatSection = (
   locale: LocaleContent,
@@ -63,6 +64,8 @@ export const renderChatSection = (
     const toolIndicator = renderToolIndicator(mc, modeLocale);
     const errorMessage = renderErrorMessage(mc);
     const { questionLabel, questionButtons } = renderQuestionUI(mc, modeLocale);
+    const workflowCards = renderWorkflowCards(state);
+    const contextChip = renderContextChip(state);
     const inputField = renderChatComposer(mc, locale, modeLocale);
     const heroHeader = renderHeroHeader(mc, modeLocale);
 
@@ -79,8 +82,10 @@ export const renderChatSection = (
         ${thinkingIndicator}
         ${toolIndicator}
         ${errorMessage}
+        ${workflowCards}
         ${questionLabel}
         ${questionButtons}
+        ${contextChip}
         ${inputField}
       </section>
     `;

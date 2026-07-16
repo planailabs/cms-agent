@@ -4,6 +4,8 @@ import path from 'path';
 import node from '@astrojs/node';
 
 export default defineConfig({
+  // Fully SSR app (auth middleware on every route) — never prerender.
+  output: 'server',
   adapter: node({ mode: 'standalone' }),
   vite: {
     envPrefix: ['VITE_', 'PUBLIC_'],

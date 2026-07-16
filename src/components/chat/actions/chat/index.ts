@@ -7,6 +7,7 @@ import { store } from '../../app/store';
 import type { Branch, ChatSummary } from '../../app/state';
 import { disconnectEvents } from './sse';
 import { restoreAIChatSession } from './session';
+import { resetWorkspaceChatState } from '../../../workspace/state';
 
 // ─── Re-exports ─────────────────────────────────────────────────────────────
 
@@ -59,10 +60,12 @@ export const createBranch = async (name: string): Promise<Branch | null> => {
     });
     if (!res.ok) return null;
     const data = await res.json();
+    // Server returns { branch } (201); tolerate a flat payload too
+    const created = data.branch ?? data;
     const branch: Branch = {
-      id: data.id,
-      name: data.name ?? name,
-      chats: data.chats ?? [],
+      id: created.id,
+      name: created.name ?? name,
+      chats: created.chats ?? [],
     };
     store.state.branches.push(branch);
     store.notify();
@@ -84,11 +87,14 @@ export const createChat = async (branchId: string, title?: string): Promise<Chat
     });
     if (!res.ok) return null;
     const data = await res.json();
+    // Server returns { chat } (201); tolerate a flat payload too
+    const created = data.chat ?? data;
+    const user = store.state.user;
     const chat: ChatSummary = {
-      id: data.id,
-      title: data.title ?? title ?? '',
-      workflowPhase: data.workflowPhase ?? 'plan',
-      createdBy: data.createdBy ?? store.state.user?.id ?? '',
+      id: created.id,
+      title: created.title ?? title ?? '',
+      workflowPhase: created.workflowPhase ?? 'plan',
+      createdBy: user ? { id: user.id, name: user.name } : null,
     };
     const branch = store.state.branches.find((b) => b.id === branchId);
     if (branch) branch.chats.push(chat);
@@ -113,6 +119,9 @@ export const switchChat = (chatId: string): void => {
   // Clear current chat state and point at the new chat
   state.chat = null;
   state.activeChatId = chatId;
+
+  // Clear chat-scoped workspace state (cards, publish, diff, chips)
+  resetWorkspaceChatState(state.workspace);
 
   // Derive branch + workflow phase from the branch list
   const branch = state.branches.find((b) => b.chats.some((c) => c.id === chatId));

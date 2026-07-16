@@ -7,6 +7,7 @@
 import { store } from '../../app/store';
 import { handleServerEvent } from './events';
 import { transition } from './stateMachine';
+import type { PageContext } from '../../../workspace/state';
 
 /** Persistent EventSource connection */
 let eventSource: EventSource | null = null;
@@ -30,7 +31,7 @@ let connectPromise: Promise<void> | null = null;
 export const postMessage = async (payload: {
   type: 'message' | 'answer';
   text: string;
-  pageContext?: string;
+  pageContext?: PageContext;
 }) => {
   const chatId = store.state.activeChatId;
   if (!chatId) return;
@@ -91,7 +92,12 @@ export const connectEvents = (): Promise<void> => {
 
       // Register event listeners BEFORE waiting for open — avoids missing
       // events that arrive between onopen and listener registration
-      const eventTypes = ['thinking', 'text_delta', 'text_done', 'tool_start', 'tool_end', 'question', 'phase_changed', 'done', 'error'];
+      const eventTypes = [
+        'thinking', 'text_delta', 'text_done', 'tool_start', 'tool_end',
+        'question', 'phase_changed', 'done', 'error',
+        // Workspace events (execution/publish lifecycle)
+        'execution_committed', 'execution_reverted', 'publish_log', 'publish_done',
+      ];
       for (const type of eventTypes) {
         es.addEventListener(type, (event) => {
           try {

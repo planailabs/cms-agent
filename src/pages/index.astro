@@ -1,18 +1,36 @@
 ---
-// Placeholder workspace shell — replaced by the full workspace (preview pane +
-// right chat sidebar) in the UI extraction step.
+/**
+ * CMS Workspace — live branch preview (left) + resizable chat sidebar
+ * (right). All UI is client-rendered by the vanilla-TS app in
+ * src/components/chat/main.ts (+ src/components/workspace/**).
+ *
+ * BASE_DOMAIN + scheme are inlined as data attributes on #app because
+ * import.meta.env.PUBLIC_* is not configured for this deployment.
+ */
+export const prerender = false;
+
 const user = Astro.locals.user!;
+const baseDomain = process.env.BASE_DOMAIN ?? 'localhost';
+const scheme = Astro.url.protocol === 'https:' ? 'https' : 'http';
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" class="is-first-visit">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CMS Agent</title>
   </head>
   <body>
-    <h1>CMS Agent</h1>
-    <p>Signed in as {user.name} ({user.email}) — role: {user.role}</p>
+    <div
+      id="app"
+      data-base-domain={baseDomain}
+      data-scheme={scheme}
+      data-user-name={user.name}
+    >
+    </div>
+    <script>
+      import '@/components/chat/main';
+    </script>
   </body>
 </html>

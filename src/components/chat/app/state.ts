@@ -19,6 +19,10 @@ import {
   type StreamConfig,
 } from '../content';
 import { STORAGE_KEYS } from '../constants';
+import {
+  createInitialWorkspaceState,
+  type WorkspaceState,
+} from '../../workspace/state';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Type Definitions
@@ -43,7 +47,7 @@ export interface ChatSummary {
   id: string;
   title: string;
   workflowPhase: WorkflowPhase;
-  createdBy: string;
+  createdBy: { id: string; name: string } | null;
 }
 
 /** Branch with its chats (from GET /api/branches) */
@@ -97,6 +101,8 @@ export interface ChatState {
     clientPrompt?: {
       toolName: string;
       input: Record<string, unknown>;
+      /** Card dismissed locally ("Not yet — keep chatting"); composer shows */
+      dismissed?: boolean;
     };
     /** Name of currently executing tool (set during 'tool' phase) */
     toolName?: string;
@@ -139,6 +145,10 @@ export interface AppState {
   // ─── Chat State ────────────────────────────────────────────────────────────
   /** Current chat conversation state (null until a chat is opened) */
   chat: ChatState | null;
+
+  // ─── Workspace State ───────────────────────────────────────────────────────
+  /** CMS workspace state (preview pane, diff viewer, phase actions) */
+  workspace: WorkspaceState;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -267,6 +277,7 @@ export const createInitialState = (): AppState => {
     activeChatId: null,
     workflowPhase: 'plan',
     chat: null,
+    workspace: createInitialWorkspaceState(),
   };
 };
 

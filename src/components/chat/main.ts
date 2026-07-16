@@ -13,16 +13,41 @@ import { initTheme } from './actions/theme';
 
 import { registerAllEvents } from './events';
 
+// Workspace (preview pane, diff viewer, phase bar, sidebar)
+import { renderPreviewPane } from '../workspace/preview';
+import { renderDiffViewer } from '../workspace/diffViewer';
+import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
+import { registerWorkspaceEvents } from '../workspace/events';
+import { loadDiffPages } from '../workspace/actions';
+
+/**
+ * Sets innerHTML only when the markup actually changed. Prevents iframe
+ * reloads / image flicker on unrelated store notifications.
+ */
+const LAST_HTML = new WeakMap<HTMLElement, string>();
+const setHtmlIfChanged = (el: HTMLElement, html: string): boolean => {
+  if (LAST_HTML.get(el) === html) return false;
+  LAST_HTML.set(el, html);
+  el.innerHTML = html;
+  return true;
+};
+
 const initApp = () => {
   const app = document.querySelector<HTMLDivElement>('#app');
 
-  // Initialization of layout structure
+  // Workspace layout: header on top, then main area (preview / diff viewer)
+  // with the resizable chat sidebar on the right.
   if (app) {
     app.innerHTML = `
     <div class="app-shell flex flex-col bg-(--surface-base) text-(--text-primary)">
       <div id="header-region" class="shrink-0"></div>
 
-      <main id="main-region" class="flex min-h-0 flex-1 flex-col items-center px-6"></main>
+      <div class="ws-layout flex min-h-0 flex-1">
+        <main id="main-region" class="ws-main min-w-0 flex-1"></main>
+        <div id="sidebar-resize-handle" class="ws-resize-handle" role="separator"
+          aria-orientation="vertical" aria-label="Resize chat sidebar"></div>
+        <aside id="sidebar-region" class="ws-sidebar"></aside>
+      </div>
     </div>
     <div id="overlay-region"></div>
   `;
@@ -30,6 +55,8 @@ const initApp = () => {
 
   const headerRegion = app?.querySelector('#header-region') as HTMLElement;
   const mainRegion = app?.querySelector('#main-region') as HTMLElement;
+  const sidebarRegion = app?.querySelector('#sidebar-region') as HTMLElement;
+  const resizeHandle = app?.querySelector('#sidebar-resize-handle') as HTMLElement;
   const overlayRegion = app?.querySelector('#overlay-region') as HTMLElement;
 
   // Subscriptions
@@ -41,35 +68,65 @@ const initApp = () => {
     }
     const state = store.state;
     const locale = locales[state.localeKey];
+    const ws = state.workspace;
 
     // 1. Update Header
     if (headerRegion) {
       headerRegion.innerHTML = renderHeader({ locale, state });
     }
 
-    // 2. Update Main Region (chat — the app starts directly in chat)
+    // 2. Main area: diff viewer in the PREVIEW phase, live preview otherwise.
     if (mainRegion) {
-      const isChatEmpty = (state.chat?.aiChat?.messages.length ?? 0) === 0;
-      // Empty chat: use justify-center to vertically center content
-      // Chat with messages: use pt-10 and start from top with scrollable content
-      const mainClasses = isChatEmpty
-        ? 'flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-6'
-        : 'flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-10 pb-6';
-
-      if (mainRegion.className !== mainClasses) {
-        mainRegion.className = mainClasses;
+      const inPreviewPhase = state.workflowPhase === 'preview' && !!state.activeChatId;
+      if (inPreviewPhase && !ws.diff.loaded && !ws.diff.loading && !ws.diff.error) {
+        void loadDiffPages(); // lazy-load the changed pages on entering PREVIEW
       }
+      const mainHtml = inPreviewPhase ? renderDiffViewer(state) : renderPreviewPane(state);
+      setHtmlIfChanged(mainRegion, mainHtml);
+    }
 
-      mainRegion.innerHTML = renderChatSection(locale, state);
-      // Auto-scroll to bottom during streaming, waiting, or just after
-      const mc = state.chat?.aiChat;
-      if (mc?.phase === 'streaming' || mc?.phase === 'waiting'
-        || mc?.phase === 'idle' || mc?.phase === 'question') {
-        mainRegion.scrollTop = mainRegion.scrollHeight;
+    // 3. Right sidebar: branch switcher, phase bar, chat.
+    if (sidebarRegion) {
+      if (ws.sidebarCollapsed) {
+        sidebarRegion.classList.add('is-collapsed');
+        sidebarRegion.style.width = '';
+        if (resizeHandle) resizeHandle.style.display = 'none';
+        setHtmlIfChanged(
+          sidebarRegion,
+          `<button type="button" class="ws-sidebar-expand" data-action="ws-sidebar-toggle"
+            title="Expand chat sidebar" aria-label="Expand chat sidebar">💬</button>`,
+        );
+      } else {
+        sidebarRegion.classList.remove('is-collapsed');
+        sidebarRegion.style.width = `${ws.sidebarWidth}px`;
+        if (resizeHandle) resizeHandle.style.display = '';
+
+        const sidebarHtml = `
+          <div class="ws-sidebar-top">
+            <div class="ws-sidebar-top__row">
+              ${renderBranchSwitcher(state)}
+              <button type="button" class="ws-mini-button ws-sidebar-collapse" data-action="ws-sidebar-toggle"
+                title="Collapse chat sidebar" aria-label="Collapse chat sidebar">⇥</button>
+            </div>
+            ${renderPhaseBar(state)}
+          </div>
+          <div id="chat-scroll-region" class="ws-chat-region">
+            ${renderChatSection(locale, state)}
+          </div>`;
+        sidebarRegion.innerHTML = sidebarHtml;
+        LAST_HTML.delete(sidebarRegion);
+
+        // Auto-scroll the chat during streaming/waiting/etc.
+        const chatRegion = sidebarRegion.querySelector<HTMLElement>('#chat-scroll-region');
+        const mc = state.chat?.aiChat;
+        if (chatRegion && (mc?.phase === 'streaming' || mc?.phase === 'waiting'
+          || mc?.phase === 'idle' || mc?.phase === 'question')) {
+          chatRegion.scrollTop = chatRegion.scrollHeight;
+        }
       }
     }
 
-    // 3. Update Overlay
+    // 4. Update Overlay
     if (overlayRegion) {
       const overlayMarkup = renderSettingsOverlay({ state, locale });
       if (overlayRegion.innerHTML !== overlayMarkup) {
@@ -85,6 +142,7 @@ const initApp = () => {
 
   if (app) {
     registerAllEvents(app);
+    registerWorkspaceEvents(app);
   }
 
   // Initialization — the user is always signed in (server-side auth),
@@ -94,12 +152,9 @@ const initApp = () => {
   void ensureActiveChat();
 
   store.notify(); // Initial render via subscription (since render is subscribed)
-  // We can also explicitly call render() if store.subscribe doesn't fire on init
-  // But subscribe only fires on changes. So we do need an initial render.
   render();
 
   // Trigger fade-in effect (on load/refresh)
-  // This runs after the initial render is complete
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       document.documentElement.classList.remove('is-first-visit');

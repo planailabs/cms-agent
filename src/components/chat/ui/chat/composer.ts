@@ -22,7 +22,10 @@ export const renderChatComposer = (
 
   const aqInput = prompt?.toolName === 'ask_question' ? prompt.input as { type?: string; question?: string } : undefined;
   const isTextQuestion = mc.phase === 'question' && aqInput?.type === 'text';
-  const showComposer = mc.phase === 'idle' || mc.phase === 'error' || isTextQuestion;
+  // A dismissed workflow card ("Not yet — keep chatting") re-opens the
+  // composer; the next message is routed as the answer to the pending tool.
+  const isDismissedCard = mc.phase === 'question' && prompt?.dismissed === true;
+  const showComposer = mc.phase === 'idle' || mc.phase === 'error' || isTextQuestion || isDismissedCard;
 
   const placeholder = escapeHtml(
     isTextQuestion ? (aqInput!.question ?? modeLocale.placeholder) : modeLocale.placeholder,

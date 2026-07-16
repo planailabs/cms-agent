@@ -7,6 +7,20 @@ import { store } from '../../app/store';
 import { locales } from '../../content';
 import { cacheAIChatMessages } from './cache';
 import { connectEvents, postMessage } from './sse';
+import type { PageContext } from '../../../workspace/state';
+
+/**
+ * Detaches the pending workspace context chip (if any) so its anchor is
+ * sent as pageContext with the outgoing message.
+ */
+const takeContextChip = (): PageContext | undefined => {
+  const ws = store.state.workspace;
+  if (!ws.contextChip) return undefined;
+  const context = ws.contextChip.context;
+  ws.contextChip = null;
+  ws.chipChoiceOpen = false;
+  return context;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AI Chat State Machine
@@ -79,7 +93,7 @@ export const transition = (
 // Chat Message Sending
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const sendChatMessage = async (message: string, pageContext?: string) => {
+export const sendChatMessage = async (message: string, pageContext?: PageContext) => {
   const state = store.state;
   const mc = state.chat?.aiChat;
   if (!mc || !state.activeChatId) return;
@@ -89,6 +103,9 @@ export const sendChatMessage = async (message: string, pageContext?: string) => 
     answerChatQuestion(message);
     return;
   }
+
+  // Attach the pending context chip (selection/element from the preview)
+  pageContext = pageContext ?? takeContextChip();
 
   transition(mc, 'waiting');
   mc.messages.push({ role: 'user', content: message });
@@ -108,13 +125,15 @@ export const answerChatQuestion = async (text: string) => {
   const mc = store.state.chat?.aiChat;
   if (!mc) return;
 
+  const pageContext = takeContextChip();
+
   transition(mc, 'waiting');
   mc.messages.push({ role: 'user', content: text });
   cacheAIChatMessages(mc.messages);
   store.notify();
 
   await connectEvents();
-  void postMessage({ type: 'answer', text });
+  void postMessage({ type: 'answer', text, pageContext });
 };
 
 export const cancelChatQuestion = async () => {
