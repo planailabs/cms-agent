@@ -95,8 +95,9 @@ export const connectEvents = (): Promise<void> => {
       const eventTypes = [
         'thinking', 'text_delta', 'text_done', 'tool_start', 'tool_end',
         'question', 'phase_changed', 'done', 'error',
-        // Workspace events (execution/publish lifecycle)
+        // Workspace events (execution/publish lifecycle, chat meta)
         'execution_committed', 'execution_reverted', 'publish_log', 'publish_done',
+        'chat_renamed',
       ];
       for (const type of eventTypes) {
         es.addEventListener(type, (event) => {
