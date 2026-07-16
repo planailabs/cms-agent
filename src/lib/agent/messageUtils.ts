@@ -1,0 +1,168 @@
+/**
+ * Message utilities — conversion to OpenAI chat messages, sanitization,
+ * trimming. Ported from chat/'s messageUtils.ts (Anthropic → OpenAI shapes;
+ * prompt-cache breakpoints dropped: OpenAI-compatible APIs cache implicitly).
+ */
+import type OpenAI from 'openai';
+import type { PageContext, StoredMessage } from './types';
+
+type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+
+// ─── Context injection ───────────────────────────────────────────────────────
+
+/** Render the [User context] block prepended to user messages (plan §2). */
+export function renderPageContext(ctx: PageContext): string {
+  const lines: string[] = ['[User context]'];
+  lines.push(`Currently viewing: ${ctx.url}${ctx.route ? ` (route ${ctx.route})` : ''}`);
+  if (ctx.branch) lines.push(`Preview branch: ${ctx.branch}`);
+  if (ctx.selection) {
+    lines.push(`Selected text: "${ctx.selection.exact}"`);
+    if (ctx.selection.cssPath) lines.push(`Selection CSS path: ${ctx.selection.cssPath}`);
+  }
+  if (ctx.element) {
+    const el = ctx.element;
+    lines.push(
+      `Selected element: <${el.tag}${el.id ? ` id="${el.id}"` : ''}${
+        el.classes?.length ? ` class="${el.classes.join(' ')}"` : ''
+      }>`,
+    );
+    if (el.headingPath?.length) lines.push(`Element heading path: ${el.headingPath.join(' > ')}`);
+    if (el.outerHtmlExcerpt) lines.push(`Element excerpt: ${el.outerHtmlExcerpt}`);
+  }
+  return lines.join('\n');
+}
+
+// ─── Conversion ──────────────────────────────────────────────────────────────
+
+/**
+ * Convert StoredMessage[] → OpenAI message params. 'cancel' rows are display
+ * only; tool batches expand to one `tool` message per result.
+ */
+export const toOpenAiMessages = (msgs: StoredMessage[]): ChatMessage[] => {
+  const result: ChatMessage[] = [];
+  for (const m of msgs) {
+    if (m.role === 'cancel') continue;
+    if (m.role === 'user') {
+      const text = m.pageContext ? `${renderPageContext(m.pageContext)}\n\n${m.content}` : m.content;
+      result.push({ role: 'user', content: text });
+    } else if (m.role === 'assistant') {
+      result.push({
+        role: 'assistant',
+        content: m.content || null,
+        ...(m.toolCalls && m.toolCalls.length > 0 ? { tool_calls: m.toolCalls } : {}),
+      });
+    } else {
+      for (const r of m.results) {
+        result.push({ role: 'tool', tool_call_id: r.toolCallId, content: r.content });
+      }
+    }
+  }
+  return result;
+};
+
+// ─── Sanitization ────────────────────────────────────────────────────────────
+
+/**
+ * Strip assistant tool_calls that don't have matching tool messages
+ * immediately following (interrupted turns would otherwise 400 the API).
+ */
+export const sanitizeMessages = (msgs: ChatMessage[]): ChatMessage[] => {
+  const result: ChatMessage[] = [];
+  // tool_call ids of the most recent kept assistant message that still expect results
+  let openCallIds = new Set<string>();
+
+  for (let i = 0; i < msgs.length; i++) {
+    const msg = msgs[i];
+
+    if (msg.role === 'assistant' && 'tool_calls' in msg && msg.tool_calls?.length) {
+      const resultIds = new Set<string>();
+      for (let j = i + 1; j < msgs.length && msgs[j].role === 'tool'; j++) {
+        resultIds.add((msgs[j] as OpenAI.Chat.Completions.ChatCompletionToolMessageParam).tool_call_id);
+      }
+      if (msg.tool_calls.every((c) => resultIds.has(c.id))) {
+        openCallIds = new Set(msg.tool_calls.map((c) => c.id));
+        result.push(msg);
+      } else {
+        // Interrupted turn: keep the text, drop the calls (and their results)
+        openCallIds = new Set();
+        if (msg.content) result.push({ role: 'assistant', content: msg.content });
+      }
+      continue;
+    }
+
+    if (msg.role === 'tool') {
+      if (openCallIds.has(msg.tool_call_id)) result.push(msg);
+      continue;
+    }
+
+    openCallIds = new Set();
+    result.push(msg);
+  }
+  return result;
+};
+
+// ─── Size helpers + trimming (same chunking strategy as chat/) ───────────────
+
+export const contentSize = (msg: StoredMessage): number =>
+  msg.role === 'tool' ? JSON.stringify(msg.results).length : msg.content.length;
+
+export const hasToolCalls = (msg: StoredMessage): boolean =>
+  msg.role === 'assistant' && !!msg.toolCalls?.length;
+
+export const isToolResultMsg = (msg: StoredMessage): boolean => msg.role === 'tool';
+
+export const trimMessages = (msgs: StoredMessage[]): StoredMessage[] => {
+  const CHAR_LIMIT = 65536;
+  if (msgs.length <= 1) return msgs;
+
+  type Chunk = StoredMessage[];
+  const chunks: Chunk[] = [];
+  let ci = 0;
+
+  while (ci < msgs.length) {
+    const msg = msgs[ci];
+    if (hasToolCalls(msg)) {
+      const group: StoredMessage[] = [msg];
+      let j = ci + 1;
+      while (j < msgs.length) {
+        group.push(msgs[j]);
+        if (isToolResultMsg(msgs[j])) { j++; break; }
+        j++;
+      }
+      chunks.push(group);
+      ci = j;
+      continue;
+    }
+    chunks.push([msg]);
+    ci++;
+  }
+
+  const chunkSize = (chunk: Chunk) => chunk.reduce((s, m) => s + contentSize(m), 0);
+
+  const firstChunk = chunks[0];
+  let budget = CHAR_LIMIT - chunkSize(firstChunk);
+  const tail: Chunk[] = [];
+
+  for (let i = chunks.length - 1; i >= 1 && budget > 0; i--) {
+    const size = chunkSize(chunks[i]);
+    if (size > budget) break;
+    budget -= size;
+    tail.unshift(chunks[i]);
+  }
+
+  return [...firstChunk, ...tail.flat()];
+};
+
+// ─── Tool call helpers ───────────────────────────────────────────────────────
+
+/** Tool calls of the last assistant message, if it is the latest message group. */
+export const getLastToolCalls = (messages: StoredMessage[]) => {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === 'assistant') {
+      return msg.toolCalls && msg.toolCalls.length > 0 ? msg.toolCalls : null;
+    }
+    if (msg.role === 'user') break;
+  }
+  return null;
+};

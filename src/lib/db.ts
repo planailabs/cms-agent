@@ -8,7 +8,10 @@
  */
 import type { PrismaClient } from '@/generated/prisma/client';
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+  prismaDbNull?: unknown;
+};
 
 async function createClient(): Promise<PrismaClient> {
   const testDbUrl = process.env.CMS_TEST_DB;
@@ -18,16 +21,24 @@ async function createClient(): Promise<PrismaClient> {
       import(/* @vite-ignore */ '../../prisma/test-client/client.ts'),
     ]);
     const adapter = new PrismaBetterSqlite3({ url: testDbUrl });
+    globalForPrisma.prismaDbNull = mod.Prisma.DbNull;
     return new mod.PrismaClient({ adapter }) as PrismaClient;
   }
-  const [{ PrismaPg }, { PrismaClient: Client }] = await Promise.all([
+  const [{ PrismaPg }, mod] = await Promise.all([
     import('@prisma/adapter-pg'),
     import('@/generated/prisma/client'),
   ]);
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
-  return new Client({ adapter });
+  globalForPrisma.prismaDbNull = mod.Prisma.DbNull;
+  return new mod.PrismaClient({ adapter });
 }
 
 export const prisma: PrismaClient = globalForPrisma.prisma ?? (await createClient());
+
+/**
+ * Json-null sentinel of the ACTIVE generated client (sentinels are per-client
+ * instances, so they must come from the same module as the client in use).
+ */
+export const dbNull = globalForPrisma.prismaDbNull as never;
 
 if (import.meta.env?.DEV) globalForPrisma.prisma = prisma;

@@ -1,0 +1,179 @@
+/**
+ * Chat handler — ported from chat/src/lib/chat/handler/index.ts.
+ * Loads chat state from Prisma, applies the incoming message/answer to the
+ * turn state machine, then runs the tool loop. Server is the source of truth.
+ */
+import { prisma } from '@/lib/db';
+import { broadcast } from './bus';
+import { getLastToolCalls } from './messageUtils';
+import {
+  createDbAdapter,
+  createMemoryAdapter,
+  loadChatRecord,
+  memoryRecords,
+} from './persistence';
+import { checkTokenBudget } from './tokenBudget';
+import { buildQuestionToolResults, runToolLoop } from './toolLoop';
+import { isClientSideTool, type ToolContext } from './tools/registry';
+import { registerClientTools } from './tools/clientTools';
+import { registerFsTools } from './tools/fsTools';
+import { getUserContextStore } from './userContext';
+import { ensureWorktree } from '@/lib/git/engine';
+import type {
+  ClientToolPrompt,
+  IncomingChatMessage,
+  StoredMessage,
+  TurnPhase,
+  WorkflowPhase,
+} from './types';
+
+registerClientTools();
+registerFsTools();
+
+export interface HandleOptions {
+  /** In-memory persistence for integration tests (no DB writes). */
+  skipPersistence?: boolean;
+}
+
+export async function handleChatMessage(
+  userId: string,
+  locale: string,
+  body: IncomingChatMessage,
+  opts: HandleOptions = {},
+): Promise<void> {
+  const { chatId } = body;
+
+  // ── Budget ────────────────────────────────────────────────────────────────
+  if (!opts.skipPersistence) {
+    const { allowed, inputUsed, outputUsed } = await checkTokenBudget(userId);
+    if (!allowed) {
+      broadcast(chatId, 'error', {
+        type: 'error',
+        message: `Token rate limit exceeded (input ${inputUsed}, output ${outputUsed} in the last hour). Try again later.`,
+      });
+      return;
+    }
+  }
+
+  // ── Load state ────────────────────────────────────────────────────────────
+  let phase: TurnPhase = 'idle';
+  let pendingQuestion: ClientToolPrompt | null = null;
+  let messages: StoredMessage[] = [];
+  let branchId = '';
+  let branchName = '';
+  let workflowPhase: WorkflowPhase = 'plan';
+  let planJson: unknown;
+  let nextOrdinal = 0;
+
+  if (opts.skipPersistence) {
+    const rec = memoryRecords.get(chatId);
+    if (rec) {
+      phase = rec.phase;
+      pendingQuestion = rec.pendingQuestion;
+      messages = rec.messages;
+    }
+    branchName = 'test';
+  } else {
+    const record = await loadChatRecord(chatId);
+    if (!record) {
+      broadcast(chatId, 'error', { type: 'error', message: 'Chat not found' });
+      return;
+    }
+    phase = record.phase;
+    pendingQuestion = record.pendingQuestion;
+    messages = record.messages;
+    branchId = record.branchId;
+    workflowPhase = record.workflowPhase as WorkflowPhase;
+    nextOrdinal = record.nextOrdinal;
+
+    const [branch, chat] = await Promise.all([
+      prisma.branch.findUniqueOrThrow({ where: { id: record.branchId } }),
+      prisma.chat.findUniqueOrThrow({ where: { id: chatId }, select: { planJson: true } }),
+    ]);
+    branchName = branch.name;
+    planJson = chat.planJson ?? undefined;
+  }
+
+  const ordinalRef = { value: nextOrdinal };
+  const adapter = opts.skipPersistence
+    ? createMemoryAdapter(chatId, messages)
+    : createDbAdapter(chatId, userId, messages, ordinalRef);
+
+  const setPhase = async (p: TurnPhase, q?: ClientToolPrompt | null) => {
+    phase = p;
+    pendingQuestion = q ?? null;
+    await adapter.setPhase(p, q);
+  };
+  const appendMsg = (msg: StoredMessage) => adapter.appendMsg(msg);
+
+  // ── Apply incoming message to the state machine ───────────────────────────
+  if (body.type === 'answer') {
+    if (phase !== 'waiting_for_answer') {
+      broadcast(chatId, 'error', { type: 'error', message: 'No pending question to answer' });
+      return;
+    }
+    const answer = body.text;
+    const cancelled = answer === '__cancel__';
+
+    const toolCalls = getLastToolCalls(messages);
+    if (!toolCalls) {
+      broadcast(chatId, 'error', { type: 'error', message: 'Resume error: no tool calls found' });
+      return;
+    }
+    const clientCall = toolCalls.find((c) => isClientSideTool(c.function.name));
+
+    if (cancelled) {
+      await appendMsg({ role: 'cancel', content: '' });
+    } else {
+      await appendMsg({ role: 'user', content: answer, pageContext: body.pageContext });
+    }
+    await appendMsg({
+      role: 'tool',
+      results: buildQuestionToolResults(toolCalls, clientCall?.id ?? '', answer, cancelled),
+    });
+    await setPhase('idle');
+  } else if (body.type === 'message') {
+    if (phase === 'waiting_for_answer' || phase === 'tool_pending') {
+      broadcast(chatId, 'error', {
+        type: 'error',
+        message: 'A conversation turn is already in progress',
+      });
+      return;
+    }
+    await appendMsg({ role: 'user', content: body.text, pageContext: body.pageContext });
+    await setPhase('idle');
+  } else {
+    broadcast(chatId, 'error', { type: 'error', message: `Unknown message type: ${body.type}` });
+    return;
+  }
+
+  // ── Tool context (worktree resolved lazily; absent in test mode) ──────────
+  const worktreePath = opts.skipPersistence ? '' : await ensureWorktree(branchName);
+
+  const toolContext: ToolContext = {
+    chatId,
+    branchId,
+    branchName,
+    userId,
+    workflowPhase,
+    worktreePath,
+    userContext: getUserContextStore(chatId),
+    modifiedPaths: new Set(),
+  };
+
+  const extension = opts.skipPersistence
+    ? undefined
+    : (await prisma.systemPromptExtension.findUnique({ where: { userId } }))?.content;
+
+  await runToolLoop({
+    chatId,
+    userId,
+    messages,
+    phase,
+    toolContext,
+    promptInput: { phase: workflowPhase, branchName, locale, planJson, extension },
+    setPhase,
+    appendMsg,
+    skipTokenAccounting: opts.skipPersistence,
+  });
+}
