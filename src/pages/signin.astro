@@ -1,0 +1,72 @@
+---
+if (Astro.locals.user) return Astro.redirect('/');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in — CMS</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        background: #0b0d10;
+        color: #e6e8ea;
+      }
+      .card {
+        text-align: center;
+        padding: 3rem;
+        border: 1px solid #2a2f36;
+        border-radius: 12px;
+        background: #12151a;
+      }
+      button {
+        margin-top: 1.5rem;
+        padding: 0.75rem 2rem;
+        font-size: 1rem;
+        border-radius: 8px;
+        border: none;
+        background: #3b82f6;
+        color: white;
+        cursor: pointer;
+      }
+      button:hover { background: #2563eb; }
+      .error { color: #f87171; margin-top: 1rem; min-height: 1.2em; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>CMS Agent</h1>
+      <p>Sign in with your organization account to continue.</p>
+      <button id="signin">Sign in</button>
+      <p class="error" id="error"></p>
+    </div>
+    <script>
+      document.getElementById('signin')!.addEventListener('click', async () => {
+        const errorEl = document.getElementById('error')!;
+        errorEl.textContent = '';
+        try {
+          const res = await fetch('/api/auth/sign-in/oauth2', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ providerId: 'oidc', callbackURL: '/' }),
+          });
+          const data = await res.json();
+          if (data.url) {
+            window.location.href = data.url;
+          } else {
+            errorEl.textContent = data.message ?? 'Sign-in failed.';
+          }
+        } catch {
+          errorEl.textContent = 'Sign-in failed — is the identity provider reachable?';
+        }
+      });
+    </script>
+  </body>
+</html>

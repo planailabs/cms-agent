@@ -1,0 +1,18 @@
+---
+// Placeholder workspace shell — replaced by the full workspace (preview pane +
+// right chat sidebar) in the UI extraction step.
+const user = Astro.locals.user!;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CMS Agent</title>
+  </head>
+  <body>
+    <h1>CMS Agent</h1>
+    <p>Signed in as {user.name} ({user.email}) — role: {user.role}</p>
+  </body>
+</html>
