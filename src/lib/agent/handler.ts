@@ -19,6 +19,7 @@ import { registerClientTools } from './tools/clientTools';
 import { registerFsTools } from './tools/fsTools';
 import { registerUploadTools } from './tools/uploadTools';
 import { registerMemoryTools } from './tools/memoryTools';
+import { registerContentTools } from '@/lib/content/tools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
@@ -34,10 +35,15 @@ registerClientTools();
 registerFsTools();
 registerUploadTools();
 registerMemoryTools();
+registerContentTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
   skipPersistence?: boolean;
+  /** Test mode: worktree the tools operate on (defaults to none). */
+  worktreePath?: string;
+  /** Test mode: workflow phase (defaults to plan). */
+  workflowPhase?: WorkflowPhase;
 }
 
 export async function handleChatMessage(
@@ -78,6 +84,7 @@ export async function handleChatMessage(
       messages = rec.messages;
     }
     branchName = 'test';
+    if (opts.workflowPhase) workflowPhase = opts.workflowPhase;
   } else {
     const record = await loadChatRecord(chatId);
     if (!record) {
@@ -152,8 +159,10 @@ export async function handleChatMessage(
     return;
   }
 
-  // ── Tool context (worktree resolved lazily; absent in test mode) ──────────
-  const worktreePath = opts.skipPersistence ? '' : await ensureWorktree(branchName);
+  // ── Tool context (worktree resolved lazily; injectable in test mode) ──────
+  const worktreePath = opts.skipPersistence
+    ? (opts.worktreePath ?? '')
+    : await ensureWorktree(branchName);
 
   const toolContext: ToolContext = {
     chatId,
