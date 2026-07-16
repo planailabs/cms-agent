@@ -11,6 +11,8 @@ const PORT = Number(process.env.PORT ?? 4321);
 
 const httpServer = createServer(handler);
 
+// HOST must match what the sidecar dials (routes-file `cms` mirrors HOST):
+// e.g. HOST=::1 in dev where astro dev also binds IPv6.
 httpServer.listen(PORT, HOST, () => {
   console.log(`cms-agent running on http://${HOST}:${PORT}`);
 });

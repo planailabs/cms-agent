@@ -12,6 +12,7 @@ import {
   PREVIEW_COOKIE_NAME,
 } from '@/lib/previewCookie';
 import { initRoutesFile } from '@/lib/preview/manager';
+import { env } from '@/lib/env';
 
 // Publish the sidecar routing table once per server boot (skipped when the
 // module is loaded outside a configured runtime, e.g. during astro build).
@@ -31,14 +32,22 @@ const PUBLIC_PATHS = [
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = new URL(context.request.url);
 
-  const session = await auth.api.getSession({ headers: context.request.headers });
-
-  if (session && isEmailAllowed(session.user.email)) {
-    context.locals.user = session.user;
-    context.locals.session = session.session;
-  } else {
-    context.locals.user = null;
+  if (env().SKIP_AUTH) {
+    // Development mode: no sign-in; identity from the seeded dev users,
+    // switchable via the impersonation cookie (POST /api/dev/impersonate).
+    const { getDevUser, DEV_IMPERSONATE_COOKIE } = await import('@/lib/devAuth');
+    context.locals.user = await getDevUser(context.cookies.get(DEV_IMPERSONATE_COOKIE)?.value);
     context.locals.session = null;
+  } else {
+    const session = await auth.api.getSession({ headers: context.request.headers });
+
+    if (session && isEmailAllowed(session.user.email)) {
+      context.locals.user = session.user;
+      context.locals.session = session.session;
+    } else {
+      context.locals.user = null;
+      context.locals.session = null;
+    }
   }
 
   const isPublic = PUBLIC_PATHS.some((re) => re.test(pathname));

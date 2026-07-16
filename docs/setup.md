@@ -66,6 +66,14 @@ Inside `nix develop`, `overmind start` runs both Procfile processes (the CMS
 dev server and the proxy sidecar with localhost-friendly settings). overmind
 sources `.env` into both.
 
+The Procfile enables **SKIP_AUTH** (development only): no sign-in, every
+request runs as `admin@localhost`, and `user@localhost` / `user2@localhost`
+are seeded so you can test multi-user behavior — switch identity with
+`POST /api/dev/impersonate {"email":"user@localhost"}` (GET lists them).
+astro dev binds `::1` — the Procfile sets `HOST=::1` and
+`CMS_UPSTREAM=[::1]:4321` so the routes file and the proxy dial the same
+IPv6 address.
+
 ## NixOS note (development)
 
 Prisma CLI needs the nixpkgs engines: `source scripts/prisma-env.sh` (the

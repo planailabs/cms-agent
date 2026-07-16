@@ -5,6 +5,12 @@
 import { z } from 'zod';
 
 const schema = z.object({
+  // Development only: no sign-in; every request runs as admin@localhost
+  // (seeded together with user@localhost/user2@localhost for impersonation).
+  SKIP_AUTH: z
+    .preprocess((v) => v === 'true' || v === '1', z.boolean())
+    .default(false),
+
   // Database
   DATABASE_URL: z.string().min(1),
 

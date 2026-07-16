@@ -34,13 +34,19 @@ const state: ManagerState =
 const routesFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-routes.json');
 const accessFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-access.json');
 
+/** host:port for the routes file — IPv6 hosts get brackets. */
+function hostPort(host: string, port: number): string {
+  return host.includes(':') ? `[${host}]:${port}` : `${host}:${port}`;
+}
+
 function writeRoutesFile(): void {
   const e = env();
   const previews: Record<string, string> = {};
   for (const [branch, { info }] of state.instances) {
     if (info.status === 'ready') previews[branch] = `127.0.0.1:${info.port}`;
   }
-  const payload = JSON.stringify({ cms: `127.0.0.1:${e.PORT}`, previews }, null, 2);
+  // cms upstream mirrors HOST (e.g. ::1 in dev, where astro dev binds IPv6)
+  const payload = JSON.stringify({ cms: hostPort(e.HOST, e.PORT), previews }, null, 2);
   fs.mkdirSync(path.dirname(routesFile()), { recursive: true });
   const tmp = routesFile() + '.tmp';
   fs.writeFileSync(tmp, payload);
