@@ -26,16 +26,25 @@ export const previewBranchName = (state: AppState): string => {
   return activeBranchName(state);
 };
 
-export const renderPreviewPane = (state: AppState): string => {
+/**
+ * Skeleton with separate sub-regions for the toolbar and the iframe, so
+ * toolbar-only state changes (picker armed, route chip) never replace the
+ * markup containing the iframe — replacing an iframe node reloads it.
+ */
+export const renderPreviewSkeleton = (): string =>
+  `<div class="ws-preview">
+      <div id="preview-toolbar-region"></div>
+      <div id="preview-frame-region" class="ws-preview__frame"></div>
+    </div>`;
+
+export const renderPreviewToolbar = (state: AppState): string => {
   const target = activeBranchName(state);
   const branch = previewBranchName(state);
-  const src = branchPreviewUrl(branch, '/');
   const ws = state.workspace;
   const label =
     branch === target ? `⎇ ${escapeHtml(target)}` : `⎇ ${escapeHtml(branch)} → ${escapeHtml(target)}`;
 
-  return `<div class="ws-preview">
-      <div class="ws-toolbar">
+  return `<div class="ws-toolbar">
         <span class="ws-toolbar__branch" title="Work branch → target branch">${label}</span>
         <span class="ws-toolbar__route ws-mono" title="Current preview route">${escapeHtml(ws.previewRoute)}</span>
         <span class="ws-toolbar__spacer"></span>
@@ -45,9 +54,11 @@ export const renderPreviewPane = (state: AppState): string => {
         </button>
         <a class="ws-mini-button" href="${escapeHtml(branchPreviewUrl(branch, ws.previewRoute))}"
           target="_blank" rel="noopener" title="Open preview in a new tab">↗</a>
-      </div>
-      <div class="ws-preview__frame">
-        <iframe id="preview-iframe" src="${escapeHtml(src)}" title="Preview of ${escapeHtml(branch)}"></iframe>
-      </div>
-    </div>`;
+      </div>`;
+};
+
+export const renderPreviewFrame = (state: AppState): string => {
+  const branch = previewBranchName(state);
+  const src = branchPreviewUrl(branch, '/');
+  return `<iframe id="preview-iframe" src="${escapeHtml(src)}" title="Preview of ${escapeHtml(branch)}"></iframe>`;
 };

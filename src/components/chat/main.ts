@@ -14,7 +14,11 @@ import { initTheme } from './actions/theme';
 import { registerAllEvents } from './events';
 
 // Workspace (preview pane, diff viewer, phase bar, sidebar)
-import { renderPreviewPane } from '../workspace/preview';
+import {
+  renderPreviewSkeleton,
+  renderPreviewToolbar,
+  renderPreviewFrame,
+} from '../workspace/preview';
 import { renderDiffViewer } from '../workspace/diffViewer';
 import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
 import { registerWorkspaceEvents } from '../workspace/events';
@@ -81,8 +85,18 @@ const initApp = () => {
       if (inPreviewPhase && !ws.diff.loaded && !ws.diff.loading && !ws.diff.error) {
         void loadDiffPages(); // lazy-load the changed pages on entering PREVIEW
       }
-      const mainHtml = inPreviewPhase ? renderDiffViewer(state) : renderPreviewPane(state);
-      setHtmlIfChanged(mainRegion, mainHtml);
+      if (inPreviewPhase) {
+        setHtmlIfChanged(mainRegion, renderDiffViewer(state));
+      } else {
+        // Toolbar and iframe render into separate sub-regions: toolbar state
+        // (picker armed, current route) must not recreate the iframe node —
+        // that reloads the preview and kills the injected agent's pick mode.
+        setHtmlIfChanged(mainRegion, renderPreviewSkeleton());
+        const toolbarRegion = mainRegion.querySelector<HTMLElement>('#preview-toolbar-region');
+        const frameRegion = mainRegion.querySelector<HTMLElement>('#preview-frame-region');
+        if (toolbarRegion) setHtmlIfChanged(toolbarRegion, renderPreviewToolbar(state));
+        if (frameRegion) setHtmlIfChanged(frameRegion, renderPreviewFrame(state));
+      }
     }
 
     // 3. Right sidebar: branch switcher, phase bar, chat.
