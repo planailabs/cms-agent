@@ -1,0 +1,34 @@
+stages:
+  - test
+  - deploy
+
+test:
+  stage: test
+  tags:
+    - nix-image
+  script:
+    - nix develop -c pnpm install --frozen-lockfile
+    # src/generated/prisma is gitignored; the config only reads DATABASE_URL,
+    # it never connects (engines come from the dev shell).
+    - DATABASE_URL=postgresql://x:x@localhost/x nix develop -c pnpm exec prisma generate --config prisma.config.ts
+    - nix develop -c pnpm exec tsc --noEmit
+    # Self-contained: throwaway SQLite DB, no services needed (prepare-test-db).
+    - nix develop -c pnpm test
+    # Builds the app + proxy (cargo test runs as its checkPhase) and
+    # evaluates the NixOS module.
+    - nix flake check -L
+  timeout: 1h
+
+deploy:
+  stage: deploy
+  tags:
+    - nix-image
+  only:
+    - trunk
+  script:
+    # Build the OCI image (CMS + proxy) with nix's dockerTools and copy it
+    # to the registry.
+    - nix develop -c bash docker-push.sh
+  timeout: 2h
+  environment: production
+  resource_group: production

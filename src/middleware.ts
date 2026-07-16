@@ -32,16 +32,28 @@ if (process.env.VAR_DIR) {
 const PUBLIC_PATHS = [
   /^\/api\/auth\//,
   /^\/signin\/?$/,
-  /^\/injected-cms-agent\.js$/,
-  /^\/injected-agent-module\.js$/,
-  // Sidecar channel — Bearer-token authenticated inside the handler
-  /^\/api\/internal\//,
   /^\/_astro\//,
   /^\/favicon/,
 ];
 
+// Paths that need no session and manage their own auth (the injected-agent
+// bundles are public by design; /api/internal/ is Bearer-token checked in its
+// handler). Skipped BEFORE env()/session work — the injected endpoints are
+// prerendered, and during `astro build` there is no runtime env to validate.
+const SELF_AUTHENTICATING_PATHS = [
+  /^\/injected-cms-agent\.js$/,
+  /^\/injected-agent-module\.js$/,
+  /^\/api\/internal\//,
+];
+
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = new URL(context.request.url);
+
+  if (SELF_AUTHENTICATING_PATHS.some((re) => re.test(pathname))) {
+    context.locals.user = null;
+    context.locals.session = null;
+    return next();
+  }
 
   if (env().SKIP_AUTH) {
     // Development mode: no sign-in; identity from the seeded dev users,

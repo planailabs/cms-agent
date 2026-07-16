@@ -93,6 +93,22 @@ stdenv.mkDerivation (finalAttrs: {
     # set (the config calls env('DATABASE_URL')) but never connects.
     DATABASE_URL = "postgresql://x:x@localhost/x";
     ASTRO_TELEMETRY_DISABLED = "1";
+    # `astro build` prerenders /injected-cms-agent.js + /injected-agent-module.js,
+    # which loads the middleware chunk; its import graph (better-auth setup)
+    # validates env() at module scope. Dummy values — the prerendered bundles
+    # don't embed any of them, and the real runtime provides its own.
+    BETTER_AUTH_SECRET = "build-only-build-only-build-only";
+    BETTER_AUTH_URL = "http://localhost:4321";
+    OIDC_ISSUER = "https://idp.invalid";
+    OIDC_CLIENT_ID = "build";
+    OIDC_CLIENT_SECRET = "build";
+    OPENAI_BASE_URL = "https://api.openai.invalid/v1";
+    OPENAI_API_KEY = "build-only";
+    OPENAI_MODEL = "build-only";
+    BASE_DOMAIN = "build.invalid";
+    PREVIEW_COOKIE_SECRET = "build-only-build-only-build-only";
+    REPO_PATH = "/build/source";
+    VAR_DIR = "/build/build-var";
   };
 
   buildPhase = ''
