@@ -15,7 +15,7 @@ import { createMcpBridge } from './mcp';
 import { isClientSideTool, type ToolContext } from './tools/registry';
 import type { ClientToolPrompt, StoredMessage, ToolCall, ToolResult, TurnPhase } from './types';
 
-const MAX_TOOL_ROUNDS = 24;
+const MAX_TOOL_ROUNDS = 250;
 
 /**
  * Build tool results after a client-side tool pause was answered/cancelled.
