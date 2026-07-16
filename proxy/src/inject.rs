@@ -27,7 +27,7 @@ fn find_ci(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 mod tests {
     use super::*;
 
-    const URL: &str = "http://cms.example.com/preview-overlay.js";
+    const URL: &str = "http://cms.example.com/injected-cms-agent.js";
 
     #[test]
     fn injects_before_head_close() {
@@ -37,7 +37,7 @@ mod tests {
         assert_eq!(
             s,
             "<html><head><title>t</title>\
-             <script src=\"http://cms.example.com/preview-overlay.js\" defer></script>\
+             <script src=\"http://cms.example.com/injected-cms-agent.js\" defer></script>\
              </head><body>hi</body></html>"
         );
     }

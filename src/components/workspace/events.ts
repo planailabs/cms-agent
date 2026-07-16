@@ -1,7 +1,7 @@
 /**
  * Workspace Events — delegated click handlers for phase/branch/diff actions,
- * the preview-overlay postMessage protocol (workspace side), sidebar
- * resizing, and the onion-skin slider.
+ * the injected-agent event handlers (workspace side), sidebar resizing, and
+ * the onion-skin slider.
  */
 
 import { store } from '../chat/app/store';
@@ -23,70 +23,53 @@ import {
   chipToNewChat,
   chipToCurrentChat,
 } from './actions';
+import {
+  registerPreviewAgent,
+  onPreviewAgentEvent,
+  startElementPick,
+  cancelElementPick,
+} from './previewAgent';
 import type { DiffViewMode, PageContextElement, PageContextSelection } from './state';
 
 const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 720;
 
-const getPreviewIframe = (): HTMLIFrameElement | null =>
-  document.getElementById('preview-iframe') as HTMLIFrameElement | null;
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Overlay protocol (messages from the preview iframe)
+// Injected-agent events (messages from the module inside the preview iframe)
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface OverlayMessage {
-  type?: string;
-  url?: string;
-  route?: string;
-  anchor?: PageContextSelection;
-  element?: PageContextElement;
-}
-
-const registerOverlayProtocol = (): void => {
-  window.addEventListener('message', (event: MessageEvent) => {
-    // Accept messages ONLY from the preview iframe
-    const iframe = getPreviewIframe();
-    if (!iframe?.contentWindow || event.source !== iframe.contentWindow) return;
-
-    const data = event.data as OverlayMessage | null;
-    if (!data || typeof data !== 'object' || typeof data.type !== 'string') return;
-
-    switch (data.type) {
-      case 'cms:navigation': {
-        if (typeof data.url === 'string') {
-          onPreviewNavigation(data.url, typeof data.route === 'string' ? data.route : '/');
-        }
-        break;
-      }
-      case 'cms:selection': {
-        if (data.anchor && typeof data.anchor.exact === 'string' && typeof data.url === 'string') {
-          attachContextChip({
-            kind: 'selection',
-            context: { url: data.url, route: data.route, selection: data.anchor },
-          });
-        }
-        break;
-      }
-      case 'cms:element': {
-        if (data.element && typeof data.element.tag === 'string' && typeof data.url === 'string') {
-          attachContextChip({
-            kind: 'element',
-            context: { url: data.url, route: data.route, element: data.element },
-          });
-        }
-        break;
-      }
-      case 'cms:pick-cancel': {
-        // Overlay exited pick mode (Esc) — un-arm the toolbar button
-        if (store.state.workspace.pickerActive) {
-          store.state.workspace.pickerActive = false;
-          store.notify();
-        }
-        break;
-      }
+const registerAgentEvents = (): void => {
+  onPreviewAgentEvent('cms:navigation', (data) => {
+    if (typeof data.url === 'string') {
+      onPreviewNavigation(data.url, typeof data.route === 'string' ? data.route : '/');
     }
   });
+
+  onPreviewAgentEvent('cms:selection', (data) => {
+    const anchor = data.anchor as PageContextSelection | undefined;
+    const { url, route } = data as { url?: string; route?: string };
+    if (anchor && typeof anchor.exact === 'string' && typeof url === 'string') {
+      attachContextChip({ kind: 'selection', context: { url, route, selection: anchor } });
+    }
+  });
+
+  onPreviewAgentEvent('cms:element', (data) => {
+    const element = data.element as PageContextElement | undefined;
+    const { url, route } = data as { url?: string; route?: string };
+    if (element && typeof element.tag === 'string' && typeof url === 'string') {
+      attachContextChip({ kind: 'element', context: { url, route, element } });
+    }
+  });
+
+  onPreviewAgentEvent('cms:pick-cancel', () => {
+    // Module exited pick mode (Esc / cancel) — un-arm the toolbar button
+    if (store.state.workspace.pickerActive) {
+      store.state.workspace.pickerActive = false;
+      store.notify();
+    }
+  });
+
+  registerPreviewAgent();
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,12 +211,16 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     store.notify();
   });
 
-  // Element picker (posts into the preview iframe)
+  // Element picker (toggles pick mode in the preview via the injected agent)
   delegateEvent(app, 'click', '[data-action="ws-element-pick"]', () => {
-    const iframe = getPreviewIframe();
-    if (!iframe?.contentWindow) return;
-    iframe.contentWindow.postMessage({ type: 'cms:start-element-pick' }, '*');
-    store.state.workspace.pickerActive = true;
+    const ws = store.state.workspace;
+    if (ws.pickerActive) {
+      cancelElementPick(); // module replies cms:pick-cancel, but un-arm now
+      ws.pickerActive = false;
+    } else {
+      startElementPick();
+      ws.pickerActive = true;
+    }
     store.notify();
   });
 
@@ -263,7 +250,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     store.notify();
   });
 
-  registerOverlayProtocol();
+  registerAgentEvents();
   registerSidebarResize(app);
   registerOnionSlider(app);
   registerShotLoadStates();

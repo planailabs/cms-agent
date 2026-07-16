@@ -23,7 +23,7 @@ if (process.env.VAR_DIR) initRoutesFile();
 const PUBLIC_PATHS = [
   /^\/api\/auth\//,
   /^\/signin\/?$/,
-  /^\/preview-overlay\.js$/,
+  /^\/injected-cms-agent\.js$/,
   /^\/_astro\//,
   /^\/favicon/,
 ];

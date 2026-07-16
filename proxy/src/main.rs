@@ -297,7 +297,7 @@ fn main() {
     let proxy = CmsProxy {
         signin_url: format!("{}://{}/signin/", cfg.public_scheme, cfg.base_domain),
         overlay_url: format!(
-            "{}://{}/preview-overlay.js",
+            "{}://{}/injected-cms-agent.js",
             cfg.public_scheme, cfg.base_domain
         ),
         base_domain: cfg.base_domain,

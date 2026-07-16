@@ -134,7 +134,11 @@ export function validateDist(distDir: string): ValidationIssue[] {
     const rel = path.relative(distDir, file);
     const html = fs.readFileSync(file, 'utf8');
 
-    if (html.includes('preview-overlay.js') || html.includes('__preview/boot')) {
+    if (
+      html.includes('injected-cms-agent.js') ||
+      html.includes('preview-overlay.js') || // legacy overlay name
+      html.includes('__preview/boot')
+    ) {
       issues.push({
         validator: 'no-cms-code',
         severity: 'error',

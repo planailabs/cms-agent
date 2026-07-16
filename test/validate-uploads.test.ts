@@ -49,7 +49,7 @@ describe('pre-publish dist validation', () => {
     const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-dist-'));
     fs.writeFileSync(
       path.join(dist, 'index.html'),
-      `<html><head><script src="https://cms/preview-overlay.js"></script></head>
+      `<html><head><script src="https://cms/injected-cms-agent.js"></script></head>
        <body><a href="/missing/">x</a><a href="/other/">y</a></body></html>`,
     );
     fs.mkdirSync(path.join(dist, 'other'));
