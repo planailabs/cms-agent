@@ -1,0 +1,326 @@
+// cms-agent schema. Production provider is PostgreSQL; `pnpm test` derives a
+// SQLite variant of this file (scripts/prepare-test-db.mjs), so keep it
+// provider-portable: no Prisma enums (string columns with app-level unions),
+// no Postgres-native types.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── better-auth core (shapes required by the prisma adapter) ────────────────
+
+model User {
+  id            String   @id
+  name          String
+  email         String
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // cms-agent additional fields
+  role     String @default("editor") // 'admin' | 'editor'
+  theme    String @default("system") // 'light' | 'dark' | 'system'
+  language String @default("en")
+
+  sessions               Session[]
+  accounts               Account[]
+  branches               Branch[]
+  chats                  Chat[]
+  messages               Message[]
+  tokenUsage             TokenUsage[]
+  uploads                Upload[]
+  approvals              Approval[]
+  autonomyGrants         AutonomyGrant[]         @relation("GrantSubject")
+  createdAutonomyGrants  AutonomyGrant[]         @relation("GrantCreator")
+  approvedMemories       ApprovedMemory[]
+  systemPromptExtensions SystemPromptExtension[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ─── Branches & chats ────────────────────────────────────────────────────────
+
+model Branch {
+  id          String   @id @default(cuid())
+  // DNS-safe label; doubles as git branch name and preview subdomain
+  name        String   @unique
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  chats        Chat[]
+  publications Publication[]
+
+  @@map("branch")
+}
+
+model Chat {
+  id          String @id @default(cuid())
+  branchId    String
+  branch      Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  title       String @default("New chat")
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  // Workflow phase: 'plan' | 'execute' | 'preview' | 'published'
+  workflowPhase String @default("plan")
+  // Turn phase: 'idle' | 'waiting_for_answer' | 'tool_pending'
+  turnPhase       String  @default("idle")
+  pendingQuestion Json?
+  planJson        Json?
+  // Optimistic concurrency for phase transitions (no last-writer-wins)
+  entityVersion   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages         Message[]
+  tokenUsage       TokenUsage[]
+  executions       Execution[]
+  approvals        Approval[]
+  memoryCandidates MemoryCandidate[]
+  publications     Publication[]
+
+  @@index([branchId])
+  @@map("chat")
+}
+
+model Message {
+  id       String  @id @default(cuid())
+  chatId   String
+  chat     Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  // Null for assistant/tool messages
+  authorId String?
+  author   User?   @relation(fields: [authorId], references: [id])
+
+  // 'user' | 'assistant' | 'cancel' | 'tool'
+  role          String
+  content       String @default("")
+  contentBlocks Json?
+  pageContext   Json?
+  ordinal       Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([chatId, ordinal])
+  @@index([chatId])
+  @@map("message")
+}
+
+model TokenUsage {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId       String?
+  chat         Chat?    @relation(fields: [chatId], references: [id], onDelete: SetNull)
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("token_usage")
+}
+
+// ─── Executions, approvals, autonomy ─────────────────────────────────────────
+
+model Execution {
+  id            String   @id @default(cuid())
+  chatId        String
+  chat          Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sha           String
+  summary       String
+  revertedBySha String?
+  createdAt     DateTime @default(now())
+
+  @@index([chatId])
+  @@map("execution")
+}
+
+model Approval {
+  id             String   @id @default(cuid())
+  chatId         String
+  chat           Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  actorId        String
+  actor          User     @relation(fields: [actorId], references: [id])
+  // 'plan' | 'publish' | 'autonomy'
+  action         String
+  planHash       String?
+  baseSha        String
+  targetSha      String?
+  idempotencyKey String   @unique
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([chatId, action])
+  @@map("approval")
+}
+
+model AutonomyGrant {
+  id            String    @id @default(cuid())
+  // Null = applies to all users
+  userId        String?
+  user          User?     @relation("GrantSubject", fields: [userId], references: [id], onDelete: Cascade)
+  actions       Json // e.g. ["implement"] or ["implement","publish"]
+  pathScope     Json // glob allowlist
+  maxRisk       String    @default("content") // 'content' | 'template' | 'code' | 'dependency'
+  maxExecutions Int       @default(1)
+  validFrom     DateTime
+  validUntil    DateTime
+  onError       String    @default("stop") // 'stop' | 'notify'
+  createdById   String
+  createdBy     User      @relation("GrantCreator", fields: [createdById], references: [id])
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+
+  @@map("autonomy_grant")
+}
+
+// ─── Memory ──────────────────────────────────────────────────────────────────
+
+model MemoryCandidate {
+  id        String   @id @default(cuid())
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  content   String
+  source    String
+  reason    String
+  // 'pending' | 'approved' | 'rejected'
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  approvedMemory ApprovedMemory?
+
+  @@map("memory_candidate")
+}
+
+model ApprovedMemory {
+  id           String          @id @default(cuid())
+  candidateId  String          @unique
+  candidate    MemoryCandidate @relation(fields: [candidateId], references: [id])
+  content      String
+  approvedById String
+  approvedBy   User            @relation(fields: [approvedById], references: [id])
+  revokedAt    DateTime?
+  createdAt    DateTime        @default(now())
+
+  @@map("approved_memory")
+}
+
+// ─── Uploads, publications, artifacts ────────────────────────────────────────
+
+model Upload {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  filename   String
+  storedPath String
+  mime       String
+  size       Int
+  sha256     String
+  createdAt  DateTime @default(now())
+
+  @@map("upload")
+}
+
+model Publication {
+  id          String   @id @default(cuid())
+  chatId      String
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  sha         String
+  flow        String
+  // 'running' | 'succeeded' | 'failed' | 'external_unknown'
+  status      String   @default("running")
+  log         String   @default("")
+  externalUrl String?
+  createdAt   DateTime @default(now())
+
+  artifacts Artifact[]
+
+  @@index([branchId])
+  @@map("publication")
+}
+
+model Artifact {
+  id            String      @id @default(cuid())
+  publicationId String
+  publication   Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  sha           String
+  tarballPath   String
+  manifest      Json
+  buildMeta     Json
+  createdAt     DateTime    @default(now())
+
+  @@index([sha])
+  @@map("artifact")
+}
+
+// ─── Admin ───────────────────────────────────────────────────────────────────
+
+model SystemPromptExtension {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_prompt_extension")
+}

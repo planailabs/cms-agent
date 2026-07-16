@@ -1,0 +1,13 @@
+allowBuilds:
+  '@prisma/client': set this to true or false
+  '@prisma/engines': true
+  better-sqlite3: true
+  esbuild: true
+  prisma: true
+  sharp: true
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - prisma
+  - "@prisma/client"
+  - "@prisma/engines"

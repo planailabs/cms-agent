@@ -1,0 +1,56 @@
+# dependencies
+node_modules/
+
+# build output
+/dist
+/build
+proxy/target/
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
+
+# debug
+npm-debug.log*
+.pnpm-debug.log*
+
+# local env files
+.env
+.env.local
+.env.development
+
+# typescript
+*.tsbuildinfo
+
+# databases / test artifacts
+*.db
+/prisma/schema.test.prisma
+/prisma/test-client/
+/.test-tmp/
+
+# playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# pnpm
+.pnpm-store
+
+# Astro
+.astro/
+
+# logs
+*.log
+*.log.*
+
+# nix
+result*
+.temp
+
+# runtime state
+/var/
+
+# prisma generated clients
+/src/generated/
+/prisma.test.config.mjs
