@@ -76,7 +76,7 @@ struct CmsProxy {
     require_auth: bool,
     cookie_secret: Vec<u8>,
     signin_url: String,
-    overlay_url: String,
+    overlay_tag: String,
     routes: Arc<RoutesStore>,
     access: Arc<AccessTracker>,
 }
@@ -155,8 +155,19 @@ impl ProxyHttp for CmsProxy {
                     return Ok(true);
                 }
                 self.access.touch(&branch, auth::now_ms());
-                ctx.upstream = Some(upstream);
-                ctx.is_preview = true;
+                // The injected-agent bootstrap is served same-origin from the
+                // preview host (dev servers block cross-origin subresources):
+                // divert /__cms/… to the CMS upstream with the path rewritten.
+                if session.req_header().uri.path() == inject::AGENT_PROXY_PATH {
+                    let uri: http::Uri = inject::AGENT_CMS_PATH
+                        .parse()
+                        .expect("static path is a valid URI");
+                    session.req_header_mut().set_uri(uri);
+                    ctx.upstream = Some(routes.cms.clone());
+                } else {
+                    ctx.upstream = Some(upstream);
+                    ctx.is_preview = true;
+                }
             }
             RouteDecision::Boot { branch, upstream } => {
                 if !self.is_authorized(session) {
@@ -274,7 +285,7 @@ impl ProxyHttp for CmsProxy {
         }
         ctx.buffering = false;
         let html = std::mem::take(&mut ctx.buffer);
-        let out = inject::inject_overlay(&html, &self.overlay_url).unwrap_or(html);
+        let out = inject::inject_overlay(&html, &self.overlay_tag).unwrap_or(html);
         *body = Some(Bytes::from(out));
         Ok(None)
     }
@@ -296,10 +307,10 @@ fn main() {
 
     let proxy = CmsProxy {
         signin_url: format!("{}://{}/signin/", cfg.public_scheme, cfg.base_domain),
-        overlay_url: format!(
-            "{}://{}/injected-cms-agent.js",
+        overlay_tag: inject::agent_script_tag(&format!(
+            "{}://{}",
             cfg.public_scheme, cfg.base_domain
-        ),
+        )),
         base_domain: cfg.base_domain,
         require_auth: cfg.require_auth,
         cookie_secret: cfg.cookie_secret,

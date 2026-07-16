@@ -30,12 +30,16 @@ export function cmsAgentBootstrap(): void {
     return;
   }
 
-  // The CMS origin = origin of this script's own URL (proxy-injected, so it
-  // always points at the CMS host, which is also the workspace's origin).
+  // The CMS origin comes from the proxy-injected data-cms-origin attribute
+  // (the script itself is served same-origin from the preview host via the
+  // proxy's /__cms/ path, so its src origin is NOT the CMS). Fallback: the
+  // src origin, for direct cross-origin script setups.
   let cmsOrigin = '';
   try {
-    const src = (document.currentScript as HTMLScriptElement | null)?.src;
-    if (src) cmsOrigin = new URL(src).origin;
+    const el = document.currentScript as HTMLScriptElement | null;
+    cmsOrigin = el?.dataset.cmsOrigin ?? '';
+    if (!cmsOrigin && el?.src) cmsOrigin = new URL(el.src).origin;
+    if (cmsOrigin === location.origin) cmsOrigin = ''; // parent must be a different origin
   } catch {
     /* fall through */
   }
