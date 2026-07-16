@@ -1,0 +1,26 @@
+---
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog');
+  return posts.map((post) => ({ params: { id: post.id }, props: { post } }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{post.data.title} — Acme Blog</title>
+  </head>
+  <body>
+    <header>
+      <h1>{post.data.title}</h1>
+      <p><time>{post.data.date.toISOString().slice(0, 10)}</time></p>
+    </header>
+    <main><Content /></main>
+    <footer><a href="/">← All posts</a></footer>
+  </body>
+</html>

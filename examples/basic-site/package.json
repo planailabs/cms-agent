@@ -1,0 +1,13 @@
+{
+  "name": "example-basic-site",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build"
+  },
+  "dependencies": {
+    "astro": "^6.1.3"
+  }
+}

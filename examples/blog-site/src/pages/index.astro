@@ -1,0 +1,27 @@
+---
+import { getCollection } from 'astro:content';
+const posts = (await getCollection('blog')).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Acme Blog</title>
+  </head>
+  <body>
+    <header><h1>Acme Blog</h1></header>
+    <main>
+      <ul>
+        {posts.map((post) => (
+          <li>
+            <a href={`/blog/${post.id}/`}>{post.data.title}</a>
+            <small> — {post.data.date.toISOString().slice(0, 10)}</small>
+            <p>{post.data.description}</p>
+          </li>
+        ))}
+      </ul>
+    </main>
+  </body>
+</html>
