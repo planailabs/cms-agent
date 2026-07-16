@@ -47,6 +47,10 @@ export interface ChatSummary {
   id: string;
   title: string;
   workflowPhase: WorkflowPhase;
+  /** The chat's own work branch (own worktree + preview subdomain). */
+  workBranch: string;
+  /** 'workflow' (default) or the 'deployments' system chat. */
+  kind?: string;
   createdBy: { id: string; name: string } | null;
 }
 

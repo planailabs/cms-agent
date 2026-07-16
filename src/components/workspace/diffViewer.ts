@@ -9,7 +9,7 @@ import { escapeHtml } from '../chat/utils/html';
 import type { AppState } from '../chat/app/state';
 import type { DiffViewMode } from './state';
 import { branchPreviewUrl } from './config';
-import { activeBranchName } from './preview';
+import { activeBranchName, previewBranchName } from './preview';
 
 const MODES: Array<{ key: DiffViewMode; label: string }> = [
   { key: 'side-by-side', label: 'Side by side' },
@@ -28,16 +28,17 @@ const renderShot = (src: string, alt: string, extraClass = '', extraStyle = ''):
   </div>`;
 
 const renderSideBySide = (state: AppState, route: string): string => {
-  const branch = activeBranchName(state);
-  const before = branchPreviewUrl('main', route);
-  const after = branchPreviewUrl(branch, route);
+  // before = the TARGET branch the chat merges into; after = the chat's
+  // own work branch (what the execution changed)
+  const before = branchPreviewUrl(activeBranchName(state), route);
+  const after = branchPreviewUrl(previewBranchName(state), route);
   return `<div class="ws-diff-columns">
       <div class="ws-diff-col">
-        <span class="ws-diff-col__label">Before (main)</span>
+        <span class="ws-diff-col__label">Before (${escapeHtml(activeBranchName(state))})</span>
         <iframe src="${escapeHtml(before)}" title="Before: ${escapeHtml(route)}"></iframe>
       </div>
       <div class="ws-diff-col">
-        <span class="ws-diff-col__label">After (${escapeHtml(branch)})</span>
+        <span class="ws-diff-col__label">After (${escapeHtml(previewBranchName(state))})</span>
         <iframe src="${escapeHtml(after)}" title="After: ${escapeHtml(route)}"></iframe>
       </div>
     </div>`;

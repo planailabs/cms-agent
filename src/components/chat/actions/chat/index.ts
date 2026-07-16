@@ -94,6 +94,8 @@ export const createChat = async (branchId: string, title?: string): Promise<Chat
       id: created.id,
       title: created.title ?? title ?? '',
       workflowPhase: created.workflowPhase ?? 'plan',
+      workBranch: created.workBranch ?? '',
+      kind: created.kind ?? 'workflow',
       createdBy: user ? { id: user.id, name: user.name } : null,
     };
     const branch = store.state.branches.find((b) => b.id === branchId);
