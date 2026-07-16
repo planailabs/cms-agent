@@ -18,14 +18,20 @@ if (!Astro.locals.user && !previewAuth) {
 }
 
 const branch = Astro.params.branch ?? '';
-const known = await prisma.branch.findUnique({ where: { name: branch } });
+// v-<sha> labels are historical read-only checkouts (plan §12)
+const isHistorical = /^v-[0-9a-f]{7,40}$/.test(branch);
+const known =
+  isHistorical || branch === 'main'
+    ? null
+    : await prisma.branch.findUnique({ where: { name: branch } });
 const isMain = branch === 'main';
 
-if (!known && !isMain) {
+if (!known && !isMain && !isHistorical) {
   Astro.response.status = 404;
 }
 
-if (known || isMain) {
+const bootable = !!known || isMain || isHistorical;
+if (bootable) {
   // Fire and forget — the page refreshes until the route exists.
   void ensureInstance(branch).catch((err) =>
     console.error(`[preview] failed to start ${branch}:`, err),
@@ -37,7 +43,7 @@ if (known || isMain) {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    {(known || isMain) && <meta http-equiv="refresh" content="2" />}
+    {bootable && <meta http-equiv="refresh" content="2" />}
     <title>Starting preview…</title>
     <style>
       body {
@@ -57,7 +63,7 @@ if (known || isMain) {
     </style>
   </head>
   <body>
-    {known || isMain ? (
+    {bootable ? (
       <p class="pulse">Starting preview for <strong>{branch}</strong> — this page reloads automatically…</p>
     ) : (
       <p>Unknown branch <strong>{branch}</strong>.</p>

@@ -48,9 +48,16 @@ export async function ensureBranch(branch: string): Promise<void> {
   }
 }
 
+/** Historical read-only checkouts use the reserved v-<sha> label (plan §12). */
+export function historicalRef(name: string): string | null {
+  const m = /^v-([0-9a-f]{7,40})$/.exec(name);
+  return m ? m[1] : null;
+}
+
 /**
  * Ensure a worktree exists for the branch and return its absolute path.
- * For the default branch, the repo itself is the worktree.
+ * For the default branch, the repo itself is the worktree. `v-<sha>` names
+ * produce detached read-only checkouts of that commit (historical preview).
  */
 export async function ensureWorktree(branch: string): Promise<string> {
   const repoPath = path.resolve(env().REPO_PATH);
@@ -59,11 +66,17 @@ export async function ensureWorktree(branch: string): Promise<string> {
   const dir = worktreeDir(branch);
   if (fs.existsSync(path.join(dir, '.git'))) return dir;
 
-  await ensureBranch(branch);
   fs.mkdirSync(path.dirname(dir), { recursive: true });
   // Prune stale registrations (e.g. VAR_DIR wiped) before adding
   await repoGit().raw(['worktree', 'prune']);
-  await repoGit().raw(['worktree', 'add', dir, branch]);
+
+  const sha = historicalRef(branch);
+  if (sha) {
+    await repoGit().raw(['worktree', 'add', '--detach', dir, sha]);
+  } else {
+    await ensureBranch(branch);
+    await repoGit().raw(['worktree', 'add', dir, branch]);
+  }
   return dir;
 }
 
