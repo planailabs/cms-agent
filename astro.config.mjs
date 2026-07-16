@@ -19,5 +19,7 @@ export default defineConfig({
   devToolbar: {
     enabled: false,
   },
-  trailingSlash: 'always',
+  // 'ignore': the API is called without trailing slashes throughout the UI;
+  // 'always' (inherited from the reference app) 404s those routes in dev.
+  trailingSlash: 'ignore',
 });

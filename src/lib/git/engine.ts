@@ -24,7 +24,17 @@ export function validateBranchName(name: string): string | null {
 }
 
 function repoGit(): SimpleGit {
-  return simpleGit(env().REPO_PATH);
+  const repoPath = path.resolve(env().REPO_PATH);
+  // Refuse to operate on a REPO_PATH that isn't its own repository — git
+  // would silently walk up to a parent repo (e.g. the CMS checkout when
+  // pointing at examples/ in-tree). scripts/setup-dev-site.sh creates a
+  // proper copy.
+  if (!fs.existsSync(path.join(repoPath, '.git'))) {
+    throw new Error(
+      `REPO_PATH (${repoPath}) is not a git repository. Use scripts/setup-dev-site.sh to create a git-inited working copy.`,
+    );
+  }
+  return simpleGit(repoPath);
 }
 
 export function worktreeDir(branch: string): string {

@@ -54,3 +54,6 @@ result*
 # prisma generated clients
 /src/generated/
 /prisma.test.config.mjs
+
+# dev working copies (scripts/setup-dev-site.sh)
+/local/

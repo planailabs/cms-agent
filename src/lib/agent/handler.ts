@@ -20,6 +20,8 @@ import { registerFsTools } from './tools/fsTools';
 import { registerUploadTools } from './tools/uploadTools';
 import { registerMemoryTools } from './tools/memoryTools';
 import { registerContentTools } from '@/lib/content/tools';
+import { registerLintTools } from './tools/lintTools';
+import { registerStructureTools } from './tools/structureTools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
@@ -36,6 +38,8 @@ registerFsTools();
 registerUploadTools();
 registerMemoryTools();
 registerContentTools();
+registerLintTools();
+registerStructureTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */

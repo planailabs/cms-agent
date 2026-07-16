@@ -50,7 +50,35 @@ stdenv.mkDerivation (finalAttrs: {
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     fetcherVersion = 3;
-    hash = "sha256-6SigCcG32F3Y9rdcbv6qbiM++m9BOpXHPOIlCAmtJPw=";
+    # NOTE: fetchPnpmDeps runs `pnpm install --force`, which is supposed to
+    # fetch optional deps for *all* platforms — but pnpm silently drops
+    # optional packages whose tarball download fails (flaky network), so a
+    # freshly generated hash can pin an *incomplete* store; the build then
+    # dies much later with e.g. lightningcss/esbuild "Cannot find module
+    # '<platform binary>'". Mitigate on both ends:
+    #  - be generous with retries/timeouts during the fetch,
+    #  - verify the fetched store against pnpm-lock.yaml and fail the fetch
+    #    (before a hash gets pinned) if any package is missing.
+    prePnpmInstall = ''
+      pnpm config set fetch-retries 10
+      pnpm config set fetch-retry-mintimeout 20000
+      pnpm config set fetch-timeout 600000
+    '';
+    postInstall = ''
+      echo "Verifying pnpm store completeness against pnpm-lock.yaml"
+      yq -r '.packages | keys | .[]' pnpm-lock.yaml | sort -u > /tmp/expected-packages
+      sqlite3 "$storePath/v11/index.db" 'select key from package_index' \
+        | sed 's/^.*\t//' | sort -u > /tmp/fetched-packages
+      missing=$(comm -23 /tmp/expected-packages /tmp/fetched-packages)
+      if [ -n "$missing" ]; then
+        echo "ERROR: fetched pnpm store is missing these lockfile packages" >&2
+        echo "(pnpm silently skips optional deps whose download fails):" >&2
+        echo "$missing" >&2
+        echo "Re-run the build to retry the fetch." >&2
+        exit 1
+      fi
+    '';
+    hash = "sha256-AHgHMYK/TvkrnjnCoesaR6c02XIB6uZ1Ql0NpeH7iV8=";
   };
 
   env = {
@@ -70,8 +98,25 @@ stdenv.mkDerivation (finalAttrs: {
   buildPhase = ''
     runHook preBuild
 
+    # Sanity check: the platform-native lightningcss addon (optional dep of
+    # lightningcss, pulled in by Tailwind v4) must have been installed from
+    # the pnpm store. If pnpmDeps was fetched over a flaky network, pnpm
+    # silently skips failed optional-dep downloads and `astro build` later
+    # dies with "Cannot find module '../lightningcss.<platform>.node'".
+    # Fail early with an actionable message instead (see pnpmDeps above).
+    node -e "require(require('path').resolve(process.argv[1]))" node_modules/.pnpm/lightningcss@*/node_modules/lightningcss || {
+      echo "ERROR: lightningcss native addon missing from node_modules." >&2
+      echo "The pnpmDeps store is likely incomplete: set pnpmDeps.hash = \"\" in package.nix and rebuild to re-fetch." >&2
+      exit 1
+    }
+
     # Generate src/generated/prisma (gitignored; imported by src/lib/db.ts).
     pnpm exec prisma generate --config prisma.config.ts
+
+    # Generate prisma/test-client (gitignored; src/lib/db.ts imports it with a
+    # literal path, so rollup must be able to resolve it during `astro build`).
+    # Offline-safe: sqlite db push via PRISMA_SCHEMA_ENGINE_BINARY + generate.
+    node scripts/prepare-test-db.mjs
 
     pnpm build
 

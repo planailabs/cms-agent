@@ -1,7 +1,12 @@
 /**
  * Server-side configuration, validated once at startup.
  * All knobs documented in .env.example and docs/setup.md.
+ *
+ * dotenv/config: Vite only exposes .env via import.meta.env — we read
+ * process.env (shared with non-Vite code paths like server.mjs), so load
+ * .env ourselves. Existing process vars win; absent file is a no-op.
  */
+import 'dotenv/config';
 import { z } from 'zod';
 
 const schema = z.object({

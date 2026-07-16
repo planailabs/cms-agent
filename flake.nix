@@ -45,6 +45,7 @@
             nodejs_22
             pnpm
             cargo
+            cargo-watch
             rustc
             gcc
             cmake

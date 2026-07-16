@@ -3,8 +3,7 @@
 ## 1. Prepare the target site
 
 ```bash
-cp -r examples/blog-site /tmp/blog-site
-cd /tmp/blog-site && git init -b main && git add -A && git commit -m init && npm install
+scripts/setup-dev-site.sh blog-site   # git-inited copy at ./local/dev-site
 ```
 
 ## 2. Configure and start the CMS
@@ -12,7 +11,7 @@ cd /tmp/blog-site && git init -b main && git add -A && git commit -m init && npm
 `.env` (see docs/setup.md for the rest):
 
 ```ini
-REPO_PATH=/tmp/blog-site
+REPO_PATH=./local/dev-site
 ROUTE_MAPPINGS=[{"files":"src/content/blog/*.md","route":"/blog/:slug/"}]
 BASE_DOMAIN=cms.localtest.me       # *.localtest.me resolves to 127.0.0.1
 DEPLOY_FLOW=web-agency

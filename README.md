@@ -22,9 +22,10 @@ diffs, and pluggable deployment flows.
 nix develop               # dev shell: node, pnpm, cargo, postgres, overmind,
                           # Prisma engines + Playwright browsers wired up
 pnpm install
-cp .env.example .env      # fill in DATABASE_URL, OIDC_*, OPENAI_*, REPO_PATH…
-npx prisma migrate deploy # against your postgres
-overmind start            # Procfile: CMS on :4321 + proxy entrypoint on :8080
+cp .env.example .env             # fill in DATABASE_URL, OPENAI_*, …
+scripts/setup-dev-site.sh        # real git-inited site copy at ./local/dev-site
+npx prisma migrate deploy        # against your postgres
+overmind start                   # Procfile: CMS (SKIP_AUTH dev mode) + proxy
 ```
 
 Without Nix you need Node 22, pnpm 11, and a Rust toolchain, then run the two

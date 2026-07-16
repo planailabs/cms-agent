@@ -60,6 +60,14 @@ Users are created on first OIDC sign-in (gated by the allowlist). Promote the
 first admin directly: `UPDATE "user" SET role='admin' WHERE email='…';`
 Afterwards the dashboard manages roles.
 
+## Development site
+
+`REPO_PATH` must point at a repository of its own — the git engine refuses a
+path without `.git` (git would otherwise walk up into a parent repo).
+`scripts/setup-dev-site.sh [basic-site|blog-site] [dest]` copies an example,
+`git init`s it, installs its dependencies, and prints the `.env` values
+(default destination: `./local/dev-site`, gitignored).
+
 ## Running in development
 
 Inside `nix develop`, `overmind start` runs both Procfile processes (the CMS
