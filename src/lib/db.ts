@@ -8,6 +8,10 @@
  */
 import type { PrismaClient } from '@/generated/prisma/client';
 
+type PrismaModule = typeof import('@/generated/prisma/client');
+
+const testClientPath: string = '../../prisma/test-client/client.ts';
+
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
   prismaDbNull?: unknown;
@@ -18,7 +22,7 @@ async function createClient(): Promise<PrismaClient> {
   if (testDbUrl) {
     const [{ PrismaBetterSqlite3 }, mod] = await Promise.all([
       import('@prisma/adapter-better-sqlite3'),
-      import(/* @vite-ignore */ '../../prisma/test-client/client.ts'),
+      import(/* @vite-ignore */ testClientPath) as Promise<PrismaModule>,
     ]);
     const adapter = new PrismaBetterSqlite3({ url: testDbUrl });
     globalForPrisma.prismaDbNull = mod.Prisma.DbNull;
