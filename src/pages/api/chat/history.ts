@@ -17,6 +17,7 @@ export const GET: APIRoute = async ({ url }) => {
     where: { id: chatId },
     include: {
       messages: { orderBy: { ordinal: 'asc' } },
+      executions: { orderBy: { createdAt: 'asc' } },
     },
   });
   if (!chat) {
@@ -84,6 +85,14 @@ export const GET: APIRoute = async ({ url }) => {
       workflowPhase: chat.workflowPhase,
       planJson: chat.planJson,
       messages,
+      // For rehydrating workspace state after reload/chat switch — without
+      // these the Publish button waits forever for an execution_committed
+      // event that already happened.
+      executions: chat.executions.map((e) => ({
+        sha: e.sha,
+        summary: e.summary,
+        revertedBySha: e.revertedBySha,
+      })),
     }),
     { headers: { 'Content-Type': 'application/json' } },
   );

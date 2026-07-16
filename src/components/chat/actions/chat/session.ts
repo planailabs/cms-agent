@@ -13,10 +13,17 @@ import {
 import { connectEvents } from './sse';
 import { sendChatMessage } from './stateMachine';
 
+export interface HistoryExecution {
+  sha: string;
+  summary: string;
+  revertedBySha: string | null;
+}
+
 export interface ChatHistoryResult {
   messages: StoredMessage[];
   phase?: string;
   pendingQuestion?: Record<string, unknown>;
+  executions: HistoryExecution[];
 }
 
 export const initAIChat = (messages: StoredMessage[], phase: 'idle' | 'waiting' = 'idle') => {
@@ -56,6 +63,7 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
       messages,
       phase: data.phase,
       pendingQuestion: data.pendingQuestion,
+      executions: (data.executions ?? []) as HistoryExecution[],
     };
   } catch {
     // Network error — fall through
@@ -92,6 +100,24 @@ export const restoreAIChatSession = (): void => {
   const applyHistory = (result: ChatHistoryResult | null) => {
     const mc = store.state.chat?.aiChat;
     if (!mc || store.state.activeChatId !== chatId) return;
+
+    // Rehydrate persisted executions (cards + publishable sha). Live SSE
+    // events may have landed while the fetch was in flight — they win.
+    if (result && result.executions.length > 0) {
+      const ws = store.state.workspace;
+      if (ws.executions.length === 0) {
+        ws.executions = result.executions.map((e) => ({
+          sha: e.sha,
+          summary: e.summary,
+          ...(e.revertedBySha ? { reverted: { revertSha: e.revertedBySha, by: '' } } : {}),
+        }));
+      }
+      if (!ws.executionSha) {
+        const publishable = result.executions.filter((e) => !e.revertedBySha);
+        ws.executionSha = publishable[publishable.length - 1]?.sha ?? null;
+      }
+      store.notify();
+    }
 
     if (result && result.messages.length > 0) {
       const cancelLabel = locales[store.state.localeKey].chatMode.cancelLabel;
