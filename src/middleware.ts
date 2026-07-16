@@ -9,8 +9,10 @@ import { isEmailAllowed } from '@/lib/allowlist';
 import {
   issuePreviewCookie,
   previewCookieAttributes,
+  verifyPreviewCookie,
   PREVIEW_COOKIE_NAME,
 } from '@/lib/previewCookie';
+import { BOOT_PATH_RE, handlePreviewBoot } from '@/lib/preview/bootPage';
 import { initRoutesFile } from '@/lib/preview/manager';
 import { env } from '@/lib/env';
 
@@ -24,9 +26,6 @@ const PUBLIC_PATHS = [
   /^\/preview-overlay\.js$/,
   /^\/_astro\//,
   /^\/favicon/,
-  // Reached through the sidecar from preview hosts, where the better-auth
-  // cookie doesn't exist; the page itself verifies the HMAC preview cookie.
-  /^\/__preview\/boot\//,
 ];
 
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -48,6 +47,21 @@ export const onRequest = defineMiddleware(async (context, next) => {
       context.locals.user = null;
       context.locals.session = null;
     }
+  }
+
+  // Preview boot page — served here because underscore-prefixed src/pages
+  // paths are excluded from Astro routing; the sidecar's rewrite target
+  // (/__preview/boot/<branch>) is a fixed contract. Auth: CMS session or the
+  // sidecar's HMAC preview cookie (requests arrive from preview hosts where
+  // the better-auth cookie doesn't exist).
+  const bootMatch = BOOT_PATH_RE.exec(pathname);
+  if (bootMatch) {
+    const previewCookie = context.cookies.get(PREVIEW_COOKIE_NAME)?.value;
+    const previewAuth = previewCookie ? verifyPreviewCookie(previewCookie) : null;
+    if (!context.locals.user && !previewAuth) {
+      return context.redirect('/signin/');
+    }
+    return handlePreviewBoot(bootMatch[1]);
   }
 
   const isPublic = PUBLIC_PATHS.some((re) => re.test(pathname));
