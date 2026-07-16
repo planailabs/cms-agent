@@ -1,0 +1,299 @@
+---
+/**
+ * Admin dashboard shell — ported from chat/'s DashboardPage.astro.
+ *
+ * Admin access is enforced server-side by src/pages/dashboard/[...tab].astro
+ * (Astro.locals.user.role === 'admin'), so there is no client-side auth
+ * check or loading gate. Tabs are URL-driven and lazily initialized by
+ * tabs.ts. Impersonation, messages, pings and customer tokens from chat/
+ * are not ported; grants and memory are new.
+ */
+import '../chat/style.css';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard | CMS Agent</title>
+
+    <!-- Theme script: resolve stored/system theme before first paint -->
+    <script is:inline>
+      (() => {
+        const THEME_STORAGE_KEY = 'cmsagent-theme-mode';
+        let stored = null;
+        try {
+          stored = sessionStorage.getItem(THEME_STORAGE_KEY);
+        } catch {
+          /* storage unavailable */
+        }
+        const prefersDark =
+          window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme =
+          stored === 'dark' || stored === 'light'
+            ? stored
+            : prefersDark
+              ? 'dark'
+              : 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="dash-root">
+      <!-- Header -->
+      <header class="dash-header">
+        <div>
+          <h1 class="dash-title">Admin Dashboard</h1>
+          <p class="dash-subtitle">Users, usage, autonomy &amp; memory</p>
+        </div>
+        <a href="/" class="dash-btn">Back to app</a>
+      </header>
+
+      <!-- Tab Navigation -->
+      <nav class="dash-tabs">
+        <button type="button" data-tab="overview" class="dash-tab">Overview</button>
+        <button type="button" data-tab="tokens" class="dash-tab">Tokens</button>
+        <button type="button" data-tab="users" class="dash-tab">Users</button>
+        <button type="button" data-tab="prompts" class="dash-tab">System Prompts</button>
+        <button type="button" data-tab="grants" class="dash-tab">Grants</button>
+        <button type="button" data-tab="memory" class="dash-tab">Memory</button>
+      </nav>
+
+      <!-- ═══════════════════════ TAB PANELS ═══════════════════════ -->
+
+      <!-- Overview Tab -->
+      <div id="tab-overview" class="tab-panel hidden">
+        <div class="stats-grid dash-grid">
+          <div class="dash-card dash-stat animate-pulse">
+            <div class="dash-stat__label">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tokens Tab -->
+      <div id="tab-tokens" class="tab-panel hidden dash-stack">
+        <div class="dash-row">
+          <h2 class="dash-section-title">Token usage</h2>
+          <label class="dash-field dash-field--inline">
+            <span>Period</span>
+            <select class="days-select dash-input">
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="dash-card dash-chart-card">
+          <h3 class="dash-card-title">Input / output tokens per day</h3>
+          <div class="usage-chart">
+            <div class="dash-td-muted">Loading chart...</div>
+          </div>
+        </div>
+
+        <div class="dash-table-wrap">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th class="dash-num">Input</th>
+                <th class="dash-num">Output</th>
+                <th class="dash-num">Total</th>
+              </tr>
+            </thead>
+            <tbody class="usage-table-body">
+              <tr class="animate-pulse">
+                <td class="dash-td-muted" colspan="4">Loading data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Users Tab -->
+      <div id="tab-users" class="tab-panel hidden dash-stack">
+        <div class="dash-search-row">
+          <label class="dash-field">
+            <span>Search by email or name</span>
+            <input
+              type="text"
+              placeholder="user@example.com"
+              class="search-input dash-input"
+            />
+          </label>
+          <button type="button" class="search-btn dash-btn">Search</button>
+        </div>
+
+        <div class="dash-table-wrap">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Language</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody class="users-table-body">
+              <tr class="animate-pulse">
+                <td class="dash-td-muted" colspan="5">Loading data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="dash-status hidden"></div>
+      </div>
+
+      <!-- System Prompts Tab -->
+      <div id="tab-prompts" class="tab-panel hidden dash-stack">
+        <p class="dash-subtitle">
+          Pick a user to edit the extension appended to their system prompt.
+        </p>
+
+        <div class="dash-search-row">
+          <label class="dash-field">
+            <span>Search by email or name</span>
+            <input
+              type="text"
+              placeholder="user@example.com"
+              class="search-input dash-input"
+            />
+          </label>
+          <button type="button" class="search-btn dash-btn">Search</button>
+        </div>
+
+        <div class="user-list dash-user-list"></div>
+
+        <div class="prompt-editor dash-card dash-stack hidden">
+          <div>
+            <h3 class="dash-card-title">Prompt extension</h3>
+            <div class="prompt-editor-user dash-subtitle"></div>
+          </div>
+          <textarea
+            class="prompt-content dash-input dash-textarea"
+            rows="10"
+            placeholder="Additional system prompt instructions for this user..."></textarea>
+          <p class="dash-hint">
+            Appended to the built-in system prompt for this user. Saving empty
+            content removes the extension.
+          </p>
+          <div class="dash-row dash-row--end">
+            <button type="button" class="prompt-clear-btn dash-btn dash-btn--danger">Remove</button>
+            <button type="button" class="prompt-save-btn dash-btn dash-btn--primary">Save</button>
+          </div>
+        </div>
+
+        <div class="dash-status hidden"></div>
+      </div>
+
+      <!-- Grants Tab -->
+      <div id="tab-grants" class="tab-panel hidden dash-stack">
+        <div class="grant-form dash-card dash-stack">
+          <h3 class="dash-card-title">Create autonomy grant</h3>
+          <div class="dash-form-grid">
+            <label class="dash-field">
+              <span>User</span>
+              <select class="grant-user dash-input">
+                <option value="">All users</option>
+              </select>
+            </label>
+            <div class="dash-field">
+              <span>Actions</span>
+              <div class="dash-checks">
+                <label><input type="checkbox" class="grant-action" value="implement" checked /> implement</label>
+                <label><input type="checkbox" class="grant-action" value="publish" /> publish</label>
+              </div>
+            </div>
+            <label class="dash-field">
+              <span>Max risk</span>
+              <select class="grant-risk dash-input">
+                <option value="content" selected>content</option>
+                <option value="template">template</option>
+                <option value="code">code</option>
+                <option value="dependency">dependency</option>
+              </select>
+            </label>
+            <label class="dash-field">
+              <span>Max executions</span>
+              <input type="number" class="grant-executions dash-input" min="1" max="100" value="1" />
+            </label>
+            <label class="dash-field">
+              <span>Valid until</span>
+              <input type="datetime-local" class="grant-until dash-input" />
+            </label>
+            <label class="dash-field">
+              <span>On error</span>
+              <select class="grant-onerror dash-input">
+                <option value="stop" selected>stop</option>
+                <option value="notify">notify</option>
+              </select>
+            </label>
+          </div>
+          <label class="dash-field">
+            <span>Path scope (one glob per line)</span>
+            <textarea
+              class="grant-scope dash-input dash-textarea"
+              rows="3"
+              placeholder="src/content/**"></textarea>
+          </label>
+          <div class="dash-row dash-row--end">
+            <button type="button" class="grant-create-btn dash-btn dash-btn--primary">Create grant</button>
+          </div>
+        </div>
+
+        <div class="dash-table-wrap">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Actions</th>
+                <th>Scope</th>
+                <th>Max risk</th>
+                <th class="dash-num">Executions left</th>
+                <th>Valid until</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody class="grants-table-body">
+              <tr class="animate-pulse">
+                <td class="dash-td-muted" colspan="8">Loading data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="dash-status hidden"></div>
+      </div>
+
+      <!-- Memory Tab -->
+      <div id="tab-memory" class="tab-panel hidden dash-stack">
+        <section class="dash-stack">
+          <h2 class="dash-section-title">Pending candidates</h2>
+          <div class="memory-pending dash-stack">
+            <div class="dash-td-muted animate-pulse">Loading...</div>
+          </div>
+        </section>
+
+        <section class="dash-stack">
+          <h2 class="dash-section-title">Approved memories</h2>
+          <div class="memory-approved dash-stack">
+            <div class="dash-td-muted animate-pulse">Loading...</div>
+          </div>
+        </section>
+
+        <div class="dash-status hidden"></div>
+      </div>
+    </div>
+
+    <!-- Client Logic -->
+    <script>
+      import { initTabs } from '@/components/dashboard/tabs';
+      initTabs();
+    </script>
+  </body>
+</html>

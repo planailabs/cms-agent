@@ -179,9 +179,18 @@ export const renderHeader = ({ locale, state }: HeaderParams): string => {
       </div>`
     : '';
 
+  // Admin-only dashboard link (plain anchor; /dashboard/ is server-guarded)
+  const dashboardOption =
+    state.user?.role === 'admin'
+      ? `<a class="dropdown-option" href="/dashboard/" role="menuitem">
+          <span>Dashboard</span>
+        </a>`
+      : '';
+
   const userDropdown = state.isAuthMenuOpen
     ? `<div class="dropdown-panel" role="menu">
         <div class="flex flex-col gap-1">
+          ${dashboardOption}
           <button type="button" class="dropdown-option" data-action="settings-link">
             <span>${navigation.settingsLabel}</span>
           </button>

@@ -1,0 +1,19 @@
+---
+/**
+ * Admin dashboard catch-all route: serves the same shell for /dashboard/
+ * and all sub-paths (/dashboard/tokens/, /dashboard/users/, …). The
+ * client-side router (tabs.ts) reads location.pathname to pick the tab.
+ *
+ * Server guard: only admins may enter (middleware already ensures a
+ * signed-in user; this adds the role check).
+ */
+export const prerender = false;
+
+import DashboardPage from '@/components/dashboard/DashboardPage.astro';
+
+if (Astro.locals.user?.role !== 'admin') {
+  return Astro.redirect('/');
+}
+---
+
+<DashboardPage />
