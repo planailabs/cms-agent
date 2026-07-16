@@ -20,9 +20,8 @@ PUBLISH_COMMAND=./scripts/demo-publish.sh   # e.g. `cp "$TARBALL_PATH" /tmp/publ
 ```
 
 ```bash
-pnpm dev &                                        # CMS on :4321
-PROXY_LISTEN=0.0.0.0:8080 CMS_UPSTREAM=127.0.0.1:4321 \
-  cargo run --manifest-path proxy/Cargo.toml &    # public entrypoint
+nix develop
+overmind start    # Procfile: CMS on :4321 + proxy entrypoint on :8080
 ```
 
 Open `http://cms.localtest.me:8080`, sign in via your OIDC provider.

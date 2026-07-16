@@ -2,7 +2,9 @@
 
 ## Prerequisites
 
-- Node 22 + pnpm 11 (or `nix develop`)
+- Node 22 + pnpm 11 + Rust toolchain — or just `nix develop`, which provides
+  everything (including overmind, the Prisma engines, and Playwright
+  browsers) and is the recommended way to work on the project
 - PostgreSQL (production; tests use a throwaway SQLite automatically)
 - An OIDC identity provider (Keycloak, Authentik, Dex, Google, …)
 - Any OpenAI-compatible model endpoint
@@ -57,6 +59,12 @@ itself should only listen on localhost.
 Users are created on first OIDC sign-in (gated by the allowlist). Promote the
 first admin directly: `UPDATE "user" SET role='admin' WHERE email='…';`
 Afterwards the dashboard manages roles.
+
+## Running in development
+
+Inside `nix develop`, `overmind start` runs both Procfile processes (the CMS
+dev server and the proxy sidecar with localhost-friendly settings). overmind
+sources `.env` into both.
 
 ## NixOS note (development)
 

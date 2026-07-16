@@ -52,6 +52,7 @@
             perl
             git
             postgresql
+            overmind
           ];
 
           shellHook = ''

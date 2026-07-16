@@ -19,17 +19,19 @@ diffs, and pluggable deployment flows.
 ## Quick start (development)
 
 ```bash
+nix develop               # dev shell: node, pnpm, cargo, postgres, overmind,
+                          # Prisma engines + Playwright browsers wired up
 pnpm install
 cp .env.example .env      # fill in DATABASE_URL, OIDC_*, OPENAI_*, REPO_PATH…
 npx prisma migrate deploy # against your postgres
-pnpm dev                  # CMS on http://localhost:4321
-cargo run --manifest-path proxy/Cargo.toml   # public entrypoint on :8080
+overmind start            # Procfile: CMS on :4321 + proxy entrypoint on :8080
 ```
 
-On NixOS use the dev shell (`nix develop`) — it wires the Prisma engines and
-Playwright browsers. See **docs/setup.md** for every environment variable,
-**docs/walkthrough.md** for an end-to-end tour with `examples/blog-site`, and
-**docs/nixos.md** for the NixOS module.
+Without Nix you need Node 22, pnpm 11, and a Rust toolchain, then run the two
+Procfile processes yourself (`pnpm dev` and
+`cargo run --manifest-path proxy/Cargo.toml`). See **docs/setup.md** for every
+environment variable, **docs/walkthrough.md** for an end-to-end tour with
+`examples/blog-site`, and **docs/nixos.md** for the NixOS module.
 
 ## Tests
 
