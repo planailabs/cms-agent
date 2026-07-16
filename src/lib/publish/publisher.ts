@@ -77,10 +77,22 @@ export async function publish(req: PublishRequest): Promise<{ publicationId: str
   broadcast(chat.id, 'phase_changed', { type: 'phase_changed', workflowPhase: 'published' });
 
   // Merge the work branch into the target under the target's lock so no
-  // other chat merges mid-publish
-  const targetSha = await withBranchLock(chat.branchId, () =>
-    mergeInto(chat.workBranch, chat.branch.name),
-  );
+  // other chat merges mid-publish. A failed merge must roll the phase back —
+  // otherwise the chat is stuck in 'published' with nothing merged.
+  let targetSha: string;
+  try {
+    targetSha = await withBranchLock(chat.branchId, () =>
+      mergeInto(chat.workBranch, chat.branch.name),
+    );
+  } catch (err) {
+    await prisma.chat.updateMany({
+      where: { id: chat.id },
+      data: { workflowPhase: 'preview', entityVersion: { increment: 1 } },
+    });
+    broadcast(chat.id, 'phase_changed', { type: 'phase_changed', workflowPhase: 'preview' });
+    const message = err instanceof Error ? err.message : String(err);
+    throw new WorkflowError(`Merge into ${chat.branch.name} failed: ${message}`);
+  }
 
   const publication = await prisma.publication.create({
     data: {

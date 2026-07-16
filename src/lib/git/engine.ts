@@ -35,7 +35,38 @@ function repoGit(): SimpleGit {
       `REPO_PATH (${repoPath}) is not a git repository. Use scripts/setup-dev-site.sh to create a git-inited working copy.`,
     );
   }
+  ensureRepoExcludes(repoPath);
   return simpleGit(repoPath);
+}
+
+/**
+ * Build artifacts the preview dev servers generate inside worktrees. The
+ * managed repo may lack a .gitignore (it's the user's site), so without these
+ * `commitExecution`'s add -A sweeps them into execution commits — and merging
+ * such a commit into a branch whose worktree has the same paths untracked
+ * fails with "untracked working tree files would be overwritten".
+ * .git/info/exclude is repo-local (never committed) and shared by all
+ * worktrees.
+ */
+const REPO_EXCLUDES = ['node_modules/', '.astro/', 'dist/', '.DS_Store'];
+const EXCLUDE_MARKER = '# cms-agent managed excludes';
+let excludesEnsured = false;
+
+function ensureRepoExcludes(repoPath: string): void {
+  if (excludesEnsured) return;
+  excludesEnsured = true;
+  try {
+    const excludeFile = path.join(repoPath, '.git', 'info', 'exclude');
+    const current = fs.existsSync(excludeFile) ? fs.readFileSync(excludeFile, 'utf8') : '';
+    if (current.includes(EXCLUDE_MARKER)) return;
+    fs.mkdirSync(path.dirname(excludeFile), { recursive: true });
+    fs.appendFileSync(
+      excludeFile,
+      `${current.endsWith('\n') || current === '' ? '' : '\n'}${EXCLUDE_MARKER}\n${REPO_EXCLUDES.join('\n')}\n`,
+    );
+  } catch {
+    // Best-effort: a failure here only means commits may include artifacts
+  }
 }
 
 export function worktreeDir(branch: string): string {
@@ -166,7 +197,17 @@ export async function mergeInto(source: string, target: string): Promise<string>
     dir = await ensureWorktree(target);
   }
   const git = simpleGit(dir);
-  await git.merge(['--no-ff', '-m', `Merge ${source} into ${target}`, source]);
+  try {
+    await git.merge(['--no-ff', '-m', `Merge ${source} into ${target}`, source]);
+  } catch (err) {
+    // Leave no half-applied merge behind (conflicts set MERGE_HEAD)
+    try {
+      await git.merge(['--abort']);
+    } catch {
+      /* nothing to abort — the merge never started */
+    }
+    throw err;
+  }
   return (await git.revparse(['HEAD'])).trim();
 }
 

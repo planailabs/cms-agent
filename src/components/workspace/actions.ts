@@ -137,6 +137,7 @@ export const publishAction = async (sha?: string): Promise<void> => {
     });
     store.notify();
   }
+  // Failures surface via postJson's error toast.
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
