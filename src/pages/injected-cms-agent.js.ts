@@ -1,16 +1,16 @@
 /**
- * GET /injected-cms-agent.js — the preview-page bootstrap, injected by the
- * proxy into every preview HTML response. Built by Astro/Vite like any other
- * TS module: we serialize the compiled cmsAgentBootstrap function (it is
- * self-contained by contract) instead of maintaining a hand-written ES5 file.
+ * GET /injected-cms-agent.js — the preview-page bootstrap engine, injected by
+ * the proxy into every preview HTML response. An esbuild bundle of
+ * src/injected/bootstrap.ts: prerendered (built once at `astro build`, served
+ * as a static file), bundled per request in dev.
  */
 import type { APIRoute } from 'astro';
-import { cmsAgentBootstrap } from '@/injected/bootstrap';
+import { bundleInjected } from '@/lib/injected/bundle';
 
-const source = `(${cmsAgentBootstrap.toString()})();\n`;
+export const prerender = true;
 
-export const GET: APIRoute = () =>
-  new Response(source, {
+export const GET: APIRoute = async () =>
+  new Response(await bundleInjected('bootstrap'), {
     headers: {
       'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'public, max-age=300',

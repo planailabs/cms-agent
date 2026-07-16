@@ -1,12 +1,14 @@
 /**
  * Injected-agent bootstrap — the two-way eval engine running inside every
- * preview page. Served at /injected-cms-agent.js (see
- * src/pages/injected-cms-agent.js.ts, which serializes cmsAgentBootstrap via
- * .toString()), injected by the preview proxy before </head>.
+ * preview page. Bundled by esbuild (src/lib/injected/bundle.ts), served at
+ * /injected-cms-agent.js, injected by the preview proxy before </head>.
+ * Imports are allowed (the bundle is self-contained by construction), but
+ * keep this entry small — it ships with every preview page load.
  *
- * SELF-CONTAINED: this function is shipped as its own source text, so it must
- * not reference anything from module scope (imports, constants, helpers).
- * Types are fine — they erase.
+ * Modules pushed via cms:load-module are esbuild IIFE bundles with
+ * globalName __cmsAgentModule (see bundle.ts); the engine evaluates the text
+ * in a function scope and calls the default-export factory with the agent
+ * API — nothing leaks onto the page's globals.
  *
  * Security model:
  *  - dormant unless framed;
@@ -15,6 +17,7 @@
  *    window.parent AND that origin, and everything we post is targeted at it;
  *  - eval is parent→child only; the preview page can never run code upstairs.
  */
+import type { AgentApi } from './protocol';
 
 export function cmsAgentBootstrap(): void {
   'use strict';
@@ -88,11 +91,17 @@ export function cmsAgentBootstrap(): void {
   const loadModule = (id: string, source: string): void => {
     teardownModule();
     try {
-      // source is "(function(agent){…})" — parenthesized function expression
-      const factory = new Function(`"use strict"; return (${source});`)() as (
-        a: typeof agent,
-      ) => void;
-      factory(agent);
+      // source is an esbuild IIFE bundle: `var __cmsAgentModule = (() => {…})();`
+      // Evaluated in a function scope, so the var stays local to it.
+      const exported = new Function(
+        `"use strict";${source}
+        return typeof __cmsAgentModule !== "undefined" ? __cmsAgentModule : undefined;`,
+      )() as { default?: unknown } | ((a: AgentApi) => void) | undefined;
+      const factory = typeof exported === 'function' ? exported : exported?.default;
+      if (typeof factory !== 'function') {
+        throw new Error('module bundle did not export a factory function');
+      }
+      (factory as (a: AgentApi) => void)(agent as AgentApi);
       post({ type: 'cms:module-loaded', id, ok: true });
     } catch (err) {
       post({ type: 'cms:module-loaded', id, ok: false, error: String(err) });
@@ -159,3 +168,5 @@ export function cmsAgentBootstrap(): void {
     ready();
   }
 }
+
+cmsAgentBootstrap();

@@ -24,6 +24,7 @@ const PUBLIC_PATHS = [
   /^\/api\/auth\//,
   /^\/signin\/?$/,
   /^\/injected-cms-agent\.js$/,
+  /^\/injected-agent-module\.js$/,
   /^\/_astro\//,
   /^\/favicon/,
 ];
