@@ -14,17 +14,28 @@ import {
 } from '@/lib/previewCookie';
 import { BOOT_PATH_RE, handlePreviewBoot } from '@/lib/preview/bootPage';
 import { initRoutesFile } from '@/lib/preview/manager';
+import { getInternalToken } from '@/lib/internalToken';
 import { env } from '@/lib/env';
 
-// Publish the sidecar routing table once per server boot (skipped when the
-// module is loaded outside a configured runtime, e.g. during astro build).
-if (process.env.VAR_DIR) initRoutesFile();
+// Publish the sidecar routing table and create the shared internal token
+// once per server boot (skipped when the module is loaded outside a
+// configured runtime, e.g. during astro build).
+if (process.env.VAR_DIR) {
+  initRoutesFile();
+  try {
+    getInternalToken();
+  } catch (err) {
+    console.error('[internal] failed to create internal token:', err);
+  }
+}
 
 const PUBLIC_PATHS = [
   /^\/api\/auth\//,
   /^\/signin\/?$/,
   /^\/injected-cms-agent\.js$/,
   /^\/injected-agent-module\.js$/,
+  // Sidecar channel — Bearer-token authenticated inside the handler
+  /^\/api\/internal\//,
   /^\/_astro\//,
   /^\/favicon/,
 ];

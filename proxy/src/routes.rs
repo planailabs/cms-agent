@@ -2,9 +2,8 @@
 
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, SystemTime};
 
 /// Contract with the TypeScript CMS: `${VAR_DIR}/proxy-routes.json`.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -146,25 +145,6 @@ impl RoutesStore {
             }
         }
     }
-}
-
-/// Poll the routes file mtime every second on a background thread and reload on change.
-pub fn spawn_watcher(store: Arc<RoutesStore>, path: PathBuf) {
-    std::thread::Builder::new()
-        .name("routes-watcher".into())
-        .spawn(move || {
-            let mut last_mtime: Option<SystemTime> = None;
-            loop {
-                let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-                if mtime.is_some() && mtime != last_mtime {
-                    if store.try_reload(&path) {
-                        last_mtime = mtime;
-                    }
-                }
-                std::thread::sleep(Duration::from_secs(1));
-            }
-        })
-        .expect("failed to spawn routes watcher thread");
 }
 
 #[cfg(test)]

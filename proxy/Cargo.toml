@@ -10,6 +10,10 @@ pingora = { version = "0.6", features = ["proxy"] }
 async-trait = "0.1"
 bytes = "1"
 http = "1"
+# SSE routes subscription from the CMS (plain HTTP to localhost — no TLS)
+reqwest = { version = "0.12", default-features = false, features = ["stream"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+tokio = { version = "1", features = ["rt", "time"] }
 hmac = "0.12"
 sha2 = "0.10"
 base64 = "0.22"

@@ -24,12 +24,21 @@ interface ManagerState {
   instances: Map<string, { info: PreviewInstance; child: ChildProcess }>;
   sweeper: ReturnType<typeof setInterval> | null;
   starting: Map<string, Promise<PreviewInstance>>;
+  /** SSE subscribers (proxy connections) notified on every routes change. */
+  routesListeners: Set<(routesJson: string) => void>;
 }
 
 // Survive Vite HMR module reloads in dev
 const g = globalThis as unknown as { __previewManager?: ManagerState };
 const state: ManagerState =
-  g.__previewManager ?? (g.__previewManager = { instances: new Map(), sweeper: null, starting: new Map() });
+  g.__previewManager ??
+  (g.__previewManager = {
+    instances: new Map(),
+    sweeper: null,
+    starting: new Map(),
+    routesListeners: new Set(),
+  });
+state.routesListeners ??= new Set(); // field added after older HMR state
 
 const routesFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-routes.json');
 const accessFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-access.json');
@@ -39,18 +48,45 @@ function hostPort(host: string, port: number): string {
   return host.includes(':') ? `[${host}]:${port}` : `${host}:${port}`;
 }
 
-function writeRoutesFile(): void {
+function buildRoutes(): { cms: string; previews: Record<string, string> } {
   const e = env();
   const previews: Record<string, string> = {};
   for (const [branch, { info }] of state.instances) {
     if (info.status === 'ready') previews[branch] = `127.0.0.1:${info.port}`;
   }
   // cms upstream mirrors HOST (e.g. ::1 in dev, where astro dev binds IPv6)
-  const payload = JSON.stringify({ cms: hostPort(e.HOST, e.PORT), previews }, null, 2);
+  return { cms: hostPort(e.HOST, e.PORT), previews };
+}
+
+/** Current routing table as single-line JSON (SSE `routes` event payload). */
+export function currentRoutesJson(): string {
+  return JSON.stringify(buildRoutes());
+}
+
+/** Subscribe to routes changes; returns the unsubscribe function. */
+export function subscribeRoutes(fn: (routesJson: string) => void): () => void {
+  state.routesListeners.add(fn);
+  return () => state.routesListeners.delete(fn);
+}
+
+function writeRoutesFile(): void {
+  const routes = buildRoutes();
+  // The file stays as boot fallback: the proxy loads it once at startup and
+  // gets everything after that over SSE.
+  const payload = JSON.stringify(routes, null, 2);
   fs.mkdirSync(path.dirname(routesFile()), { recursive: true });
   const tmp = routesFile() + '.tmp';
   fs.writeFileSync(tmp, payload);
   fs.renameSync(tmp, routesFile());
+
+  const line = JSON.stringify(routes);
+  for (const listener of state.routesListeners) {
+    try {
+      listener(line);
+    } catch {
+      /* a dead SSE connection must not break preview management */
+    }
+  }
 }
 
 function freePort(): Promise<number> {

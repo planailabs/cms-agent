@@ -14,6 +14,7 @@ mod access;
 mod auth;
 mod inject;
 mod routes;
+mod sse;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -298,9 +299,11 @@ fn main() {
     let routes_path = cfg.var_dir.join("proxy-routes.json");
     let access_path = cfg.var_dir.join("proxy-access.json");
 
+    // Boot fallback from the routes file; everything after that arrives live
+    // over the token-authenticated SSE subscription to the CMS.
     let store = Arc::new(RoutesStore::new(Routes::fallback(&cfg.cms_upstream)));
-    store.try_reload(&routes_path); // initial load, if the file already exists
-    routes::spawn_watcher(store.clone(), routes_path);
+    store.try_reload(&routes_path);
+    sse::spawn_sse_client(store.clone(), cfg.var_dir.join("internal-token"));
 
     let access = AccessTracker::new();
     access::spawn_flusher(access.clone(), access_path);
