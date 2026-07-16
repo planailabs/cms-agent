@@ -14,6 +14,8 @@ export interface PromptInput {
   planJson?: unknown;
   approvedMemories?: string[];
   extension?: string;
+  /** True while the chat still carries the default title. */
+  needsTitle?: boolean;
 }
 
 const COMMON = `You are the editorial agent of a CMS that manages an Astro website through git.
@@ -69,6 +71,10 @@ export function buildSystemPrompt(input: PromptInput): string {
       input.planJson ? JSON.stringify(input.planJson, null, 2) : '(missing — ask the user)',
     );
 
+  if (input.needsTitle) {
+    prompt += `\n\nThis chat is still untitled: call set_chat_title once, early in your reply,
+with a concise 3–6 word title (in the user's language) describing their goal.`;
+  }
   if (input.approvedMemories?.length) {
     prompt += `\n\nProject conventions (team-approved memory):\n${input.approvedMemories
       .map((m) => `- ${m}`)

@@ -29,6 +29,19 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
       return true;
     }
 
+    case 'chat_renamed': {
+      const chatId = data.chatId as string;
+      const title = data.title as string;
+      if (chatId && title) {
+        for (const branch of store.state.branches) {
+          const chat = branch.chats.find((c) => c.id === chatId);
+          if (chat) chat.title = title;
+        }
+        store.notify();
+      }
+      return true;
+    }
+
     case 'execution_reverted': {
       const sha = data.sha as string;
       const revertSha = data.revertSha as string;

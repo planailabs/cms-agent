@@ -23,6 +23,7 @@ import { registerContentTools } from '@/lib/content/tools';
 import { registerLintTools } from './tools/lintTools';
 import { registerStructureTools } from './tools/structureTools';
 import { registerDeployTools } from './tools/deployTools';
+import { registerChatTools } from './tools/chatTools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
@@ -42,6 +43,7 @@ registerContentTools();
 registerLintTools();
 registerStructureTools();
 registerDeployTools();
+registerChatTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
@@ -80,6 +82,7 @@ export async function handleChatMessage(
   let branchName = '';
   let targetBranchName = 'main';
   let chatKind: ChatKind = 'workflow';
+  let needsTitle = false;
   let workflowPhase: WorkflowPhase = 'plan';
   let planJson: unknown;
   let nextOrdinal = 0;
@@ -110,13 +113,14 @@ export async function handleChatMessage(
       prisma.branch.findUniqueOrThrow({ where: { id: record.branchId } }),
       prisma.chat.findUniqueOrThrow({
         where: { id: chatId },
-        select: { planJson: true, workBranch: true, kind: true },
+        select: { planJson: true, workBranch: true, kind: true, title: true },
       }),
     ]);
     targetBranchName = branch.name;
     branchName = chat.workBranch; // the chat's own work branch
     chatKind = chat.kind as ChatKind;
     planJson = chat.planJson ?? undefined;
+    needsTitle = chat.title === 'New chat';
   }
 
   const ordinalRef = { value: nextOrdinal };
@@ -213,6 +217,7 @@ export async function handleChatMessage(
       planJson,
       extension,
       approvedMemories,
+      needsTitle,
     },
     setPhase,
     appendMsg,
