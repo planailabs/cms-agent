@@ -114,16 +114,34 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
       break;
     }
 
-    case 'tool_start':
+    case 'tool_start': {
       transition(currentMc, 'tool');
       currentMc.toolName = data.name as string;
+      // Persistent, collapsible tool-call row in the transcript
+      currentMc.messages.push({
+        role: 'tool',
+        content: '',
+        tool: { name: data.name as string, input: data.input, running: true },
+      });
       store.notify();
       break;
+    }
 
-    case 'tool_end':
+    case 'tool_end': {
       transition(currentMc, 'waiting');
+      const name = data.name as string;
+      for (let i = currentMc.messages.length - 1; i >= 0; i--) {
+        const msg = currentMc.messages[i];
+        if (msg.role === 'tool' && msg.tool?.running && msg.tool.name === name) {
+          msg.tool.running = false;
+          msg.tool.result = data.result as string | undefined;
+          break;
+        }
+      }
+      cacheAIChatMessages(currentMc.messages);
       store.notify();
       break;
+    }
 
     case 'question': {
       const mc2 = store.state.chat?.aiChat;

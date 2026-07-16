@@ -83,7 +83,7 @@ export interface ChatState {
   };
   /** AI chat state (SSE-driven conversation) */
   aiChat?: {
-    messages: Array<{ id?: string; role: 'user' | 'assistant' | 'cancel'; content: string }>;
+    messages: Array<import('../actions/chat/cache').StoredMessage>;
     /**
      * State machine phase:
      *   idle      → composer visible

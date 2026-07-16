@@ -6,7 +6,20 @@
 import { store } from '../../app/store';
 import { chatStorageKey } from '../../constants';
 
-export type StoredMessage = { id?: string; role: 'user' | 'assistant' | 'cancel'; content: string };
+/** Tool-call display info attached to role:'tool' messages. */
+export interface ToolCallInfo {
+  name: string;
+  input?: unknown;
+  result?: string;
+  running?: boolean;
+}
+
+export type StoredMessage = {
+  id?: string;
+  role: 'user' | 'assistant' | 'cancel' | 'tool';
+  content: string;
+  tool?: ToolCallInfo;
+};
 
 export const cacheAIChatMessages = (messages: StoredMessage[], chatId?: string) => {
   try {

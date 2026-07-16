@@ -85,13 +85,15 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       const results: ToolResult[] = [];
       for (const call of toolCalls) {
         if (isClientSideTool(call.function.name)) continue;
-        broadcast(chatId, 'tool_start', { type: 'tool_start', name: call.function.name });
-        const content = await bridge.callTool(
-          call.function.name,
-          safeParseArgs(call.function.arguments),
-        );
+        const args = safeParseArgs(call.function.arguments);
+        broadcast(chatId, 'tool_start', { type: 'tool_start', name: call.function.name, input: args });
+        const content = await bridge.callTool(call.function.name, args);
         results.push({ toolCallId: call.id, content });
-        broadcast(chatId, 'tool_end', { type: 'tool_end', name: call.function.name });
+        broadcast(chatId, 'tool_end', {
+          type: 'tool_end',
+          name: call.function.name,
+          result: content.slice(0, 2000),
+        });
       }
       await appendMsg({ role: 'tool', results });
       await setPhase('idle');
@@ -170,13 +172,15 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       await setPhase('tool_pending');
       const results: ToolResult[] = [];
       for (const call of toolCalls) {
-        broadcast(chatId, 'tool_start', { type: 'tool_start', name: call.function.name });
-        const content = await bridge.callTool(
-          call.function.name,
-          safeParseArgs(call.function.arguments),
-        );
+        const args = safeParseArgs(call.function.arguments);
+        broadcast(chatId, 'tool_start', { type: 'tool_start', name: call.function.name, input: args });
+        const content = await bridge.callTool(call.function.name, args);
         results.push({ toolCallId: call.id, content });
-        broadcast(chatId, 'tool_end', { type: 'tool_end', name: call.function.name });
+        broadcast(chatId, 'tool_end', {
+          type: 'tool_end',
+          name: call.function.name,
+          result: content.slice(0, 2000),
+        });
       }
       await appendMsg({ role: 'tool', results });
       await setPhase('idle');
