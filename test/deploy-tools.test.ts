@@ -1,9 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/db';
+import { registerClientTools } from '@/lib/agent/tools/clientTools';
 import { registerDeployTools } from '@/lib/agent/tools/deployTools';
 import { registerFsTools } from '@/lib/agent/tools/fsTools';
 import { executeTool, toolsForPhase, type ToolContext } from '@/lib/agent/tools/registry';
 
+registerClientTools();
 registerDeployTools();
 registerFsTools();
 
