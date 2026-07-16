@@ -22,6 +22,7 @@ export const GET: APIRoute = async () => {
           id: true,
           title: true,
           workflowPhase: true,
+          workBranch: true,
           updatedAt: true,
           createdBy: { select: { id: true, name: true } },
         },

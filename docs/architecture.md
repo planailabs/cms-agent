@@ -32,8 +32,15 @@
 - **Branch = subdomain = draft.** Real git branches (DNS-safe names) are the
   unit of preview and publish. `main.BASE_DOMAIN` previews production state;
   `v-<sha>.BASE_DOMAIN` previews any historical commit read-only.
-- **Chats ≠ branches.** A branch has many chats; all users see all chats.
-  Turn execution locks per chat; worktree mutation locks per branch.
+- **Chats have their own worktrees.** Every chat owns a work branch
+  (`c-<id>`, own worktree + preview subdomain) based on the TARGET branch it
+  will merge into (main or a long-lived branch). Chats on the same target
+  work in parallel without blocking each other; the target lock is only
+  taken during the publish merge. Publishing into the default branch runs
+  the deploy flow; into any other target it is a pure merge.
+- **Chats ≠ branches.** A target branch has many chats; all users see all
+  chats. Turn execution locks per chat; worktree mutation locks per work
+  branch.
 - **The proxy is a dumb, stable sidecar.** All lifecycle intelligence lives
   in TypeScript; the contract is two JSON files in VAR_DIR
   (`proxy-routes.json` written by the CMS, `proxy-access.json` written by the

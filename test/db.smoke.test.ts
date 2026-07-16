@@ -12,7 +12,12 @@ describe('throwaway sqlite db', () => {
     });
     const b = await prisma.branch.create({ data: { name: 'smoke-draft', createdById: u.id } });
     const c = await prisma.chat.create({
-      data: { branchId: b.id, createdById: u.id, planJson: { steps: ['a', 'b'] } },
+      data: {
+        branchId: b.id,
+        workBranch: 'c-smoke1',
+        createdById: u.id,
+        planJson: { steps: ['a', 'b'] },
+      },
     });
 
     const back = await prisma.chat.findUniqueOrThrow({ where: { id: c.id } });

@@ -48,16 +48,17 @@ but not edit. Historical versions of the branch are browsable at
 `v-<sha>.BASE_DOMAIN`; old versions can be restored as new commits.
 
 - **Request changes** → back to PLAN with feedback.
-- **Publish** (`POST …/publish {sha}`) → refused if the branch head moved
-  since review (stale approval); otherwise: publish approval bound to the
-  exact sha → merge to main under the branch lock → configured DeployFlow
-  runs with live log streaming → `Publication` (+ sealed `Artifact` where the
-  flow builds).
+- **Publish** (`POST …/publish {sha}`) → refused if the chat's work branch
+  moved since review (stale approval); otherwise: publish approval bound to
+  the exact sha → the work branch merges into its TARGET branch under the
+  target's lock → the configured DeployFlow runs (only when the target is
+  the default branch; other targets are pure merges) with live log
+  streaming → `Publication` (+ sealed `Artifact` where the flow builds).
 
 ## PUBLISHED → PLAN
 
-On verified success the branch resets onto the new main and the chat returns
-to PLAN for the next request. On failure main stays merged, the publication
+On verified success the work branch resets onto the updated target and the
+chat returns to PLAN for the next request. On failure main stays merged, the publication
 is marked failed, and retrying reuses the same sha and sealed artifact — no
 blind re-uploads (flows reconcile by commit sha first).
 

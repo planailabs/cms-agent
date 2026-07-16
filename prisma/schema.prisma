@@ -112,8 +112,12 @@ model Branch {
 
 model Chat {
   id          String @id @default(cuid())
+  // Target branch the chat's work merges into (main or a long-lived branch)
   branchId    String
   branch      Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  // The chat's own git work branch (own worktree + preview subdomain),
+  // based on the target branch and merged back into it on publish
+  workBranch  String @unique
   title       String @default("New chat")
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])

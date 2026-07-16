@@ -16,13 +16,18 @@ export const GET: APIRoute = async ({ params }) => {
   });
   if (!chat) return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
 
-  const files = await changedFiles(chat.branch.name);
+  const files = await changedFiles(chat.workBranch, chat.branch.name);
   const plan = chat.planJson as { pages?: Array<{ url: string }> } | null;
   const plannedUrls = plan?.pages?.map((p) => p.url) ?? [];
   const resolution = resolveChangedPages(files, plannedUrls);
 
   return new Response(
-    JSON.stringify({ branch: chat.branch.name, changedFiles: files, ...resolution }),
+    JSON.stringify({
+      branch: chat.workBranch,
+      targetBranch: chat.branch.name,
+      changedFiles: files,
+      ...resolution,
+    }),
     { headers: { 'Content-Type': 'application/json' } },
   );
 };

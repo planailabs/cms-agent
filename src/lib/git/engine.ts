@@ -17,7 +17,8 @@ export function validateBranchName(name: string): string | null {
   if (!BRANCH_RE.test(name)) {
     return 'Branch names must be DNS-safe labels: lowercase letters, digits, hyphens (1–63 chars, no leading/trailing hyphen).';
   }
-  if (RESERVED_BRANCH_NAMES.has(name) || name.startsWith('v-')) {
+  // v- = historical checkouts, c- = per-chat work branches
+  if (RESERVED_BRANCH_NAMES.has(name) || name.startsWith('v-') || name.startsWith('c-')) {
     return `"${name}" is reserved.`;
   }
   return null;
@@ -49,12 +50,12 @@ export async function defaultBranch(): Promise<string> {
   return branches.current;
 }
 
-/** Create the git branch (from main) if missing. */
-export async function ensureBranch(branch: string): Promise<void> {
+/** Create the git branch (from `base`, default main) if missing. */
+export async function ensureBranch(branch: string, base?: string): Promise<void> {
   const git = repoGit();
   const branches = await git.branchLocal();
   if (!branches.all.includes(branch)) {
-    await git.branch([branch, await defaultBranch()]);
+    await git.branch([branch, base ?? (await defaultBranch())]);
   }
 }
 
@@ -69,7 +70,7 @@ export function historicalRef(name: string): string | null {
  * For the default branch, the repo itself is the worktree. `v-<sha>` names
  * produce detached read-only checkouts of that commit (historical preview).
  */
-export async function ensureWorktree(branch: string): Promise<string> {
+export async function ensureWorktree(branch: string, base?: string): Promise<string> {
   const repoPath = path.resolve(env().REPO_PATH);
   if (branch === (await defaultBranch())) return repoPath;
 
@@ -84,7 +85,7 @@ export async function ensureWorktree(branch: string): Promise<string> {
   if (sha) {
     await repoGit().raw(['worktree', 'add', '--detach', dir, sha]);
   } else {
-    await ensureBranch(branch);
+    await ensureBranch(branch, base);
     await repoGit().raw(['worktree', 'add', dir, branch]);
   }
   return dir;
@@ -139,35 +140,46 @@ export async function revertCommit(branch: string, sha: string): Promise<string>
   return (await git.revparse(['HEAD'])).trim();
 }
 
-/** Merge the branch into main with a merge commit; returns main's new sha. */
-export async function mergeToMain(branch: string): Promise<string> {
+/**
+ * Merge `source` into `target` with a merge commit; returns the target's new
+ * sha. The merge runs inside the checkout that owns `target` — the repo for
+ * the default branch, its worktree otherwise (a branch can only be checked
+ * out in one place).
+ */
+export async function mergeInto(source: string, target: string): Promise<string> {
   const main = await defaultBranch();
-  const git = repoGit();
-  const current = (await git.branchLocal()).current;
-  if (current !== main) await git.checkout(main);
-  await git.merge(['--no-ff', '-m', `Publish ${branch}`, branch]);
+  let dir: string;
+  if (target === main) {
+    dir = path.resolve(env().REPO_PATH);
+    const git = repoGit();
+    const current = (await git.branchLocal()).current;
+    if (current !== main) await git.checkout(main);
+  } else {
+    dir = await ensureWorktree(target);
+  }
+  const git = simpleGit(dir);
+  await git.merge(['--no-ff', '-m', `Merge ${source} into ${target}`, source]);
   return (await git.revparse(['HEAD'])).trim();
 }
 
-/** Reset a branch (and its worktree) onto main after publish (plan §3). */
-export async function resetBranchOntoMain(branch: string): Promise<void> {
-  const main = await defaultBranch();
+/** Reset a branch (and its worktree) onto its base after a merge (plan §3). */
+export async function resetBranchOnto(branch: string, base: string): Promise<void> {
   const dir = await ensureWorktree(branch);
   const git = simpleGit(dir);
-  await git.raw(['reset', '--hard', main]);
+  await git.raw(['reset', '--hard', base]);
 }
 
-/** Files changed between main and the branch (three-dot diff). */
-export async function changedFiles(branch: string): Promise<string[]> {
-  const main = await defaultBranch();
-  const out = await repoGit().raw(['diff', '--name-only', `${main}...${branch}`]);
+/** Files changed between `base` (default main) and the branch (three-dot). */
+export async function changedFiles(branch: string, base?: string): Promise<string[]> {
+  const from = base ?? (await defaultBranch());
+  const out = await repoGit().raw(['diff', '--name-only', `${from}...${branch}`]);
   return out.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
-/** Unified diff of a branch against main. */
-export async function branchDiff(branch: string): Promise<string> {
-  const main = await defaultBranch();
-  return await repoGit().raw(['diff', `${main}...${branch}`]);
+/** Unified diff of a branch against `base` (default main). */
+export async function branchDiff(branch: string, base?: string): Promise<string> {
+  const from = base ?? (await defaultBranch());
+  return await repoGit().raw(['diff', `${from}...${branch}`]);
 }
 
 export interface CommitInfo {

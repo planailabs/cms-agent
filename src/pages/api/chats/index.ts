@@ -3,6 +3,7 @@
  */
 export const prerender = false;
 
+import { randomBytes } from 'node:crypto';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
 
@@ -25,6 +26,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const chat = await prisma.chat.create({
     data: {
       branchId: branch.id,
+      // The chat's own work branch: worktree + preview subdomain, merged
+      // into the target branch on publish. DNS-safe label.
+      workBranch: `c-${randomBytes(6).toString('hex')}`,
       title: body.title?.trim() || 'New chat',
       createdById: user.id,
     },

@@ -56,8 +56,8 @@ function padTo(png: PNG, width: number, height: number): PNG {
  * Produce before/after/diff PNGs for a route. Boots both preview instances
  * if needed. Cached per commit pair.
  */
-export async function diffRoute(branch: string, route: string): Promise<DiffResult> {
-  const main = await defaultBranch();
+export async function diffRoute(branch: string, route: string, base?: string): Promise<DiffResult> {
+  const main = base ?? (await defaultBranch());
   const [mainRef, branchRef] = await Promise.all([branchSha(main), branchSha(branch)]);
   const key = cacheKey(route, mainRef, branchRef);
   const dir = cacheDir(branch);

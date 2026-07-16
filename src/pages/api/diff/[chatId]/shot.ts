@@ -27,7 +27,7 @@ export const GET: APIRoute = async ({ params, url }) => {
   if (!chat) return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
 
   try {
-    const result = await diffRoute(chat.branch.name, route);
+    const result = await diffRoute(chat.workBranch, route, chat.branch.name);
     if (url.searchParams.get('meta')) {
       return new Response(
         JSON.stringify({

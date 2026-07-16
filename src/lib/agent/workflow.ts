@@ -9,7 +9,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/db';
 import { acquireTurnLock, broadcast, releaseTurnLock, withBranchLock } from './bus';
 import { handleChatMessage } from './handler';
-import { commitExecution, branchSha, ensureWorktree, revertCommit as gitRevert } from '@/lib/git/engine';
+import {
+  branchSha,
+  commitExecution,
+  ensureBranch,
+  ensureWorktree,
+  revertCommit as gitRevert,
+} from '@/lib/git/engine';
 import { hasErrors, validateWorktree } from '@/lib/validate';
 import { syncMemoriesToWorktree } from '@/lib/memory';
 import type { WorkflowPhase } from './types';
@@ -77,18 +83,20 @@ function emitPhase(chatId: string, workflowPhase: WorkflowPhase, extra: object =
 }
 
 async function recordApproval(
-  chat: { id: string; branch: { name: string } },
+  chat: { id: string; workBranch: string; branch: { name: string } },
   actorId: string,
   action: 'plan' | 'publish',
   opts: { planHash?: string; targetSha?: string; idempotencyKey?: string },
 ): Promise<void> {
+  // The chat's work branch may not exist yet before the first turn
+  await ensureBranch(chat.workBranch, chat.branch.name);
   await prisma.approval.create({
     data: {
       chatId: chat.id,
       actorId,
       action,
       planHash: opts.planHash,
-      baseSha: await branchSha(chat.branch.name),
+      baseSha: await branchSha(chat.workBranch),
       targetSha: opts.targetSha,
       idempotencyKey: opts.idempotencyKey ?? randomUUID(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -178,7 +186,7 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
     'CMS change';
 
   // Version team-approved conventions with this change (.cms/knowledge/)
-  const worktree = await ensureWorktree(chat.branch.name);
+  const worktree = await ensureWorktree(chat.workBranch, chat.branch.name);
   await syncMemoriesToWorktree(worktree);
 
   // Pre-commit validation of the dirty worktree (secret scan, binaries,
@@ -197,8 +205,8 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
     );
   }
 
-  const sha = await withBranchLock(chat.branchId, () =>
-    commitExecution(chat.branch.name, `${summary}\n\nChat: ${chat.id}`, {
+  const sha = await withBranchLock(chat.workBranch, () =>
+    commitExecution(chat.workBranch, `${summary}\n\nChat: ${chat.id}`, {
       name: opts.actor.name,
       email: opts.actor.email,
     }),
@@ -228,16 +236,20 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
   return { sha };
 }
 
-/** Undo an execution: git revert on the branch (never destructive). */
+/** Undo an execution: git revert on the owning chat's work branch. */
 export async function revertExecution(opts: {
   branchId: string;
   sha: string;
   actor: { id: string; name: string; email: string };
 }): Promise<string> {
-  const branch = await prisma.branch.findUnique({ where: { id: opts.branchId } });
-  if (!branch) throw new WorkflowError('Branch not found', 404);
+  const execution = await prisma.execution.findFirst({
+    where: { sha: opts.sha, chat: { branchId: opts.branchId } },
+    include: { chat: { select: { workBranch: true } } },
+  });
+  if (!execution) throw new WorkflowError('Execution not found on this branch', 404);
+  const workBranch = execution.chat.workBranch;
 
-  const revertSha = await withBranchLock(opts.branchId, () => gitRevert(branch.name, opts.sha));
+  const revertSha = await withBranchLock(workBranch, () => gitRevert(workBranch, opts.sha));
 
   await prisma.execution.updateMany({
     where: { sha: opts.sha, revertedBySha: null },

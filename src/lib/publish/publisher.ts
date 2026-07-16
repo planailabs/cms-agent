@@ -12,7 +12,7 @@ import { dbNull, prisma } from '@/lib/db';
 import { env } from '@/lib/env';
 import { broadcast, withBranchLock } from '@/lib/agent/bus';
 import { WorkflowError } from '@/lib/agent/workflow';
-import { branchSha, mergeToMain, resetBranchOntoMain } from '@/lib/git/engine';
+import { branchSha, defaultBranch, mergeInto, resetBranchOnto } from '@/lib/git/engine';
 import { registerBuiltinFlows } from './flows';
 import { getDeployFlow } from './types';
 
@@ -38,15 +38,21 @@ export async function publish(req: PublishRequest): Promise<{ publicationId: str
     throw new WorkflowError(`Cannot publish from the ${chat.workflowPhase} phase.`);
   }
 
-  const head = await branchSha(chat.branch.name);
+  // The approval binds the chat's WORK branch head — the exact state reviewed
+  const head = await branchSha(chat.workBranch);
   if (head !== req.sha) {
     throw new WorkflowError(
-      `The branch moved since you reviewed it (${req.sha.slice(0, 8)} → ${head.slice(0, 8)}). Review the preview again.`,
+      `The chat's work branch moved since you reviewed it (${req.sha.slice(0, 8)} → ${head.slice(0, 8)}). Review the preview again.`,
     );
   }
 
-  const flow = getDeployFlow(e.DEPLOY_FLOW);
-  if (!flow) throw new WorkflowError(`Unknown deploy flow: ${e.DEPLOY_FLOW}`, 500);
+  // Deploy flows run only when the target is the site's default branch;
+  // merging into another target branch is a pure merge.
+  const isDefaultTarget = chat.branch.name === (await defaultBranch());
+  const flow = isDefaultTarget ? getDeployFlow(e.DEPLOY_FLOW) : null;
+  if (isDefaultTarget && !flow) {
+    throw new WorkflowError(`Unknown deploy flow: ${e.DEPLOY_FLOW}`, 500);
+  }
 
   // Approval bound to the exact sha; unique idempotency key dedupes retries
   await prisma.approval.create({
@@ -70,21 +76,31 @@ export async function publish(req: PublishRequest): Promise<{ publicationId: str
   }
   broadcast(chat.id, 'phase_changed', { type: 'phase_changed', workflowPhase: 'published' });
 
-  // Merge under the branch lock so no execution lands mid-publish
-  const mainSha = await withBranchLock(chat.branchId, () => mergeToMain(chat.branch.name));
+  // Merge the work branch into the target under the target's lock so no
+  // other chat merges mid-publish
+  const targetSha = await withBranchLock(chat.branchId, () =>
+    mergeInto(chat.workBranch, chat.branch.name),
+  );
 
   const publication = await prisma.publication.create({
     data: {
       chatId: chat.id,
       branchId: chat.branchId,
-      sha: mainSha,
-      flow: flow.id,
+      sha: targetSha,
+      flow: flow?.id ?? 'merge-only',
       status: 'running',
     },
   });
 
   // Run the flow asynchronously; progress streams over SSE
-  void runFlow(publication.id, chat.id, chat.branchId, chat.branch.name, mainSha, flow.id);
+  void runFlow(
+    publication.id,
+    chat.id,
+    chat.workBranch,
+    chat.branch.name,
+    targetSha,
+    flow?.id ?? null,
+  );
 
   return { publicationId: publication.id };
 }
@@ -92,13 +108,13 @@ export async function publish(req: PublishRequest): Promise<{ publicationId: str
 async function runFlow(
   publicationId: string,
   chatId: string,
-  branchId: string,
-  branchName: string,
+  workBranch: string,
+  targetName: string,
   sha: string,
-  flowId: string,
+  flowId: string | null,
 ): Promise<void> {
   const e = env();
-  const flow = getDeployFlow(flowId)!;
+  const flow = flowId ? getDeployFlow(flowId)! : null;
   const logLines: string[] = [];
   const log = (line: string) => {
     logLines.push(line);
@@ -106,13 +122,17 @@ async function runFlow(
   };
 
   try {
-    const result = await flow.publish({ sha, repoPath: path.resolve(e.REPO_PATH), log });
-
-    let verified = true;
-    if (flow.verify) {
-      verified = await flow.verify({ sha, repoPath: path.resolve(e.REPO_PATH), log }, result);
+    let result: { externalUrl?: string } = {};
+    if (flow) {
+      result = await flow.publish({ sha, repoPath: path.resolve(e.REPO_PATH), log });
+      let verified = true;
+      if (flow.verify) {
+        verified = await flow.verify({ sha, repoPath: path.resolve(e.REPO_PATH), log }, result);
+      }
+      if (!verified) throw new Error('Post-publish verification failed');
+    } else {
+      log(`Merged into ${targetName} (non-default target — no deployment).`);
     }
-    if (!verified) throw new Error('Post-publish verification failed');
 
     // Record the sealed artifact when the flow produced one
     const artifactMeta = path.join(path.resolve(e.VAR_DIR), 'artifacts', `${sha}.json`);
@@ -134,8 +154,8 @@ async function runFlow(
       data: { status: 'succeeded', log: logLines.join('\n'), externalUrl: result.externalUrl },
     });
 
-    // Cycle: branch back onto new main, chat back to PLAN
-    await withBranchLock(branchId, () => resetBranchOntoMain(branchName));
+    // Cycle: work branch back onto the updated target, chat back to PLAN
+    await withBranchLock(workBranch, () => resetBranchOnto(workBranch, targetName));
     await prisma.chat.updateMany({
       where: { id: chatId },
       data: { workflowPhase: 'plan', planJson: dbNull, entityVersion: { increment: 1 } },

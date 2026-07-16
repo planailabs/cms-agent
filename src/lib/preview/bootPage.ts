@@ -9,6 +9,7 @@
  * until the sidecar picks up the new route.
  */
 import { prisma } from '@/lib/db';
+import { ensureBranch } from '@/lib/git/engine';
 import { ensureInstance } from './manager';
 import { escapeHtml } from './html';
 
@@ -18,15 +19,26 @@ export async function handlePreviewBoot(branch: string): Promise<Response> {
   // v-<sha> labels are historical read-only checkouts (plan §12)
   const isHistorical = /^v-[0-9a-f]{7,40}$/.test(branch);
   const isMain = branch === 'main';
-  const known =
-    isHistorical || isMain ? null : await prisma.branch.findUnique({ where: { name: branch } });
-  const bootable = !!known || isMain || isHistorical;
+  const [known, chat] =
+    isHistorical || isMain
+      ? [null, null]
+      : await Promise.all([
+          prisma.branch.findUnique({ where: { name: branch } }),
+          // per-chat work branches (c-…) get previews too
+          prisma.chat.findUnique({
+            where: { workBranch: branch },
+            include: { branch: { select: { name: true } } },
+          }),
+        ]);
+  const bootable = !!known || !!chat || isMain || isHistorical;
 
   if (bootable) {
     // Fire and forget — the page refreshes until the route exists.
-    void ensureInstance(branch).catch((err) =>
-      console.error(`[preview] failed to start ${branch}:`, err),
-    );
+    void (async () => {
+      // A work branch may not exist in git before its first turn
+      if (chat) await ensureBranch(branch, chat.branch.name);
+      await ensureInstance(branch);
+    })().catch((err) => console.error(`[preview] failed to start ${branch}:`, err));
   }
 
   const safe = escapeHtml(branch);

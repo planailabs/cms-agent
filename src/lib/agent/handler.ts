@@ -76,6 +76,7 @@ export async function handleChatMessage(
   let messages: StoredMessage[] = [];
   let branchId = '';
   let branchName = '';
+  let targetBranchName = 'main';
   let workflowPhase: WorkflowPhase = 'plan';
   let planJson: unknown;
   let nextOrdinal = 0;
@@ -104,9 +105,13 @@ export async function handleChatMessage(
 
     const [branch, chat] = await Promise.all([
       prisma.branch.findUniqueOrThrow({ where: { id: record.branchId } }),
-      prisma.chat.findUniqueOrThrow({ where: { id: chatId }, select: { planJson: true } }),
+      prisma.chat.findUniqueOrThrow({
+        where: { id: chatId },
+        select: { planJson: true, workBranch: true },
+      }),
     ]);
-    branchName = branch.name;
+    targetBranchName = branch.name;
+    branchName = chat.workBranch; // the chat's own work branch
     planJson = chat.planJson ?? undefined;
   }
 
@@ -163,10 +168,10 @@ export async function handleChatMessage(
     return;
   }
 
-  // ── Tool context (worktree resolved lazily; injectable in test mode) ──────
+  // ── Tool context: the chat's own worktree, based on its target branch ─────
   const worktreePath = opts.skipPersistence
     ? (opts.worktreePath ?? '')
-    : await ensureWorktree(branchName);
+    : await ensureWorktree(branchName, targetBranchName);
 
   const toolContext: ToolContext = {
     chatId,
@@ -192,7 +197,14 @@ export async function handleChatMessage(
     messages,
     phase,
     toolContext,
-    promptInput: { phase: workflowPhase, branchName, locale, planJson, extension, approvedMemories },
+    promptInput: {
+      phase: workflowPhase,
+      branchName: opts.skipPersistence ? branchName : `${branchName} (merges into ${targetBranchName})`,
+      locale,
+      planJson,
+      extension,
+      approvedMemories,
+    },
     setPhase,
     appendMsg,
     skipTokenAccounting: opts.skipPersistence,
