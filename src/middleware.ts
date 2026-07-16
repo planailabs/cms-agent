@@ -11,8 +11,22 @@ import {
   previewCookieAttributes,
   PREVIEW_COOKIE_NAME,
 } from '@/lib/previewCookie';
+import { initRoutesFile } from '@/lib/preview/manager';
 
-const PUBLIC_PATHS = [/^\/api\/auth\//, /^\/signin\/?$/, /^\/preview-overlay\.js$/, /^\/_astro\//, /^\/favicon/];
+// Publish the sidecar routing table once per server boot (skipped when the
+// module is loaded outside a configured runtime, e.g. during astro build).
+if (process.env.VAR_DIR) initRoutesFile();
+
+const PUBLIC_PATHS = [
+  /^\/api\/auth\//,
+  /^\/signin\/?$/,
+  /^\/preview-overlay\.js$/,
+  /^\/_astro\//,
+  /^\/favicon/,
+  // Reached through the sidecar from preview hosts, where the better-auth
+  // cookie doesn't exist; the page itself verifies the HMAC preview cookie.
+  /^\/__preview\/boot\//,
+];
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = new URL(context.request.url);
