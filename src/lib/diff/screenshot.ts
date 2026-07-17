@@ -13,6 +13,11 @@ import { branchSha, defaultBranch } from '@/lib/git/engine';
 import { ensureInstance } from '@/lib/preview/manager';
 
 export type ShotKind = 'before' | 'after' | 'diff';
+export type BrowserName = 'chromium' | 'firefox' | 'webkit';
+export const BROWSERS: readonly BrowserName[] = ['chromium', 'firefox', 'webkit'];
+const isBrowser = (v: string): v is BrowserName => (BROWSERS as readonly string[]).includes(v);
+export const asBrowser = (v: string | null | undefined, fallback: BrowserName): BrowserName =>
+  v && isBrowser(v) ? v : fallback;
 
 export interface DiffResult {
   route: string;
@@ -27,22 +32,48 @@ function cacheDir(branch: string): string {
   return path.join(path.resolve(env().VAR_DIR), 'diffs', branch);
 }
 
-function cacheKey(route: string, mainRef: string, branchRef: string): string {
-  return createHash('sha256').update(`${route}|${mainRef}|${branchRef}`).digest('hex').slice(0, 16);
+function cacheKey(...parts: string[]): string {
+  return createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 16);
 }
 
-async function screenshot(port: number, route: string, outFile: string): Promise<void> {
-  const { chromium } = await import('playwright');
+async function screenshot(
+  port: number,
+  route: string,
+  outFile: string,
+  browser: BrowserName = 'chromium',
+): Promise<void> {
+  const playwright = await import('playwright');
   // chromiumSandbox: false — chromium's own SUID/namespace sandbox is
   // unreliable inside the container; the content is our own site preview.
-  const browser = await chromium.launch({ chromiumSandbox: false });
+  const launched = await playwright[browser].launch(
+    browser === 'chromium' ? { chromiumSandbox: false } : {},
+  );
   try {
-    const page = await browser.newPage({ viewport: VIEWPORT });
+    const page = await launched.newPage({ viewport: VIEWPORT });
     await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: 'networkidle', timeout: 30_000 });
     await page.screenshot({ path: outFile, fullPage: true });
   } finally {
-    await browser.close();
+    await launched.close();
   }
+}
+
+/** pixelmatch two PNG files into a diff PNG; returns changed pixel count. */
+function pixelDiff(fileA: string, fileB: string, diffOut: string): { changed: number; total: number } {
+  const a = PNG.sync.read(fs.readFileSync(fileA));
+  const b = PNG.sync.read(fs.readFileSync(fileB));
+  const width = Math.max(a.width, b.width);
+  const height = Math.max(a.height, b.height);
+  const ap = padTo(a, width, height);
+  const bp = padTo(b, width, height);
+  const diff = new PNG({ width, height });
+  const changed = pixelmatch(ap.data, bp.data, diff.data, width, height, {
+    threshold: 0.1,
+    diffColor: [255, 64, 64],
+    diffColorAlt: [64, 128, 255],
+    alpha: 0.4,
+  });
+  fs.writeFileSync(diffOut, PNG.sync.write(diff));
+  return { changed, total: width * height };
 }
 
 /** Pad both PNGs to identical dimensions (white background). */
@@ -87,30 +118,46 @@ export async function diffRoute(branch: string, route: string, base?: string): P
     screenshot(branchInstance.port, route, files.after),
   ]);
 
-  const before = PNG.sync.read(fs.readFileSync(files.before));
-  const after = PNG.sync.read(fs.readFileSync(files.after));
-  const width = Math.max(before.width, after.width);
-  const height = Math.max(before.height, after.height);
-  const beforePadded = padTo(before, width, height);
-  const afterPadded = padTo(after, width, height);
+  const { changed, total } = pixelDiff(files.before, files.after, files.diff);
+  const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
+  fs.writeFileSync(metaFile, JSON.stringify(result));
+  return result;
+}
 
-  const diff = new PNG({ width, height });
-  const changedPixels = pixelmatch(
-    beforePadded.data,
-    afterPadded.data,
-    diff.data,
-    width,
-    height,
-    { threshold: 0.1, diffColor: [255, 64, 64], diffColorAlt: [64, 128, 255], alpha: 0.4 },
-  );
-  fs.writeFileSync(files.diff, PNG.sync.write(diff));
+/**
+ * Cross-browser diff: render the SAME branch/route in two browser engines and
+ * pixelmatch them. before = browserA, after = browserB. Cached per
+ * (route, sha, browserA, browserB).
+ */
+export async function diffBrowsers(
+  branch: string,
+  route: string,
+  browserA: BrowserName,
+  browserB: BrowserName,
+): Promise<DiffResult> {
+  const ref = await branchSha(branch);
+  const key = cacheKey('browsers', route, ref, browserA, browserB);
+  const dir = cacheDir(branch);
+  fs.mkdirSync(dir, { recursive: true });
 
-  const result: DiffResult = {
-    route,
-    changedPixels,
-    totalPixels: width * height,
-    files,
+  const files: Record<ShotKind, string> = {
+    before: path.join(dir, `${key}-before.png`),
+    after: path.join(dir, `${key}-after.png`),
+    diff: path.join(dir, `${key}-diff.png`),
   };
+  const metaFile = path.join(dir, `${key}-meta.json`);
+  if (fs.existsSync(metaFile) && Object.values(files).every((f) => fs.existsSync(f))) {
+    return JSON.parse(fs.readFileSync(metaFile, 'utf8')) as DiffResult;
+  }
+
+  const instance = await ensureInstance(branch);
+  await Promise.all([
+    screenshot(instance.port, route, files.before, browserA),
+    screenshot(instance.port, route, files.after, browserB),
+  ]);
+
+  const { changed, total } = pixelDiff(files.before, files.after, files.diff);
+  const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
   fs.writeFileSync(metaFile, JSON.stringify(result));
   return result;
 }
