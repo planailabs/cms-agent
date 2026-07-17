@@ -44,7 +44,9 @@ export type StoredMessage =
   | { id?: string; role: 'user'; content: string; pageContext?: PageContext }
   | { id?: string; role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { id?: string; role: 'tool'; results: ToolResult[] }
-  | { id?: string; role: 'cancel'; content: string };
+  | { id?: string; role: 'cancel'; content: string }
+  // Agent-less flow event (see lib/automatism.ts) — part of the agent context
+  | { id?: string; role: 'automatism'; content: string };
 
 export interface ClientToolPrompt {
   toolName: string;

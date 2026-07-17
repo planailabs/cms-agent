@@ -42,7 +42,10 @@ export const toOpenAiMessages = (msgs: StoredMessage[]): ChatMessage[] => {
   const result: ChatMessage[] = [];
   for (const m of msgs) {
     if (m.role === 'cancel') continue;
-    if (m.role === 'user') {
+    if (m.role === 'automatism') {
+      // Agent-less flow events: model context, marked as such
+      result.push({ role: 'user', content: `[Automatism]\n${m.content}` });
+    } else if (m.role === 'user') {
       const text = m.pageContext ? `${renderPageContext(m.pageContext)}\n\n${m.content}` : m.content;
       result.push({ role: 'user', content: text });
     } else if (m.role === 'assistant') {

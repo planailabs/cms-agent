@@ -61,6 +61,9 @@ export async function loadChatRecord(chatId: string): Promise<{
     if (row.role === 'tool') {
       return { id: row.id, role: 'tool', results: (row.contentBlocks as ToolResult[] | null) ?? [] };
     }
+    if (row.role === 'automatism') {
+      return { id: row.id, role: 'automatism', content: row.content };
+    }
     return {
       id: row.id,
       role: 'user',

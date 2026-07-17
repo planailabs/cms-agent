@@ -6,8 +6,8 @@
 import type { WorkflowPhase } from './types';
 
 export interface PromptInput {
-  /** 'deployments' system chats get their own prompt, phase-independent. */
-  kind?: 'workflow' | 'deployments';
+  /** Non-workflow kinds get their own prompt, phase-independent. */
+  kind?: 'workflow' | 'deployment' | 'deployments';
   phase: WorkflowPhase;
   branchName: string;
   locale: string;
@@ -66,9 +66,22 @@ list_publications, get_publication (full logs), check_deployment_status
 deployment state — always read it from the tools. Answer in the user's
 language (locale: {locale}).`;
 
+const DEPLOYMENT_PROMPT = `You are the deployment agent for one publish of a CMS-managed Astro website.
+This chat belongs to a single deployment (an "automatism": merge → deploy → verify)
+that runs without you and posts its progress as [Automatism] events above. You are
+invoked when a step fails. Your job:
+- Read the failure context in the last [Automatism] event and investigate with your
+  tools: list_publications, get_publication (full logs), check_deployment_status.
+- Explain the root cause precisely; never invent deployment state — read it from tools.
+- When the underlying problem is fixed and a retry makes sense, call
+  resume_automatism to re-run the failed step. If the failure needs a human
+  decision or a code change, say exactly what and why instead.
+Answer in the user's language (locale: {locale}).`;
+
 export function buildSystemPrompt(input: PromptInput): string {
-  if (input.kind === 'deployments') {
-    let p = DEPLOYMENTS_PROMPT.replace('{locale}', input.locale);
+  if (input.kind === 'deployments' || input.kind === 'deployment') {
+    const base = input.kind === 'deployment' ? DEPLOYMENT_PROMPT : DEPLOYMENTS_PROMPT;
+    let p = base.replace('{locale}', input.locale);
     if (input.extension) p += `\n\n${input.extension}`;
     return p;
   }

@@ -6,8 +6,9 @@
 import type { z } from 'zod';
 import type { WorkflowPhase } from '../types';
 
-/** Chat kinds: normal workflow chats vs. the deployments system chat. */
-export type ChatKind = 'workflow' | 'deployments';
+/** Chat kinds: workflow chats, per-publish deployment chats, and the shared
+ *  deployments system chat. */
+export type ChatKind = 'workflow' | 'deployment' | 'deployments';
 
 /** Context passed to every server-side tool execution. */
 export interface ToolContext {

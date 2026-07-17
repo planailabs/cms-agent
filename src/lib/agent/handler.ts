@@ -27,6 +27,7 @@ import { registerChatTools } from './tools/chatTools';
 import { registerScratchTools } from './tools/scratchTools';
 import { registerCommitTools } from './tools/commitTools';
 import { registerCommandTools } from './tools/commandTools';
+import { registerAutomatismTools } from './tools/automatismTools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
@@ -50,6 +51,7 @@ registerChatTools();
 registerScratchTools();
 registerCommitTools();
 registerCommandTools();
+registerAutomatismTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
@@ -195,10 +197,10 @@ export async function handleChatMessage(
   }
 
   // ── Tool context: the chat's own worktree, based on its target branch.
-  // System chats (deployments) have no repo tools and need no worktree. ─────
+  // Deployment/system chats have no repo tools and need no worktree. ────────
   const worktreePath = opts.skipPersistence
     ? (opts.worktreePath ?? '')
-    : chatKind === 'deployments'
+    : chatKind !== 'workflow'
       ? ''
       : await ensureWorktree(branchName, targetBranchName);
 

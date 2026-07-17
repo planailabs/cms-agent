@@ -20,7 +20,7 @@ const listPublicationsTool: ToolDef = {
     status: z.enum(['running', 'succeeded', 'failed', 'external_unknown']).optional(),
   }),
   phases: [...ALL_PHASES],
-  kinds: ['workflow', 'deployments'],
+  kinds: ['workflow', 'deployment', 'deployments'],
   async execute(input) {
     const rows = await prisma.publication.findMany({
       where: input.status ? { status: input.status } : undefined,
@@ -56,7 +56,7 @@ const getPublicationTool: ToolDef = {
     'Full detail of one publication: complete deploy log, artifact manifest summary, approval linkage. Pass the publication id or a commit sha.',
   schema: z.object({ idOrSha: z.string() }),
   phases: [...ALL_PHASES],
-  kinds: ['workflow', 'deployments'],
+  kinds: ['workflow', 'deployment', 'deployments'],
   async execute(input) {
     const p = await prisma.publication.findFirst({
       where: { OR: [{ id: input.idOrSha }, { sha: input.idOrSha }] },
@@ -98,7 +98,7 @@ const deploymentStatusTool: ToolDef = {
     "Re-check a publication's live status via the deploy flow's verification (e.g. GitHub CI conclusion, Cloudflare deployment state). Read-only.",
   schema: z.object({ publicationId: z.string() }),
   phases: [...ALL_PHASES],
-  kinds: ['workflow', 'deployments'],
+  kinds: ['workflow', 'deployment', 'deployments'],
   async execute(input) {
     const p = await prisma.publication.findUnique({ where: { id: input.publicationId } });
     if (!p) return JSON.stringify({ error: 'Publication not found' });
