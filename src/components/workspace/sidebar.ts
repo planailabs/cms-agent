@@ -29,10 +29,11 @@ const renderBranchList = (state: AppState): string =>
         .map((chat) => {
           const isActiveChat = chat.id === state.activeChatId;
           const author = chat.createdBy?.name ? ` · ${escapeHtml(chat.createdBy.name)}` : '';
-          const isWorkflow = (chat.kind ?? 'workflow') === 'workflow';
+          const kind = chat.kind ?? 'workflow';
+          const isWorkflow = kind === 'workflow';
           const kindBadge = isWorkflow
             ? ''
-            : `<span class="ws-chat-item__kind">${escapeHtml(KIND_LABEL[chat.kind] ?? chat.kind)}</span>`;
+            : `<span class="ws-chat-item__kind">${escapeHtml(KIND_LABEL[kind] ?? kind)}</span>`;
           // System chats have no workflow phase worth showing
           const phase = isWorkflow ? PHASE_SHORT[chat.workflowPhase] ?? chat.workflowPhase : '';
           return `<button type="button"
