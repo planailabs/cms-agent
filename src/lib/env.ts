@@ -36,6 +36,9 @@ const schema = z.object({
 
   // Domains / networking
   BASE_DOMAIN: z.string().min(1), // e.g. cms.example.com or localhost
+  // Scheme browsers reach the CMS with. Behind TLS-terminating proxies the
+  // node server only sees http, so this can't be derived from the request.
+  PUBLIC_SCHEME: z.enum(['http', 'https']).optional(),
   HOST: z.string().default('127.0.0.1'),
   PORT: z.coerce.number().int().default(4321),
   PREVIEW_COOKIE_SECRET: z.string().min(16),

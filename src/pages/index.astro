@@ -11,7 +11,8 @@ export const prerender = false;
 
 const user = Astro.locals.user!;
 const baseDomain = process.env.BASE_DOMAIN ?? 'localhost';
-const scheme = Astro.url.protocol === 'https:' ? 'https' : 'http';
+const scheme =
+  process.env.PUBLIC_SCHEME ?? (Astro.url.protocol === 'https:' ? 'https' : 'http');
 ---
 
 <!doctype html>
