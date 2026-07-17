@@ -101,6 +101,8 @@ export interface ChatState {
     /** Word-by-word streaming reveal of the last assistant message */
     streamingText?: { full: string; visible: string };
     error?: string;
+    /** Turn was interrupted (e.g. server restart) — a Continue button shows */
+    canContinue?: boolean;
     /** Active client-side tool prompt (waiting for user input) */
     clientPrompt?: {
       toolName: string;

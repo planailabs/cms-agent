@@ -7,6 +7,7 @@
 import { store } from '../chat/app/store';
 import { delegateEvent } from '../chat/utils/dom';
 import { switchChat } from '../chat/actions/chat';
+import { continueChatSession } from '../chat/actions/chat/session';
 import {
   approvePlanAction,
   requestChangesAction,
@@ -243,6 +244,9 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     }
     store.notify();
   });
+
+  // Retry a failed turn / continue an interrupted session
+  delegateEvent(app, 'click', '[data-action="chat-continue"]', () => void continueChatSession());
 
   // Context chip
   delegateEvent(app, 'click', '[data-action="ws-chip-remove"]', () => removeContextChip());

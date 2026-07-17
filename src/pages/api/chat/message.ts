@@ -9,6 +9,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { acquireTurnLock, broadcast, releaseTurnLock } from '@/lib/agent/bus';
 import { handleChatMessage } from '@/lib/agent/handler';
+import { prisma } from '@/lib/db';
 import type { IncomingChatMessage } from '@/lib/agent/types';
 
 const json = (data: unknown, status = 200) =>
@@ -36,16 +37,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   void (async () => {
     try {
+      // A starting turn clears the previous failure (Retry sends 'continue')
+      await prisma.chat
+        .updateMany({ where: { id: body.chatId, lastError: { not: null } }, data: { lastError: null } })
+        .catch(() => {});
       await handleChatMessage(user.id, locale, body);
       // Autonomy grants may auto-approve a plan the turn just proposed
       const { maybeAutoApprovePlan } = await import('@/lib/autonomy');
       await maybeAutoApprovePlan(body.chatId, user.id);
     } catch (err) {
       console.error('[chat/message] Handler error:', err);
-      broadcast(body.chatId, 'error', {
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Internal error',
-      });
+      const message = err instanceof Error ? err.message : 'Internal error';
+      // Persist so the error (and its Retry) survives reloads
+      await prisma.chat
+        .updateMany({ where: { id: body.chatId }, data: { lastError: message } })
+        .catch(() => {});
+      broadcast(body.chatId, 'error', { type: 'error', message });
     } finally {
       releaseTurnLock(body.chatId, lockId);
     }

@@ -24,6 +24,7 @@ export interface ChatHistoryResult {
   phase?: string;
   pendingQuestion?: Record<string, unknown>;
   executions: HistoryExecution[];
+  lastError?: string | null;
 }
 
 export const initAIChat = (messages: StoredMessage[], phase: 'idle' | 'waiting' = 'idle') => {
@@ -64,6 +65,7 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
       phase: data.phase,
       pendingQuestion: data.pendingQuestion,
       executions: (data.executions ?? []) as HistoryExecution[],
+      lastError: data.lastError ?? null,
     };
   } catch {
     // Network error — fall through
@@ -136,6 +138,14 @@ export const restoreAIChatSession = (): void => {
         } else {
           mc.clientPrompt = { toolName: 'ask_question', input: pq };
         }
+      } else if (result.lastError) {
+        // A previous turn failed — show the stored error with Retry
+        mc.phase = 'error';
+        mc.error = result.lastError;
+      } else if (result.phase === 'tool_pending') {
+        // Interrupted mid-turn (e.g. server restart) — offer Continue
+        mc.phase = 'idle';
+        mc.canContinue = true;
       } else {
         mc.phase = 'idle';
       }
@@ -152,4 +162,38 @@ export const restoreAIChatSession = (): void => {
   };
 
   void fetchAIChatHistory(chatId).then(applyHistory);
+};
+
+/**
+ * Resumes an interrupted or failed turn (Retry / Continue buttons): clears
+ * the local error state and asks the server to continue from stored state.
+ */
+export const continueChatSession = async (): Promise<void> => {
+  const chatId = store.state.activeChatId;
+  const mc = store.state.chat?.aiChat;
+  if (!chatId || !mc) return;
+
+  mc.error = undefined;
+  mc.canContinue = false;
+  mc.phase = 'waiting';
+  store.notify();
+
+  try {
+    const res = await fetch('/api/chat/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId, type: 'continue', text: '' }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      mc.phase = 'error';
+      mc.error = data.error ?? `Continue failed (${res.status})`;
+      store.notify();
+    }
+    // On 202 the SSE stream (thinking/text_delta/…) drives the UI from here.
+  } catch {
+    mc.phase = 'error';
+    mc.error = 'Network error — could not continue the session.';
+    store.notify();
+  }
 };

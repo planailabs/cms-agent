@@ -47,9 +47,25 @@ export const renderToolIndicator = (
 
 export const renderErrorMessage = (mc: AiChat): string =>
   mc.phase === 'error' && mc.error
-    ? `<div class="flex justify-start">
+    ? `<div class="flex flex-col items-start gap-2">
           <p class="max-w-full text-sm leading-relaxed text-red-500">
             ${escapeHtml(mc.error)}
           </p>
+          <button type="button" class="ws-mini-button" data-action="chat-continue">
+            ↻ Retry
+          </button>
+        </div>`
+    : '';
+
+/** Interrupted turn (e.g. server restart) — offer to continue where it stopped. */
+export const renderContinuePrompt = (mc: AiChat): string =>
+  mc.canContinue && mc.phase === 'idle'
+    ? `<div class="flex flex-col items-start gap-2">
+          <p class="max-w-full text-sm leading-relaxed text-amber-500">
+            This session was interrupted before the last turn finished.
+          </p>
+          <button type="button" class="ws-mini-button" data-action="chat-continue">
+            ▶ Continue
+          </button>
         </div>`
     : '';

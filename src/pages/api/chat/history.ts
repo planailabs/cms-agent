@@ -84,6 +84,7 @@ export const GET: APIRoute = async ({ url }) => {
       phase: chat.turnPhase,
       workflowPhase: chat.workflowPhase,
       planJson: chat.planJson,
+      lastError: chat.lastError,
       messages,
       // For rehydrating workspace state after reload/chat switch — without
       // these the Publish button waits forever for an execution_committed

@@ -13,7 +13,7 @@ import type { AppState } from '../../app/state';
 import { escapeHtml } from '../../utils/html';
 
 import { renderMessageBubbles } from './bubbles';
-import { renderStreamingBubble, renderThinkingIndicator, renderToolIndicator, renderErrorMessage } from './indicators';
+import { renderStreamingBubble, renderThinkingIndicator, renderToolIndicator, renderErrorMessage, renderContinuePrompt } from './indicators';
 import { renderQuestionUI } from './prompts';
 import { renderChatComposer, renderEmptyState } from './composer';
 import { renderWorkflowCards, renderContextChip } from './cards';
@@ -77,6 +77,7 @@ export const renderChatSection = (
         ${thinkingIndicator}
         ${toolIndicator}
         ${errorMessage}
+        ${renderContinuePrompt(mc)}
         ${workflowCards}
         ${questionLabel}
         ${questionButtons}

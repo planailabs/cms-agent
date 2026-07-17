@@ -133,6 +133,8 @@ model Chat {
   // Turn phase: 'idle' | 'waiting_for_answer' | 'tool_pending'
   turnPhase       String  @default("idle")
   pendingQuestion Json?
+  // Last failed turn's error — shown with a Retry button until cleared
+  lastError       String?
   planJson        Json?
   // Optimistic concurrency for phase transitions (no last-writer-wins)
   entityVersion   Int     @default(0)

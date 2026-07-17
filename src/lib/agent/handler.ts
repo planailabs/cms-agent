@@ -175,6 +175,18 @@ export async function handleChatMessage(
     }
     await appendMsg({ role: 'user', content: body.text, pageContext: body.pageContext });
     await setPhase('idle');
+  } else if (body.type === 'continue') {
+    // Resume after a failed turn or a server restart: nothing is appended —
+    // the loop re-runs from stored state ('tool_pending' re-executes the
+    // pending tool calls first via the resume pre-step).
+    if (phase === 'waiting_for_answer') {
+      broadcast(chatId, 'error', { type: 'error', message: 'Answer the pending question instead' });
+      return;
+    }
+    if (messages.length === 0) {
+      broadcast(chatId, 'error', { type: 'error', message: 'Nothing to continue' });
+      return;
+    }
   } else {
     broadcast(chatId, 'error', { type: 'error', message: `Unknown message type: ${body.type}` });
     return;

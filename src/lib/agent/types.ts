@@ -54,7 +54,8 @@ export interface ClientToolPrompt {
 /** Sent by the browser with every POST /api/chat/message. */
 export interface IncomingChatMessage {
   chatId: string;
-  type: 'message' | 'answer';
+  /** 'continue' resumes an interrupted/failed turn from stored state. */
+  type: 'message' | 'answer' | 'continue';
   text: string;
   pageContext?: PageContext;
 }
