@@ -10,6 +10,9 @@ import { store } from '../chat/app/store';
 import { transition } from '../chat/actions/chat/stateMachine';
 import { createChat, switchChat, createBranch } from '../chat/actions/chat';
 import { publishCardReducer } from './publishCard';
+import { branchPreviewUrl } from './config';
+import { previewBranchName } from './preview';
+import { getPreviewIframe } from './previewAgent';
 import type { ContextChip, DiffPage } from './state';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -242,6 +245,7 @@ export const onPreviewNavigation = (url: string, route: string): void => {
   const ws = store.state.workspace;
   if (ws.previewRoute !== route) {
     ws.previewRoute = route;
+    ws.previewTabs[ws.activeTabIndex] = route;
     store.notify();
   }
 
@@ -255,6 +259,71 @@ export const onPreviewNavigation = (url: string, route: string): void => {
       flushBeacon();
     }, CONTEXT_BEACON_MIN_INTERVAL_MS - elapsed);
   }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Preview tabs / address bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Accepts "/about/", "about" or a pasted full URL; returns a root-relative route. */
+const normalizeRoute = (raw: string): string => {
+  let route = raw.trim();
+  if (/^https?:\/\//i.test(route)) {
+    try {
+      const u = new URL(route);
+      route = u.pathname + u.search + u.hash;
+    } catch {
+      // fall through with the raw value
+    }
+  }
+  if (!route.startsWith('/')) route = `/${route}`;
+  return route;
+};
+
+/** Points the preview iframe at a route (direct src set — the frame region's
+ *  markup is route-independent, so re-renders won't reload it). */
+const loadPreviewRoute = (route: string): void => {
+  const iframe = getPreviewIframe();
+  if (iframe) iframe.src = branchPreviewUrl(previewBranchName(store.state), route);
+};
+
+export const navigatePreviewTo = (raw: string): void => {
+  const ws = store.state.workspace;
+  const route = normalizeRoute(raw);
+  ws.previewRoute = route;
+  ws.previewTabs[ws.activeTabIndex] = route;
+  store.notify();
+  loadPreviewRoute(route);
+};
+
+export const switchPreviewTab = (index: number): void => {
+  const ws = store.state.workspace;
+  if (index === ws.activeTabIndex || index < 0 || index >= ws.previewTabs.length) return;
+  ws.activeTabIndex = index;
+  ws.previewRoute = ws.previewTabs[index];
+  store.notify();
+  loadPreviewRoute(ws.previewRoute);
+};
+
+export const closePreviewTab = (index: number): void => {
+  const ws = store.state.workspace;
+  if (ws.previewTabs.length <= 1 || index < 0 || index >= ws.previewTabs.length) return;
+  const wasActive = index === ws.activeTabIndex;
+  ws.previewTabs.splice(index, 1);
+  if (ws.activeTabIndex >= ws.previewTabs.length) ws.activeTabIndex = ws.previewTabs.length - 1;
+  else if (index < ws.activeTabIndex) ws.activeTabIndex -= 1;
+  ws.previewRoute = ws.previewTabs[ws.activeTabIndex];
+  store.notify();
+  if (wasActive) loadPreviewRoute(ws.previewRoute);
+};
+
+export const newPreviewTab = (): void => {
+  const ws = store.state.workspace;
+  ws.previewTabs.push('/');
+  ws.activeTabIndex = ws.previewTabs.length - 1;
+  ws.previewRoute = '/';
+  store.notify();
+  loadPreviewRoute('/');
 };
 
 /** cms:selection / cms:element → context chip above the composer. */

@@ -37,6 +37,28 @@ export const renderPreviewSkeleton = (): string =>
       <div id="preview-frame-region" class="ws-preview__frame"></div>
     </div>`;
 
+const renderTabStrip = (ws: AppState['workspace']): string => {
+  const tabs = ws.previewTabs
+    .map((route, i) => {
+      const active = i === ws.activeTabIndex;
+      const close =
+        ws.previewTabs.length > 1
+          ? `<span class="ws-tab__close" data-action="ws-tab-close" data-index="${i}"
+              role="button" aria-label="Close tab" title="Close tab">×</span>`
+          : '';
+      return `<button type="button" class="ws-tab ${active ? 'is-active' : ''}"
+          data-action="ws-tab-switch" data-index="${i}" title="${escapeHtml(route)}">
+          <span class="ws-tab__label ws-mono">${escapeHtml(route)}</span>${close}
+        </button>`;
+    })
+    .join('');
+  return `<div class="ws-tabs" role="tablist">
+      ${tabs}
+      <button type="button" class="ws-tab ws-tab--new" data-action="ws-tab-new"
+        title="New preview tab" aria-label="New preview tab">+</button>
+    </div>`;
+};
+
 export const renderPreviewToolbar = (state: AppState): string => {
   const target = activeBranchName(state);
   const branch = previewBranchName(state);
@@ -44,9 +66,13 @@ export const renderPreviewToolbar = (state: AppState): string => {
   const label =
     branch === target ? `⎇ ${escapeHtml(target)}` : `⎇ ${escapeHtml(branch)} → ${escapeHtml(target)}`;
 
-  return `<div class="ws-toolbar">
+  return `${renderTabStrip(ws)}
+      <div class="ws-toolbar">
         <span class="ws-toolbar__branch" title="Work branch → target branch">${label}</span>
-        <span class="ws-toolbar__route ws-mono" title="Current preview route">${escapeHtml(ws.previewRoute)}</span>
+        <form class="ws-address" data-action="ws-address-form" title="Preview route — Enter to navigate">
+          <input class="ws-address__input ws-mono" type="text" spellcheck="false"
+            autocomplete="off" value="${escapeHtml(ws.previewRoute)}" aria-label="Preview route" />
+        </form>
         <span class="ws-toolbar__spacer"></span>
         <button type="button" class="ws-mini-button ${ws.pickerActive ? 'is-active' : ''}"
           data-action="ws-element-pick" title="Pick an element in the preview">

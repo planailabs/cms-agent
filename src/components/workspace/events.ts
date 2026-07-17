@@ -18,6 +18,10 @@ import {
   newChatAction,
   loadDiffPages,
   onPreviewNavigation,
+  navigatePreviewTo,
+  switchPreviewTab,
+  closePreviewTab,
+  newPreviewTab,
   attachContextChip,
   removeContextChip,
   chipToNewChat,
@@ -210,6 +214,22 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     store.state.workspace.sidebarCollapsed = !store.state.workspace.sidebarCollapsed;
     store.notify();
   });
+
+  // Preview tabs + address bar
+  delegateEvent(app, 'submit', '[data-action="ws-address-form"]', (event, target) => {
+    event.preventDefault();
+    const input = target.querySelector<HTMLInputElement>('.ws-address__input');
+    if (input?.value) navigatePreviewTo(input.value);
+  });
+  delegateEvent(app, 'click', '[data-action="ws-tab-switch"]', (event, target) => {
+    // The close × sits inside the tab button — let its own handler run alone
+    if ((event.target as HTMLElement | null)?.closest('[data-action="ws-tab-close"]')) return;
+    switchPreviewTab(Number(target.getAttribute('data-index')));
+  });
+  delegateEvent(app, 'click', '[data-action="ws-tab-close"]', (_e, target) => {
+    closePreviewTab(Number(target.getAttribute('data-index')));
+  });
+  delegateEvent(app, 'click', '[data-action="ws-tab-new"]', () => newPreviewTab());
 
   // Element picker (toggles pick mode in the preview via the injected agent)
   delegateEvent(app, 'click', '[data-action="ws-element-pick"]', () => {

@@ -92,6 +92,9 @@ export interface WorkspaceState {
 
   /** Current route inside the preview iframe (cms:navigation). */
   previewRoute: string;
+  /** Open preview tabs (routes); the active one mirrors previewRoute. */
+  previewTabs: string[];
+  activeTabIndex: number;
   /** Element picker armed (waiting for a click inside the preview). */
   pickerActive: boolean;
 
@@ -129,6 +132,8 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   sidebarCollapsed: false,
   branchListOpen: false,
   previewRoute: '/',
+  previewTabs: ['/'],
+  activeTabIndex: 0,
   pickerActive: false,
   executionSha: null,
   executions: [],

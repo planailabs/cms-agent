@@ -1340,6 +1340,84 @@ html.is-first-visit #app {
     background: var(--surface-hover);
   }
 
+  /* ── Preview tabs ── */
+
+  .ws-tabs {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.25rem;
+    padding: 0.4rem 0.85rem 0;
+    border-bottom: 1px solid color-mix(in lab, var(--border-muted) 70%, transparent);
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+
+  .ws-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: 14rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid color-mix(in lab, var(--border-muted) 70%, transparent);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .ws-tab.is-active {
+    background: var(--surface-elevated);
+    color: var(--text-primary);
+  }
+
+  .ws-tab__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ws-tab__close {
+    border-radius: 4px;
+    padding: 0 0.2rem;
+    line-height: 1;
+  }
+
+  .ws-tab__close:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .ws-tab--new {
+    max-width: none;
+    font-weight: 600;
+  }
+
+  /* ── Address bar ── */
+
+  .ws-address {
+    flex: 1;
+    min-width: 8rem;
+    max-width: 28rem;
+    display: flex;
+  }
+
+  .ws-address__input {
+    width: 100%;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid color-mix(in lab, var(--border-muted) 70%, transparent);
+    border-radius: 6px;
+    background: var(--surface-elevated);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+  }
+
+  .ws-address__input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
   /* ── Toolbar (preview + diff header) ── */
 
   .ws-toolbar {
