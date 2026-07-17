@@ -34,7 +34,8 @@ const MAX_OUTPUT_CHARS = 50_000;
 const state = new Map<string, Promise<SandboxState>>();
 
 function sandboxDir(major: string): string {
-  const v = (env() as Record<string, string | undefined>)[`SANDBOX_DIR_${major}`];
+  const e = env();
+  const v = { '22': e.SANDBOX_DIR_22, '24': e.SANDBOX_DIR_24, '26': e.SANDBOX_DIR_26 }[major];
   if (!v) {
     throw new Error(
       `Sandbox not configured: SANDBOX_DIR_${major} is unset. In the image it is ` +
@@ -86,6 +87,19 @@ function materialize(major: string): string {
   return extracted;
 }
 
+/**
+ * A minimal /etc for the jail — just a resolver config so `npm install` can
+ * resolve DNS. Written once under VAR_DIR (never the host's /etc, which would
+ * leak secrets). glibc's built-in `dns` module lives in the sandbox store.
+ */
+function sandboxEtc(): string {
+  const etc = path.join(varRoot(), 'etc');
+  fs.mkdirSync(etc, { recursive: true });
+  const nss = path.join(etc, 'nsswitch.conf');
+  if (!fs.existsSync(nss)) fs.writeFileSync(nss, 'passwd: files\ngroup: files\nhosts: files dns\n');
+  return etc;
+}
+
 /** Build the bwrap argv prefix (everything up to the command). */
 function bwrapArgs(sb: SandboxState, opts: SandboxRunOptions): string[] {
   const worktree = fs.realpathSync(opts.cwd);
@@ -116,17 +130,19 @@ function bwrapArgs(sb: SandboxState, opts: SandboxRunOptions): string[] {
     '--setenv', 'PATH', `/work/node_modules/.bin:${sb.envRootInJail}/bin`,
     '--setenv', 'HOME', '/home/sandbox',
     '--setenv', 'NODE_ENV', opts.nodeEnv ?? 'development',
+    // TLS trust from the sandbox's own cacert (store is overshadowed)
+    '--setenv', 'SSL_CERT_FILE', `${sb.envRootInJail}/etc/ssl/certs/ca-bundle.crt`,
+    '--setenv', 'NODE_EXTRA_CA_CERTS', `${sb.envRootInJail}/etc/ssl/certs/ca-bundle.crt`,
   ];
 
-  if (!env().SANDBOX_ALLOW_NETWORK) args.push('--unshare-net');
-
-  // TLS trust for npm/fetch: bind the real CA bundle to a fixed jail path
-  // (its store path is hidden once /nix/store is overshadowed).
-  const ca = process.env.SSL_CERT_FILE;
-  if (ca && fs.existsSync(ca)) {
-    args.push('--ro-bind', ca, '/etc/ssl/certs/ca-bundle.crt');
-    args.push('--setenv', 'SSL_CERT_FILE', '/etc/ssl/certs/ca-bundle.crt');
-    args.push('--setenv', 'NODE_EXTRA_CA_CERTS', '/etc/ssl/certs/ca-bundle.crt');
+  if (env().SANDBOX_ALLOW_NETWORK) {
+    // DNS resolution needs a resolver config + hosts (bound read-only from the
+    // host; nsswitch is our minimal one so no host NSS modules are required).
+    args.push('--ro-bind', path.join(sandboxEtc(), 'nsswitch.conf'), '/etc/nsswitch.conf');
+    args.push('--ro-bind-try', '/etc/resolv.conf', '/etc/resolv.conf');
+    args.push('--ro-bind-try', '/etc/hosts', '/etc/hosts');
+  } else {
+    args.push('--unshare-net');
   }
 
   for (const [k, v] of Object.entries(opts.extraEnv ?? {})) {

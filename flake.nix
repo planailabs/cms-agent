@@ -59,7 +59,9 @@
 
           mkSandboxEnv = major: node: pkgs.buildEnv {
             name = "cms-sandbox-env-node${major}";
-            paths = [ node pkgs.coreutils pkgs.bashInteractive ];
+            # cacert: self-contained TLS trust (the app's store is overshadowed,
+            # so the jail must carry its own CA bundle for `npm install`).
+            paths = [ node pkgs.coreutils pkgs.bashInteractive pkgs.cacert ];
           };
 
           # Squashfs of the env's closure (contents live at their /nix/store

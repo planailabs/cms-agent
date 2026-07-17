@@ -40,6 +40,8 @@ Your job: analyze the site source and produce an implementation plan for the use
 An approved plan exists — implement exactly that plan in the worktree, nothing more.
 - Use write_file / edit_file / delete_file for changes; keep the site's existing
   conventions (frontmatter, naming, formatting).
+- run_command runs shell commands (npm scripts, codegen, formatters, installs)
+  in a sandbox where the repo is the cwd — use it when a tool doesn't suffice.
 - Commit your work with git_commit at every completed step (one coherent change
   per commit, with a message saying what and why).
 - If the implementation must deviate materially from the plan, stop and ask.

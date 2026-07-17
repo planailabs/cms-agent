@@ -4,14 +4,19 @@
  * sidecar (VAR_DIR/proxy-routes.json) and reads its access timestamps
  * (VAR_DIR/proxy-access.json) to stop idle instances. Plan §5.
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { env } from '@/lib/env';
-import { siteChildEnv } from '@/lib/childEnv';
 import { ensureWorktree } from '@/lib/git/engine';
+import {
+  ensureSandbox,
+  runSandboxed,
+  spawnSandboxed,
+  type SandboxState,
+} from '@/lib/sandbox';
 
 export interface PreviewInstance {
   branch: string;
@@ -70,7 +75,9 @@ function buildRoutes(): { cms: string; previews: Record<string, string> } {
   const e = env();
   const previews: Record<string, string> = {};
   for (const [branch, { info }] of state.instances) {
-    if (info.status === 'ready') previews[branch] = `127.0.0.1:${info.port}`;
+    // Preview dev servers bind HOST too (e.g. ::1 in dev) so the proxy — which
+    // dials this address — reaches them regardless of the v4/v6 stack.
+    if (info.status === 'ready') previews[branch] = hostPort(e.HOST, info.port);
   }
   // cms upstream mirrors HOST (e.g. ::1 in dev, where astro dev binds IPv6)
   return { cms: hostPort(e.HOST, e.PORT), previews };
@@ -110,7 +117,9 @@ function writeRoutesFile(): void {
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
-    srv.listen(0, '127.0.0.1', () => {
+    // Probe on HOST (the same address the dev server binds) so the port is
+    // actually free on that stack (v4/v6).
+    srv.listen(0, env().HOST, () => {
       const { port } = srv.address() as net.AddressInfo;
       srv.close(() => resolve(port));
     });
@@ -123,7 +132,12 @@ function freePort(): Promise<number> {
  * since the last install (the agent can edit site deps mid-chat), or when
  * `force` is set (boot-page retry = repair).
  */
-async function ensureDeps(worktree: string, force = false): Promise<void> {
+async function ensureDeps(
+  sb: SandboxState,
+  worktree: string,
+  branch: string,
+  force = false,
+): Promise<void> {
   const pkgPath = path.join(worktree, 'package.json');
   if (!fs.existsSync(pkgPath)) return;
   const hash = createHash('sha256').update(fs.readFileSync(pkgPath)).digest('hex');
@@ -136,37 +150,30 @@ async function ensureDeps(worktree: string, force = false): Promise<void> {
   }
   if (!force && stamp === hash) return;
   console.log(`[preview] installing site dependencies in ${worktree}…`);
-  await new Promise<void>((resolve, reject) => {
-    // --include=dev: the container runs with NODE_ENV=production, but dev
-    // servers need devDependencies (astro itself usually lives there)
-    const child = spawn('npm', ['install', '--no-audit', '--no-fund', '--include=dev'], {
-      cwd: worktree,
-      stdio: ['ignore', 'ignore', 'pipe'],
-      env: siteChildEnv(),
-    });
-    let stderr = '';
-    child.stderr?.on('data', (d: Buffer) => (stderr += d.toString()));
-    child.on('error', reject);
-    child.on('exit', (code) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`npm install failed (${code}): ${stderr.slice(-2000)}`)),
-    );
+  // --include=dev: dev servers need devDependencies (astro usually lives there)
+  const r = await runSandboxed(sb, 'npm install --no-audit --no-fund --include=dev', {
+    cwd: worktree,
+    sessionKey: branch,
+    timeoutMs: 5 * 60_000,
   });
+  if (r.code !== 0) {
+    throw new Error(`npm install failed (${r.code}): ${(r.stderr || r.stdout).slice(-2000)}`);
+  }
   fs.writeFileSync(stampPath, hash);
 }
 
-async function waitForHttp(port: number, timeoutMs = 90_000): Promise<void> {
+async function waitForHttp(host: string, port: number, timeoutMs = 90_000): Promise<void> {
+  const url = `http://${hostPort(host, port)}/`;
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(2000) });
+      await fetch(url, { signal: AbortSignal.timeout(2000) });
       return; // any HTTP response counts as up
     } catch {
       await new Promise((r) => setTimeout(r, 500));
     }
   }
-  throw new Error(`Preview dev server on port ${port} did not come up within ${timeoutMs}ms`);
+  throw new Error(`Preview dev server at ${url} did not come up within ${timeoutMs}ms`);
 }
 
 function startSweeper(): void {
@@ -238,21 +245,24 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     state.startErrors.delete(branch);
     await evictForCapacity();
     const e = env();
+    const sb = await ensureSandbox();
     const worktree = await ensureWorktree(branch);
-    await ensureDeps(worktree, repair);
+    await ensureDeps(sb, worktree, branch, repair);
     const port = await freePort();
 
     // REPO_DEV_COMMAND is split on whitespace (document: no shell quoting)
     const [cmd, ...args] = e.REPO_DEV_COMMAND.split(/\s+/);
-    const child = spawn(cmd, [...args, '--port', String(port), '--host', '127.0.0.1'], {
-      cwd: worktree,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: siteChildEnv({
+    const child = spawnSandboxed(
+      sb,
+      [cmd, ...args, '--port', String(port), '--host', e.HOST],
+      {
+        cwd: worktree,
+        sessionKey: branch,
         // The proxy preserves the public Host header (<branch>.<BASE_DOMAIN>),
         // which Vite's host check would otherwise block.
-        __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `${branch}.${e.BASE_DOMAIN}`,
-      }),
-    });
+        extraEnv: { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `${branch}.${e.BASE_DOMAIN}` },
+      },
+    );
 
     const info: PreviewInstance = {
       branch,
@@ -297,7 +307,7 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
           }
         });
       });
-      await Promise.race([waitForHttp(port), earlyExit]);
+      await Promise.race([waitForHttp(e.HOST, port), earlyExit]);
     } catch (err) {
       child.kill('SIGTERM');
       state.instances.delete(branch);

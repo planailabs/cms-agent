@@ -5,13 +5,12 @@
  * sealed artifact instead of rebuilding.
  */
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as tar from 'tar';
 import { simpleGit } from 'simple-git';
 import { env } from '@/lib/env';
-import { siteChildEnv } from '@/lib/childEnv';
+import { ensureSandbox, spawnSandboxed, type SandboxState } from '@/lib/sandbox';
 import { hasErrors, validateDist } from '@/lib/validate';
 
 export interface ArtifactInfo {
@@ -24,15 +23,22 @@ export interface ArtifactInfo {
 
 const artifactsDir = () => path.join(path.resolve(env().VAR_DIR), 'artifacts');
 
-function run(command: string, cwd: string, log: (l: string) => void): Promise<void> {
-  const [cmd, ...args] = command.split(/\s+/);
+function run(
+  sb: SandboxState,
+  command: string,
+  cwd: string,
+  sessionKey: string,
+  log: (l: string) => void,
+  nodeEnv: 'development' | 'production' = 'production',
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd, env: siteChildEnv() });
-    child.stdout.on('data', (d: Buffer) => d.toString().split('\n').filter(Boolean).forEach(log));
-    child.stderr.on('data', (d: Buffer) => d.toString().split('\n').filter(Boolean).forEach(log));
+    // Streamed for live publish_log; runs in the jail like all site commands.
+    const child = spawnSandboxed(sb, ['/bin/sh', '-lc', command], { cwd, sessionKey, nodeEnv });
+    child.stdout?.on('data', (d: Buffer) => d.toString().split('\n').filter(Boolean).forEach(log));
+    child.stderr?.on('data', (d: Buffer) => d.toString().split('\n').filter(Boolean).forEach(log));
     child.on('error', reject);
-    child.on('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error(`${cmd} exited with code ${code}`)),
+    child.on('close', (code) =>
+      code === 0 ? resolve() : reject(new Error(`\`${command}\` exited with code ${code}`)),
     );
   });
 }
@@ -68,15 +74,16 @@ export async function sealArtifact(sha: string, log: (l: string) => void): Promi
   await git.raw(['worktree', 'add', '--detach', buildDir, sha]);
 
   try {
+    const sb = await ensureSandbox();
     log(`Building ${sha.slice(0, 8)} with: ${e.REPO_BUILD_COMMAND}`);
     // Site deps: install if the checkout has none (worktrees don't share node_modules)
     if (fs.existsSync(path.join(buildDir, 'package.json')) && !fs.existsSync(path.join(buildDir, 'node_modules'))) {
       log('Installing site dependencies…');
       // --include=dev: NODE_ENV=production would omit devDependencies,
       // where site build tooling (astro, integrations) usually lives
-      await run('npm install --no-audit --no-fund --include=dev', buildDir, log);
+      await run(sb, 'npm install --no-audit --no-fund --include=dev', buildDir, sha, log, 'development');
     }
-    await run(e.REPO_BUILD_COMMAND, buildDir, log);
+    await run(sb, e.REPO_BUILD_COMMAND, buildDir, sha, log, 'production');
 
     const builtDist = path.join(buildDir, 'dist');
     if (!fs.existsSync(builtDist)) throw new Error('Build produced no dist/ directory');

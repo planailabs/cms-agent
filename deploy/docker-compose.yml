@@ -1,0 +1,76 @@
+# Example deployment for cms-agent (single image: CMS + pingora proxy).
+#
+#   docker compose up -d
+#
+# Fill in the secrets below (or use an .env file next to this compose file).
+# The proxy listens on 8080; terminate TLS in front of it (nginx/Caddy) for
+# cms.<domain> and *.<domain> (branch previews are served on subdomains).
+#
+# security_opt is REQUIRED: the agent runs all site shell commands (npm
+# install, the preview dev server, builds, run_command) inside a bubblewrap
+# jail, which needs the targeted seccomp profile to create user namespaces
+# under unprivileged docker. seccomp.json is deploy/seccomp/cms-agent.json.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cms
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: cmsagent
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U cms -d cmsagent']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  cms-agent:
+    image: registry.plan.ai/plan-ai/cms-agent/cms-agent:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:8080:8080' # put a TLS-terminating reverse proxy in front
+    volumes:
+      - data:/data # site repo, worktrees, sandbox store, artifacts
+    # Required for the bubblewrap sandbox (see note above).
+    security_opt:
+      - seccomp=./seccomp.json
+    environment:
+      DATABASE_URL: postgresql://cms:${POSTGRES_PASSWORD}@db:5432/cmsagent
+      BASE_DOMAIN: ${BASE_DOMAIN:?set BASE_DOMAIN}
+      PUBLIC_SCHEME: https
+      BETTER_AUTH_URL: https://${BASE_DOMAIN}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      PREVIEW_COOKIE_SECRET: ${PREVIEW_COOKIE_SECRET:?set PREVIEW_COOKIE_SECRET}
+      # OIDC (e.g. Google): redirect URI https://<domain>/api/auth/oauth2/callback/oidc
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET}
+      # Optional email allowlist (otherwise any IdP account is accepted)
+      # ALLOWED_EMAIL_DOMAIN: example.com
+      # Model endpoint (any OpenAI-compatible API)
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-sol}
+      # Sandbox: node major for site commands (22 | 24 | 26); network on so
+      # `npm install` works (set 0 to isolate).
+      SANDBOX_NODE_MAJOR: '22'
+      SANDBOX_ALLOW_NETWORK: '1'
+
+volumes:
+  pgdata:
+  data:
+
+# IPv6 on the default network: required when the model endpoint (OPENAI_BASE_URL)
+# is IPv6-only (AAAA-only). Docker 26+ does NAT66 for a ULA subnet out of the box.
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd0c:ca15:600d::/64
