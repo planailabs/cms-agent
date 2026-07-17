@@ -63,9 +63,14 @@ run('bubblewrap sandbox', () => {
       expect.arrayContaining(['bin', 'dev', 'home', 'nix', 'proc', 'tmp', 'usr', 'work']),
     );
     // No host dirs leaked in
-    expect(entries).not.toContain('etc');
     expect(entries).not.toContain('srv');
     expect(entries).not.toContain('root');
+    // /etc exists only for DNS — just the resolver files, no host secrets
+    const etc = await sandbox.runSandboxed(sb, 'ls -1 /etc', { cwd: work });
+    const etcEntries = etc.stdout.trim().split('\n').filter(Boolean);
+    expect(etcEntries.sort()).toEqual(['hosts', 'nsswitch.conf', 'resolv.conf']);
+    expect(etcEntries).not.toContain('passwd');
+    expect(etcEntries).not.toContain('shadow');
   });
 
   it('makes the worktree writable, the store read-only, HOME writable', async () => {
