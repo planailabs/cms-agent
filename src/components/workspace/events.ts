@@ -26,6 +26,11 @@ import {
   newPreviewTab,
   attachContextChip,
   removeContextChip,
+  openBrowserCompare,
+  closeBrowserCompare,
+  toggleBrowserCompareOverlay,
+  setBrowserCompareMode,
+  setBrowserCompareBrowser,
 } from './actions';
 import {
   registerPreviewAgent,
@@ -119,7 +124,9 @@ const registerOnionSlider = (app: HTMLElement): void => {
   let dragging = false;
 
   app.addEventListener('pointerdown', (event) => {
-    const handle = (event.target as HTMLElement | null)?.closest('[data-action="ws-onion-handle"]');
+    const handle = (event.target as HTMLElement | null)?.closest(
+      '[data-action="ws-onion-handle"], [data-action="ws-bc-onion-handle"]',
+    );
     if (!handle) return;
     event.preventDefault();
     dragging = true;
@@ -137,7 +144,12 @@ const registerOnionSlider = (app: HTMLElement): void => {
     const slider = container.querySelector<HTMLElement>('.ws-onion__slider');
     if (after) after.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
     if (slider) slider.style.left = `${pct}%`;
-    store.state.workspace.diff.onionPercent = pct; // silent
+    // Route to the right state slice (silent — DOM already updated)
+    if (container.dataset.onionTarget === 'browserCompare') {
+      store.state.workspace.browserCompare.onionPercent = pct;
+    } else {
+      store.state.workspace.diff.onionPercent = pct;
+    }
   });
 
   window.addEventListener('pointerup', () => {
@@ -269,6 +281,22 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-diff-overlay-toggle"]', () => {
     store.state.workspace.diff.overlayVisible = !store.state.workspace.diff.overlayVisible;
     store.notify();
+  });
+
+  // Cross-browser comparison overlay
+  delegateEvent(app, 'click', '[data-action="ws-bc-open"]', () => openBrowserCompare());
+  delegateEvent(app, 'click', '[data-action="ws-bc-close"]', () => closeBrowserCompare());
+  delegateEvent(app, 'click', '[data-action="ws-bc-overlay-toggle"]', () => toggleBrowserCompareOverlay());
+  delegateEvent(app, 'click', '[data-action="ws-bc-mode"]', (_e, target) => {
+    const mode = target.getAttribute('data-mode');
+    if (mode === 'highlight' || mode === 'onion') setBrowserCompareMode(mode);
+  });
+  delegateEvent<Event>(app, 'change', '[data-action="ws-bc-browser"]', (_e, target) => {
+    const which = target.getAttribute('data-which');
+    const value = (target as HTMLSelectElement).value;
+    if ((which === 'a' || which === 'b') && (value === 'chromium' || value === 'firefox' || value === 'webkit')) {
+      setBrowserCompareBrowser(which, value);
+    }
   });
 
   registerAgentEvents();

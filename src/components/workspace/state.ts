@@ -63,6 +63,19 @@ export interface DiffPage {
 
 export type DiffViewMode = 'side-by-side' | 'highlight' | 'onion';
 
+export type BrowserName = 'chromium' | 'firefox' | 'webkit';
+
+/** Cross-browser comparison overlay (main area) — preview + regular mode. */
+export interface BrowserCompareState {
+  open: boolean;
+  a: BrowserName;
+  b: BrowserName;
+  /** Reuses the diff widgets: highlight (overlay) or onion (slider). */
+  mode: 'highlight' | 'onion';
+  overlayVisible: boolean;
+  onionPercent: number;
+}
+
 export interface DiffState {
   /** Chat the pages were loaded for (guards stale loads). */
   forChatId: string | null;
@@ -110,6 +123,9 @@ export interface WorkspaceState {
 
   /** Diff viewer state (PREVIEW phase main area). */
   diff: DiffState;
+
+  /** Cross-browser comparison overlay (toggled from the preview toolbar). */
+  browserCompare: BrowserCompareState;
 }
 
 export const createInitialDiffState = (): DiffState => ({
@@ -138,6 +154,16 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   publish: null,
   contextChip: null,
   diff: createInitialDiffState(),
+  browserCompare: createInitialBrowserCompareState(),
+});
+
+export const createInitialBrowserCompareState = (): BrowserCompareState => ({
+  open: false,
+  a: 'chromium',
+  b: 'firefox',
+  mode: 'highlight',
+  overlayVisible: true,
+  onionPercent: 50,
 });
 
 /** Clears the chat-scoped parts of the workspace (call on chat switch). */
@@ -150,4 +176,5 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.publish = null;
   ws.contextChip = null;
   ws.diff = createInitialDiffState();
+  ws.browserCompare = createInitialBrowserCompareState();
 };

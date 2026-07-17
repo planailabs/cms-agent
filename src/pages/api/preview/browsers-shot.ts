@@ -9,10 +9,14 @@ export const prerender = false;
 import fs from 'node:fs';
 import type { APIRoute } from 'astro';
 import { diffBrowsers, asBrowser, type ShotKind } from '@/lib/diff/screenshot';
-import { validateBranchName } from '@/lib/git/engine';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+
+// DNS-safe label — accepts existing preview branches incl. c-<id>/v-<sha>
+// work/historical branches (validateBranchName rejects those as reserved,
+// but here they're legitimate targets to screenshot).
+const PREVIEW_BRANCH_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 export const GET: APIRoute = async ({ url, locals }) => {
   if (!locals.user) return json({ error: 'Unauthorized' }, 401);
@@ -23,8 +27,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
   const a = asBrowser(url.searchParams.get('a'), 'chromium');
   const b = asBrowser(url.searchParams.get('b'), 'firefox');
 
-  const invalid = validateBranchName(branch);
-  if (invalid) return json({ error: invalid }, 400);
+  if (!PREVIEW_BRANCH_RE.test(branch)) return json({ error: 'invalid branch' }, 400);
   if (!route || !route.startsWith('/')) return json({ error: 'route (starting with /) required' }, 400);
   if (!['before', 'after', 'diff'].includes(kind)) return json({ error: 'bad kind' }, 400);
 

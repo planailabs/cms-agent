@@ -15,6 +15,13 @@ export default defineConfig({
         '@': path.resolve('./src'),
       },
     },
+    server: {
+      watch: {
+        // Don't watch runtime state (sandbox extractions, worktrees, diffs,
+        // routes) or the dev site copy — churn there must not reload the CMS.
+        ignored: ['**/var/**', '**/local/**'],
+      },
+    },
   },
   devToolbar: {
     enabled: false,

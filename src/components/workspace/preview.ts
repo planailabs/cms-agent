@@ -78,6 +78,8 @@ export const renderPreviewToolbar = (state: AppState): string => {
           data-action="ws-element-pick" title="Pick an element in the preview">
           ${ws.pickerActive ? 'Picking… (Esc to cancel)' : '⌖ Element picker'}
         </button>
+        <button type="button" class="ws-mini-button" data-action="ws-bc-open"
+          title="Compare how this page renders in different browsers">⧉ Browsers</button>
         <a class="ws-mini-button" href="${escapeHtml(branchPreviewUrl(branch, ws.previewRoute))}"
           target="_blank" rel="noopener" title="Open preview in a new tab">↗</a>
       </div>`;

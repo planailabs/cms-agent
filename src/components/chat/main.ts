@@ -20,6 +20,7 @@ import {
   renderPreviewFrame,
 } from '../workspace/preview';
 import { renderDiffViewer } from '../workspace/diffViewer';
+import { renderBrowserCompare } from '../workspace/browserCompare';
 import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
@@ -85,7 +86,11 @@ const initApp = () => {
       if (inPreviewPhase && !ws.diff.loaded && !ws.diff.loading && !ws.diff.error) {
         void loadDiffPages(); // lazy-load the changed pages on entering PREVIEW
       }
-      if (inPreviewPhase) {
+      if (ws.browserCompare.open) {
+        // Cross-browser comparison overlay — replaces the main area in both
+        // the PREVIEW phase and regular preview mode.
+        setHtmlIfChanged(mainRegion, renderBrowserCompare(state));
+      } else if (inPreviewPhase) {
         setHtmlIfChanged(mainRegion, renderDiffViewer(state));
       } else {
         // Toolbar and iframe render into separate sub-regions: toolbar state

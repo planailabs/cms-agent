@@ -11,7 +11,7 @@ import { transition } from '../chat/actions/chat/stateMachine';
 import { createChat, switchChat, createBranch } from '../chat/actions/chat';
 import { publishCardReducer } from './publishCard';
 import { loadPreviewRoute, scheduleTabsSave } from './tabsSync';
-import type { ContextChip, DiffPage } from './state';
+import type { BrowserName, ContextChip, DiffPage } from './state';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -330,6 +330,32 @@ export const attachContextChip = (chip: ContextChip): void => {
   chip.context.branch = branch?.name;
   ws.contextChip = chip;
   ws.pickerActive = false;
+  store.notify();
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cross-browser comparison overlay
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const openBrowserCompare = (): void => {
+  store.state.workspace.browserCompare.open = true;
+  store.notify();
+};
+export const closeBrowserCompare = (): void => {
+  store.state.workspace.browserCompare.open = false;
+  store.notify();
+};
+export const setBrowserCompareBrowser = (which: 'a' | 'b', name: BrowserName): void => {
+  store.state.workspace.browserCompare[which] = name;
+  store.notify();
+};
+export const setBrowserCompareMode = (mode: 'highlight' | 'onion'): void => {
+  store.state.workspace.browserCompare.mode = mode;
+  store.notify();
+};
+export const toggleBrowserCompareOverlay = (): void => {
+  const bc = store.state.workspace.browserCompare;
+  bc.overlayVisible = !bc.overlayVisible;
   store.notify();
 };
 

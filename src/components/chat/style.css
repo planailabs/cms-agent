@@ -1447,6 +1447,18 @@ html.is-first-visit #app {
     flex: 1;
   }
 
+  .ws-bc-select {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.78rem;
+    max-width: 8rem;
+  }
+
+  .ws-bc-vs {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding: 0 0.1rem;
+  }
+
   .ws-mini-button {
     display: inline-flex;
     align-items: center;

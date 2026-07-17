@@ -103,6 +103,8 @@ export const renderDiffViewer = (state: AppState): string => {
   const header = `<div class="ws-toolbar">
       <span class="ws-toolbar__branch">Review changes</span>
       <span class="ws-toolbar__spacer"></span>
+      <button type="button" class="ws-mini-button" data-action="ws-bc-open"
+        title="Compare how this page renders in different browsers">⧉ Browsers</button>
       <button type="button" class="ws-mini-button ws-mini-button--primary" data-action="ws-publish"
         ${!hasSha || publishing ? 'disabled' : ''}>${publishing ? 'Publishing…' : 'Publish'}</button>
       <button type="button" class="ws-mini-button" data-action="ws-request-changes">Request changes</button>

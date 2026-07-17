@@ -50,7 +50,11 @@ async function screenshot(
   );
   try {
     const page = await launched.newPage({ viewport: VIEWPORT });
-    await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: 'networkidle', timeout: 30_000 });
+    // Connect on the host the dev server actually binds (HOST — ::1 in dev,
+    // 127.0.0.1 in prod); v6 needs brackets.
+    const host = env().HOST;
+    const h = host.includes(':') ? `[${host}]` : host;
+    await page.goto(`http://${h}:${port}${route}`, { waitUntil: 'networkidle', timeout: 30_000 });
     await page.screenshot({ path: outFile, fullPage: true });
   } finally {
     await launched.close();
