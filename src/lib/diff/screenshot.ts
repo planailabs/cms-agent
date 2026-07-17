@@ -33,7 +33,9 @@ function cacheKey(route: string, mainRef: string, branchRef: string): string {
 
 async function screenshot(port: number, route: string, outFile: string): Promise<void> {
   const { chromium } = await import('playwright');
-  const browser = await chromium.launch();
+  // chromiumSandbox: false — chromium's own SUID/namespace sandbox is
+  // unreliable inside the container; the content is our own site preview.
+  const browser = await chromium.launch({ chromiumSandbox: false });
   try {
     const page = await browser.newPage({ viewport: VIEWPORT });
     await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: 'networkidle', timeout: 30_000 });

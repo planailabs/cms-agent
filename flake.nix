@@ -176,6 +176,9 @@
               pkgs.squashfuse
               pkgs.squashfsTools
               sandboxDir
+              # Headless chromium for diff screenshots (playwright). Version
+              # matches the project's playwright (1.60) — see PLAYWRIGHT_* env.
+              pkgs.playwright-driver.browsers
             ];
             extraCommands = ''
               mkdir -p tmp data && chmod 1777 tmp
@@ -201,6 +204,9 @@
                 "SANDBOX_NODE_MAJOR=22"
                 "SANDBOX_ALLOW_NETWORK=1"
                 "SANDBOX_DIR=${sandboxDir}"
+                # Diff screenshots: use the bundled playwright browsers.
+                "PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}"
+                "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true"
               ];
               ExposedPorts = { "8080/tcp" = { }; };
               Volumes = { "/data" = { }; };
