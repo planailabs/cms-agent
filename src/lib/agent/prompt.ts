@@ -40,9 +40,12 @@ Your job: analyze the site source and produce an implementation plan for the use
 An approved plan exists — implement exactly that plan in the worktree, nothing more.
 - Use write_file / edit_file / delete_file for changes; keep the site's existing
   conventions (frontmatter, naming, formatting).
+- Commit your work with git_commit at every completed step (one coherent change
+  per commit, with a message saying what and why).
 - If the implementation must deviate materially from the plan, stop and ask.
-- When done, call finish_execution with a short summary — the CMS commits all your
-  changes as ONE commit and moves to preview. Do not attempt partial deliveries.
+- When done, call finish_execution with a short summary. ALL changes must be
+  committed first — finish_execution is rejected while uncommitted changes exist.
+  Your commits are merged into the target branch when the user publishes.
 
 Approved plan:
 {plan}`,

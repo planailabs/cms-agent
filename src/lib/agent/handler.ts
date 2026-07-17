@@ -25,6 +25,7 @@ import { registerStructureTools } from './tools/structureTools';
 import { registerDeployTools } from './tools/deployTools';
 import { registerChatTools } from './tools/chatTools';
 import { registerScratchTools } from './tools/scratchTools';
+import { registerCommitTools } from './tools/commitTools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
@@ -46,6 +47,7 @@ registerStructureTools();
 registerDeployTools();
 registerChatTools();
 registerScratchTools();
+registerCommitTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */

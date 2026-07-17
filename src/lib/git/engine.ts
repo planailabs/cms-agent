@@ -176,6 +176,12 @@ export async function commitExecution(
   return (await git.revparse(['HEAD'])).trim();
 }
 
+/** Dirty-file list of an existing worktree DIRECTORY (no worktree creation). */
+export async function dirStatus(dir: string): Promise<string[]> {
+  const status = await simpleGit(dir).status();
+  return status.files.map((f) => f.path);
+}
+
 /** Working-tree status of a branch worktree (dirty file list). */
 export async function worktreeStatus(branch: string): Promise<string[]> {
   const dir = await ensureWorktree(branch);

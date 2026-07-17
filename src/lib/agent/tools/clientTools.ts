@@ -47,9 +47,11 @@ export const proposePlanTool: ToolDef = {
 export const finishExecutionTool: ToolDef = {
   name: 'finish_execution',
   description:
-    'Signal that the implementation is complete and ready for preview. The user confirms; the CMS then commits all changes as one commit and switches to the preview phase.',
+    'Signal that the implementation is complete and ready for preview. Every change ' +
+    'must already be committed with git_commit — this call is rejected while the ' +
+    'worktree has uncommitted changes. The user then confirms the switch to preview.',
   schema: z.object({
-    summary: z.string().describe('Short summary of what was implemented (used as commit message).'),
+    summary: z.string().describe('Short summary of what was implemented.'),
   }),
   phases: ['execute'],
 };

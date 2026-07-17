@@ -11,7 +11,9 @@ import { acquireTurnLock, broadcast, releaseTurnLock, withBranchLock } from './b
 import { handleChatMessage } from './handler';
 import {
   branchSha,
+  changedFiles,
   commitExecution,
+  dirStatus,
   ensureBranch,
   ensureWorktree,
   revertCommit as gitRevert,
@@ -189,8 +191,20 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
   const worktree = await ensureWorktree(chat.workBranch, chat.branch.name);
   await syncMemoriesToWorktree(worktree);
 
-  // Pre-commit validation of the dirty worktree (secret scan, binaries,
-  // symlinks, dependency changes) — errors block the commit (medved §21).
+  // The agent commits its own work via git_commit — everything except the
+  // memory-sync files (.cms/) must already be committed.
+  const dirty = await dirStatus(worktree);
+  const uncommitted = dirty.filter((p) => !p.startsWith('.cms/'));
+  if (uncommitted.length > 0) {
+    throw new WorkflowError(
+      `Uncommitted changes in the worktree — the agent must commit them with git_commit first:\n${uncommitted
+        .map((p) => `- ${p}`)
+        .join('\n')}`,
+      422,
+    );
+  }
+
+  // Validation of the memory-sync leftovers before their commit (medved §21).
   const issues = await validateWorktree(worktree);
   if (issues.length > 0) {
     broadcast(opts.chatId, 'validation_result', { type: 'validation_result', issues });
@@ -205,22 +219,26 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
     );
   }
 
-  const sha = await withBranchLock(chat.workBranch, () =>
-    commitExecution(chat.workBranch, `${summary}\n\nChat: ${chat.id}`, {
-      name: opts.actor.name,
-      email: opts.actor.email,
-    }),
-  );
-
-  if (sha) {
-    await prisma.execution.create({ data: { chatId: chat.id, sha, summary } });
+  if (dirty.length > 0) {
+    await withBranchLock(chat.workBranch, () =>
+      commitExecution(chat.workBranch, `Sync team knowledge\n\nChat: ${chat.id}`, {
+        name: opts.actor.name,
+        email: opts.actor.email,
+      }),
+    );
   }
+
+  // Preview/publish sha = work-branch HEAD when it has commits over the target
+  const changed = await changedFiles(chat.workBranch, chat.branch.name);
+  const sha = changed.length > 0 ? await branchSha(chat.workBranch) : null;
 
   await updatePhase(opts.chatId, opts.expectedVersion ?? chat.entityVersion, {
     workflowPhase: 'preview',
   });
   emitPhase(opts.chatId, 'preview', { executionSha: sha });
   if (sha) {
+    // Cards are broadcast per git_commit; this only refreshes executionSha
+    // for clients (execution_committed dedupes by sha client-side).
     broadcast(opts.chatId, 'execution_committed', { type: 'execution_committed', sha, summary });
   }
 
@@ -229,7 +247,7 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
       opts.chatId,
       opts.actor,
       sha
-        ? `The execution was committed as ${sha.slice(0, 8)} and the chat moved to the preview phase.`
+        ? `All commits are in (HEAD ${sha.slice(0, 8)}); the chat moved to the preview phase.`
         : 'No changes were made; the chat moved to the preview phase.',
     );
   }

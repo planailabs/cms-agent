@@ -12,6 +12,7 @@ import type { PersistenceAdapter } from './persistence';
 import { recordTokenUsage } from './tokenBudget';
 import { buildSystemPrompt, type PromptInput } from './prompt';
 import { createMcpBridge } from './mcp';
+import { dirStatus } from '@/lib/git/engine';
 import { isClientSideTool, type ToolContext } from './tools/registry';
 import type { ClientToolPrompt, StoredMessage, ToolCall, ToolResult, TurnPhase } from './types';
 
@@ -208,6 +209,35 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
 
       // Store full assistant response including tool calls
       await appendMsg({ role: 'assistant', content: text, toolCalls });
+
+      // ── finish_execution gate: every change must be committed first ───────
+      const finishCall = toolCalls.find((c) => c.function.name === 'finish_execution');
+      if (finishCall) {
+        let dirty: string[] = [];
+        try {
+          dirty = await dirStatus(toolContext.worktreePath);
+        } catch {
+          // not a git worktree (test harness) — skip the gate
+        }
+        if (dirty.length > 0) {
+          console.log(`[agent] chat=${chatId} finish_execution rejected: ${dirty.length} dirty`);
+          await appendMsg({
+            role: 'tool',
+            results: toolCalls.map((call) => ({
+              toolCallId: call.id,
+              content:
+                call.id === finishCall.id
+                  ? JSON.stringify({
+                      error:
+                        `Cannot finish: the worktree has uncommitted changes:\n${dirty.join('\n')}\n` +
+                        `Commit them with git_commit (or revert them) first, then call finish_execution again.`,
+                    })
+                  : 'Skipped: finish_execution was rejected first. Re-issue this call if still needed.',
+            })),
+          });
+          continue;
+        }
+      }
 
       // ── Client-side tool → pause for the browser ──────────────────────────
       const clientCall = toolCalls.find((c) => isClientSideTool(c.function.name));
