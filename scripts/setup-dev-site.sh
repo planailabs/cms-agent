@@ -26,8 +26,6 @@ cd "$DEST"
 git init -b main -q
 git add -A
 git -c user.name="Dev Setup" -c user.email="dev@localhost" commit -qm "Initial site ($EXAMPLE)"
-echo "Installing site dependencies…"
-npm install --no-audit --no-fund --silent
 
 echo
 echo "Dev site ready at: $DEST"

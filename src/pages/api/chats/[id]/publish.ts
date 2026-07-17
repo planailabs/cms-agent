@@ -18,14 +18,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     });
   }
   try {
-    const { publicationId } = await publish({
+    const { publicationId, deployChatId } = await publish({
       chatId: params.id!,
       sha: body.sha,
       actor: user,
       expectedVersion: body.expectedVersion,
       idempotencyKey: body.idempotencyKey,
     });
-    return new Response(JSON.stringify({ ok: true, publicationId }), {
+    return new Response(JSON.stringify({ ok: true, publicationId, deployChatId }), {
       status: 202,
       headers: { 'Content-Type': 'application/json' },
     });

@@ -17,9 +17,10 @@ import { initRoutesFile } from '@/lib/preview/manager';
 import { getInternalToken } from '@/lib/internalToken';
 import { env } from '@/lib/env';
 
-// Publish the sidecar routing table and create the shared internal token
-// once per server boot (skipped when the module is loaded outside a
-// configured runtime, e.g. during astro build).
+// Publish the sidecar routing table, create the shared internal token and
+// recover automatisms orphaned by the previous process, once per server boot
+// (skipped when the module is loaded outside a configured runtime, e.g.
+// during astro build).
 if (process.env.VAR_DIR) {
   initRoutesFile();
   try {
@@ -27,6 +28,9 @@ if (process.env.VAR_DIR) {
   } catch (err) {
     console.error('[internal] failed to create internal token:', err);
   }
+  void import('@/lib/automatism')
+    .then(({ recoverAutomatisms }) => recoverAutomatisms())
+    .catch((err) => console.error('[automatism] boot recovery failed:', err));
 }
 
 const PUBLIC_PATHS = [

@@ -58,7 +58,9 @@ interface DeployData extends AutomatismData {
   mergedSha?: string;
 }
 
-export async function publish(req: PublishRequest): Promise<{ publicationId: string }> {
+export async function publish(
+  req: PublishRequest,
+): Promise<{ publicationId: string; deployChatId: string }> {
   const e = env();
   const chat = await prisma.chat.findUnique({
     where: { id: req.chatId },
@@ -154,7 +156,7 @@ export async function publish(req: PublishRequest): Promise<{ publicationId: str
   );
   await startAutomatism('deploy', deployChat.id, data);
 
-  return { publicationId: publication.id };
+  return { publicationId: publication.id, deployChatId: deployChat.id };
 }
 
 // ─── The 'deploy' automatism ─────────────────────────────────────────────────

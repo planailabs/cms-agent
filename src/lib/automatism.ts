@@ -174,6 +174,28 @@ async function invokeAgent(chatId: string, userId: string): Promise<void> {
   }
 }
 
+/**
+ * Boot recovery — automatisms still 'running' belonged to a process that
+ * died mid-step; steps are retry-safe, so re-run them from the persisted
+ * step. Paused ones keep waiting for their resume.
+ */
+export async function recoverAutomatisms(): Promise<void> {
+  await import('@/lib/publish/publisher'); // registers automatism types
+  const orphans = await prisma.automatism.findMany({ where: { status: 'running' } });
+  for (const row of orphans) {
+    console.log(`[automatism] recovering ${row.id} (${row.type}) from step ${row.step}`);
+    try {
+      await postAutomatismMessage(
+        row.chatId,
+        `Server restarted mid-flow — resuming automatically from step ${row.step + 1}.`,
+      );
+    } catch (err) {
+      console.error('[automatism] recovery notice failed:', err);
+    }
+    void advance(row.id);
+  }
+}
+
 /** Newest paused automatism actionable from `chatId` (home or agent chat). */
 export async function findPausedAutomatism(chatId: string) {
   return prisma.automatism.findFirst({

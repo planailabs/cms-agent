@@ -8,7 +8,7 @@
 
 import { store } from '../chat/app/store';
 import { transition } from '../chat/actions/chat/stateMachine';
-import { createChat, switchChat, createBranch } from '../chat/actions/chat';
+import { createChat, switchChat, createBranch, loadBranches } from '../chat/actions/chat';
 import { publishCardReducer } from './publishCard';
 import { loadPreviewRoute, scheduleTabsSave } from './tabsSync';
 import type { BrowserName, ContextChip, DiffPage } from './state';
@@ -137,6 +137,13 @@ export const publishAction = async (sha?: string): Promise<void> => {
       publicationId: res.data.publicationId as string | undefined,
     });
     store.notify();
+    // Follow the deployment where it happens: the automatism posts its
+    // progress into the per-publish deployment chat.
+    const deployChatId = res.data.deployChatId as string | undefined;
+    if (deployChatId) {
+      await loadBranches(); // the new deployment chat appears in the sidebar
+      switchChat(deployChatId);
+    }
   }
   // Failures surface via postJson's error toast.
 };

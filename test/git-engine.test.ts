@@ -101,4 +101,34 @@ describe('git engine', () => {
     // main untouched by the feature-target merge
     expect(await engine.changedFiles('feature-x')).toEqual(['note.md']);
   });
+
+  it('self-heals untracked-file collisions when merging (build artifacts in the target)', async () => {
+    const wt = await engine.ensureWorktree('lockfile-branch');
+    fs.writeFileSync(path.join(wt, 'generated.json'), '{"from":"branch"}\n');
+    await engine.commitExecution('lockfile-branch', 'track generated file', AUTHOR);
+
+    // Same path exists UNTRACKED in main's checkout (e.g. npm install artifact)
+    fs.writeFileSync(path.join(repo, 'generated.json'), '{"from":"artifact"}\n');
+
+    const sha = await engine.mergeInto('lockfile-branch', 'main', AUTHOR);
+    expect(sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(fs.readFileSync(path.join(repo, 'generated.json'), 'utf8')).toContain('branch');
+  });
+
+  it('parses git untracked-collision errors (and only those)', () => {
+    const gitError = new Error(
+      'error: The following untracked working tree files would be overwritten by merge:\n' +
+        '\tpackage-lock.json\n\tsub/dir/file.txt\nPlease move or remove them before you merge.\nAborting',
+    );
+    expect(engine.untrackedMergeCollisions(gitError)).toEqual([
+      'package-lock.json',
+      'sub/dir/file.txt',
+    ]);
+    expect(engine.untrackedMergeCollisions(new Error('CONFLICT (content): merge conflict'))).toEqual([]);
+    // path traversal from a hostile message is filtered
+    const evil = new Error(
+      'untracked working tree files would be overwritten by merge:\n\t../../etc/passwd\n\t/abs/path\nAborting',
+    );
+    expect(engine.untrackedMergeCollisions(evil)).toEqual([]);
+  });
 });
