@@ -8,6 +8,7 @@ import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
 import { deleteBranch, removeWorktree } from '@/lib/git/engine';
 import { stopInstance, clearStartError } from '@/lib/preview/manager';
+import { removeScratchpad } from '@/lib/agent/tools/scratchTools';
 import { requireAdmin } from '@/lib/adminGuard';
 
 const json = (data: unknown, status = 200) =>
@@ -51,6 +52,7 @@ export const DELETE: APIRoute = async ({ url, locals }) => {
   clearStartError(chat.workBranch);
   await removeWorktree(chat.workBranch);
   await deleteBranch(chat.workBranch);
+  removeScratchpad(chat.id);
   await prisma.chat.delete({ where: { id } });
   return json({ ok: true });
 };
