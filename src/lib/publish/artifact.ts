@@ -11,6 +11,7 @@ import path from 'node:path';
 import * as tar from 'tar';
 import { simpleGit } from 'simple-git';
 import { env } from '@/lib/env';
+import { siteChildEnv } from '@/lib/childEnv';
 import { hasErrors, validateDist } from '@/lib/validate';
 
 export interface ArtifactInfo {
@@ -26,7 +27,7 @@ const artifactsDir = () => path.join(path.resolve(env().VAR_DIR), 'artifacts');
 function run(command: string, cwd: string, log: (l: string) => void): Promise<void> {
   const [cmd, ...args] = command.split(/\s+/);
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd, env: { ...process.env, FORCE_COLOR: '0' } });
+    const child = spawn(cmd, args, { cwd, env: siteChildEnv() });
     child.stdout.on('data', (d: Buffer) => d.toString().split('\n').filter(Boolean).forEach(log));
     child.stderr.on('data', (d: Buffer) => d.toString().split('\n').filter(Boolean).forEach(log));
     child.on('error', reject);

@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { env } from '@/lib/env';
+import { siteChildEnv } from '@/lib/childEnv';
 import { ensureWorktree } from '@/lib/git/engine';
 
 export interface PreviewInstance {
@@ -137,7 +138,7 @@ async function ensureDeps(worktree: string, force = false): Promise<void> {
     const child = spawn('npm', ['install', '--no-audit', '--no-fund', '--include=dev'], {
       cwd: worktree,
       stdio: ['ignore', 'ignore', 'pipe'],
-      env: { ...process.env, FORCE_COLOR: '0' },
+      env: siteChildEnv(),
     });
     let stderr = '';
     child.stderr?.on('data', (d: Buffer) => (stderr += d.toString()));
@@ -211,19 +212,23 @@ async function evictForCapacity(): Promise<void> {
  * `repair` forces a dependency re-install (boot-page retry after a failure).
  */
 export async function ensureInstance(branch: string, repair = false): Promise<PreviewInstance> {
+  // In-flight start first: a second caller must NOT touch the instances
+  // entry the in-flight start already registered (deleting it orphaned the
+  // child and restarted the branch on every boot-page reload).
+  const inFlight = state.starting.get(branch);
+  if (inFlight) return inFlight;
+
   const existing = state.instances.get(branch);
   if (existing && existing.info.status === 'ready' && existing.child.exitCode === null) {
     existing.info.lastUsedAt = Date.now();
     return existing.info;
   }
   if (existing) {
-    // crashed or stopped — clean up before restart
+    // crashed or stopped — kill (no-op if already dead) and clean up
+    existing.child.kill('SIGTERM');
     state.instances.delete(branch);
     writeRoutesFile();
   }
-
-  const inFlight = state.starting.get(branch);
-  if (inFlight) return inFlight;
 
   const startPromise = (async () => {
     state.startErrors.delete(branch);
@@ -238,13 +243,11 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     const child = spawn(cmd, [...args, '--port', String(port), '--host', '127.0.0.1'], {
       cwd: worktree,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        FORCE_COLOR: '0',
+      env: siteChildEnv({
         // The proxy preserves the public Host header (<branch>.<BASE_DOMAIN>),
         // which Vite's host check would otherwise block.
         __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `${branch}.${e.BASE_DOMAIN}`,
-      },
+      }),
     });
 
     const info: PreviewInstance = {
