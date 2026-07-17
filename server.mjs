@@ -4,7 +4,11 @@
  * listens on the internal CMS port and never proxies preview traffic itself.
  */
 import { createServer } from 'node:http';
-import { handler } from './dist/server/entry.mjs';
+
+// Must be set before the import below: in standalone mode the Astro entry
+// autostarts its own listener on HOST:PORT unless this is disabled → EADDRINUSE.
+process.env.ASTRO_NODE_AUTOSTART = 'disabled';
+const { handler } = await import('./dist/server/entry.mjs');
 
 const HOST = process.env.HOST ?? '127.0.0.1';
 const PORT = Number(process.env.PORT ?? 4321);
