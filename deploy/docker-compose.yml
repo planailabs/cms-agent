@@ -37,9 +37,15 @@ services:
       - '127.0.0.1:8080:8080' # put a TLS-terminating reverse proxy in front
     volumes:
       - data:/data # site repo, worktrees, sandbox store, artifacts
-    # Required for the bubblewrap sandbox (see note above).
+    # Required for the bubblewrap sandbox (see note above):
+    # - seccomp: the targeted profile lets bwrap create user+mount namespaces.
+    # - systempaths=unconfined: removes Docker's masked/read-only /proc paths,
+    #   which otherwise block bwrap from mounting a fresh procfs in the jail
+    #   ("Can't mount proc … Operation not permitted"). The jail still gets its
+    #   own PID namespace, so sandboxed code cannot see the CMS process/secrets.
     security_opt:
       - seccomp=./seccomp.json
+      - systempaths=unconfined
     environment:
       DATABASE_URL: postgresql://cms:${POSTGRES_PASSWORD}@db:5432/cmsagent
       BASE_DOMAIN: ${BASE_DOMAIN:?set BASE_DOMAIN}
