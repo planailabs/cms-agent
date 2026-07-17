@@ -106,10 +106,25 @@ const renderAutomatismBar = (state: AppState): string => {
       return `<span class="ws-phase-step ${cls}">${escapeHtml(name)}</span>`;
     })
     .join('<span class="ws-phase-sep">→</span>');
+  // Resume is a human action too — offered whenever the automatism is
+  // paused and the agent is not mid-turn.
+  const agentBusy =
+    state.chat?.aiChat?.phase === 'waiting' ||
+    state.chat?.aiChat?.phase === 'streaming' ||
+    state.chat?.aiChat?.phase === 'tool';
   const note = done
     ? '<span class="ws-phase-note">done</span>'
     : a.status === 'paused'
-      ? '<span class="ws-phase-note ws-phase-note--failed">paused — agent investigating</span>'
+      ? agentBusy
+        ? '<span class="ws-phase-note ws-phase-note--failed">paused — agent investigating</span>'
+        : `<div class="ws-phase-actions">
+            <span class="ws-phase-note ws-phase-note--failed">paused</span>
+            <button type="button" class="ws-mini-button ws-mini-button--primary"
+              data-action="ws-automatism-resume"
+              title="Re-run the failed step (${escapeHtml(a.steps[a.step] ?? '')}) and continue">
+              ▶ Resume
+            </button>
+          </div>`
       : a.status === 'failed'
         ? '<span class="ws-phase-note ws-phase-note--failed">failed</span>'
         : '';

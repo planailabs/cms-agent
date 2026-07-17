@@ -148,6 +148,19 @@ export const publishAction = async (sha?: string): Promise<void> => {
   // Failures surface via postJson's error toast.
 };
 
+/** Step-bar ▶ Resume — re-runs the paused automatism's failed step. */
+export const resumeAutomatismAction = async (): Promise<void> => {
+  const chatId = store.state.activeChatId;
+  if (!chatId) return;
+  const res = await postJson(`/api/chats/${encodeURIComponent(chatId)}/resume-automatism`, {});
+  if (res.ok) {
+    const a = store.state.workspace.automatism;
+    // Optimistic; the automatism_state SSE event confirms right after
+    if (a && a.forChatId === chatId) a.status = 'running';
+    store.notify();
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Branch / chat helpers (workspace buttons)
 // ─────────────────────────────────────────────────────────────────────────────

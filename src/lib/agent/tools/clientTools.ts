@@ -56,8 +56,23 @@ export const finishExecutionTool: ToolDef = {
   phases: ['execute'],
 };
 
+export const needsHumanAttentionTool: ToolDef = {
+  name: 'needs_human_attention',
+  description:
+    'Pause until a human performs an action you cannot do yourself (add a deploy key, ' +
+    'approve access, change DNS, …). Describe precisely what they must do; the turn ' +
+    'resumes when they press Done. Do not use it for questions — use ask_question.',
+  schema: z.object({
+    reason: z.string().describe('Why human action is required.'),
+    instructions: z.string().describe('Exact steps the human should perform.'),
+  }),
+  phases: ['plan', 'execute', 'preview', 'published'],
+  kinds: ['workflow', 'deployment', 'deployments'],
+};
+
 export function registerClientTools(): void {
   registerTool(askQuestionTool);
   registerTool(proposePlanTool);
   registerTool(finishExecutionTool);
+  registerTool(needsHumanAttentionTool);
 }

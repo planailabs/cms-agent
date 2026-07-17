@@ -28,6 +28,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return json({ error: 'Invalid body: need { chatId, type, text }' }, 400);
   }
 
+  // While an automatism is actively running its steps, its chat takes no
+  // user messages — wait for it to finish or pause (then the agent engages).
+  if (body.type === 'message') {
+    const { automatismStateFor } = await import('@/lib/automatism');
+    const auto = await automatismStateFor(body.chatId);
+    if (auto?.status === 'running') {
+      return json({ error: 'The automatism is running — messages are accepted once it pauses or finishes.' }, 409);
+    }
+  }
+
   const lockId = acquireTurnLock(body.chatId);
   if (!lockId) {
     return json({ error: 'A conversation turn is already in progress' }, 409);

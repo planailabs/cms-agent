@@ -2821,3 +2821,47 @@ html.is-first-visit #app {
 .ws-phase-note--failed {
   color: #dc2626;
 }
+
+/* ── Needs-human-attention card ── */
+
+.chat-attention {
+  margin: 0.35rem 0;
+  border: 1px solid color-mix(in srgb, #d97706 45%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, #d97706 8%, transparent);
+  padding: 0.6rem 0.75rem;
+}
+
+.chat-attention__head {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #d97706;
+}
+
+.chat-attention__reason {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.chat-attention__steps {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.chat-automatism--gate .chat-automatism__body {
+  color: var(--text-muted);
+}
+
+.ws-phase-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}

@@ -16,6 +16,7 @@ import {
   dismissFinishExecution,
   undoExecutionAction,
   publishAction,
+  resumeAutomatismAction,
   newBranchAction,
   newChatAction,
   loadDiffPages,
@@ -202,6 +203,9 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-publish"]', () => void publishAction());
   delegateEvent(app, 'click', '[data-action="ws-retry-publish"]', () =>
     void publishAction(store.state.workspace.publish?.sha),
+  );
+  delegateEvent(app, 'click', '[data-action="ws-automatism-resume"]', () =>
+    void resumeAutomatismAction(),
   );
 
   // Branch switcher / chat list

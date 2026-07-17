@@ -66,7 +66,16 @@ export const renderChatSection = (
     const { questionLabel, questionButtons } = renderQuestionUI(mc, modeLocale);
     const workflowCards = renderWorkflowCards(state);
     const contextChip = renderContextChip(state);
-    const inputField = renderChatComposer(mc, locale, modeLocale);
+    // While an automatism actively runs its steps, its chat takes no input
+    // (the server rejects it too) — the agent engages on pause/finish.
+    const auto = state.workspace.automatism;
+    const automatismRunning =
+      !!auto && auto.forChatId === state.activeChatId && auto.status === 'running';
+    const inputField = automatismRunning
+      ? `<div class="chat-automatism chat-automatism--gate">
+          <div class="chat-automatism__body">⚙ Automatism running (${escapeHtml(auto.steps[auto.step] ?? '…')}) — chat opens when it pauses or finishes.</div>
+        </div>`
+      : renderChatComposer(mc, locale, modeLocale);
     const emptyState = renderEmptyState(mc, modeLocale);
 
     return `
