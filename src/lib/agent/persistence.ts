@@ -106,23 +106,39 @@ export function createDbAdapter(
     },
     async appendMsg(msg) {
       messages.push(msg);
-      const ordinal = ordinalRef.value++;
       const contentBlocks =
         msg.role === 'assistant' ? (msg.toolCalls as object[] | undefined) ?? null
         : msg.role === 'tool' ? (msg.results as object[])
         : null;
-      const row = await prisma.message.create({
-        data: {
-          chatId,
-          authorId: msg.role === 'user' || msg.role === 'cancel' ? authorId : null,
-          role: msg.role,
-          content: extractDisplayText(msg),
-          contentBlocks: contentBlocks ?? undefined,
-          pageContext: msg.role === 'user' ? ((msg.pageContext as object | undefined) ?? undefined) : undefined,
-          ordinal,
-        },
-      });
-      msg.id = row.id;
+      // Ordinals come from an in-memory counter; an automatism message can
+      // land mid-turn and take the next ordinal — on collision resync the
+      // counter to the DB and retry.
+      for (let attempt = 0; ; attempt++) {
+        const ordinal = ordinalRef.value++;
+        try {
+          const row = await prisma.message.create({
+            data: {
+              chatId,
+              authorId: msg.role === 'user' || msg.role === 'cancel' ? authorId : null,
+              role: msg.role,
+              content: extractDisplayText(msg),
+              contentBlocks: contentBlocks ?? undefined,
+              pageContext: msg.role === 'user' ? ((msg.pageContext as object | undefined) ?? undefined) : undefined,
+              ordinal,
+            },
+          });
+          msg.id = row.id;
+          return;
+        } catch (err) {
+          if ((err as { code?: string })?.code !== 'P2002' || attempt >= 4) throw err;
+          const last = await prisma.message.findFirst({
+            where: { chatId },
+            orderBy: { ordinal: 'desc' },
+            select: { ordinal: true },
+          });
+          ordinalRef.value = (last?.ordinal ?? -1) + 1;
+        }
+      }
     },
   };
 }

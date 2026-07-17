@@ -102,6 +102,26 @@ describe('automatism engine', () => {
     expect(ran).toEqual(['prep', 'flaky', 'flaky', 'after']);
   });
 
+  it('turn adapter survives an automatism message landing mid-turn (ordinal resync)', async () => {
+    const { createDbAdapter } = await import('@/lib/agent/persistence');
+    const u = await prisma.user.findUniqueOrThrow({ where: { id: 'auto-user' } });
+    const b = await prisma.branch.findFirstOrThrow({ where: { name: 'auto-target' } });
+    const chat = await prisma.chat.create({
+      data: { branchId: b.id, workBranch: 'c-autotest3', title: 'Race', createdById: u.id },
+    });
+    const adapter = createDbAdapter(chat.id, u.id, [], { value: 0 });
+    await adapter.appendMsg({ role: 'user', content: 'start' });
+    // Automatism takes the next ordinal behind the adapter's back
+    await postAutomatismMessage(chat.id, 'interleaved event');
+    await adapter.appendMsg({ role: 'assistant', content: 'reply' }); // would collide without resync
+    const rows = await prisma.message.findMany({ where: { chatId: chat.id }, orderBy: { ordinal: 'asc' } });
+    expect(rows.map((r) => [r.ordinal, r.role])).toEqual([
+      [0, 'user'],
+      [1, 'automatism'],
+      [2, 'assistant'],
+    ]);
+  });
+
   it('assigns sequential ordinals even with concurrent posts', async () => {
     await Promise.all(
       Array.from({ length: 5 }, (_v, i) => postAutomatismMessage(chatId, `parallel ${i}`)),
