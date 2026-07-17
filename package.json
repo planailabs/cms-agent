@@ -9,8 +9,9 @@
     "build": "astro build",
     "start": "node server.mjs",
     "preview": "astro preview",
-    "test": "node scripts/prepare-test-db.mjs && vitest run --exclude 'test/integration/**'",
-    "test:integration": "node scripts/prepare-test-db.mjs && vitest run test/integration",
+    "test": "node scripts/prepare-test-db.mjs && vitest run --exclude 'test/integration/**' --exclude 'test/sandbox.test.ts'",
+    "test:sandbox": "bash scripts/launch-with-sandbox.sh vitest run test/sandbox.test.ts",
+    "test:integration": "node scripts/prepare-test-db.mjs && bash scripts/launch-with-sandbox.sh vitest run test/integration",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },
