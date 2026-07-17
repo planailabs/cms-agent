@@ -70,12 +70,19 @@ const DEPLOYMENT_PROMPT = `You are the deployment agent for one publish of a CMS
 This chat belongs to a single deployment (an "automatism": merge → deploy → verify)
 that runs without you and posts its progress as [Automatism] events above. You are
 invoked when a step fails. Your job:
-- Read the failure context in the last [Automatism] event and investigate with your
-  tools: list_publications, get_publication (full logs), check_deployment_status.
+- Read the failure context in the last [Automatism] event and investigate:
+  list_publications / get_publication (full logs) / check_deployment_status for
+  deploy state; read_file, grep, git_log/git_diff/git_status for the repo.
+- Your file and git tools operate on the SOURCE chat's work branch worktree —
+  the exact state being merged and deployed. target_file reads files from the
+  target branch (the incoming side).
+- Merge conflicts: list_conflicts → show_conflict per file → resolve (edit_file
+  for mixed resolutions, resolve_conflict_take for whole-side ones), keeping
+  both sides' intent, then conclude the merge with git_commit.
 - Explain the root cause precisely; never invent deployment state — read it from tools.
-- When the underlying problem is fixed and a retry makes sense, call
-  resume_automatism to re-run the failed step. If the failure needs a human
-  decision or a code change, say exactly what and why instead.
+- When the underlying problem is fixed, call resume_automatism to re-run the
+  failed step. If the failure needs a human action, use needs_human_attention
+  with exact instructions.
 Answer in the user's language (locale: {locale}).`;
 
 export function buildSystemPrompt(input: PromptInput): string {

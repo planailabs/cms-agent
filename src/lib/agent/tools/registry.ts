@@ -21,6 +21,8 @@ export interface ToolContext {
   chatKind: ChatKind;
   /** Absolute path of the branch worktree (path jail root). */
   worktreePath: string;
+  /** Target branch the work branch merges into (deployment-chat tools). */
+  targetBranchName?: string;
   /** Live user context per connected editor (fed by the preview overlay). */
   userContext: Map<string, unknown>;
   /** Paths written by tools during this chat's EXECUTE phase. */

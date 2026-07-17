@@ -346,6 +346,15 @@ export function assertSafeRef(ref: string): void {
   if (!SAFE_REF.test(ref) || ref.includes('..')) throw new Error(`Invalid git ref: ${ref}`);
 }
 
+/** File content at a ref (`git show ref:path`), read-only. */
+export async function showFileAtRef(ref: string, filePath: string): Promise<string> {
+  assertSafeRef(ref);
+  if (filePath.startsWith('-') || filePath.includes('..') || filePath.includes('\0')) {
+    throw new Error(`Invalid path: ${filePath}`);
+  }
+  return await repoGit().raw(['show', `${ref}:${filePath}`]);
+}
+
 /** `git show` of a single commit (message + stat + patch), read-only. */
 export async function showCommit(ref: string): Promise<string> {
   assertSafeRef(ref);

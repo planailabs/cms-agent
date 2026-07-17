@@ -23,6 +23,7 @@ const runCommandTool: ToolDef = {
     timeoutSeconds: z.number().int().positive().max(600).default(120),
   }),
   phases: ['execute'],
+  kinds: ['workflow', 'deployment'],
   async execute(input, ctx) {
     const sb = await ensureSandbox();
     const r = await runSandboxed(sb, input.command, {

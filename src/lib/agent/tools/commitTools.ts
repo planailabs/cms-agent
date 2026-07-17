@@ -22,6 +22,7 @@ const gitCommitTool: ToolDef = {
     message: z.string().min(3).max(500).describe('Commit message describing the change'),
   }),
   phases: ['execute'],
+  kinds: ['workflow', 'deployment'],
   async execute(input, ctx) {
     const issues = await validateWorktree(ctx.worktreePath);
     if (hasErrors(issues)) {

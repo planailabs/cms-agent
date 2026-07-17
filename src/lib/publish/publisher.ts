@@ -199,29 +199,23 @@ registerAutomatism({
           if (!isConflictError(err)) {
             throw new AutomatismFailure(`Merge into ${data.targetName} failed: ${message}`);
           }
-          // Materialize the conflict in the chat's own work branch worktree
-          // and hand it to the agent there — resolving + committing the
-          // reverse merge makes the retried forward merge clean.
+          // Materialize the conflict in the source chat's work branch
+          // worktree — this deployment chat's tools operate on exactly that
+          // worktree, so the agent resolves it here. Committing the reverse
+          // merge makes the retried forward merge clean.
           await abortMerge(data.workBranch);
           const files = await withBranchLock(data.workBranch, () =>
             beginConflictMerge(data.workBranch, data.targetName, identity),
           );
-          await prisma.chat.updateMany({
-            where: { id: data.workflowChatId },
-            data: { workflowPhase: 'execute', entityVersion: { increment: 1 } },
-          });
-          broadcast(data.workflowChatId, 'phase_changed', {
-            type: 'phase_changed',
-            workflowPhase: 'execute',
-          });
           throw new AutomatismFailure(
-            `Merging your work branch into ${data.targetName} hit conflicts` +
+            `Merging ${data.workBranch} into ${data.targetName} hit conflicts` +
               (files.length ? ` in:\n${files.map((f) => `- ${f}`).join('\n')}` : '.') +
-              `\nThe conflicted merge is materialized in your worktree (conflict markers ` +
-              `in the listed files, merge in progress). Resolve the markers exactly — keep ` +
-              `both sides' intent — then commit with git_commit. Only after the commit, ` +
-              `call resume_automatism to retry the merge and continue the deployment.`,
-            data.workflowChatId,
+              `\nThe conflicted merge is materialized in this chat's worktree (markers in ` +
+              `place, merge in progress). Use list_conflicts / show_conflict to inspect, ` +
+              `target_file for the incoming side, then resolve each file — edit_file for ` +
+              `mixed resolutions, resolve_conflict_take for whole-side ones — keeping both ` +
+              `sides' intent. Commit the merge with git_commit, and only then call ` +
+              `resume_automatism to retry the merge and continue the deployment.`,
           );
         }
       },

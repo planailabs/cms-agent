@@ -52,12 +52,15 @@ function* walk(dir: string, root: string): Generator<string> {
 }
 
 const ALL_PHASES = ['plan', 'execute', 'preview', 'published'] as const;
+// Deployment chats work on the source chat's work worktree (conflict fixes)
+const REPO_KINDS = ['workflow', 'deployment'] as const;
 
 const readFileTool: ToolDef = {
   name: 'read_file',
   description: 'Read a file from the site repository. Paths are relative to the repo root.',
   schema: z.object({ path: z.string() }),
   phases: [...ALL_PHASES],
+  kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const p = jail(ctx, input.path);
     const content = fs.readFileSync(p, 'utf8');
@@ -72,6 +75,7 @@ const listDirTool: ToolDef = {
   description: 'List a directory in the site repository (non-recursive). "." for the root.',
   schema: z.object({ path: z.string().default('.') }),
   phases: [...ALL_PHASES],
+  kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const p = jail(ctx, input.path);
     const entries = fs
@@ -92,6 +96,7 @@ const grepTool: ToolDef = {
     glob: z.string().optional().describe('Only search files whose path contains this substring'),
   }),
   phases: [...ALL_PHASES],
+  kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const root = jail(ctx, '.');
     let re: RegExp;
@@ -139,8 +144,8 @@ const listPagesTool: ToolDef = {
   },
 };
 
-// Read-only git tools are also available in the deployments system chat.
-const GIT_KINDS = ['workflow', 'deployments'] as const;
+// Read-only git tools: also in deployment chats + the deployments system chat.
+const GIT_KINDS = ['workflow', 'deployment', 'deployments'] as const;
 
 const gitLogTool: ToolDef = {
   name: 'git_log',
@@ -222,6 +227,7 @@ const writeFileTool: ToolDef = {
   description: 'Create or overwrite a file in the repository.',
   schema: z.object({ path: z.string(), content: z.string() }),
   phases: ['execute'],
+  kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const p = jail(ctx, input.path);
     fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -242,6 +248,7 @@ const editFileTool: ToolDef = {
     replaceAll: z.boolean().default(false),
   }),
   phases: ['execute'],
+  kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const p = jail(ctx, input.path);
     const content = fs.readFileSync(p, 'utf8');
@@ -268,6 +275,7 @@ const deleteFileTool: ToolDef = {
   description: 'Delete a file from the repository.',
   schema: z.object({ path: z.string() }),
   phases: ['execute'],
+  kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const p = jail(ctx, input.path);
     fs.rmSync(p);

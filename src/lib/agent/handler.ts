@@ -28,6 +28,7 @@ import { registerScratchTools } from './tools/scratchTools';
 import { registerCommitTools } from './tools/commitTools';
 import { registerCommandTools } from './tools/commandTools';
 import { registerAutomatismTools } from './tools/automatismTools';
+import { registerConflictTools } from './tools/conflictTools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
@@ -52,6 +53,7 @@ registerScratchTools();
 registerCommitTools();
 registerCommandTools();
 registerAutomatismTools();
+registerConflictTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
@@ -197,20 +199,35 @@ export async function handleChatMessage(
   }
 
   // ── Tool context: the chat's own worktree, based on its target branch.
-  // Deployment/system chats have no repo tools and need no worktree. ────────
-  const worktreePath = opts.skipPersistence
-    ? (opts.worktreePath ?? '')
-    : chatKind !== 'workflow'
-      ? ''
-      : await ensureWorktree(branchName, targetBranchName);
+  // Deployment chats operate on the SOURCE chat's work worktree (conflict
+  // resolution); the shared deployments system chat has no worktree. ────────
+  let worktreePath = '';
+  if (opts.skipPersistence) {
+    worktreePath = opts.worktreePath ?? '';
+  } else if (chatKind === 'workflow') {
+    worktreePath = await ensureWorktree(branchName, targetBranchName);
+  } else if (chatKind === 'deployment') {
+    const automatism = await prisma.automatism.findFirst({
+      where: { chatId },
+      orderBy: { createdAt: 'desc' },
+    });
+    const workBranch = (automatism?.data as { workBranch?: string } | null)?.workBranch;
+    if (workBranch) {
+      branchName = workBranch; // repo/git tools act on the source work branch
+      worktreePath = await ensureWorktree(workBranch, targetBranchName);
+    }
+  }
 
   const toolContext: ToolContext = {
     chatId,
     branchId,
     branchName,
     userId,
-    workflowPhase,
+    // Deployment chats gate tools like EXECUTE (edits, git_commit, conflict
+    // helpers) — their persisted phase is a static 'published'.
+    workflowPhase: chatKind === 'deployment' ? 'execute' : workflowPhase,
     chatKind,
+    targetBranchName,
     worktreePath,
     userContext: getUserContextStore(chatId),
     modifiedPaths: new Set(),
