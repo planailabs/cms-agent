@@ -25,13 +25,17 @@ export interface GitIdentity {
  * EDITOR, which simple-git rejects as unsafe).
  */
 function gitAs(dir: string, id: GitIdentity): SimpleGit {
-  return simpleGit(dir).env({
+  // allowUnsafeEditor: simple-git blocks GIT_EDITOR by default because an
+  // attacker-controlled value executes code — ours is the constant 'true'.
+  return simpleGit(dir, { unsafe: { allowUnsafeEditor: true } }).env({
     PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? '',
     GIT_AUTHOR_NAME: id.name,
     GIT_AUTHOR_EMAIL: id.email,
     GIT_COMMITTER_NAME: id.name,
     GIT_COMMITTER_EMAIL: id.email,
+    // Never open an editor (rebase --continue keeps the original message)
+    GIT_EDITOR: 'true',
   });
 }
 
@@ -324,6 +328,75 @@ export async function abortMerge(branch: string): Promise<void> {
   } catch {
     // no merge in progress
   }
+}
+
+/** Outcome of a rebase step: new head OR the conflicted paths blocking it. */
+export interface RebaseResult {
+  sha?: string;
+  conflicts?: string[];
+}
+
+/**
+ * Rebase `branch` onto `base` in its worktree. On conflicts the rebase stays
+ * IN PROGRESS (markers in the files) so they can be resolved and continued;
+ * any other failure aborts cleanly and throws. Rewrites the branch history —
+ * previously reviewed shas change.
+ */
+export async function rebaseOnto(
+  branch: string,
+  base: string,
+  author: GitIdentity,
+): Promise<RebaseResult> {
+  const dir = await ensureWorktree(branch);
+  const git = gitAs(dir, author);
+  try {
+    await git.rebase([base]);
+  } catch (err) {
+    const status = await git.status();
+    if (status.conflicted.length > 0) return { conflicts: status.conflicted };
+    try {
+      await git.rebase(['--abort']);
+    } catch {
+      /* rebase never started */
+    }
+    throw err;
+  }
+  return { sha: (await git.revparse(['HEAD'])).trim() };
+}
+
+/** Stage everything and continue an in-progress rebase (next conflict or done). */
+export async function continueRebase(branch: string, author: GitIdentity): Promise<RebaseResult> {
+  const dir = await ensureWorktree(branch);
+  const git = gitAs(dir, author);
+  await git.add(['-A']);
+  try {
+    await git.rebase(['--continue']);
+  } catch (err) {
+    const status = await git.status();
+    if (status.conflicted.length > 0) return { conflicts: status.conflicted };
+    throw err;
+  }
+  return { sha: (await git.revparse(['HEAD'])).trim() };
+}
+
+/** Abort an in-progress rebase, if any. */
+export async function abortRebase(branch: string): Promise<void> {
+  try {
+    await simpleGit(await ensureWorktree(branch)).rebase(['--abort']);
+  } catch {
+    // no rebase in progress
+  }
+}
+
+/** True while `dir` has a rebase in progress (rebase state dir exists —
+ *  REBASE_HEAD is unreliable: git may leave it behind after completion). */
+export async function rebaseInProgress(dir: string): Promise<boolean> {
+  const git = simpleGit(dir);
+  for (const state of ['rebase-merge', 'rebase-apply']) {
+    const p = (await git.raw(['rev-parse', '--git-path', state])).trim();
+    if (fs.existsSync(path.isAbsolute(p) ? p : path.join(dir, p))) return true;
+  }
+  return false;
 }
 
 /** Reset a branch (and its worktree) onto its base after a merge (plan §3). */

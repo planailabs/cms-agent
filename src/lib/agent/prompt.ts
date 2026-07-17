@@ -79,6 +79,9 @@ invoked when a step fails. Your job:
 - Merge conflicts: list_conflicts → show_conflict per file → resolve (edit_file
   for mixed resolutions, resolve_conflict_take for whole-side ones), keeping
   both sides' intent, then conclude the merge with git_commit.
+- git_rebase / git_rebase_continue / git_rebase_abort rebase the work branch
+  onto the target instead of merging when a linear history is preferable
+  (rewrites the branch — the reviewed sha changes).
 - Explain the root cause precisely; never invent deployment state — read it from tools.
 - When the underlying problem is fixed, call resume_automatism to re-run the
   failed step. If the failure needs a human action, use needs_human_attention

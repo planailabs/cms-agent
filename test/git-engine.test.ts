@@ -115,6 +115,44 @@ describe('git engine', () => {
     expect(fs.readFileSync(path.join(repo, 'generated.json'), 'utf8')).toContain('branch');
   });
 
+  it('rebases a branch onto a moved base, pausing on conflicts until continued', async () => {
+    // Base commit both sides will touch
+    const wtR = await engine.ensureWorktree('rebase-branch');
+    fs.writeFileSync(path.join(wtR, 'shared.txt'), 'base\n');
+    await engine.commitExecution('rebase-branch', 'branch: add shared', AUTHOR);
+
+    // Clean case: main moved with an unrelated file
+    fs.writeFileSync(path.join(repo, 'unrelated.txt'), 'main side\n');
+    const mainGit = simpleGit(repo);
+    await mainGit.add(['-A']);
+    await mainGit.commit('main: unrelated');
+    const clean = await engine.rebaseOnto('rebase-branch', 'main', AUTHOR);
+    expect(clean.sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(clean.conflicts).toBeUndefined();
+
+    // Conflict case: both sides edit the same line
+    fs.writeFileSync(path.join(repo, 'shared.txt'), 'main version\n');
+    await mainGit.add(['-A']);
+    await mainGit.commit('main: edit shared');
+    fs.writeFileSync(path.join(wtR, 'shared.txt'), 'branch version\n');
+    await engine.commitExecution('rebase-branch', 'branch: edit shared', AUTHOR);
+
+    const conflicted = await engine.rebaseOnto('rebase-branch', 'main', AUTHOR);
+    expect(conflicted.conflicts).toEqual(['shared.txt']);
+    expect(await engine.rebaseInProgress(wtR)).toBe(true);
+
+    // Both branch commits touch shared.txt → the rebase pauses once per
+    // replayed commit; resolve each round until it completes.
+    let done = { conflicts: ['shared.txt'] } as Awaited<ReturnType<typeof engine.continueRebase>>;
+    for (let round = 0; round < 3 && done.conflicts?.length; round++) {
+      fs.writeFileSync(path.join(wtR, 'shared.txt'), 'resolved\n');
+      done = await engine.continueRebase('rebase-branch', AUTHOR);
+    }
+    expect(done.sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(await engine.rebaseInProgress(wtR)).toBe(false);
+    expect(fs.readFileSync(path.join(wtR, 'shared.txt'), 'utf8')).toBe('resolved\n');
+  });
+
   it('parses git untracked-collision errors (and only those)', () => {
     const gitError = new Error(
       'error: The following untracked working tree files would be overwritten by merge:\n' +
