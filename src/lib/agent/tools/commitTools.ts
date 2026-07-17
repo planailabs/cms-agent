@@ -31,10 +31,17 @@ const gitCommitTool: ToolDef = {
           .join('\n')}`,
       });
     }
-    const user = await prisma.user.findUnique({
-      where: { id: ctx.userId },
-      select: { name: true, email: true },
+    // Commit as the chat's creator (falling back to the acting user).
+    const chat = await prisma.chat.findUnique({
+      where: { id: ctx.chatId },
+      select: { createdBy: { select: { name: true, email: true } } },
     });
+    const user =
+      chat?.createdBy ??
+      (await prisma.user.findUnique({
+        where: { id: ctx.userId },
+        select: { name: true, email: true },
+      }));
     const sha = await withBranchLock(ctx.branchName, () =>
       commitExecution(ctx.branchName, `${input.message}\n\nChat: ${ctx.chatId}`, {
         name: user?.name ?? 'CMS Agent',

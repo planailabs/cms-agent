@@ -166,13 +166,22 @@ export async function commitExecution(
   author: { name: string; email: string },
 ): Promise<string | null> {
   const dir = await ensureWorktree(branch);
-  const git = simpleGit(dir);
+  // Ready-to-use identity for BOTH author and committer — the container has no
+  // git config, so without this every commit fails with "empty ident name".
+  // Only pass what git needs (a full process.env spread leaks EDITOR, which
+  // simple-git rejects as unsafe).
+  const git = simpleGit(dir).env({
+    PATH: process.env.PATH ?? '',
+    HOME: process.env.HOME ?? '',
+    GIT_AUTHOR_NAME: author.name,
+    GIT_AUTHOR_EMAIL: author.email,
+    GIT_COMMITTER_NAME: author.name,
+    GIT_COMMITTER_EMAIL: author.email,
+  });
   const status = await git.status();
   if (status.isClean()) return null;
   await git.add(['-A']);
-  await git.commit(message, undefined, {
-    '--author': `${author.name} <${author.email}>`,
-  });
+  await git.commit(message);
   return (await git.revparse(['HEAD'])).trim();
 }
 
