@@ -69,6 +69,22 @@ const schema = z.object({
   // Preview manager
   PREVIEW_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   PREVIEW_MAX_INSTANCES: z.coerce.number().int().positive().default(5),
+
+  // Sandbox (bubblewrap jail for ALL site shell calls — install, dev server,
+  // build, run_command). Requires the container to run with the targeted
+  // seccomp profile (deploy/seccomp/cms-agent.json).
+  SANDBOX_NODE_MAJOR: z.enum(['22', '24', '26']).default('22'),
+  // Keep network in the jail (needed for `npm install`); set 0 to isolate.
+  SANDBOX_ALLOW_NETWORK: z
+    .enum(['0', '1'])
+    .default('1')
+    .transform((v) => v === '1'),
+  // Path to the built sandbox dir for the selected major (env.squashfs +
+  // manifest). Baked into the docker image; set by launch-with-sandbox.sh
+  // in dev/test. Resolved per-major as SANDBOX_DIR_<major> in the sandbox lib.
+  SANDBOX_DIR_22: z.string().optional(),
+  SANDBOX_DIR_24: z.string().optional(),
+  SANDBOX_DIR_26: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;
