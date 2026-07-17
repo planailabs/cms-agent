@@ -100,6 +100,28 @@ function freePort(): Promise<number> {
   });
 }
 
+/** Site deps: install if the checkout has none (worktrees don't share node_modules). */
+async function ensureDeps(worktree: string): Promise<void> {
+  if (!fs.existsSync(path.join(worktree, 'package.json'))) return;
+  if (fs.existsSync(path.join(worktree, 'node_modules'))) return;
+  console.log(`[preview] installing site dependencies in ${worktree}…`);
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('npm', ['install', '--no-audit', '--no-fund'], {
+      cwd: worktree,
+      stdio: ['ignore', 'ignore', 'pipe'],
+      env: { ...process.env, FORCE_COLOR: '0' },
+    });
+    let stderr = '';
+    child.stderr?.on('data', (d: Buffer) => (stderr += d.toString()));
+    child.on('error', reject);
+    child.on('exit', (code) =>
+      code === 0
+        ? resolve()
+        : reject(new Error(`npm install failed (${code}): ${stderr.slice(-2000)}`)),
+    );
+  });
+}
+
 async function waitForHttp(port: number, timeoutMs = 90_000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -175,6 +197,7 @@ export async function ensureInstance(branch: string): Promise<PreviewInstance> {
     await evictForCapacity();
     const e = env();
     const worktree = await ensureWorktree(branch);
+    await ensureDeps(worktree);
     const port = await freePort();
 
     // REPO_DEV_COMMAND is split on whitespace (document: no shell quoting)
