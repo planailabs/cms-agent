@@ -57,3 +57,6 @@ result*
 
 # dev working copies (scripts/setup-dev-site.sh)
 /local/
+
+# scratch browser-verification scripts (ui-verify skill)
+*.local.mjs

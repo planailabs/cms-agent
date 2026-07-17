@@ -30,3 +30,6 @@ pnpm test:integration                     # real dev servers + deploy flows
 cargo test --manifest-path proxy/Cargo.toml
 npx tsc --noEmit && npx astro build
 ```
+
+UI changes: verify in a real browser against the prod build — see
+[`.agents/skills/ui-verify/SKILL.md`](.agents/skills/ui-verify/SKILL.md).
