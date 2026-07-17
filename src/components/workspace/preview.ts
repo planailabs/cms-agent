@@ -22,7 +22,8 @@ const activeChatSummary = (state: AppState): ChatSummary | null => {
 /** Branch label whose preview the main pane shows. */
 export const previewBranchName = (state: AppState): string => {
   const chat = activeChatSummary(state);
-  if (chat && chat.kind !== 'deployments' && chat.workBranch) return chat.workBranch;
+  // Deployment/system chats have no real worktree — show the target branch
+  if (chat && (chat.kind ?? 'workflow') === 'workflow' && chat.workBranch) return chat.workBranch;
   return activeBranchName(state);
 };
 

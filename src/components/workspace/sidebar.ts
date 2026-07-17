@@ -18,6 +18,7 @@ const PHASE_SHORT: Record<WorkflowPhase, string> = {
 
 /** Badge labels for non-workflow chat kinds. */
 const KIND_LABEL: Record<string, string> = {
+  deployment: 'deploy',
   deployments: 'deployments',
 };
 
@@ -63,6 +64,7 @@ export const renderBranchSwitcher = (state: AppState): string => {
     ? `<div class="ws-branch-panel">
         <div class="ws-branch-panel__actions">
           <button type="button" class="ws-mini-button" data-action="ws-new-branch">+ New branch</button>
+          <button type="button" class="ws-mini-button" data-action="ws-archive-open" title="Done chats">🗄 Archive</button>
         </div>
         <div class="ws-branch-panel__list">${renderBranchList(state) || '<span class="ws-empty-note">No branches yet</span>'}</div>
       </div>`

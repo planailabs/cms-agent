@@ -36,6 +36,15 @@ export const renderMessageBubbles = (mc: AiChat): string =>
       if (msg.role === 'tool' && msg.tool) {
         return renderToolCall(msg);
       }
+      if (msg.role === 'automatism') {
+        // Agent-less flow event — rendered as a system event card
+        return `
+            <div class="chat-automatism">
+              <div class="chat-automatism__head">⚙ Automatism</div>
+              <pre class="chat-automatism__body">${escapeHtml(msg.content)}</pre>
+            </div>
+          `;
+      }
       if (msg.role === 'cancel') {
         return `
             <div class="flex justify-end">

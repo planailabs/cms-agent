@@ -25,6 +25,8 @@ export const GET: APIRoute = async () => {
     orderBy: { createdAt: 'desc' },
     include: {
       chats: {
+        // Archived (done) chats live in the archive view, not the sidebar
+        where: { archivedAt: null },
         orderBy: { updatedAt: 'desc' },
         select: {
           id: true,

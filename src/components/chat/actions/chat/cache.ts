@@ -16,7 +16,7 @@ export interface ToolCallInfo {
 
 export type StoredMessage = {
   id?: string;
-  role: 'user' | 'assistant' | 'cancel' | 'tool';
+  role: 'user' | 'assistant' | 'cancel' | 'tool' | 'automatism';
   content: string;
   tool?: ToolCallInfo;
 };

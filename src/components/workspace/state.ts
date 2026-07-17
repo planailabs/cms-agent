@@ -76,6 +76,28 @@ export interface BrowserCompareState {
   onionPercent: number;
 }
 
+/** A done chat in the archive view (GET /api/chats/archived). */
+export interface ArchivedChatRow {
+  id: string;
+  title: string;
+  kind: string;
+  branch: string;
+  workBranch: string;
+  createdBy: string | null;
+  archivedAt: string;
+  publication: { status: string; sha: string; externalUrl: string | null } | null;
+}
+
+/** Full-screen archive modal (done chats; delete = chat + branch + data). */
+export interface ArchiveState {
+  open: boolean;
+  loading: boolean;
+  error: string | null;
+  chats: ArchivedChatRow[];
+  /** Chat id with a delete in flight. */
+  busyId: string | null;
+}
+
 export interface DiffState {
   /** Chat the pages were loaded for (guards stale loads). */
   forChatId: string | null;
@@ -126,6 +148,9 @@ export interface WorkspaceState {
 
   /** Cross-browser comparison overlay (toggled from the preview toolbar). */
   browserCompare: BrowserCompareState;
+
+  /** Archive modal (not chat-scoped — survives chat switches). */
+  archive: ArchiveState;
 }
 
 export const createInitialDiffState = (): DiffState => ({
@@ -155,6 +180,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   contextChip: null,
   diff: createInitialDiffState(),
   browserCompare: createInitialBrowserCompareState(),
+  archive: { open: false, loading: false, error: null, chats: [], busyId: null },
 });
 
 export const createInitialBrowserCompareState = (): BrowserCompareState => ({

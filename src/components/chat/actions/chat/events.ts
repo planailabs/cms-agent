@@ -73,6 +73,28 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
       return true;
     }
 
+    case 'automatism': {
+      // Agent-less flow event — appended to the transcript of the open chat
+      const mc = store.state.chat?.aiChat;
+      if (mc) {
+        mc.messages.push({ role: 'automatism', content: (data.content as string) ?? '' });
+        cacheAIChatMessages(mc.messages);
+        store.notify();
+      }
+      return true;
+    }
+
+    case 'chat_archived': {
+      // Done chats leave the sidebar (they live in the archive view now)
+      const chatId = data.chatId as string;
+      for (const branch of store.state.branches) {
+        const idx = branch.chats.findIndex((c) => c.id === chatId);
+        if (idx >= 0) branch.chats.splice(idx, 1);
+      }
+      store.notify();
+      return true;
+    }
+
     case 'publish_done': {
       ws.publish = publishCardReducer(ws.publish, {
         type: 'done',

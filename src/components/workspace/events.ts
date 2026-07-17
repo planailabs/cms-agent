@@ -38,6 +38,7 @@ import {
   startElementPick,
   cancelElementPick,
 } from './previewAgent';
+import { openArchive, closeArchive, deleteArchivedChat } from './archive';
 import type { DiffViewMode, PageContextElement, PageContextSelection } from './state';
 
 const SIDEBAR_MIN_WIDTH = 300;
@@ -219,6 +220,14 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
       store.state.workspace.branchListOpen = false;
       switchChat(chatId);
     }
+  });
+
+  // Archive modal (done chats)
+  delegateEvent(app, 'click', '[data-action="ws-archive-open"]', () => void openArchive());
+  delegateEvent(app, 'click', '[data-action="ws-archive-close"]', () => closeArchive());
+  delegateEvent(app, 'click', '[data-action="ws-archive-delete"]', (_e, target) => {
+    const chatId = target.getAttribute('data-chat-id');
+    if (chatId) void deleteArchivedChat(chatId);
   });
 
   // Sidebar collapse/expand

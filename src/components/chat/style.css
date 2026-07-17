@@ -2671,3 +2671,137 @@ html.is-first-visit #app {
   display: flex;
   gap: 0.5rem;
 }
+
+/* ── Automatism events (agent-less flow messages in the chat) ── */
+
+.chat-automatism {
+  margin: 0.35rem 0;
+  border: 1px dashed var(--border-muted);
+  border-radius: 0.75rem;
+  background: var(--surface-elevated);
+  overflow: hidden;
+}
+
+.chat-automatism__head {
+  padding: 0.35rem 0.75rem 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.chat-automatism__body {
+  margin: 0;
+  padding: 0.35rem 0.75rem 0.6rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+/* ── Archive modal (full-screen, done chats) ── */
+
+.ws-archive {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  padding: 2rem;
+  background: color-mix(in srgb, var(--surface-base) 70%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.ws-archive__panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border-muted);
+  border-radius: 1rem;
+  background: var(--surface-base);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.35);
+}
+
+.ws-archive__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.ws-archive__heading {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.ws-archive__error {
+  margin: 0.75rem 1.25rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  color: #dc2626;
+  font-size: 0.8rem;
+}
+
+.ws-archive__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ws-archive__row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-muted);
+  border-radius: 0.75rem;
+  background: var(--surface-elevated);
+}
+
+.ws-archive__info {
+  min-width: 0;
+  flex: 1;
+}
+
+.ws-archive__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.ws-archive__meta {
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ws-archive__pub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.ws-archive__pub.is-succeeded { color: #16a34a; }
+.ws-archive__pub.is-failed { color: #dc2626; }
+
+.ws-archive__empty {
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.ws-archive__delete:hover {
+  border-color: #dc2626;
+  color: #dc2626;
+}
