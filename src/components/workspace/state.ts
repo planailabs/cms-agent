@@ -145,6 +145,9 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
 
 /** Clears the chat-scoped parts of the workspace (call on chat switch). */
 export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
+  ws.previewRoute = '/';
+  ws.previewTabs = ['/'];
+  ws.activeTabIndex = 0;
   ws.executionSha = null;
   ws.executions = [];
   ws.publish = null;

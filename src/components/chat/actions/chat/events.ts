@@ -8,6 +8,7 @@ import { cacheAIChatMessages } from './cache';
 import { transition } from './stateMachine';
 import { publishCardReducer } from '../../../workspace/publishCard';
 import { createInitialDiffState } from '../../../workspace/state';
+import { onRemoteTabsUpdated } from '../../../workspace/tabsSync';
 
 /**
  * Handles workspace-level events (execution/publish lifecycle). These don't
@@ -26,6 +27,11 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
       }
       ws.executionSha = sha;
       store.notify();
+      return true;
+    }
+
+    case 'tabs_updated': {
+      onRemoteTabsUpdated(data);
       return true;
     }
 

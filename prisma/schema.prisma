@@ -41,6 +41,7 @@ model User {
   createdAutonomyGrants  AutonomyGrant[]         @relation("GrantCreator")
   approvedMemories       ApprovedMemory[]
   systemPromptExtensions SystemPromptExtension[]
+  chatTabs               ChatTabs[]
 
   @@unique([email])
   @@map("user")
@@ -145,9 +146,26 @@ model Chat {
   approvals        Approval[]
   memoryCandidates MemoryCandidate[]
   publications     Publication[]
+  tabs             ChatTabs[]
 
   @@index([branchId])
   @@map("chat")
+}
+
+// Per-user open preview tabs of a chat (synced across sessions via SSE)
+model ChatTabs {
+  id          String   @id @default(cuid())
+  chatId      String
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Array of routes, e.g. ["/", "/blog/"]
+  tabs        Json
+  activeIndex Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([chatId, userId])
+  @@map("chat_tabs")
 }
 
 model Message {

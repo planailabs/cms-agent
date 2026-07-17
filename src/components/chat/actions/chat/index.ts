@@ -8,6 +8,7 @@ import type { Branch, ChatSummary } from '../../app/state';
 import { disconnectEvents } from './sse';
 import { restoreAIChatSession } from './session';
 import { resetWorkspaceChatState } from '../../../workspace/state';
+import { loadChatTabs } from '../../../workspace/tabsSync';
 
 // ─── Re-exports ─────────────────────────────────────────────────────────────
 
@@ -131,6 +132,9 @@ export const switchChat = (chatId: string): void => {
   const summary = branch?.chats.find((c) => c.id === chatId);
   state.workflowPhase = summary?.workflowPhase ?? 'plan';
   store.notify();
+
+  // Restore the user's saved preview tabs for this chat (best-effort)
+  void loadChatTabs(chatId);
 
   // Restore/init the new chat
   restoreAIChatSession();

@@ -10,9 +10,7 @@ import { store } from '../chat/app/store';
 import { transition } from '../chat/actions/chat/stateMachine';
 import { createChat, switchChat, createBranch } from '../chat/actions/chat';
 import { publishCardReducer } from './publishCard';
-import { branchPreviewUrl } from './config';
-import { previewBranchName } from './preview';
-import { getPreviewIframe } from './previewAgent';
+import { loadPreviewRoute, scheduleTabsSave } from './tabsSync';
 import type { ContextChip, DiffPage } from './state';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -247,6 +245,7 @@ export const onPreviewNavigation = (url: string, route: string): void => {
     ws.previewRoute = route;
     ws.previewTabs[ws.activeTabIndex] = route;
     store.notify();
+    scheduleTabsSave();
   }
 
   pendingBeacon = { url, route };
@@ -280,13 +279,6 @@ const normalizeRoute = (raw: string): string => {
   return route;
 };
 
-/** Points the preview iframe at a route (direct src set — the frame region's
- *  markup is route-independent, so re-renders won't reload it). */
-const loadPreviewRoute = (route: string): void => {
-  const iframe = getPreviewIframe();
-  if (iframe) iframe.src = branchPreviewUrl(previewBranchName(store.state), route);
-};
-
 export const navigatePreviewTo = (raw: string): void => {
   const ws = store.state.workspace;
   const route = normalizeRoute(raw);
@@ -294,6 +286,7 @@ export const navigatePreviewTo = (raw: string): void => {
   ws.previewTabs[ws.activeTabIndex] = route;
   store.notify();
   loadPreviewRoute(route);
+  scheduleTabsSave();
 };
 
 export const switchPreviewTab = (index: number): void => {
@@ -303,6 +296,7 @@ export const switchPreviewTab = (index: number): void => {
   ws.previewRoute = ws.previewTabs[index];
   store.notify();
   loadPreviewRoute(ws.previewRoute);
+  scheduleTabsSave();
 };
 
 export const closePreviewTab = (index: number): void => {
@@ -315,6 +309,7 @@ export const closePreviewTab = (index: number): void => {
   ws.previewRoute = ws.previewTabs[ws.activeTabIndex];
   store.notify();
   if (wasActive) loadPreviewRoute(ws.previewRoute);
+  scheduleTabsSave();
 };
 
 export const newPreviewTab = (): void => {
@@ -324,6 +319,7 @@ export const newPreviewTab = (): void => {
   ws.previewRoute = '/';
   store.notify();
   loadPreviewRoute('/');
+  scheduleTabsSave();
 };
 
 /** cms:selection / cms:element → context chip above the composer. */
