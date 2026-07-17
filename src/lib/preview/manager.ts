@@ -5,6 +5,7 @@
  * (VAR_DIR/proxy-access.json) to stop idle instances. Plan §5.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -26,6 +27,8 @@ interface ManagerState {
   starting: Map<string, Promise<PreviewInstance>>;
   /** SSE subscribers (proxy connections) notified on every routes change. */
   routesListeners: Set<(routesJson: string) => void>;
+  /** Last failed start per branch, surfaced on the boot page. */
+  startErrors: Map<string, { message: string; at: number }>;
 }
 
 // Survive Vite HMR module reloads in dev
@@ -37,8 +40,18 @@ const state: ManagerState =
     sweeper: null,
     starting: new Map(),
     routesListeners: new Set(),
+    startErrors: new Map(),
   });
-state.routesListeners ??= new Set(); // field added after older HMR state
+state.routesListeners ??= new Set(); // fields added after older HMR state
+state.startErrors ??= new Map();
+
+export function getStartError(branch: string): { message: string; at: number } | null {
+  return state.startErrors.get(branch) ?? null;
+}
+
+export function clearStartError(branch: string): void {
+  state.startErrors.delete(branch);
+}
 
 const routesFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-routes.json');
 const accessFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-access.json');
@@ -100,13 +113,28 @@ function freePort(): Promise<number> {
   });
 }
 
-/** Site deps: install if the checkout has none (worktrees don't share node_modules). */
-async function ensureDeps(worktree: string): Promise<void> {
-  if (!fs.existsSync(path.join(worktree, 'package.json'))) return;
-  if (fs.existsSync(path.join(worktree, 'node_modules'))) return;
+/**
+ * Site deps: install when the checkout has none, when package.json changed
+ * since the last install (the agent can edit site deps mid-chat), or when
+ * `force` is set (boot-page retry = repair).
+ */
+async function ensureDeps(worktree: string, force = false): Promise<void> {
+  const pkgPath = path.join(worktree, 'package.json');
+  if (!fs.existsSync(pkgPath)) return;
+  const hash = createHash('sha256').update(fs.readFileSync(pkgPath)).digest('hex');
+  const stampPath = path.join(worktree, 'node_modules', '.cms-deps-hash');
+  let stamp: string | null = null;
+  try {
+    stamp = fs.readFileSync(stampPath, 'utf8');
+  } catch {
+    // no stamp — never installed by us
+  }
+  if (!force && stamp === hash) return;
   console.log(`[preview] installing site dependencies in ${worktree}…`);
   await new Promise<void>((resolve, reject) => {
-    const child = spawn('npm', ['install', '--no-audit', '--no-fund'], {
+    // --include=dev: the container runs with NODE_ENV=production, but dev
+    // servers need devDependencies (astro itself usually lives there)
+    const child = spawn('npm', ['install', '--no-audit', '--no-fund', '--include=dev'], {
       cwd: worktree,
       stdio: ['ignore', 'ignore', 'pipe'],
       env: { ...process.env, FORCE_COLOR: '0' },
@@ -120,6 +148,7 @@ async function ensureDeps(worktree: string): Promise<void> {
         : reject(new Error(`npm install failed (${code}): ${stderr.slice(-2000)}`)),
     );
   });
+  fs.writeFileSync(stampPath, hash);
 }
 
 async function waitForHttp(port: number, timeoutMs = 90_000): Promise<void> {
@@ -177,8 +206,11 @@ async function evictForCapacity(): Promise<void> {
   }
 }
 
-/** Ensure a dev server runs for the branch; resolves when it accepts HTTP. */
-export async function ensureInstance(branch: string): Promise<PreviewInstance> {
+/**
+ * Ensure a dev server runs for the branch; resolves when it accepts HTTP.
+ * `repair` forces a dependency re-install (boot-page retry after a failure).
+ */
+export async function ensureInstance(branch: string, repair = false): Promise<PreviewInstance> {
   const existing = state.instances.get(branch);
   if (existing && existing.info.status === 'ready' && existing.child.exitCode === null) {
     existing.info.lastUsedAt = Date.now();
@@ -194,10 +226,11 @@ export async function ensureInstance(branch: string): Promise<PreviewInstance> {
   if (inFlight) return inFlight;
 
   const startPromise = (async () => {
+    state.startErrors.delete(branch);
     await evictForCapacity();
     const e = env();
     const worktree = await ensureWorktree(branch);
-    await ensureDeps(worktree);
+    await ensureDeps(worktree, repair);
     const port = await freePort();
 
     // REPO_DEV_COMMAND is split on whitespace (document: no shell quoting)
@@ -218,12 +251,20 @@ export async function ensureInstance(branch: string): Promise<PreviewInstance> {
     };
     state.instances.set(branch, { info, child });
 
-    child.stdout?.on('data', (d: Buffer) =>
-      console.log(`[preview:${branch}] ${d.toString().trimEnd()}`),
-    );
-    child.stderr?.on('data', (d: Buffer) =>
-      console.error(`[preview:${branch}] ${d.toString().trimEnd()}`),
-    );
+    // Rolling tail of the child's output — becomes the error message when
+    // the dev server dies before it is ready.
+    let logTail = '';
+    const appendTail = (d: Buffer) => {
+      logTail = (logTail + d.toString()).slice(-4000);
+    };
+    child.stdout?.on('data', (d: Buffer) => {
+      appendTail(d);
+      console.log(`[preview:${branch}] ${d.toString().trimEnd()}`);
+    });
+    child.stderr?.on('data', (d: Buffer) => {
+      appendTail(d);
+      console.error(`[preview:${branch}] ${d.toString().trimEnd()}`);
+    });
     child.on('exit', (code) => {
       console.log(`[preview:${branch}] exited (${code})`);
       const cur = state.instances.get(branch);
@@ -234,7 +275,16 @@ export async function ensureInstance(branch: string): Promise<PreviewInstance> {
     });
 
     try {
-      await waitForHttp(port);
+      // Fail fast (with the captured output) when the dev server exits
+      // before accepting HTTP, instead of waiting out the full timeout.
+      const earlyExit = new Promise<never>((_, reject) => {
+        child.on('exit', (code) => {
+          if (info.status === 'starting') {
+            reject(new Error(`dev server exited (${code}) before ready:\n${logTail.slice(-2000)}`));
+          }
+        });
+      });
+      await Promise.race([waitForHttp(port), earlyExit]);
     } catch (err) {
       child.kill('SIGTERM');
       state.instances.delete(branch);
@@ -248,6 +298,13 @@ export async function ensureInstance(branch: string): Promise<PreviewInstance> {
     console.log(`[preview] ${branch} ready on port ${port} (worktree ${worktree})`);
     return info;
   })().finally(() => state.starting.delete(branch));
+
+  startPromise.catch((err: unknown) => {
+    state.startErrors.set(branch, {
+      message: err instanceof Error ? err.message : String(err),
+      at: Date.now(),
+    });
+  });
 
   state.starting.set(branch, startPromise);
   return startPromise;

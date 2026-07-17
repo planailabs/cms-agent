@@ -71,7 +71,9 @@ export async function sealArtifact(sha: string, log: (l: string) => void): Promi
     // Site deps: install if the checkout has none (worktrees don't share node_modules)
     if (fs.existsSync(path.join(buildDir, 'package.json')) && !fs.existsSync(path.join(buildDir, 'node_modules'))) {
       log('Installing site dependencies…');
-      await run('npm install --no-audit --no-fund', buildDir, log);
+      // --include=dev: NODE_ENV=production would omit devDependencies,
+      // where site build tooling (astro, integrations) usually lives
+      await run('npm install --no-audit --no-fund --include=dev', buildDir, log);
     }
     await run(e.REPO_BUILD_COMMAND, buildDir, log);
 

@@ -85,7 +85,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (!context.locals.user && !previewAuth) {
       return context.redirect('/signin/');
     }
-    return handlePreviewBoot(bootMatch[1]);
+    const retry = new URL(context.request.url).searchParams.has('retry');
+    return handlePreviewBoot(bootMatch[1], retry);
   }
 
   const isPublic = PUBLIC_PATHS.some((re) => re.test(pathname));
