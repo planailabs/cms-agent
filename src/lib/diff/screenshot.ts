@@ -61,7 +61,12 @@ async function screenshot(
   }
 }
 
-/** pixelmatch two PNG files into a diff PNG; returns changed pixel count. */
+/**
+ * pixelmatch two PNG files into a diff PNG; returns changed pixel count.
+ * fullPage screenshots differ in height (content / font metrics), so all
+ * three PNGs are normalized to the same (max) dimensions — the before/after
+ * files are rewritten padded, so the onion/highlight overlays line up.
+ */
 function pixelDiff(fileA: string, fileB: string, diffOut: string): { changed: number; total: number } {
   const a = PNG.sync.read(fs.readFileSync(fileA));
   const b = PNG.sync.read(fs.readFileSync(fileB));
@@ -69,6 +74,8 @@ function pixelDiff(fileA: string, fileB: string, diffOut: string): { changed: nu
   const height = Math.max(a.height, b.height);
   const ap = padTo(a, width, height);
   const bp = padTo(b, width, height);
+  if (ap !== a) fs.writeFileSync(fileA, PNG.sync.write(ap));
+  if (bp !== b) fs.writeFileSync(fileB, PNG.sync.write(bp));
   const diff = new PNG({ width, height });
   const changed = pixelmatch(ap.data, bp.data, diff.data, width, height, {
     threshold: 0.1,
