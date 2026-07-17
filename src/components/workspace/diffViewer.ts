@@ -32,14 +32,15 @@ const renderSideBySide = (state: AppState, route: string): string => {
   // own work branch (what the execution changed)
   const before = branchPreviewUrl(activeBranchName(state), route);
   const after = branchPreviewUrl(previewBranchName(state), route);
+  // Stable ids: the scroll-sync controller (diffScroll.ts) pairs these two.
   return `<div class="ws-diff-columns">
       <div class="ws-diff-col">
         <span class="ws-diff-col__label">Before (${escapeHtml(activeBranchName(state))})</span>
-        <iframe src="${escapeHtml(before)}" title="Before: ${escapeHtml(route)}"></iframe>
+        <iframe id="ws-diff-before" src="${escapeHtml(before)}" title="Before: ${escapeHtml(route)}"></iframe>
       </div>
       <div class="ws-diff-col">
         <span class="ws-diff-col__label">After (${escapeHtml(previewBranchName(state))})</span>
-        <iframe src="${escapeHtml(after)}" title="After: ${escapeHtml(route)}"></iframe>
+        <iframe id="ws-diff-after" src="${escapeHtml(after)}" title="After: ${escapeHtml(route)}"></iframe>
       </div>
     </div>`;
 };

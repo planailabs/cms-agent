@@ -8,6 +8,7 @@ import { store } from '../chat/app/store';
 import { delegateEvent } from '../chat/utils/dom';
 import { switchChat } from '../chat/actions/chat';
 import { continueChatSession } from '../chat/actions/chat/session';
+import { registerDiffScrollSync } from './diffScroll';
 import {
   approvePlanAction,
   requestChangesAction,
@@ -274,4 +275,5 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   registerSidebarResize(app);
   registerOnionSlider(app);
   registerShotLoadStates();
+  registerDiffScrollSync();
 };
