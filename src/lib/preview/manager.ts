@@ -238,7 +238,13 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     const child = spawn(cmd, [...args, '--port', String(port), '--host', '127.0.0.1'], {
       cwd: worktree,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, FORCE_COLOR: '0' },
+      env: {
+        ...process.env,
+        FORCE_COLOR: '0',
+        // The proxy preserves the public Host header (<branch>.<BASE_DOMAIN>),
+        // which Vite's host check would otherwise block.
+        __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `${branch}.${e.BASE_DOMAIN}`,
+      },
     });
 
     const info: PreviewInstance = {
