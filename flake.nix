@@ -67,6 +67,7 @@
             gawk
             gnugrep
             ripgrep
+            python3
           ];
 
           mkSandboxEnv = major: node: pkgs.buildEnv {

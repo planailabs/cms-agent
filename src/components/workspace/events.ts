@@ -25,8 +25,6 @@ import {
   newPreviewTab,
   attachContextChip,
   removeContextChip,
-  chipToNewChat,
-  chipToCurrentChat,
 } from './actions';
 import {
   registerPreviewAgent,
@@ -250,8 +248,6 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
 
   // Context chip
   delegateEvent(app, 'click', '[data-action="ws-chip-remove"]', () => removeContextChip());
-  delegateEvent(app, 'click', '[data-action="ws-chip-current"]', () => chipToCurrentChat());
-  delegateEvent(app, 'click', '[data-action="ws-chip-new-chat"]', () => void chipToNewChat());
 
   // Diff viewer
   delegateEvent(app, 'click', '[data-action="ws-diff-reload"]', () => void loadDiffPages());

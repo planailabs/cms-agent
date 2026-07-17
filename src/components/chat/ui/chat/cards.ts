@@ -178,21 +178,12 @@ export const renderContextChip = (state: AppState): string => {
     label = chip.context.route ?? chip.context.url;
   }
 
-  const popover = ws.chipChoiceOpen
-    ? `<div class="ws-chip-popover">
-        <span class="ws-chip-popover__label">Attach to</span>
-        <button type="button" class="chat-cta-button" data-action="ws-chip-current">Current chat</button>
-        <button type="button" class="chat-cta-button" data-action="ws-chip-new-chat">New chat</button>
-      </div>`
-    : '';
-
   return `<div class="ws-chip-row">
       <span class="ws-chip" title="${escapeHtml(chip.context.route ?? chip.context.url)}">
         <span class="ws-chip__kind">${chip.kind === 'selection' ? '❝' : '⌖'}</span>
         <span class="ws-chip__label">${escapeHtml(label)}</span>
         <button type="button" class="ws-chip__remove" data-action="ws-chip-remove" aria-label="Remove context">×</button>
       </span>
-      ${popover}
     </div>`;
 };
 

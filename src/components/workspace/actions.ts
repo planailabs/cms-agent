@@ -322,43 +322,18 @@ export const newPreviewTab = (): void => {
   scheduleTabsSave();
 };
 
-/** cms:selection / cms:element → context chip above the composer. */
+/** cms:selection / cms:element → context chip above the composer, attached to
+ *  the current chat (the next message carries it). */
 export const attachContextChip = (chip: ContextChip): void => {
   const ws = store.state.workspace;
   const branch = store.state.branches.find((b) => b.id === store.state.activeBranchId);
   chip.context.branch = branch?.name;
   ws.contextChip = chip;
-  ws.chipChoiceOpen = true;
   ws.pickerActive = false;
   store.notify();
 };
 
 export const removeContextChip = (): void => {
-  const ws = store.state.workspace;
-  ws.contextChip = null;
-  ws.chipChoiceOpen = false;
-  store.notify();
-};
-
-/** Chip popover → "New chat": create a chat on the branch, keep the chip. */
-export const chipToNewChat = async (): Promise<void> => {
-  const ws = store.state.workspace;
-  const branchId = store.state.activeBranchId;
-  const chip = ws.contextChip;
-  if (!branchId) return;
-  const chat = await createChat(branchId);
-  if (!chat) {
-    showChatError('Could not create the chat.');
-    return;
-  }
-  switchChat(chat.id); // resets workspace chat state (incl. the chip) …
-  store.state.workspace.contextChip = chip; // … so re-attach it to the new chat
-  store.state.workspace.chipChoiceOpen = false;
-  store.notify();
-};
-
-/** Chip popover → "Current chat": just keep the chip attached. */
-export const chipToCurrentChat = (): void => {
-  store.state.workspace.chipChoiceOpen = false;
+  store.state.workspace.contextChip = null;
   store.notify();
 };

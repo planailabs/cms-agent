@@ -1903,29 +1903,6 @@ html.is-first-visit #app {
     color: var(--accent-danger);
   }
 
-  .ws-chip-popover {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.6rem;
-    border-radius: 999px;
-    border: 1px solid color-mix(in lab, var(--border-muted) 85%, transparent);
-    background: color-mix(in lab, var(--surface-elevated) 96%, transparent);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-  }
-
-  .ws-chip-popover .chat-cta-button {
-    min-width: auto;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.75rem;
-  }
-
-  .ws-chip-popover__label {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-
   /* ── Diff viewer ── */
 
   .ws-diff {

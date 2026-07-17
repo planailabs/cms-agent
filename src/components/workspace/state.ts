@@ -107,8 +107,6 @@ export interface WorkspaceState {
 
   /** Pending context chip (selection/element from the preview overlay). */
   contextChip: ContextChip | null;
-  /** "current chat / new chat" popover open for the chip. */
-  chipChoiceOpen: boolean;
 
   /** Diff viewer state (PREVIEW phase main area). */
   diff: DiffState;
@@ -139,7 +137,6 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   executions: [],
   publish: null,
   contextChip: null,
-  chipChoiceOpen: false,
   diff: createInitialDiffState(),
 });
 
@@ -152,6 +149,5 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.executions = [];
   ws.publish = null;
   ws.contextChip = null;
-  ws.chipChoiceOpen = false;
   ws.diff = createInitialDiffState();
 };

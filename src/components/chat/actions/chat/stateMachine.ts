@@ -18,7 +18,6 @@ const takeContextChip = (): PageContext | undefined => {
   if (!ws.contextChip) return undefined;
   const context = ws.contextChip.context;
   ws.contextChip = null;
-  ws.chipChoiceOpen = false;
   return context;
 };
 
