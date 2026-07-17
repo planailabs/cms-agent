@@ -135,6 +135,16 @@
 
               mkdir -p "$VAR_DIR"
 
+              # Deploy key for git ssh remotes (git-push/github-ci flows):
+              # generated on first boot; add the logged public key to the site
+              # repo with write access. Path matches the GIT_SSH_COMMAND default.
+              if [ ! -f "$VAR_DIR/ssh/id_ed25519" ]; then
+                mkdir -p "$VAR_DIR/ssh"
+                chmod 700 "$VAR_DIR/ssh"
+                ssh-keygen -t ed25519 -N "" -C cms-agent-deploy -f "$VAR_DIR/ssh/id_ed25519" >/dev/null
+              fi
+              echo "cms-agent: git deploy key: $(cat "$VAR_DIR/ssh/id_ed25519.pub")"
+
               cms-agent-prisma migrate deploy
 
               cms-agent &
