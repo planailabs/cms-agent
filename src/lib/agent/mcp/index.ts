@@ -47,14 +47,20 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   return {
     async asOpenAiTools() {
       const { tools } = await client.listTools();
-      return tools.map((t) => ({
-        type: 'function' as const,
-        function: {
-          name: t.name,
-          description: t.description ?? '',
-          parameters: (t.inputSchema as Record<string, unknown>) ?? { type: 'object' },
-        },
-      }));
+      return tools.map((t) => {
+        // Strip the $schema marker — some OpenAI-compatible backends reject
+        // parameters carrying it and then expose the tool WITHOUT parameters.
+        const { $schema: _drop, ...parameters } =
+          (t.inputSchema as Record<string, unknown>) ?? {};
+        return {
+          type: 'function' as const,
+          function: {
+            name: t.name,
+            description: t.description ?? '',
+            parameters: Object.keys(parameters).length > 0 ? parameters : { type: 'object' },
+          },
+        };
+      });
     },
     async callTool(name, input) {
       const result = await client.callTool({ name, arguments: input });

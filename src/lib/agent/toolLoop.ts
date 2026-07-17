@@ -189,7 +189,12 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
           // Assign, don't concatenate: some backends (codex proxy) repeat the
           // FULL name on every fragment; only arguments stream incrementally.
           if (tc.function?.name) accumulated[idx].function.name = tc.function.name;
-          if (tc.function?.arguments) accumulated[idx].function.arguments += tc.function.arguments;
+          if (tc.function?.arguments) {
+            accumulated[idx].function.arguments = accumulateArgs(
+              accumulated[idx].function.arguments,
+              tc.function.arguments,
+            );
+          }
         }
       }
 
@@ -292,11 +297,49 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
   }
 }
 
-function safeParseArgs(args: string): Record<string, unknown> {
+const isCompleteJson = (s: string): boolean => {
+  try {
+    JSON.parse(s);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Accumulate a tool-argument stream fragment. Normal backends send deltas
+ * (concatenate); some proxies resend the FULL arguments JSON each fragment —
+ * appending would corrupt it into `{...}{...}` and every call would fall back
+ * to {}. When the buffer is already complete JSON and the fragment opens a
+ * new object, it is such a resend: replace instead of append.
+ */
+export function accumulateArgs(current: string, fragment: string): string {
+  if (current && fragment.trimStart().startsWith('{') && isCompleteJson(current)) {
+    return fragment;
+  }
+  return current + fragment;
+}
+
+export function safeParseArgs(args: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(args || '{}');
     return typeof parsed === 'object' && parsed !== null ? parsed : {};
   } catch {
+    // Salvage concatenated full-JSON repeats (`{...}{...}`): take the last
+    // balanced object rather than silently degrading to {}.
+    const cut = args.lastIndexOf('}{');
+    if (cut >= 0) {
+      try {
+        const parsed = JSON.parse(args.slice(cut + 1));
+        if (typeof parsed === 'object' && parsed !== null) {
+          console.warn('[agent] salvaged repeated tool-arguments stream');
+          return parsed;
+        }
+      } catch {
+        // fall through
+      }
+    }
+    console.warn(`[agent] unparseable tool arguments (${args.length} chars) — using {}`);
     return {};
   }
 }

@@ -50,3 +50,31 @@ describe('createLoopDetector', () => {
     expect(detect('read_file', { path: 'a' })).toBeNull();
   });
 });
+
+// ── Argument-stream accumulation (proxy full-resend + salvage) ───────────────
+import { accumulateArgs, safeParseArgs } from '@/lib/agent/toolLoop';
+
+describe('tool argument accumulation', () => {
+  it('concatenates normal delta fragments', () => {
+    let buf = '';
+    for (const frag of ['{"pa', 'th":"a.', 'txt"}']) buf = accumulateArgs(buf, frag);
+    expect(JSON.parse(buf)).toEqual({ path: 'a.txt' });
+  });
+
+  it('replaces when a proxy resends the full JSON each fragment', () => {
+    let buf = '';
+    for (const frag of ['{"path":"a.txt"}', '{"path":"a.txt","content":"x"}']) {
+      buf = accumulateArgs(buf, frag);
+    }
+    expect(JSON.parse(buf)).toEqual({ path: 'a.txt', content: 'x' });
+  });
+
+  it('salvages already-corrupted concatenated repeats', () => {
+    expect(safeParseArgs('{"path":"a"}{"path":"a","content":"x"}')).toEqual({
+      path: 'a',
+      content: 'x',
+    });
+    expect(safeParseArgs('garbage')).toEqual({});
+    expect(safeParseArgs('')).toEqual({});
+  });
+});
