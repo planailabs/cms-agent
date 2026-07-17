@@ -108,6 +108,12 @@
             printf '{"majors":["22","24","26"]}\n' > "$out/manifest.json"
           '';
 
+          # fontconfig config + fonts for the diff-screenshot chromium — without
+          # a fonts.conf and at least one font it FATALs in Skia's font manager.
+          screenshotFontsConf = pkgs.makeFontsConf {
+            fontDirectories = [ pkgs.dejavu_fonts pkgs.liberation_ttf ];
+          };
+
           # Single-container entrypoint: run migrations, then both processes;
           # exit (and let the runtime restart the container) when either dies.
           # git + node must be on PATH: the CMS shells into the managed repo
@@ -207,6 +213,7 @@
                 # Diff screenshots: use the bundled playwright browsers.
                 "PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}"
                 "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true"
+                "FONTCONFIG_FILE=${screenshotFontsConf}"
               ];
               ExposedPorts = { "8080/tcp" = { }; };
               Volumes = { "/data" = { }; };
