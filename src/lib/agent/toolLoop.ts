@@ -16,6 +16,43 @@ import { isClientSideTool, type ToolContext } from './tools/registry';
 import type { ClientToolPrompt, StoredMessage, ToolCall, ToolResult, TurnPhase } from './types';
 
 const MAX_TOOL_ROUNDS = 250;
+const LOOP_WINDOW = 5;
+const LOOP_THRESHOLD = 3;
+
+/** Key-order-independent canonical form of tool arguments. */
+function canonicalArgs(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalArgs).join(',')}]`;
+  if (v && typeof v === 'object') {
+    const obj = v as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalArgs(obj[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v) ?? 'null';
+}
+
+/**
+ * Detects tool-call loops: the same tool called with identical arguments
+ * LOOP_THRESHOLD times within the last LOOP_WINDOW calls. The sliding window
+ * catches both straight repeats and A-B-A-B alternation while leaving
+ * legitimate re-reads (interleaved with other work) alone.
+ */
+export function createLoopDetector(): (name: string, args: unknown) => string | null {
+  const recent: string[] = [];
+  return (name, args) => {
+    const key = `${name}:${canonicalArgs(args)}`;
+    recent.push(key);
+    if (recent.length > LOOP_WINDOW) recent.shift();
+    const count = recent.filter((k) => k === key).length;
+    if (count < LOOP_THRESHOLD) return null;
+    return JSON.stringify({
+      error:
+        `Loop detected: "${name}" was called with identical arguments ${count} times ` +
+        `in the last ${recent.length} tool calls. The call was NOT executed — its result ` +
+        `would not change. Take a different approach, change the arguments, or ask the ` +
+        `user for guidance.`,
+    });
+  };
+}
 
 /**
  * Build tool results after a client-side tool pause was answered/cancelled.
@@ -75,6 +112,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
   try {
     const tools = await bridge.asOpenAiTools();
     const systemPrompt = buildSystemPrompt(input.promptInput);
+    const detectLoop = createLoopDetector();
 
     // ── Pre-step: resume from tool_pending (crash/restart recovery) ─────────
     if (input.phase === 'tool_pending') {
@@ -174,7 +212,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       for (const call of toolCalls) {
         const args = safeParseArgs(call.function.arguments);
         broadcast(chatId, 'tool_start', { type: 'tool_start', name: call.function.name, input: args });
-        const content = await bridge.callTool(call.function.name, args);
+        const loopWarning = detectLoop(call.function.name, args);
+        if (loopWarning) console.warn(`[agent] chat=${chatId} loop detected on ${call.function.name}`);
+        const content = loopWarning ?? (await bridge.callTool(call.function.name, args));
         results.push({ toolCallId: call.id, content });
         broadcast(chatId, 'tool_end', {
           type: 'tool_end',
