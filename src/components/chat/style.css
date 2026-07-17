@@ -2195,6 +2195,13 @@ html.is-first-visit #app {
   gap: 1.25rem;
 }
 
+/* Tailwind's .hidden lives in @layer utilities, which unlayered rules like
+   .dash-stack or .dash-status always override — restate it unlayered with
+   !important so hidden always wins over display-setting component classes. */
+.hidden {
+  display: none !important;
+}
+
 .dash-row {
   display: flex;
   align-items: center;
