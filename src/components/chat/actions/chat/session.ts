@@ -25,6 +25,14 @@ export interface ChatHistoryResult {
   pendingQuestion?: Record<string, unknown>;
   executions: HistoryExecution[];
   lastError?: string | null;
+  automatism?: {
+    chatId: string;
+    automatismType: string;
+    status: string;
+    step: number;
+    steps: string[];
+    lastError: string | null;
+  } | null;
 }
 
 export const initAIChat = (messages: StoredMessage[], phase: 'idle' | 'waiting' = 'idle') => {
@@ -66,6 +74,7 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
       pendingQuestion: data.pendingQuestion,
       executions: (data.executions ?? []) as HistoryExecution[],
       lastError: data.lastError ?? null,
+      automatism: data.automatism ?? null,
     };
   } catch {
     // Network error — fall through
@@ -102,6 +111,19 @@ export const restoreAIChatSession = (): void => {
   const applyHistory = (result: ChatHistoryResult | null) => {
     const mc = store.state.chat?.aiChat;
     if (!mc || store.state.activeChatId !== chatId) return;
+
+    // Rehydrate the automatism step bar (deployment chats)
+    if (result?.automatism) {
+      store.state.workspace.automatism = {
+        forChatId: chatId,
+        automatismType: result.automatism.automatismType,
+        status: result.automatism.status,
+        step: result.automatism.step,
+        steps: result.automatism.steps,
+        lastError: result.automatism.lastError,
+      };
+      store.notify();
+    }
 
     // Rehydrate persisted executions (cards + publishable sha). Live SSE
     // events may have landed while the fetch was in flight — they win.

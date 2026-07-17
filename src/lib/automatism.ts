@@ -41,6 +41,42 @@ export function registerAutomatism(def: AutomatismDef): void {
   types.set(def.type, def);
 }
 
+/** Step-progress snapshot shown in the UI (phase-bar equivalent). */
+export interface AutomatismState {
+  chatId: string;
+  automatismType: string;
+  status: string;
+  step: number;
+  steps: string[];
+  lastError: string | null;
+}
+
+function emitState(s: AutomatismState): void {
+  broadcast(s.chatId, 'automatism_state', { type: 'automatism_state', ...s });
+}
+
+const stateOf = (
+  row: { chatId: string; type: string; status: string; step: number; lastError?: string | null },
+  overrides: Partial<AutomatismState> = {},
+): AutomatismState => ({
+  chatId: row.chatId,
+  automatismType: row.type,
+  status: row.status,
+  step: row.step,
+  steps: types.get(row.type)?.steps.map((s) => s.name) ?? [],
+  lastError: row.lastError ?? null,
+  ...overrides,
+});
+
+/** Latest automatism of a chat, for rendering its step bar (null = none). */
+export async function automatismStateFor(chatId: string): Promise<AutomatismState | null> {
+  const row = await prisma.automatism.findFirst({
+    where: { chatId },
+    orderBy: { createdAt: 'desc' },
+  });
+  return row ? stateOf(row) : null;
+}
+
 /**
  * Append a role:'automatism' message to a chat and broadcast it. Ordinals are
  * assigned by read-back; a concurrent agent turn can race the unique
@@ -105,24 +141,28 @@ async function advance(id: string): Promise<void> {
   for (let step = row.step; step < def.steps.length; step++) {
     const s = def.steps[step];
     await prisma.automatism.update({ where: { id }, data: { step, data: data as object } });
+    emitState(stateOf({ ...row, status: 'running', step }));
     try {
       await s.run(data, post);
     } catch (err) {
-      await pauseOnFailure(id, row.chatId, data, s.name, err);
+      await pauseOnFailure(id, row, data, step, s.name, err);
       return;
     }
   }
 
   await prisma.automatism.update({ where: { id }, data: { status: 'done', data: data as object } });
+  emitState(stateOf({ ...row, status: 'done', step: def.steps.length }));
 }
 
 async function pauseOnFailure(
   id: string,
-  chatId: string,
+  row: { chatId: string; type: string },
   data: AutomatismData,
+  step: number,
   stepName: string,
   err: unknown,
 ): Promise<void> {
+  const chatId = row.chatId;
   const message = err instanceof Error ? err.message : String(err);
   const agentChatId = (err instanceof AutomatismFailure && err.agentChatId) || chatId;
   console.error(`[automatism] ${id} paused at step "${stepName}":`, err);
@@ -131,6 +171,7 @@ async function pauseOnFailure(
     where: { id },
     data: { status: 'paused', lastError: message, agentChatId, data: data as object },
   });
+  emitState(stateOf({ ...row, status: 'paused', step, lastError: message }));
 
   const context =
     `Step "${stepName}" FAILED:\n${message}\n\n` +

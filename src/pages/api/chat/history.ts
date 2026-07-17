@@ -79,12 +79,19 @@ export const GET: APIRoute = async ({ url }) => {
     });
   }
 
+  // Automatism step bar (deployment chats): step names come from the
+  // registered defs, so make sure the publisher registered them.
+  await import('@/lib/publish/publisher');
+  const { automatismStateFor } = await import('@/lib/automatism');
+  const automatism = await automatismStateFor(chatId);
+
   return new Response(
     JSON.stringify({
       phase: chat.turnPhase,
       workflowPhase: chat.workflowPhase,
       planJson: chat.planJson,
       lastError: chat.lastError,
+      automatism,
       messages,
       // For rehydrating workspace state after reload/chat switch — without
       // these the Publish button waits forever for an execution_committed

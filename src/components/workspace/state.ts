@@ -151,6 +151,19 @@ export interface WorkspaceState {
 
   /** Archive modal (not chat-scoped — survives chat switches). */
   archive: ArchiveState;
+
+  /** Step progress of the active chat's automatism (deployment chats). */
+  automatism: AutomatismProgress | null;
+}
+
+/** Mirror of the server's AutomatismState (history + automatism_state SSE). */
+export interface AutomatismProgress {
+  forChatId: string;
+  automatismType: string;
+  status: string;
+  step: number;
+  steps: string[];
+  lastError: string | null;
 }
 
 export const createInitialDiffState = (): DiffState => ({
@@ -181,6 +194,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   diff: createInitialDiffState(),
   browserCompare: createInitialBrowserCompareState(),
   archive: { open: false, loading: false, error: null, chats: [], busyId: null },
+  automatism: null,
 });
 
 export const createInitialBrowserCompareState = (): BrowserCompareState => ({
@@ -203,4 +217,5 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.contextChip = null;
   ws.diff = createInitialDiffState();
   ws.browserCompare = createInitialBrowserCompareState();
+  ws.automatism = null;
 };

@@ -68,6 +68,9 @@
             gnugrep
             ripgrep
             python3
+            # Alternative package managers for managed sites (npm ships with node)
+            pnpm
+            yarn
           ];
 
           mkSandboxEnv = major: node: pkgs.buildEnv {
@@ -121,7 +124,7 @@
           # dev`) for branch previews.
           dockerEntrypoint = pkgs.writeShellApplication {
             name = "cms-agent-container";
-            runtimeInputs = [ cms-agent proxy pkgs.git pkgs.nodejs_22 pkgs.coreutils ];
+            runtimeInputs = [ cms-agent proxy pkgs.git pkgs.nodejs_22 pkgs.coreutils pkgs.openssh ];
             text = ''
               for required in DATABASE_URL BASE_DOMAIN; do
                 if [ -z "''${!required:-}" ]; then
@@ -171,6 +174,8 @@
               proxy
               dockerEntrypoint
               pkgs.git
+              # ssh for git remotes (git-push/github-ci deploy flows)
+              pkgs.openssh
               pkgs.nodejs_22
               pkgs.cacert
               pkgs.dockerTools.fakeNss
@@ -204,6 +209,10 @@
                 "REPO_PATH=/data/site"
                 "NODE_ENV=production"
                 "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+                # SSH for git deploy flows: key + known_hosts live on the data
+                # volume (mount or generate /data/var/ssh/id_ed25519 and add it
+                # as a deploy key with write access). Override with -e as usual.
+                "GIT_SSH_COMMAND=ssh -i /data/var/ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/data/var/ssh/known_hosts"
                 # Sandbox: baked env dirs (no nix at runtime); pick with
                 # SANDBOX_NODE_MAJOR (default 22). SANDBOX_ALLOW_NETWORK=1 keeps
                 # network in the jail so `npm install` works.

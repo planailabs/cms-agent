@@ -90,7 +90,44 @@ const PHASE_STEPS: Array<{ key: WorkflowPhase; label: string }> = [
   { key: 'published', label: 'Publish' },
 ];
 
+/** Step bar for the active chat's automatism (deployment chats) — the
+ *  non-workflow equivalent of the phase bar. */
+const renderAutomatismBar = (state: AppState): string => {
+  const a = state.workspace.automatism;
+  if (!a || a.forChatId !== state.activeChatId || a.steps.length === 0) return '';
+  const done = a.status === 'done';
+  const steps = a.steps
+    .map((name, i) => {
+      const cls = done || i < a.step
+        ? 'is-done'
+        : i === a.step
+          ? a.status === 'paused' || a.status === 'failed' ? 'is-failed' : 'is-current'
+          : '';
+      return `<span class="ws-phase-step ${cls}">${escapeHtml(name)}</span>`;
+    })
+    .join('<span class="ws-phase-sep">→</span>');
+  const note = done
+    ? '<span class="ws-phase-note">done</span>'
+    : a.status === 'paused'
+      ? '<span class="ws-phase-note ws-phase-note--failed">paused — agent investigating</span>'
+      : a.status === 'failed'
+        ? '<span class="ws-phase-note ws-phase-note--failed">failed</span>'
+        : '';
+  return `<div class="ws-phase-bar">
+      <div class="ws-phase-steps">${steps}</div>
+      ${note}
+    </div>`;
+};
+
 export const renderPhaseBar = (state: AppState): string => {
+  // Non-workflow chats have no PLAN→PUBLISH cycle — show automatism steps
+  const activeChat = state.branches
+    .flatMap((b) => b.chats)
+    .find((c) => c.id === state.activeChatId);
+  if (activeChat && (activeChat.kind ?? 'workflow') !== 'workflow') {
+    return renderAutomatismBar(state);
+  }
+
   const current = state.workflowPhase;
   const currentIdx = PHASE_STEPS.findIndex((s) => s.key === current);
 

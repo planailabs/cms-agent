@@ -84,6 +84,22 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
       return true;
     }
 
+    case 'automatism_state': {
+      // Step-bar progress for the active chat's automatism
+      if (data.chatId === store.state.activeChatId) {
+        store.state.workspace.automatism = {
+          forChatId: data.chatId as string,
+          automatismType: (data.automatismType as string) ?? '',
+          status: (data.status as string) ?? 'running',
+          step: (data.step as number) ?? 0,
+          steps: (data.steps as string[]) ?? [],
+          lastError: (data.lastError as string | null) ?? null,
+        };
+        store.notify();
+      }
+      return true;
+    }
+
     case 'chat_archived': {
       // Done chats leave the sidebar (they live in the archive view now)
       const chatId = data.chatId as string;
