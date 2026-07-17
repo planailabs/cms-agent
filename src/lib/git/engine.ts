@@ -250,6 +250,37 @@ export async function mergeInto(source: string, target: string, author: GitIdent
   return (await git.revparse(['HEAD'])).trim();
 }
 
+/**
+ * Materialize a conflicted merge of `source` INTO `branch`'s worktree and
+ * leave it unresolved (MERGE_HEAD set, conflict markers in the files) so an
+ * agent can resolve and commit it there. Returns the conflicted paths; []
+ * when the merge completed cleanly (races: source moved since the check).
+ */
+export async function beginConflictMerge(
+  branch: string,
+  source: string,
+  author: GitIdentity,
+): Promise<string[]> {
+  const dir = await ensureWorktree(branch);
+  const git = gitAs(dir, author);
+  try {
+    await git.merge(['--no-ff', '-m', `Merge ${source} into ${branch}`, source]);
+    return [];
+  } catch {
+    const status = await git.status();
+    return status.conflicted;
+  }
+}
+
+/** Abort an in-progress (conflicted) merge in a branch worktree, if any. */
+export async function abortMerge(branch: string): Promise<void> {
+  try {
+    await simpleGit(await ensureWorktree(branch)).merge(['--abort']);
+  } catch {
+    // no merge in progress
+  }
+}
+
 /** Reset a branch (and its worktree) onto its base after a merge (plan §3). */
 export async function resetBranchOnto(branch: string, base: string): Promise<void> {
   const dir = await ensureWorktree(branch);
