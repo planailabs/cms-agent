@@ -1635,6 +1635,17 @@ html.is-first-visit #app {
     color: var(--text-muted);
   }
 
+  .ws-chat-item__kind {
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.35rem;
+    border: 1px solid color-mix(in lab, var(--accent) 45%, transparent);
+    border-radius: 999px;
+    font-size: 0.62rem;
+    color: var(--accent);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
   .ws-empty-note {
     font-size: 0.78rem;
     color: var(--text-muted);

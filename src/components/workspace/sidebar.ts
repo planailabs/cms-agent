@@ -16,6 +16,11 @@ const PHASE_SHORT: Record<WorkflowPhase, string> = {
   published: 'pub',
 };
 
+/** Badge labels for non-workflow chat kinds. */
+const KIND_LABEL: Record<string, string> = {
+  deployments: 'deployments',
+};
+
 const renderBranchList = (state: AppState): string =>
   state.branches
     .map((branch) => {
@@ -24,11 +29,17 @@ const renderBranchList = (state: AppState): string =>
         .map((chat) => {
           const isActiveChat = chat.id === state.activeChatId;
           const author = chat.createdBy?.name ? ` · ${escapeHtml(chat.createdBy.name)}` : '';
+          const isWorkflow = (chat.kind ?? 'workflow') === 'workflow';
+          const kindBadge = isWorkflow
+            ? ''
+            : `<span class="ws-chat-item__kind">${escapeHtml(KIND_LABEL[chat.kind] ?? chat.kind)}</span>`;
+          // System chats have no workflow phase worth showing
+          const phase = isWorkflow ? PHASE_SHORT[chat.workflowPhase] ?? chat.workflowPhase : '';
           return `<button type="button"
               class="ws-chat-item ${isActiveChat ? 'is-active' : ''}"
               data-action="ws-open-chat" data-chat-id="${escapeHtml(chat.id)}">
-              <span class="ws-chat-item__title">${escapeHtml(chat.title || 'Untitled chat')}</span>
-              <span class="ws-chat-item__meta">${PHASE_SHORT[chat.workflowPhase] ?? chat.workflowPhase}${author}</span>
+              <span class="ws-chat-item__title">${escapeHtml(chat.title || 'Untitled chat')}${kindBadge}</span>
+              <span class="ws-chat-item__meta">${phase}${author}</span>
             </button>`;
         })
         .join('');
