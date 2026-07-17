@@ -70,12 +70,12 @@ export const approvePlanAction = async (): Promise<void> => {
   if (res.ok) enterWaiting();
 };
 
-/** Request changes (plan card, phase bar, diff viewer). Prompts for feedback. */
-export const requestChangesAction = async (feedback?: string): Promise<void> => {
+/** Request changes (plan card, phase bar, diff viewer) with the given
+ *  feedback — collected by the request-changes modal. */
+export const requestChangesAction = async (feedback: string): Promise<void> => {
   const chatId = store.state.activeChatId;
-  if (!chatId) return;
-  const text = feedback ?? window.prompt('What should be changed?')?.trim();
-  if (!text) return;
+  const text = feedback.trim();
+  if (!chatId || !text) return;
   const res = await postJson(`/api/chats/${encodeURIComponent(chatId)}/request-changes`, {
     feedback: text,
   });

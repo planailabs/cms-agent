@@ -23,6 +23,7 @@ import { renderDiffViewer } from '../workspace/diffViewer';
 import { renderBrowserCompare } from '../workspace/browserCompare';
 import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
 import { renderArchiveModal } from '../workspace/archive';
+import { renderRequestChangesModal } from '../workspace/requestChanges';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
 
@@ -148,7 +149,10 @@ const initApp = () => {
 
     // 4. Update Overlay (settings + full-screen archive modal)
     if (overlayRegion) {
-      const overlayMarkup = renderSettingsOverlay({ state, locale }) + renderArchiveModal(state);
+      const overlayMarkup =
+        renderSettingsOverlay({ state, locale }) +
+        renderArchiveModal(state) +
+        renderRequestChangesModal(state);
       if (overlayRegion.innerHTML !== overlayMarkup) {
         overlayRegion.innerHTML = overlayMarkup;
       }

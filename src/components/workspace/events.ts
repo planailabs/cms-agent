@@ -10,8 +10,12 @@ import { switchChat } from '../chat/actions/chat';
 import { continueChatSession } from '../chat/actions/chat/session';
 import { registerDiffScrollSync } from './diffScroll';
 import {
+  openRequestChanges,
+  closeRequestChanges,
+  submitRequestChanges,
+} from './requestChanges';
+import {
   approvePlanAction,
-  requestChangesAction,
   createPreviewAction,
   dismissFinishExecution,
   undoExecutionAction,
@@ -193,7 +197,28 @@ const registerShotLoadStates = (): void => {
 export const registerWorkspaceEvents = (app: HTMLElement): void => {
   // Phase / workflow card actions
   delegateEvent(app, 'click', '[data-action="ws-approve-plan"]', () => void approvePlanAction());
-  delegateEvent(app, 'click', '[data-action="ws-request-changes"]', () => void requestChangesAction());
+  delegateEvent(app, 'click', '[data-action="ws-request-changes"]', () => openRequestChanges());
+
+  // Request-changes modal (composer-style input)
+  delegateEvent(app, 'click', '[data-action="ws-rc-close"]', () => closeRequestChanges());
+  delegateEvent(app, 'click', '[data-action="ws-rc-send"]', () => submitRequestChanges(document.body));
+  delegateEvent<Event>(app, 'input', '[data-action="ws-rc-input"]', (_e, target) => {
+    const empty = !(target.textContent ?? '').trim();
+    target.setAttribute('data-empty', String(empty));
+    const send = document.querySelector<HTMLButtonElement>('[data-action="ws-rc-send"]');
+    if (send) {
+      send.disabled = empty;
+      send.setAttribute('aria-disabled', String(empty));
+    }
+  });
+  delegateEvent<KeyboardEvent>(app, 'keydown', '[data-action="ws-rc-input"]', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      submitRequestChanges(document.body);
+    } else if (event.key === 'Escape') {
+      closeRequestChanges();
+    }
+  });
   delegateEvent(app, 'click', '[data-action="ws-create-preview"]', () => void createPreviewAction());
   delegateEvent(app, 'click', '[data-action="ws-dismiss-finish"]', () => dismissFinishExecution());
   delegateEvent(app, 'click', '[data-action="ws-undo-execution"]', (_e, target) => {
