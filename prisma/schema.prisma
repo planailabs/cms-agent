@@ -121,6 +121,7 @@ model Chat {
   // based on the target branch and merged back into it on publish
   workBranch  String @unique
   // 'workflow' = normal plan/execute/preview/publish chat;
+  // 'deployment' = per-publish chat hosting the deploy automatism;
   // 'deployments' = system chat over publication state (read-only tools)
   kind        String @default("workflow")
   title       String  @default("New chat")
@@ -138,6 +139,9 @@ model Chat {
   planJson        Json?
   // Optimistic concurrency for phase transitions (no last-writer-wins)
   entityVersion   Int     @default(0)
+  // Set when the chat is done (published / deployment finished): hidden from
+  // the sidebar, listed in the archive view until deleted
+  archivedAt      DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -149,9 +153,40 @@ model Chat {
   memoryCandidates MemoryCandidate[]
   publications     Publication[]
   tabs             ChatTabs[]
+  automatisms      Automatism[]
 
   @@index([branchId])
   @@map("chat")
+}
+
+// ─── Automatisms ─────────────────────────────────────────────────────────────
+
+// An agent-less flow attached to a chat (e.g. the deploy pipeline). Steps run
+// server-side and post role:'automatism' messages into the chat; on a step
+// failure the automatism pauses and the agent is invoked with that context.
+// resume_automatism retries the failed step and continues.
+model Automatism {
+  id     String @id @default(cuid())
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  // Registered automatism type, e.g. 'deploy'
+  type   String
+  // 'running' | 'paused' | 'done' | 'failed'
+  status String @default("running")
+  // Index of the current/failed step
+  step   Int    @default(0)
+  // Type-specific payload (shas, branch names, publication id, actor, …)
+  data   Json
+  // Chat the agent was invoked in on the last failure (resume lookup)
+  agentChatId String?
+  lastError   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chatId])
+  @@index([agentChatId])
+  @@map("automatism")
 }
 
 // Per-user open preview tabs of a chat (synced across sessions via SSE)
@@ -178,7 +213,7 @@ model Message {
   authorId String?
   author   User?   @relation(fields: [authorId], references: [id])
 
-  // 'user' | 'assistant' | 'cancel' | 'tool'
+  // 'user' | 'assistant' | 'cancel' | 'tool' | 'automatism'
   role          String
   content       String @default("")
   contentBlocks Json?
