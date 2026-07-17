@@ -33,13 +33,12 @@ const MAX_OUTPUT_CHARS = 50_000;
 
 const state = new Map<string, Promise<SandboxState>>();
 
-function sandboxDir(major: string): string {
-  const e = env();
-  const v = { '22': e.SANDBOX_DIR_22, '24': e.SANDBOX_DIR_24, '26': e.SANDBOX_DIR_26 }[major];
+function sandboxDir(): string {
+  const v = env().SANDBOX_DIR;
   if (!v) {
     throw new Error(
-      `Sandbox not configured: SANDBOX_DIR_${major} is unset. In the image it is ` +
-        `baked in; in dev/test run through scripts/launch-with-sandbox.sh.`,
+      `Sandbox not configured: SANDBOX_DIR is unset. In the image it is baked ` +
+        `in; in dev/test run through scripts/launch-with-sandbox.sh.`,
     );
   }
   return v;
@@ -49,42 +48,48 @@ function varRoot(): string {
   return path.join(path.resolve(env().VAR_DIR), 'sandbox');
 }
 
-/** Mount (squashfuse) or extract (unsquashfs) the env squashfs → storeRoot. */
+/**
+ * Make the selected major's /nix/store available and return its path. The
+ * combined squashfs holds one self-contained store per major (node22/ etc.);
+ * we mount the whole image (squashfuse) or extract ONLY the major's folder
+ * (unsquashfs <folder>), so runtime disk stays at one major's closure.
+ */
 function materialize(major: string): string {
-  const dir = sandboxDir(major);
-  const squashfs = fs.realpathSync(path.join(dir, 'env.squashfs'));
+  const squashfs = fs.realpathSync(path.join(sandboxDir(), 'sandbox.squashfs'));
   // Content-addressed cache key: the nix store basename of the squashfs.
   const key = path.basename(squashfs).replace(/[^A-Za-z0-9._-]/g, '_');
-  const mnt = path.join(varRoot(), 'mnt', `${major}-${key}`);
-  const extracted = path.join(varRoot(), 'root', `${major}-${key}`);
+  const folder = `node${major}`;
+  const mnt = path.join(varRoot(), 'mnt', key);
+  const mntStore = path.join(mnt, folder, 'nix', 'store');
+  const dest = path.join(varRoot(), 'root', `${key}-${folder}`);
+  const destStore = path.join(dest, folder, 'nix', 'store');
 
-  const looksReady = (root: string) =>
-    fs.existsSync(root) &&
-    fs.readdirSync(root).some((n) => n.endsWith(`-cms-sandbox-env-node${major}`));
+  const looksReady = (store: string) =>
+    fs.existsSync(store) &&
+    fs.readdirSync(store).some((n) => n.endsWith(`-cms-sandbox-env-node${major}`));
 
   // Already materialized (persisted across restarts on the /data volume).
-  if (looksReady(mnt)) return mnt;
-  if (looksReady(extracted)) return extracted;
+  if (looksReady(mntStore)) return mntStore;
+  if (looksReady(destStore)) return destStore;
 
-  // Prefer a squashfuse mount (cheap, no disk copy) when /dev/fuse exists.
+  // Prefer a squashfuse mount of the whole image (cheap) when /dev/fuse exists.
   if (fs.existsSync('/dev/fuse')) {
     fs.mkdirSync(mnt, { recursive: true });
     const r = spawnSync('squashfuse', [squashfs, mnt], { encoding: 'utf8' });
-    if (r.status === 0 && looksReady(mnt)) return mnt;
-    // Mount failed (no perms / stale) — clean up and fall through to extract.
+    if (r.status === 0 && looksReady(mntStore)) return mntStore;
     spawnSync('fusermount', ['-u', mnt]);
   }
 
-  // Fallback: extract once (cached by key). unsquashfs needs an empty dest.
-  fs.mkdirSync(path.dirname(extracted), { recursive: true });
-  if (fs.existsSync(extracted)) fs.rmSync(extracted, { recursive: true, force: true });
-  const r = spawnSync('unsquashfs', ['-no-progress', '-dest', extracted, squashfs], {
+  // Fallback: extract ONLY this major's folder (self-contained store).
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  if (fs.existsSync(dest)) fs.rmSync(dest, { recursive: true, force: true });
+  const r = spawnSync('unsquashfs', ['-no-progress', '-dest', dest, squashfs, folder], {
     encoding: 'utf8',
   });
-  if (r.status !== 0 || !looksReady(extracted)) {
+  if (r.status !== 0 || !looksReady(destStore)) {
     throw new Error(`Sandbox extraction failed: ${r.stderr || r.stdout || `exit ${r.status}`}`);
   }
-  return extracted;
+  return destStore;
 }
 
 /**

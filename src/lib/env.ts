@@ -79,12 +79,11 @@ const schema = z.object({
     .enum(['0', '1'])
     .default('1')
     .transform((v) => v === '1'),
-  // Path to the built sandbox dir for the selected major (env.squashfs +
-  // manifest). Baked into the docker image; set by launch-with-sandbox.sh
-  // in dev/test. Resolved per-major as SANDBOX_DIR_<major> in the sandbox lib.
-  SANDBOX_DIR_22: z.string().optional(),
-  SANDBOX_DIR_24: z.string().optional(),
-  SANDBOX_DIR_26: z.string().optional(),
+  // Path to the built sandbox dir (sandbox.squashfs + manifest). The squashfs
+  // holds one self-contained store per major (node22/ node24/ node26/); the
+  // runtime materializes the folder for SANDBOX_NODE_MAJOR. Baked into the
+  // image; set by launch-with-sandbox.sh in dev/test.
+  SANDBOX_DIR: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

@@ -1,6 +1,6 @@
 /**
  * Sandbox jail — real bwrap + squashfs env (built by launch-with-sandbox.sh,
- * which exports SANDBOX_DIR_22). Skipped when bwrap or the env dir is absent.
+ * which exports SANDBOX_DIR). Skipped when bwrap or the env dir is absent.
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -9,7 +9,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const hasBwrap = spawnSync('bwrap', ['--version']).status === 0;
-const hasEnv = !!process.env.SANDBOX_DIR_22;
+const hasEnv = !!process.env.SANDBOX_DIR;
 const run = describe.skipIf(!hasBwrap || !hasEnv);
 
 let sandbox: typeof import('@/lib/sandbox');

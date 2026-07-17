@@ -75,27 +75,38 @@
             paths = [ node ] ++ sandboxCommonPkgs;
           };
 
-          # Squashfs of the env's closure (contents live at their /nix/store
-          # paths). The output file has no runtime references, so shipping it
-          # in the image does NOT drag the uncompressed closure along.
-          mkSandboxSquashfs = major: node:
-            pkgs.callPackage "${nixpkgs}/nixos/lib/make-squashfs.nix" {
-              storeContents = [ (mkSandboxEnv major node) ];
-              comp = "zstd";
-            };
+          # A tree with one self-contained store per node major:
+          #   node22/nix/store/…  node24/nix/store/…  node26/nix/store/…
+          # Each folder holds that major's FULL closure as real files, so the
+          # runtime can materialize just one folder (extract `node<major>` /
+          # mount + bind its nix/store) with no closure-list or symlink chasing.
+          sandboxTree = pkgs.runCommand "cms-sandbox-tree" { } (
+            lib.concatStrings (lib.mapAttrsToList (major: node:
+              let ci = pkgs.closureInfo { rootPaths = [ (mkSandboxEnv major node) ]; };
+              in ''
+                mkdir -p "$out/node${major}/nix/store"
+                while read -r p; do
+                  cp -a "$p" "$out/node${major}/nix/store/"
+                done < "${ci}/store-paths"
+              '') sandboxNodes));
 
-          # A directory the runtime points SANDBOX_DIR_<major> at: the squashfs
-          # plus a tiny manifest. Deliberately does NOT embed the env store
-          # path (the runtime discovers it by glob after materializing), to
-          # keep the image free of the uncompressed closure.
-          mkSandboxDir = major: node:
-            pkgs.runCommand "cms-sandbox-node${major}" { } ''
-              mkdir -p "$out"
-              ln -s ${mkSandboxSquashfs major node} "$out/env.squashfs"
-              printf '{"major":"%s"}\n' "${major}" > "$out/manifest.json"
+          # One squashfs holding all three folders. mksquashfs dedupes identical
+          # files across the folders (default), so the shared closure (glibc,
+          # python3, coreutils, ripgrep, …) is stored once — ~3x smaller than
+          # three independent squashfs while each folder stays self-contained.
+          sandboxSquashfs = pkgs.runCommand "cms-sandbox.squashfs"
+            { nativeBuildInputs = [ pkgs.squashfsTools ]; } ''
+              mksquashfs ${sandboxTree} "$out" -comp zstd -all-root -no-progress -quiet
             '';
 
-          sandboxDirs = lib.mapAttrs mkSandboxDir sandboxNodes;
+          # Directory the runtime points SANDBOX_DIR at: the combined squashfs
+          # (its root has node22/ node24/ node26/). SANDBOX_NODE_MAJOR selects
+          # which folder to materialize.
+          sandboxDir = pkgs.runCommand "cms-sandbox" { } ''
+            mkdir -p "$out"
+            ln -s ${sandboxSquashfs} "$out/sandbox.squashfs"
+            printf '{"majors":["22","24","26"]}\n' > "$out/manifest.json"
+          '';
 
           # Single-container entrypoint: run migrations, then both processes;
           # exit (and let the runtime restart the container) when either dies.
@@ -138,11 +149,9 @@
           proxy = proxy;
         }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-          # Sandbox env dirs, one per node major — `nix build .#sandbox-node22`.
-          # scripts/launch-with-sandbox.sh builds the selected one on the fly.
-          sandbox-node22 = sandboxDirs."22";
-          sandbox-node24 = sandboxDirs."24";
-          sandbox-node26 = sandboxDirs."26";
+          # Combined sandbox squashfs dir — `nix build .#sandbox`.
+          # scripts/launch-with-sandbox.sh builds it on the fly in dev/test.
+          sandbox = sandboxDir;
 
           # OCI image with BOTH the CMS and the proxy, built with nix's native
           # dockerTools — no Dockerfile/daemon. Everything is configured over
@@ -166,9 +175,7 @@
               pkgs.bubblewrap
               pkgs.squashfuse
               pkgs.squashfsTools
-              sandboxDirs."22"
-              sandboxDirs."24"
-              sandboxDirs."26"
+              sandboxDir
             ];
             extraCommands = ''
               mkdir -p tmp data && chmod 1777 tmp
@@ -193,9 +200,7 @@
                 # network in the jail so `npm install` works.
                 "SANDBOX_NODE_MAJOR=22"
                 "SANDBOX_ALLOW_NETWORK=1"
-                "SANDBOX_DIR_22=${sandboxDirs."22"}"
-                "SANDBOX_DIR_24=${sandboxDirs."24"}"
-                "SANDBOX_DIR_26=${sandboxDirs."26"}"
+                "SANDBOX_DIR=${sandboxDir}"
               ];
               ExposedPorts = { "8080/tcp" = { }; };
               Volumes = { "/data" = { }; };
