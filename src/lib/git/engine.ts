@@ -237,6 +237,18 @@ export async function changedFiles(branch: string, base?: string): Promise<strin
   return out.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
+/** Refs accepted from the model: branch names, tags, shas — no flags/ranges. */
+const SAFE_REF = /^[0-9A-Za-z][0-9A-Za-z._/-]{0,127}$/;
+export function assertSafeRef(ref: string): void {
+  if (!SAFE_REF.test(ref) || ref.includes('..')) throw new Error(`Invalid git ref: ${ref}`);
+}
+
+/** `git show` of a single commit (message + stat + patch), read-only. */
+export async function showCommit(ref: string): Promise<string> {
+  assertSafeRef(ref);
+  return await repoGit().raw(['show', '--no-color', '--stat', '--patch', ref]);
+}
+
 /** Unified diff of a branch against `base` (default main). */
 export async function branchDiff(branch: string, base?: string): Promise<string> {
   const from = base ?? (await defaultBranch());

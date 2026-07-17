@@ -148,30 +148,52 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       console.log(`[agent] chat=${chatId} round ${rounds}/${MAX_TOOL_ROUNDS}, ${chatMessages.length} msgs`);
       broadcast(chatId, 'thinking', { type: 'thinking' });
 
-      const stream = openai.beta.chat.completions.stream({
+      // Hand-accumulated streaming: the SDK's beta stream helper rejects
+      // slightly nonconforming chunks ("missing role for choice 0") that
+      // OpenAI-compatible backends emit on edge cases (empty completions,
+      // usage-only streams). Accumulate leniently ourselves instead.
+      const stream = await openai.chat.completions.create({
         model: e.OPENAI_MODEL,
         max_tokens: e.OPENAI_MAX_TOKENS,
         messages: [{ role: 'system', content: systemPrompt }, ...chatMessages],
         tools: tools.length > 0 ? tools : undefined,
+        stream: true,
         stream_options: { include_usage: true },
       });
 
-      stream.on('content', (delta: string) => {
-        broadcast(chatId, 'text_delta', { type: 'text_delta', content: delta });
-      });
-
-      const completion = await stream.finalChatCompletion();
-      const choice = completion.choices[0];
-      const message = choice.message;
-
-      if (completion.usage) {
-        totalInputTokens += completion.usage.prompt_tokens ?? 0;
-        totalOutputTokens += completion.usage.completion_tokens ?? 0;
+      let text = '';
+      let finishReason: string | null = null;
+      const accumulated: ToolCall[] = [];
+      for await (const chunk of stream) {
+        if (chunk.usage) {
+          totalInputTokens += chunk.usage.prompt_tokens ?? 0;
+          totalOutputTokens += chunk.usage.completion_tokens ?? 0;
+        }
+        const choice = chunk.choices?.[0];
+        if (!choice) continue;
+        finishReason = choice.finish_reason ?? finishReason;
+        const delta = choice.delta ?? {};
+        if (delta.content) {
+          text += delta.content;
+          broadcast(chatId, 'text_delta', { type: 'text_delta', content: delta.content });
+        }
+        for (const tc of delta.tool_calls ?? []) {
+          const idx = tc.index ?? accumulated.length;
+          accumulated[idx] ??= {
+            id: tc.id ?? `call_${idx}`,
+            type: 'function',
+            function: { name: '', arguments: '' },
+          };
+          if (tc.id) accumulated[idx].id = tc.id;
+          // Assign, don't concatenate: some backends (codex proxy) repeat the
+          // FULL name on every fragment; only arguments stream incrementally.
+          if (tc.function?.name) accumulated[idx].function.name = tc.function.name;
+          if (tc.function?.arguments) accumulated[idx].function.arguments += tc.function.arguments;
+        }
       }
 
-      const text = message.content ?? '';
-      const toolCalls = (message.tool_calls ?? []) as ToolCall[];
-      console.log(`[agent] finish=${choice.finish_reason}, ${toolCalls.length} tools`);
+      const toolCalls = accumulated.filter(Boolean);
+      console.log(`[agent] finish=${finishReason}, ${toolCalls.length} tools`);
 
       if (text) broadcast(chatId, 'text_done', { type: 'text_done', content: text });
 

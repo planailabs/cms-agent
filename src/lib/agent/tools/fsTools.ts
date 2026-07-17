@@ -6,7 +6,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { branchDiff, branchLog } from '@/lib/git/engine';
+import {
+  assertSafeRef,
+  branchDiff,
+  branchLog,
+  defaultBranch,
+  listRepoBranches,
+  showCommit,
+  worktreeStatus,
+} from '@/lib/git/engine';
 import { registerTool, type ToolContext, type ToolDef } from './registry';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro']);
@@ -131,25 +139,79 @@ const listPagesTool: ToolDef = {
   },
 };
 
+// Read-only git tools are also available in the deployments system chat.
+const GIT_KINDS = ['workflow', 'deployments'] as const;
+
 const gitLogTool: ToolDef = {
   name: 'git_log',
-  description: 'Show the commit history of the current draft branch.',
-  schema: z.object({ maxCount: z.number().int().positive().max(100).default(20) }),
+  description:
+    'Show commit history. Defaults to the current draft branch; pass ref for another branch/sha.',
+  schema: z.object({
+    maxCount: z.number().int().positive().max(100).default(20),
+    ref: z.string().optional().describe('Branch, tag, or sha (default: current branch)'),
+  }),
   phases: [...ALL_PHASES],
+  kinds: [...GIT_KINDS],
   async execute(input, ctx) {
-    const log = await branchLog(ctx.branchName, input.maxCount);
+    if (input.ref) assertSafeRef(input.ref);
+    const log = await branchLog(input.ref ?? ctx.branchName, input.maxCount);
     return log.map((c) => `${c.sha.slice(0, 8)} ${c.date} ${c.authorName}: ${c.message}`).join('\n');
+  },
+};
+
+const gitShowTool: ToolDef = {
+  name: 'git_show',
+  description: 'Show one commit: message, changed files, and full patch.',
+  schema: z.object({ ref: z.string().describe('Commit sha, branch, or tag') }),
+  phases: [...ALL_PHASES],
+  kinds: [...GIT_KINDS],
+  async execute(input) {
+    const out = await showCommit(input.ref);
+    return out.length > MAX_FILE_CHARS
+      ? out.slice(0, MAX_FILE_CHARS) + `\n… (truncated, ${out.length} chars total)`
+      : out;
   },
 };
 
 const gitDiffTool: ToolDef = {
   name: 'git_diff',
-  description: 'Show the diff of the draft branch against main (committed changes).',
+  description:
+    'Show the committed diff of a branch against a base (defaults: draft branch vs main).',
+  schema: z.object({
+    ref: z.string().optional().describe('Branch to diff (default: current branch)'),
+    base: z.string().optional().describe('Base to diff against (default: main)'),
+  }),
+  phases: [...ALL_PHASES],
+  kinds: [...GIT_KINDS],
+  async execute(input, ctx) {
+    if (input.ref) assertSafeRef(input.ref);
+    if (input.base) assertSafeRef(input.base);
+    const diff = await branchDiff(input.ref ?? ctx.branchName, input.base);
+    return diff.slice(0, MAX_FILE_CHARS) || '(no committed changes against the base)';
+  },
+};
+
+const gitStatusTool: ToolDef = {
+  name: 'git_status',
+  description: 'Show uncommitted changes in the current branch worktree.',
   schema: z.object({}),
   phases: [...ALL_PHASES],
+  kinds: [...GIT_KINDS],
   async execute(_input, ctx) {
-    const diff = await branchDiff(ctx.branchName);
-    return diff.slice(0, MAX_FILE_CHARS) || '(no committed changes against main)';
+    const lines = await worktreeStatus(ctx.branchName);
+    return lines.join('\n') || '(worktree clean)';
+  },
+};
+
+const gitBranchesTool: ToolDef = {
+  name: 'git_branches',
+  description: 'List the branches of the site repository (default branch marked).',
+  schema: z.object({}),
+  phases: [...ALL_PHASES],
+  kinds: [...GIT_KINDS],
+  async execute() {
+    const [branches, def] = await Promise.all([listRepoBranches(), defaultBranch()]);
+    return branches.map((b) => (b === def ? `* ${b} (default)` : `  ${b}`)).join('\n');
   },
 };
 
@@ -235,7 +297,10 @@ export function registerFsTools(): void {
   registerTool(grepTool);
   registerTool(listPagesTool);
   registerTool(gitLogTool);
+  registerTool(gitShowTool);
   registerTool(gitDiffTool);
+  registerTool(gitStatusTool);
+  registerTool(gitBranchesTool);
   registerTool(writeFileTool);
   registerTool(editFileTool);
   registerTool(deleteFileTool);
