@@ -14,9 +14,10 @@ const runCommandTool: ToolDef = {
   name: 'run_command',
   description:
     'Run a shell command in the sandboxed site environment (cwd = repo root; ' +
-    'PATH has node, npm, and the repo\'s node_modules/.bin). Use for builds, ' +
-    'codegen, formatters, package scripts, dependency installs, etc. Only the ' +
-    'repo is writable; commit changes with git_commit afterwards.',
+    'PATH has node, npm, the repo\'s node_modules/.bin, coreutils, GNU grep/awk, ' +
+    'and ripgrep (rg)). Use for builds, codegen, formatters, package scripts, ' +
+    'searches, dependency installs, etc. Only the repo is writable; commit ' +
+    'changes with git_commit afterwards.',
   schema: z.object({
     command: z.string().min(1).describe('Shell command, e.g. "npm run build" or "npx prettier -w ."'),
     timeoutSeconds: z.number().int().positive().max(600).default(120),

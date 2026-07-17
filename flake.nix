@@ -45,7 +45,7 @@
           };
 
           # ── Sandbox environments (one per supported node major) ─────────────
-          # Each is a minimal buildEnv (node + coreutils + bash) whose full
+          # Each is a buildEnv (node + coreutils/bash + grep/awk/ripgrep) whose full
           # closure is packed into a squashfs. At runtime the jail mounts (or
           # extracts) the squashfs and binds its /nix/store over the real one,
           # so shell commands see ONLY these tools — never the app's store.
@@ -57,11 +57,21 @@
             "26" = pkgs.nodejs_26;
           };
 
+          # Tools every sandbox env carries, regardless of node major. cacert:
+          # self-contained TLS trust (the app's store is overshadowed, so the
+          # jail must carry its own CA bundle for `npm install`).
+          sandboxCommonPkgs = with pkgs; [
+            coreutils
+            bashInteractive
+            cacert
+            gawk
+            gnugrep
+            ripgrep
+          ];
+
           mkSandboxEnv = major: node: pkgs.buildEnv {
             name = "cms-sandbox-env-node${major}";
-            # cacert: self-contained TLS trust (the app's store is overshadowed,
-            # so the jail must carry its own CA bundle for `npm install`).
-            paths = [ node pkgs.coreutils pkgs.bashInteractive pkgs.cacert ];
+            paths = [ node ] ++ sandboxCommonPkgs;
           };
 
           # Squashfs of the env's closure (contents live at their /nix/store
