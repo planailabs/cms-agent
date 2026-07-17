@@ -17,6 +17,7 @@ export interface HistoryExecution {
   sha: string;
   summary: string;
   revertedBySha: string | null;
+  createdAt?: string;
 }
 
 export interface ChatHistoryResult {
@@ -148,6 +149,21 @@ export const restoreAIChatSession = (): void => {
       mc.messages = result.messages.map((m) =>
         m.role === 'cancel' ? { ...m, content: m.content || cancelLabel } : m,
       );
+      // Interleave committed-execution cards at their chronological place
+      for (const e of result.executions) {
+        if (!e.createdAt) continue;
+        const at = new Date(e.createdAt).getTime();
+        let idx = mc.messages.findIndex(
+          (m) => m.createdAt && new Date(m.createdAt).getTime() > at,
+        );
+        if (idx < 0) idx = mc.messages.length;
+        mc.messages.splice(idx, 0, {
+          role: 'execution',
+          content: '',
+          sha: e.sha,
+          createdAt: e.createdAt,
+        });
+      }
       store.state.chat!.userPrompt = result.messages[0]?.content ?? '';
 
       // Restore pending question if server is waiting for an answer

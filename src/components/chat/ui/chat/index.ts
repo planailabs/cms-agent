@@ -58,7 +58,7 @@ export const renderChatSection = (
   if (mc) {
     const modeLocale = locale.chatMode;
 
-    const messageBubbles = renderMessageBubbles(mc);
+    const messageBubbles = renderMessageBubbles(mc, state.workspace.executions);
     const streamingBubble = renderStreamingBubble(mc);
     const thinkingIndicator = renderThinkingIndicator(mc);
     const toolIndicator = renderToolIndicator(mc, modeLocale);

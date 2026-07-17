@@ -87,35 +87,33 @@ const renderExecutionFinishedCard = (mc: AiChat): string => {
     </div>`;
 };
 
-// ── Execution-committed cards (execution_committed SSE event) ───────────
+// ── Execution-committed card (rendered INLINE in the transcript by
+// bubbles.ts at its chronological position) ─────────────────────────────
 
-const renderExecutionCards = (state: AppState): string =>
-  state.workspace.executions
-    .map((exec) => {
-      const shortSha = escapeHtml(exec.sha.slice(0, 8));
-      if (exec.reverted) {
-        return `<div class="ws-card ws-card--muted" data-card="execution">
-            <div class="ws-card__header">
-              <span class="ws-card__title"><span class="ws-mono">${shortSha}</span> reverted</span>
-            </div>
-            <p class="ws-card__summary">${escapeHtml(exec.summary)}</p>
-            <p class="ws-card__note">Undone by ${escapeHtml(exec.reverted.by)} (revert <span class="ws-mono">${escapeHtml(exec.reverted.revertSha.slice(0, 8))}</span>)</p>
-          </div>`;
-      }
-      return `<div class="ws-card" data-card="execution">
-          <div class="ws-card__header">
-            <span class="ws-card__title">Committed <span class="ws-mono">${shortSha}</span></span>
-          </div>
-          <p class="ws-card__summary">${escapeHtml(exec.summary)}</p>
-          <div class="ws-card__actions">
-            <button type="button" class="chat-cta-button" data-action="ws-undo-execution"
-              data-sha="${escapeHtml(exec.sha)}" ${exec.busy ? 'disabled' : ''}>
-              ${exec.busy ? 'Undoing…' : 'Undo'}
-            </button>
-          </div>
-        </div>`;
-    })
-    .join('');
+export const renderExecutionCard = (exec: import('../../../workspace/state').ExecutionCard): string => {
+  const shortSha = escapeHtml(exec.sha.slice(0, 8));
+  if (exec.reverted) {
+    return `<div class="ws-card ws-card--muted" data-card="execution">
+        <div class="ws-card__header">
+          <span class="ws-card__title"><span class="ws-mono">${shortSha}</span> reverted</span>
+        </div>
+        <p class="ws-card__summary">${escapeHtml(exec.summary)}</p>
+        <p class="ws-card__note">Undone by ${escapeHtml(exec.reverted.by)} (revert <span class="ws-mono">${escapeHtml(exec.reverted.revertSha.slice(0, 8))}</span>)</p>
+      </div>`;
+  }
+  return `<div class="ws-card" data-card="execution">
+      <div class="ws-card__header">
+        <span class="ws-card__title">Committed <span class="ws-mono">${shortSha}</span></span>
+      </div>
+      <p class="ws-card__summary">${escapeHtml(exec.summary)}</p>
+      <div class="ws-card__actions">
+        <button type="button" class="chat-cta-button" data-action="ws-undo-execution"
+          data-sha="${escapeHtml(exec.sha)}" ${exec.busy ? 'disabled' : ''}>
+          ${exec.busy ? 'Undoing…' : 'Undo'}
+        </button>
+      </div>
+    </div>`;
+};
 
 // ── Publish progress card (publish_log / publish_done) ──────────────────
 
@@ -193,7 +191,6 @@ export const renderWorkflowCards = (state: AppState): string => {
   const mc = state.chat?.aiChat;
   if (!mc) return '';
   return [
-    renderExecutionCards(state),
     renderPublishCard(state),
     renderPlanApprovalCard(mc),
     renderExecutionFinishedCard(mc),

@@ -26,6 +26,12 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
         ws.executions.push({ sha, summary });
       }
       ws.executionSha = sha;
+      // Anchor the card inline at its chronological place in the transcript
+      const mc = store.state.chat?.aiChat;
+      if (mc && !mc.messages.some((m) => m.role === 'execution' && m.sha === sha)) {
+        mc.messages.push({ role: 'execution', content: '', sha });
+        cacheAIChatMessages(mc.messages);
+      }
       store.notify();
       return true;
     }

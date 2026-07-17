@@ -16,9 +16,15 @@ export interface ToolCallInfo {
 
 export type StoredMessage = {
   id?: string;
-  role: 'user' | 'assistant' | 'cancel' | 'tool' | 'automatism';
+  // 'execution' is a client-side pseudo message anchoring the committed-
+  // execution card at its chronological place in the transcript
+  role: 'user' | 'assistant' | 'cancel' | 'tool' | 'automatism' | 'execution';
   content: string;
   tool?: ToolCallInfo;
+  /** role 'execution': commit sha, resolved against workspace.executions. */
+  sha?: string;
+  /** Server timestamp (history) — used to interleave executions. */
+  createdAt?: string;
 };
 
 export const cacheAIChatMessages = (messages: StoredMessage[], chatId?: string) => {

@@ -100,6 +100,7 @@ export const GET: APIRoute = async ({ url }) => {
         sha: e.sha,
         summary: e.summary,
         revertedBySha: e.revertedBySha,
+        createdAt: e.createdAt,
       })),
     }),
     { headers: { 'Content-Type': 'application/json' } },

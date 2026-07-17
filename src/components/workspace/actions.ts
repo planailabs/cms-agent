@@ -165,12 +165,9 @@ export const resumeAutomatismAction = async (): Promise<void> => {
 // Branch / chat helpers (workspace buttons)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** "New branch" button — prompts for a DNS-safe name. */
-export const newBranchAction = async (): Promise<void> => {
-  const name = window
-    .prompt('Branch name (DNS-safe: lowercase letters, digits, hyphens):')
-    ?.trim()
-    .toLowerCase();
+/** "New branch" — called with the name collected by the input modal. */
+export const newBranchAction = async (rawName: string): Promise<void> => {
+  const name = rawName.trim().toLowerCase();
   if (!name) return;
   if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name)) {
     showChatError('Branch name must be DNS-safe (lowercase letters, digits, hyphens).');

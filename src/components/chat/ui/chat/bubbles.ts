@@ -5,8 +5,10 @@
 
 import { escapeHtml } from '../../utils/html';
 import { renderMarkdown } from '../../utils/markdown';
+import { renderExecutionCard } from './cards';
 
 import type { ChatState } from '../../app/state';
+import type { ExecutionCard } from '../../../workspace/state';
 
 type AiChat = NonNullable<ChatState['aiChat']>;
 
@@ -30,11 +32,17 @@ const renderToolCall = (msg: AiChat['messages'][number]): string => {
     `;
 };
 
-export const renderMessageBubbles = (mc: AiChat): string =>
+export const renderMessageBubbles = (mc: AiChat, executions: ExecutionCard[] = []): string =>
   mc.messages
     .map((msg) => {
       if (msg.role === 'tool' && msg.tool) {
         return renderToolCall(msg);
+      }
+      if (msg.role === 'execution') {
+        // Inline committed-execution card; live state (busy/reverted) comes
+        // from the workspace slice, keyed by sha
+        const exec = executions.find((e) => e.sha === msg.sha);
+        return exec ? renderExecutionCard(exec) : '';
       }
       if (msg.role === 'automatism') {
         // Agent-less flow event — rendered as a system event card

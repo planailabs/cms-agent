@@ -155,8 +155,8 @@ export interface WorkspaceState {
   /** Step progress of the active chat's automatism (deployment chats). */
   automatism: AutomatismProgress | null;
 
-  /** Request-changes feedback modal. */
-  requestChangesOpen: boolean;
+  /** Generic composer-style input modal (null = closed). */
+  inputModal: { title: string; hint?: string; placeholder: string } | null;
 }
 
 /** Mirror of the server's AutomatismState (history + automatism_state SSE). */
@@ -198,7 +198,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   browserCompare: createInitialBrowserCompareState(),
   archive: { open: false, loading: false, error: null, chats: [], busyId: null },
   automatism: null,
-  requestChangesOpen: false,
+  inputModal: null,
 });
 
 export const createInitialBrowserCompareState = (): BrowserCompareState => ({

@@ -9,13 +9,10 @@ import { delegateEvent } from '../chat/utils/dom';
 import { switchChat } from '../chat/actions/chat';
 import { continueChatSession } from '../chat/actions/chat/session';
 import { registerDiffScrollSync } from './diffScroll';
-import {
-  openRequestChanges,
-  closeRequestChanges,
-  submitRequestChanges,
-} from './requestChanges';
+import { openInputModal, closeInputModal, submitInputModal } from './modal';
 import {
   approvePlanAction,
+  requestChangesAction,
   createPreviewAction,
   dismissFinishExecution,
   undoExecutionAction,
@@ -197,26 +194,35 @@ const registerShotLoadStates = (): void => {
 export const registerWorkspaceEvents = (app: HTMLElement): void => {
   // Phase / workflow card actions
   delegateEvent(app, 'click', '[data-action="ws-approve-plan"]', () => void approvePlanAction());
-  delegateEvent(app, 'click', '[data-action="ws-request-changes"]', () => openRequestChanges());
+  delegateEvent(app, 'click', '[data-action="ws-request-changes"]', () =>
+    openInputModal(
+      {
+        title: 'Request changes',
+        hint: 'Describe what should be different — the agent picks it up from there.',
+        placeholder: 'What should be changed?',
+      },
+      (text) => void requestChangesAction(text),
+    ),
+  );
 
-  // Request-changes modal (composer-style input)
-  delegateEvent(app, 'click', '[data-action="ws-rc-close"]', () => closeRequestChanges());
-  delegateEvent(app, 'click', '[data-action="ws-rc-send"]', () => submitRequestChanges(document.body));
-  delegateEvent<Event>(app, 'input', '[data-action="ws-rc-input"]', (_e, target) => {
+  // Generic input modal (composer-style input)
+  delegateEvent(app, 'click', '[data-action="ws-modal-close"]', () => closeInputModal());
+  delegateEvent(app, 'click', '[data-action="ws-modal-send"]', () => submitInputModal());
+  delegateEvent<Event>(app, 'input', '[data-action="ws-modal-input"]', (_e, target) => {
     const empty = !(target.textContent ?? '').trim();
     target.setAttribute('data-empty', String(empty));
-    const send = document.querySelector<HTMLButtonElement>('[data-action="ws-rc-send"]');
+    const send = document.querySelector<HTMLButtonElement>('[data-action="ws-modal-send"]');
     if (send) {
       send.disabled = empty;
       send.setAttribute('aria-disabled', String(empty));
     }
   });
-  delegateEvent<KeyboardEvent>(app, 'keydown', '[data-action="ws-rc-input"]', (event) => {
+  delegateEvent<KeyboardEvent>(app, 'keydown', '[data-action="ws-modal-input"]', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      submitRequestChanges(document.body);
+      submitInputModal();
     } else if (event.key === 'Escape') {
-      closeRequestChanges();
+      closeInputModal();
     }
   });
   delegateEvent(app, 'click', '[data-action="ws-create-preview"]', () => void createPreviewAction());
@@ -238,7 +244,16 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     store.state.workspace.branchListOpen = !store.state.workspace.branchListOpen;
     store.notify();
   });
-  delegateEvent(app, 'click', '[data-action="ws-new-branch"]', () => void newBranchAction());
+  delegateEvent(app, 'click', '[data-action="ws-new-branch"]', () =>
+    openInputModal(
+      {
+        title: 'New branch',
+        hint: 'Becomes a git branch and a preview subdomain.',
+        placeholder: 'Branch name (lowercase letters, digits, hyphens)',
+      },
+      (name) => void newBranchAction(name),
+    ),
+  );
   delegateEvent(app, 'click', '[data-action="ws-new-chat"]', (_e, target) => {
     const branchId = target.getAttribute('data-branch-id');
     if (branchId) void newChatAction(branchId);

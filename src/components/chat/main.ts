@@ -23,7 +23,7 @@ import { renderDiffViewer } from '../workspace/diffViewer';
 import { renderBrowserCompare } from '../workspace/browserCompare';
 import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
 import { renderArchiveModal } from '../workspace/archive';
-import { renderRequestChangesModal } from '../workspace/requestChanges';
+import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
 
@@ -152,7 +152,7 @@ const initApp = () => {
       const overlayMarkup =
         renderSettingsOverlay({ state, locale }) +
         renderArchiveModal(state) +
-        renderRequestChangesModal(state);
+        renderInputModal(state);
       if (overlayRegion.innerHTML !== overlayMarkup) {
         overlayRegion.innerHTML = overlayMarkup;
       }
