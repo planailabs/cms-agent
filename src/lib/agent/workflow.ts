@@ -267,7 +267,9 @@ export async function revertExecution(opts: {
   if (!execution) throw new WorkflowError('Execution not found on this branch', 404);
   const workBranch = execution.chat.workBranch;
 
-  const revertSha = await withBranchLock(workBranch, () => gitRevert(workBranch, opts.sha));
+  const revertSha = await withBranchLock(workBranch, () =>
+    gitRevert(workBranch, opts.sha, { name: opts.actor.name, email: opts.actor.email }),
+  );
 
   await prisma.execution.updateMany({
     where: { sha: opts.sha, revertedBySha: null },

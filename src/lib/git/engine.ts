@@ -12,6 +12,29 @@ import { env } from '@/lib/env';
 const RESERVED_BRANCH_NAMES = new Set(['main', 'master', 'www', 'api', 'cms', 'mail', 'ns1', 'ns2']);
 const BRANCH_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
+/** Author/committer identity for any commit-creating git op (see git/identity.ts). */
+export interface GitIdentity {
+  name: string;
+  email: string;
+}
+
+/**
+ * simple-git bound to an author identity for BOTH author and committer — the
+ * container has no git config, so without this any commit fails with "empty
+ * ident name". Only what git needs is passed (a full process.env spread leaks
+ * EDITOR, which simple-git rejects as unsafe).
+ */
+function gitAs(dir: string, id: GitIdentity): SimpleGit {
+  return simpleGit(dir).env({
+    PATH: process.env.PATH ?? '',
+    HOME: process.env.HOME ?? '',
+    GIT_AUTHOR_NAME: id.name,
+    GIT_AUTHOR_EMAIL: id.email,
+    GIT_COMMITTER_NAME: id.name,
+    GIT_COMMITTER_EMAIL: id.email,
+  });
+}
+
 /** DNS-safe label usable as subdomain AND git branch (plan §5). */
 export function validateBranchName(name: string): string | null {
   if (!BRANCH_RE.test(name)) {
@@ -163,21 +186,10 @@ export async function branchSha(branch: string): Promise<string> {
 export async function commitExecution(
   branch: string,
   message: string,
-  author: { name: string; email: string },
+  author: GitIdentity,
 ): Promise<string | null> {
   const dir = await ensureWorktree(branch);
-  // Ready-to-use identity for BOTH author and committer — the container has no
-  // git config, so without this every commit fails with "empty ident name".
-  // Only pass what git needs (a full process.env spread leaks EDITOR, which
-  // simple-git rejects as unsafe).
-  const git = simpleGit(dir).env({
-    PATH: process.env.PATH ?? '',
-    HOME: process.env.HOME ?? '',
-    GIT_AUTHOR_NAME: author.name,
-    GIT_AUTHOR_EMAIL: author.email,
-    GIT_COMMITTER_NAME: author.name,
-    GIT_COMMITTER_EMAIL: author.email,
-  });
+  const git = gitAs(dir, author);
   const status = await git.status();
   if (status.isClean()) return null;
   await git.add(['-A']);
@@ -199,9 +211,9 @@ export async function worktreeStatus(branch: string): Promise<string[]> {
 }
 
 /** Revert a commit on the branch (new revert commit; never destructive). */
-export async function revertCommit(branch: string, sha: string): Promise<string> {
+export async function revertCommit(branch: string, sha: string, author: GitIdentity): Promise<string> {
   const dir = await ensureWorktree(branch);
-  const git = simpleGit(dir);
+  const git = gitAs(dir, author);
   await git.raw(['revert', '--no-edit', sha]);
   return (await git.revparse(['HEAD'])).trim();
 }
@@ -212,7 +224,7 @@ export async function revertCommit(branch: string, sha: string): Promise<string>
  * the default branch, its worktree otherwise (a branch can only be checked
  * out in one place).
  */
-export async function mergeInto(source: string, target: string): Promise<string> {
+export async function mergeInto(source: string, target: string, author: GitIdentity): Promise<string> {
   const main = await defaultBranch();
   let dir: string;
   if (target === main) {
@@ -223,7 +235,7 @@ export async function mergeInto(source: string, target: string): Promise<string>
   } else {
     dir = await ensureWorktree(target);
   }
-  const git = simpleGit(dir);
+  const git = gitAs(dir, author);
   try {
     await git.merge(['--no-ff', '-m', `Merge ${source} into ${target}`, source]);
   } catch (err) {

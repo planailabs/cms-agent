@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { broadcast, withBranchLock } from '../bus';
 import { commitExecution } from '@/lib/git/engine';
+import { chatGitIdentity } from '@/lib/git/identity';
 import { hasErrors, validateWorktree } from '@/lib/validate';
 import { registerTool, type ToolDef } from './registry';
 
@@ -31,22 +32,10 @@ const gitCommitTool: ToolDef = {
           .join('\n')}`,
       });
     }
-    // Commit as the chat's creator (falling back to the acting user).
-    const chat = await prisma.chat.findUnique({
-      where: { id: ctx.chatId },
-      select: { createdBy: { select: { name: true, email: true } } },
-    });
-    const user =
-      chat?.createdBy ??
-      (await prisma.user.findUnique({
-        where: { id: ctx.userId },
-        select: { name: true, email: true },
-      }));
+    // Commit as the chat's creator (falling back to the acting user, then CMS).
+    const identity = await chatGitIdentity(ctx.chatId, ctx.userId);
     const sha = await withBranchLock(ctx.branchName, () =>
-      commitExecution(ctx.branchName, `${input.message}\n\nChat: ${ctx.chatId}`, {
-        name: user?.name ?? 'CMS Agent',
-        email: user?.email ?? 'agent@cms.invalid',
-      }),
+      commitExecution(ctx.branchName, `${input.message}\n\nChat: ${ctx.chatId}`, identity),
     );
     if (!sha) return JSON.stringify({ success: false, message: 'Nothing to commit — worktree is clean.' });
     await prisma.execution.create({ data: { chatId: ctx.chatId, sha, summary: input.message } });

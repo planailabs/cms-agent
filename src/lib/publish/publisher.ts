@@ -13,6 +13,7 @@ import { env } from '@/lib/env';
 import { broadcast, withBranchLock } from '@/lib/agent/bus';
 import { WorkflowError } from '@/lib/agent/workflow';
 import { branchSha, defaultBranch, mergeInto, resetBranchOnto } from '@/lib/git/engine';
+import { chatGitIdentity } from '@/lib/git/identity';
 import { registerBuiltinFlows } from './flows';
 import { getDeployFlow } from './types';
 
@@ -81,8 +82,9 @@ export async function publish(req: PublishRequest): Promise<{ publicationId: str
   // otherwise the chat is stuck in 'published' with nothing merged.
   let targetSha: string;
   try {
+    const identity = await chatGitIdentity(chat.id, req.actor.id);
     targetSha = await withBranchLock(chat.branchId, () =>
-      mergeInto(chat.workBranch, chat.branch.name),
+      mergeInto(chat.workBranch, chat.branch.name, identity),
     );
   } catch (err) {
     await prisma.chat.updateMany({

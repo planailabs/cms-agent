@@ -65,7 +65,7 @@ describe('git engine', () => {
     expect(log[0].authorName).toBe('Test Editor');
 
     // undo = revert commit, history preserved
-    const revertSha = await engine.revertCommit('summer-update', sha!);
+    const revertSha = await engine.revertCommit('summer-update', sha!, AUTHOR);
     expect(revertSha).not.toBe(sha);
     expect(fs.readFileSync(path.join(wt, 'src', 'pages', 'index.astro'), 'utf8')).toContain('Home');
     expect(fs.existsSync(path.join(wt, 'src', 'pages', 'about.astro'))).toBe(false);
@@ -77,7 +77,7 @@ describe('git engine', () => {
     expect(fs.existsSync(path.join(wt, 'src', 'pages', 'about.astro'))).toBe(true);
 
     // merge to main with merge commit
-    const mainSha = await engine.mergeInto('summer-update', 'main');
+    const mainSha = await engine.mergeInto('summer-update', 'main', AUTHOR);
     expect(mainSha).toMatch(/^[0-9a-f]{40}$/);
     expect(fs.readFileSync(path.join(repo, 'src', 'pages', 'about.astro'), 'utf8')).toContain(
       'About',
@@ -94,7 +94,7 @@ describe('git engine', () => {
     const chatSha = await engine.commitExecution('c-abc123', 'chat change', AUTHOR);
     expect(chatSha).toMatch(/^[0-9a-f]{40}$/);
     expect(await engine.changedFiles('c-abc123', 'feature-x')).toEqual(['note.md']);
-    const featSha = await engine.mergeInto('c-abc123', 'feature-x');
+    const featSha = await engine.mergeInto('c-abc123', 'feature-x', AUTHOR);
     expect(featSha).toMatch(/^[0-9a-f]{40}$/);
     await engine.resetBranchOnto('c-abc123', 'feature-x');
     expect(await engine.changedFiles('c-abc123', 'feature-x')).toEqual([]);
