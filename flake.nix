@@ -44,6 +44,46 @@
             };
           };
 
+          # ── Sandbox environments (one per supported node major) ─────────────
+          # Each is a minimal buildEnv (node + coreutils + bash) whose full
+          # closure is packed into a squashfs. At runtime the jail mounts (or
+          # extracts) the squashfs and binds its /nix/store over the real one,
+          # so shell commands see ONLY these tools — never the app's store.
+          # Selected via SANDBOX_NODE_MAJOR; built on the fly in dev by
+          # scripts/launch-with-sandbox.sh, baked into the image in prod.
+          sandboxNodes = {
+            "22" = pkgs.nodejs_22;
+            "24" = pkgs.nodejs_24;
+            "26" = pkgs.nodejs_26;
+          };
+
+          mkSandboxEnv = major: node: pkgs.buildEnv {
+            name = "cms-sandbox-env-node${major}";
+            paths = [ node pkgs.coreutils pkgs.bashInteractive ];
+          };
+
+          # Squashfs of the env's closure (contents live at their /nix/store
+          # paths). The output file has no runtime references, so shipping it
+          # in the image does NOT drag the uncompressed closure along.
+          mkSandboxSquashfs = major: node:
+            pkgs.callPackage "${nixpkgs}/nixos/lib/make-squashfs.nix" {
+              storeContents = [ (mkSandboxEnv major node) ];
+              comp = "zstd";
+            };
+
+          # A directory the runtime points SANDBOX_DIR_<major> at: the squashfs
+          # plus a tiny manifest. Deliberately does NOT embed the env store
+          # path (the runtime discovers it by glob after materializing), to
+          # keep the image free of the uncompressed closure.
+          mkSandboxDir = major: node:
+            pkgs.runCommand "cms-sandbox-node${major}" { } ''
+              mkdir -p "$out"
+              ln -s ${mkSandboxSquashfs major node} "$out/env.squashfs"
+              printf '{"major":"%s"}\n' "${major}" > "$out/manifest.json"
+            '';
+
+          sandboxDirs = lib.mapAttrs mkSandboxDir sandboxNodes;
+
           # Single-container entrypoint: run migrations, then both processes;
           # exit (and let the runtime restart the container) when either dies.
           # git + node must be on PATH: the CMS shells into the managed repo
@@ -85,6 +125,12 @@
           proxy = proxy;
         }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # Sandbox env dirs, one per node major — `nix build .#sandbox-node22`.
+          # scripts/launch-with-sandbox.sh builds the selected one on the fly.
+          sandbox-node22 = sandboxDirs."22";
+          sandbox-node24 = sandboxDirs."24";
+          sandbox-node26 = sandboxDirs."26";
+
           # OCI image with BOTH the CMS and the proxy, built with nix's native
           # dockerTools — no Dockerfile/daemon. Everything is configured over
           # env vars (see module.nix's environmentFile docs for the full list);
@@ -102,6 +148,14 @@
               pkgs.dockerTools.fakeNss
               pkgs.dockerTools.binSh
               pkgs.dockerTools.usrBinEnv
+              # Sandbox: jail + squashfs mount/extract tools, and all three
+              # per-major env dirs (their squashfs, selectable at runtime).
+              pkgs.bubblewrap
+              pkgs.squashfuse
+              pkgs.squashfsTools
+              sandboxDirs."22"
+              sandboxDirs."24"
+              sandboxDirs."26"
             ];
             extraCommands = ''
               mkdir -p tmp data && chmod 1777 tmp
@@ -121,6 +175,14 @@
                 "REPO_PATH=/data/site"
                 "NODE_ENV=production"
                 "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+                # Sandbox: baked env dirs (no nix at runtime); pick with
+                # SANDBOX_NODE_MAJOR (default 22). SANDBOX_ALLOW_NETWORK=1 keeps
+                # network in the jail so `npm install` works.
+                "SANDBOX_NODE_MAJOR=22"
+                "SANDBOX_ALLOW_NETWORK=1"
+                "SANDBOX_DIR_22=${sandboxDirs."22"}"
+                "SANDBOX_DIR_24=${sandboxDirs."24"}"
+                "SANDBOX_DIR_26=${sandboxDirs."26"}"
               ];
               ExposedPorts = { "8080/tcp" = { }; };
               Volumes = { "/data" = { }; };
@@ -177,6 +239,11 @@
             postgresql
             overmind
             skopeo # for docker-push.sh (copy the image to the registry)
+            # Sandbox: jail + squashfs mount/extract (launch-with-sandbox.sh
+            # builds the env squashfs on the fly via nix in dev/test).
+            bubblewrap
+            squashfuse
+            squashfsTools
           ];
 
           shellHook = ''
