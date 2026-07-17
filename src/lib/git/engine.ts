@@ -98,6 +98,18 @@ export async function ensureBranch(branch: string, base?: string): Promise<void>
   }
 }
 
+/** Delete a git branch (worktree must be removed first). No-op if absent. */
+export async function deleteBranch(branch: string): Promise<void> {
+  if (branch === (await defaultBranch())) {
+    throw new Error('refusing to delete the default branch');
+  }
+  try {
+    await repoGit().raw(['branch', '-D', branch]);
+  } catch {
+    // work branches may not exist in git before their first commit
+  }
+}
+
 /** Historical read-only checkouts use the reserved v-<sha> label (plan §12). */
 export function historicalRef(name: string): string | null {
   const m = /^v-([0-9a-f]{7,40})$/.exec(name);

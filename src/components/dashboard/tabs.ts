@@ -13,6 +13,7 @@ const TAB_NAMES = [
   'prompts',
   'grants',
   'memory',
+  'system',
 ] as const;
 type TabName = (typeof TAB_NAMES)[number];
 
@@ -75,6 +76,11 @@ async function initTabModule(tab: TabName) {
     case 'memory': {
       const { initMemory } = await import('./memory');
       void initMemory(document.getElementById('tab-memory')!);
+      break;
+    }
+    case 'system': {
+      const { initSystem } = await import('./system');
+      void initSystem(document.getElementById('tab-system')!);
       break;
     }
   }

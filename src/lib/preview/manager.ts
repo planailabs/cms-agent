@@ -54,6 +54,10 @@ export function clearStartError(branch: string): void {
   state.startErrors.delete(branch);
 }
 
+export function listStartErrors(): Array<{ branch: string; message: string; at: number }> {
+  return [...state.startErrors].map(([branch, e]) => ({ branch, ...e }));
+}
+
 const routesFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-routes.json');
 const accessFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-access.json');
 

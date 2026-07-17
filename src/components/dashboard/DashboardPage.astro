@@ -59,6 +59,7 @@ import '../chat/style.css';
         <button type="button" data-tab="prompts" class="dash-tab">System Prompts</button>
         <button type="button" data-tab="grants" class="dash-tab">Grants</button>
         <button type="button" data-tab="memory" class="dash-tab">Memory</button>
+        <button type="button" data-tab="system" class="dash-tab">System</button>
       </nav>
 
       <!-- ═══════════════════════ TAB PANELS ═══════════════════════ -->
@@ -283,6 +284,87 @@ import '../chat/style.css';
           <h2 class="dash-section-title">Approved memories</h2>
           <div class="memory-approved dash-stack">
             <div class="dash-td-muted animate-pulse">Loading...</div>
+          </div>
+        </section>
+
+        <div class="dash-status hidden"></div>
+      </div>
+
+      <!-- System Tab -->
+      <div id="tab-system" class="tab-panel hidden dash-stack">
+        <div class="dash-search-row">
+          <button type="button" class="system-refresh dash-btn">Refresh</button>
+        </div>
+
+        <section class="dash-stack">
+          <h2 class="dash-section-title">Previews</h2>
+          <div class="dash-table-wrap">
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th>Branch</th>
+                  <th>Status</th>
+                  <th>Port / PID</th>
+                  <th>Started</th>
+                  <th>Last used</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody class="previews-table-body">
+                <tr class="animate-pulse">
+                  <td class="dash-td-muted" colspan="6">Loading data...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="dash-stack">
+          <h2 class="dash-section-title">Branches</h2>
+          <div class="dash-table-wrap">
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Creator</th>
+                  <th class="dash-num">Chats</th>
+                  <th class="dash-num">Publications</th>
+                  <th>State</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody class="branches-table-body">
+                <tr class="animate-pulse">
+                  <td class="dash-td-muted" colspan="7">Loading data...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="dash-stack">
+          <h2 class="dash-section-title">Chats</h2>
+          <div class="dash-table-wrap">
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Kind</th>
+                  <th>Phase</th>
+                  <th>Branches</th>
+                  <th>Creator</th>
+                  <th class="dash-num">Messages</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody class="chats-table-body">
+                <tr class="animate-pulse">
+                  <td class="dash-td-muted" colspan="8">Loading data...</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
 
