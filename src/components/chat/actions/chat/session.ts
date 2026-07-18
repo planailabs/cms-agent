@@ -34,6 +34,7 @@ export interface ChatHistoryResult {
     steps: string[];
     lastError: string | null;
   } | null;
+  targetAhead?: boolean;
 }
 
 export const initAIChat = (messages: StoredMessage[], phase: 'idle' | 'waiting' = 'idle') => {
@@ -76,6 +77,7 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
       executions: (data.executions ?? []) as HistoryExecution[],
       lastError: data.lastError ?? null,
       automatism: data.automatism ?? null,
+      targetAhead: Boolean(data.targetAhead),
     };
   } catch {
     // Network error — fall through
@@ -112,6 +114,11 @@ export const restoreAIChatSession = (): void => {
   const applyHistory = (result: ChatHistoryResult | null) => {
     const mc = store.state.chat?.aiChat;
     if (!mc || store.state.activeChatId !== chatId) return;
+
+    if (result) {
+      store.state.workspace.targetAhead = Boolean(result.targetAhead);
+      store.notify();
+    }
 
     // Rehydrate the automatism step bar (deployment chats)
     if (result?.automatism) {

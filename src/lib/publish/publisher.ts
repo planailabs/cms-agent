@@ -19,8 +19,12 @@ import {
   abortMerge,
   beginConflictMerge,
   branchSha,
+  continueRebase,
   defaultBranch,
+  ensureWorktree,
   mergeInto,
+  rebaseInProgress,
+  rebaseOnto,
   resetBranchOnto,
 } from '@/lib/git/engine';
 import { chatGitIdentity } from '@/lib/git/identity';
@@ -158,6 +162,123 @@ export async function publish(
 
   return { publicationId: publication.id, deployChatId: deployChat.id };
 }
+
+// ─── The 'pull' automatism (Sync button) ─────────────────────────────────────
+// Rebases a workflow chat's work branch onto the latest TARGET branch state.
+// Registered here alongside 'deploy' so every `import '@/lib/publish/publisher'`
+// (resume tool, history, boot recovery) sees all automatism types.
+
+/** Payload of the 'pull' automatism. */
+interface PullData extends AutomatismData {
+  workflowChatId: string;
+  workBranch: string;
+  targetName: string;
+  /** Workflow phase to restore after a conflict forced EXECUTE. */
+  restorePhase?: string;
+}
+
+/** Start a target→work sync for a workflow chat. Throws on invalid state. */
+export async function startPull(chatId: string, actor: { id: string; name: string }): Promise<string> {
+  const chat = await prisma.chat.findUnique({ where: { id: chatId }, include: { branch: true } });
+  if (!chat) throw new WorkflowError('Chat not found', 404);
+  if (chat.kind !== 'workflow') throw new WorkflowError('Only workflow chats can sync.');
+  if (chat.archivedAt) throw new WorkflowError('This chat is archived.');
+  const active = await prisma.automatism.findFirst({
+    where: { chatId, status: { in: ['running', 'paused'] } },
+  });
+  if (active) throw new WorkflowError(`A ${active.type} automatism is already ${active.status}.`, 409);
+
+  await postAutomatismMessage(
+    chatId,
+    `Sync started by ${actor.name}: rebasing this draft onto the latest ${chat.branch.name}.`,
+  );
+  return startAutomatism('pull', chatId, {
+    actorId: actor.id,
+    workflowChatId: chatId,
+    workBranch: chat.workBranch,
+    targetName: chat.branch.name,
+  } satisfies PullData);
+}
+
+registerAutomatism({
+  type: 'pull',
+  steps: [
+    {
+      name: 'pull',
+      async run(raw, post) {
+        const data = raw as PullData;
+        const identity = await chatGitIdentity(data.workflowChatId, data.actorId);
+
+        // Force the chat into EXECUTE while conflicts need resolving; the
+        // finalize step restores the previous phase.
+        const pauseWithConflicts = async (files: string[]): Promise<never> => {
+          const chat = await prisma.chat.findUnique({
+            where: { id: data.workflowChatId },
+            select: { workflowPhase: true },
+          });
+          if (chat && chat.workflowPhase !== 'execute') {
+            data.restorePhase ??= chat.workflowPhase;
+            await prisma.chat.updateMany({
+              where: { id: data.workflowChatId },
+              data: { workflowPhase: 'execute', entityVersion: { increment: 1 } },
+            });
+            broadcast(data.workflowChatId, 'phase_changed', {
+              type: 'phase_changed',
+              workflowPhase: 'execute',
+            });
+          }
+          throw new AutomatismFailure(
+            `Rebasing the draft onto ${data.targetName} hit conflicts` +
+              (files.length ? ` in:\n${files.map((f) => `- ${f}`).join('\n')}` : '.') +
+              `\nThe rebase is paused in this chat's worktree (markers in place). Use ` +
+              `list_conflicts / show_conflict, target_file for the incoming side, resolve ` +
+              `each file (edit_file or resolve_conflict_take) keeping both sides' intent, ` +
+              `then git_rebase_continue — repeat per replayed commit until the rebase ` +
+              `completes — and finally call resume_automatism to finish the sync.`,
+          );
+        };
+
+        try {
+          // Retry-safe: after a conflict pause the rebase may still be in
+          // progress (agent resolved but didn't continue) or already be done.
+          const dir = await ensureWorktree(data.workBranch);
+          const result = (await rebaseInProgress(dir))
+            ? await withBranchLock(data.workBranch, () => continueRebase(data.workBranch, identity))
+            : await withBranchLock(data.workBranch, () =>
+                rebaseOnto(data.workBranch, data.targetName, identity),
+              );
+          if (result.conflicts?.length) await pauseWithConflicts(result.conflicts);
+          await post(
+            `Rebased the draft onto the latest ${data.targetName} → ${result.sha!.slice(0, 8)}. ` +
+              `Note: the draft history was rewritten — review the preview again before publishing.`,
+          );
+        } catch (err) {
+          if (err instanceof AutomatismFailure) throw err;
+          const message = err instanceof Error ? err.message : String(err);
+          throw new AutomatismFailure(`Rebasing onto ${data.targetName} failed: ${message}`);
+        }
+      },
+    },
+    {
+      name: 'finalize',
+      async run(raw, post) {
+        const data = raw as PullData;
+        if (data.restorePhase) {
+          await prisma.chat.updateMany({
+            where: { id: data.workflowChatId },
+            data: { workflowPhase: data.restorePhase, entityVersion: { increment: 1 } },
+          });
+          broadcast(data.workflowChatId, 'phase_changed', {
+            type: 'phase_changed',
+            workflowPhase: data.restorePhase,
+          });
+          data.restorePhase = undefined;
+        }
+        await post(`Sync done — the draft is up to date with ${data.targetName}.`);
+      },
+    },
+  ],
+});
 
 // ─── The 'deploy' automatism ─────────────────────────────────────────────────
 

@@ -157,6 +157,9 @@ export interface WorkspaceState {
 
   /** Generic composer-style input modal (null = closed). */
   inputModal: { title: string; hint?: string; placeholder: string } | null;
+
+  /** Target branch has commits the work branch lacks (Sync button shows). */
+  targetAhead: boolean;
 }
 
 /** Mirror of the server's AutomatismState (history + automatism_state SSE). */
@@ -199,6 +202,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   archive: { open: false, loading: false, error: null, chats: [], busyId: null },
   automatism: null,
   inputModal: null,
+  targetAhead: false,
 });
 
 export const createInitialBrowserCompareState = (): BrowserCompareState => ({
@@ -222,4 +226,5 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.diff = createInitialDiffState();
   ws.browserCompare = createInitialBrowserCompareState();
   ws.automatism = null;
+  ws.targetAhead = false;
 };

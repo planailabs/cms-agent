@@ -148,6 +148,14 @@ export const publishAction = async (sha?: string): Promise<void> => {
   // Failures surface via postJson's error toast.
 };
 
+/** ⟳ Sync — rebase the draft onto the latest target branch ('pull' automatism). */
+export const syncAction = async (): Promise<void> => {
+  const chatId = store.state.activeChatId;
+  if (!chatId) return;
+  await postJson(`/api/chats/${encodeURIComponent(chatId)}/sync`, {});
+  // Progress arrives as automatism messages + automatism_state events.
+};
+
 /** Step-bar ▶ Resume — re-runs the paused automatism's failed step. */
 export const resumeAutomatismAction = async (): Promise<void> => {
   const chatId = store.state.activeChatId;

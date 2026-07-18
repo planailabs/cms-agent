@@ -18,6 +18,7 @@ import {
   undoExecutionAction,
   publishAction,
   resumeAutomatismAction,
+  syncAction,
   newBranchAction,
   newChatAction,
   loadDiffPages,
@@ -238,6 +239,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-automatism-resume"]', () =>
     void resumeAutomatismAction(),
   );
+  delegateEvent(app, 'click', '[data-action="ws-sync"]', () => void syncAction());
 
   // Branch switcher / chat list
   delegateEvent(app, 'click', '[data-action="ws-branch-list-toggle"]', () => {

@@ -406,6 +406,12 @@ export async function resetBranchOnto(branch: string, base: string): Promise<voi
   await git.raw(['reset', '--hard', base]);
 }
 
+/** Commits `to` has that `from` lacks (rev-list from..to). 0 = up to date. */
+export async function branchAheadCount(from: string, to: string): Promise<number> {
+  const out = await repoGit().raw(['rev-list', '--count', `${from}..${to}`]);
+  return Number.parseInt(out.trim(), 10) || 0;
+}
+
 /** Files changed between `base` (default main) and the branch (three-dot). */
 export async function changedFiles(branch: string, base?: string): Promise<string[]> {
   const from = base ?? (await defaultBranch());

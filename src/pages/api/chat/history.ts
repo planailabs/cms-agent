@@ -18,6 +18,7 @@ export const GET: APIRoute = async ({ url }) => {
     include: {
       messages: { orderBy: { ordinal: 'asc' } },
       executions: { orderBy: { createdAt: 'asc' } },
+      branch: { select: { name: true } },
     },
   });
   if (!chat) {
@@ -85,6 +86,16 @@ export const GET: APIRoute = async ({ url }) => {
   const { automatismStateFor } = await import('@/lib/automatism');
   const automatism = await automatismStateFor(chatId);
 
+  // Sync button visibility: target moved ahead of the work branch. Unknown
+  // refs (fresh chat, work branch not created yet) count as up to date.
+  let targetAhead = false;
+  if (chat.kind === 'workflow') {
+    const { branchAheadCount } = await import('@/lib/git/engine');
+    targetAhead = await branchAheadCount(chat.workBranch, chat.branch.name)
+      .then((n) => n > 0)
+      .catch(() => false);
+  }
+
   return new Response(
     JSON.stringify({
       phase: chat.turnPhase,
@@ -92,6 +103,7 @@ export const GET: APIRoute = async ({ url }) => {
       planJson: chat.planJson,
       lastError: chat.lastError,
       automatism,
+      targetAhead,
       messages,
       // For rehydrating workspace state after reload/chat switch — without
       // these the Publish button waits forever for an execution_committed

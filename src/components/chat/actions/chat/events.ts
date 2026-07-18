@@ -101,6 +101,10 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
           steps: (data.steps as string[]) ?? [],
           lastError: (data.lastError as string | null) ?? null,
         };
+        // A finished sync means the draft now contains the target
+        if (data.automatismType === 'pull' && data.status === 'done') {
+          ws.targetAhead = false;
+        }
         store.notify();
       }
       return true;

@@ -152,12 +152,24 @@ export const renderPhaseBar = (state: AppState): string => {
     return `<span class="ws-phase-step ${cls}">${step.label}</span>`;
   }).join('<span class="ws-phase-sep">→</span>');
 
-  // Contextual actions
-  let actions = '';
+  // Contextual actions — Sync rebases the draft onto the latest target;
+  // only offered while the target actually has commits the draft lacks.
+  const syncing =
+    state.workspace.automatism?.forChatId === state.activeChatId &&
+    state.workspace.automatism.status === 'running';
+  const syncButton =
+    state.workspace.targetAhead || syncing
+      ? `<button type="button" class="ws-mini-button" data-action="ws-sync"
+          ${syncing ? 'disabled' : ''} title="Rebase this draft onto the latest target branch state">
+          ${syncing ? '⟳ Syncing…' : '⟳ Sync'}
+        </button>`
+      : '';
+  let actions = `<div class="ws-phase-actions">${syncButton}</div>`;
   if (current === 'preview') {
     const publishing = state.workspace.publish?.status === 'running';
     const hasSha = Boolean(state.workspace.executionSha);
     actions = `<div class="ws-phase-actions">
+        ${syncButton}
         <button type="button" class="ws-mini-button ws-mini-button--primary" data-action="ws-publish"
           ${!hasSha || publishing ? 'disabled' : ''}
           title="${hasSha ? `Publish ${escapeHtml(state.workspace.executionSha!.slice(0, 8))}` : 'Waiting for the reviewed commit'}">
@@ -167,8 +179,10 @@ export const renderPhaseBar = (state: AppState): string => {
       </div>`;
   }
 
+  // A running/paused automatism on THIS chat (e.g. a sync) shows its own
+  // step bar below the workflow phases — incl. the ▶ Resume button.
   return `<div class="ws-phase-bar">
       <div class="ws-phase-steps">${steps}</div>
       ${actions}
-    </div>`;
+    </div>${renderAutomatismBar(state)}`;
 };
