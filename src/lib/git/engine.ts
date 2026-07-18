@@ -434,10 +434,19 @@ export async function showFileAtRef(ref: string, filePath: string): Promise<stri
   return await repoGit().raw(['show', `${ref}:${filePath}`]);
 }
 
-/** `git show` of a single commit (message + stat + patch), read-only. */
+/** `git show` of a single commit (message + stat + patch), read-only.
+ *  Merge commits diff against their first parent — plain `git show` prints
+ *  no patch at all for merges, only a combined --cc diff at best. */
 export async function showCommit(ref: string): Promise<string> {
   assertSafeRef(ref);
-  return await repoGit().raw(['show', '--no-color', '--stat', '--patch', ref]);
+  return await repoGit().raw([
+    'show',
+    '--no-color',
+    '--stat',
+    '--patch',
+    '--diff-merges=first-parent',
+    ref,
+  ]);
 }
 
 /** Unified diff of a branch against `base` (default main). */

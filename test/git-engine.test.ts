@@ -170,6 +170,23 @@ describe('git engine', () => {
     expect(engine.untrackedMergeCollisions(evil)).toEqual([]);
   });
 
+  it('shows a first-parent patch for merge commits', async () => {
+    const wt = await engine.ensureWorktree('merge-show-test', 'main');
+    fs.writeFileSync(path.join(wt, 'merged-feature.txt'), 'feature\n');
+    await engine.commitExecution('merge-show-test', 'Feature work', AUTHOR);
+
+    // Diverge main so the merge is a real merge commit, not a fast-forward
+    const mainGit = simpleGit(repo);
+    fs.writeFileSync(path.join(repo, 'mainline.txt'), 'mainline\n');
+    await mainGit.add(['-A']);
+    await mainGit.commit('mainline change');
+
+    const mergeSha = await engine.mergeInto('merge-show-test', 'main', AUTHOR);
+    const shown = await engine.showCommit(mergeSha);
+    expect(shown).toContain('diff --git');
+    expect(shown).toContain('merged-feature.txt');
+  });
+
   it('flags commits already on the target in branchCommits', async () => {
     const wt = await engine.ensureWorktree('commit-list-test', 'main');
     fs.writeFileSync(path.join(wt, 'exclusive.txt'), 'only here\n');
