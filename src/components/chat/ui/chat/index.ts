@@ -74,7 +74,7 @@ export const renderChatSection = (
       !!auto && auto.forChatId === state.activeChatId && auto.status === 'running';
     const inputField = state.activeChatArchived
       ? `<div class="chat-automatism chat-automatism--gate">
-          <div class="chat-automatism__body">🗄 ${t(uiLocale(), 'chat.archived.note')}</div>
+          <div class="chat-automatism__body">📦 ${t(uiLocale(), 'chat.archived.note')}</div>
         </div>`
       : automatismRunning
         ? `<div class="chat-automatism chat-automatism--gate">

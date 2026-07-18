@@ -19,7 +19,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.sidebar.noChats': 'No chats yet',
     'workspace.sidebar.newBranch': '+ New branch',
     'workspace.sidebar.archiveTitle': 'Done chats',
-    'workspace.sidebar.archiveButton': '🗄 Archive',
+    'workspace.sidebar.archiveButton': '📦 Archive',
     'workspace.sidebar.noBranches': 'No branches yet',
 
     // ── phase bar (PLAN → EXECUTE → PREVIEW → PUBLISH) + automatism bar ──
@@ -162,7 +162,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.sidebar.noChats': 'Noch keine Chats',
     'workspace.sidebar.newBranch': '+ Neuer Branch',
     'workspace.sidebar.archiveTitle': 'Abgeschlossene Chats',
-    'workspace.sidebar.archiveButton': '🗄 Archiv',
+    'workspace.sidebar.archiveButton': '📦 Archiv',
     'workspace.sidebar.noBranches': 'Noch keine Branches',
 
     // ── Phasenleiste + Automatismus-Leiste ──
