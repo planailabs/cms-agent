@@ -92,7 +92,7 @@ export const renderBranchSwitcher = (state: AppState): string => {
       <button type="button" class="ws-switcher__toggle" data-action="ws-branch-list-toggle"
         aria-expanded="${state.workspace.branchListOpen}">
         <span class="ws-switcher__branch">⎇ ${escapeHtml(activeBranch?.name ?? '…')}</span>
-        <span class="ws-switcher__chat">${escapeHtml(activeChat?.title ?? '')}</span>
+        <span class="ws-switcher__chat">${escapeHtml(activeChat?.title ?? state.activeChatTitle ?? '')}</span>
         <span class="ws-switcher__caret">${state.workspace.branchListOpen ? '▴' : '▾'}</span>
       </button>
       ${panel}

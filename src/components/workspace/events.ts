@@ -42,7 +42,7 @@ import {
   startElementPick,
   cancelElementPick,
 } from './previewAgent';
-import { openArchive, closeArchive, deleteArchivedChat } from './archive';
+import { openArchive, closeArchive, deleteArchivedChat, openArchivedChat } from './archive';
 import { openGitModal, closeGitModal, loadGitCommits, selectGitCommit, backToGitList } from './gitModal';
 import type { DiffViewMode, PageContextElement, PageContextSelection } from './state';
 
@@ -277,6 +277,10 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-archive-delete"]', (_e, target) => {
     const chatId = target.getAttribute('data-chat-id');
     if (chatId) void deleteArchivedChat(chatId);
+  });
+  delegateEvent(app, 'click', '[data-action="ws-archive-view"]', (_e, target) => {
+    const chatId = target.getAttribute('data-chat-id');
+    if (chatId) openArchivedChat(chatId);
   });
 
   // Git modal (commit list + diffs)

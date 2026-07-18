@@ -132,6 +132,7 @@ export const switchChat = (chatId: string): void => {
   const summary = branch?.chats.find((c) => c.id === chatId);
   state.workflowPhase = summary?.workflowPhase ?? 'plan';
   if (summary) state.activeChatKind = summary.kind ?? 'workflow';
+  state.activeChatTitle = summary?.title ?? null;
   state.activeChatArchived = false; // authoritative value arrives with history
   store.notify();
 

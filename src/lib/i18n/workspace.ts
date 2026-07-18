@@ -133,6 +133,8 @@ export const workspaceCatalogs: AreaCatalogs = {
     // ── Injected preview overlay ──
     'workspace.injected.chatAboutThis': '💬 Chat about this',
 
+    'workspace.archive.viewTitle': 'Open this chat read-only',
+
     // ── Git modal ──
     'workspace.sidebar.gitButton': 'Commits',
     'workspace.sidebar.gitTitle': 'Browse commits and diffs',
@@ -277,6 +279,8 @@ export const workspaceCatalogs: AreaCatalogs = {
 
     // ── Injiziertes Vorschau-Overlay ──
     'workspace.injected.chatAboutThis': '💬 Darüber chatten',
+
+    'workspace.archive.viewTitle': 'Diesen Chat schreibgeschützt öffnen',
 
     // ── Git-Modal ──
     'workspace.sidebar.gitButton': 'Commits',

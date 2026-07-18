@@ -6,6 +6,7 @@
 import { store } from '../chat/app/store';
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
+import { switchChat } from '../chat/actions/chat';
 import type { AppState } from '../chat/app/state';
 
 // ── Actions ──────────────────────────────────────────────────────────────
@@ -36,6 +37,20 @@ export const openArchive = async (): Promise<void> => {
 
 export const closeArchive = (): void => {
   store.state.workspace.archive.open = false;
+  store.notify();
+};
+
+/** Open an archived chat read-only: it isn't in the sidebar list anymore, so
+ *  carry its kind/title over and mark it archived right away (history
+ *  confirms both) — the composer stays replaced by the archived note. */
+export const openArchivedChat = (id: string): void => {
+  const row = store.state.workspace.archive.chats.find((c) => c.id === id);
+  if (!row) return;
+  closeArchive();
+  switchChat(id);
+  store.state.activeChatKind = row.kind;
+  store.state.activeChatTitle = row.title;
+  store.state.activeChatArchived = true;
   store.notify();
 };
 
@@ -99,7 +114,9 @@ const renderRow = (row: AppState['workspace']['archive']['chats'][number], busy:
   const when = row.archivedAt ? new Date(row.archivedAt).toLocaleString(locale) : '';
   const kindLabel = KIND_LABEL_KEY[row.kind] ? t(locale, KIND_LABEL_KEY[row.kind]) : row.kind;
   return `<div class="ws-archive__row">
-      <div class="ws-archive__info">
+      <div class="ws-archive__info ws-archive__info--clickable" data-action="ws-archive-view"
+        data-chat-id="${escapeHtml(row.id)}" role="button" tabindex="0"
+        title="${escapeHtml(t(locale, 'workspace.archive.viewTitle'))}">
         <div class="ws-archive__title">
           ${escapeHtml(row.title)}
           <span class="ws-chat-item__kind">${escapeHtml(kindLabel)}</span>

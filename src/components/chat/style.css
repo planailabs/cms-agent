@@ -2805,6 +2805,17 @@ html.is-first-visit #app {
   color: #dc2626;
 }
 
+.ws-archive__info--clickable {
+  cursor: pointer;
+  border-radius: 0.5rem;
+  margin: -0.25rem;
+  padding: 0.25rem;
+}
+
+.ws-archive__info--clickable:hover .ws-archive__title {
+  color: var(--accent);
+}
+
 /* ── Git modal (commit list + diffs, GitHub-flavored) ── */
 
 .ws-git__head-left {
