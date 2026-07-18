@@ -439,9 +439,8 @@ html.is-first-visit #app {
       transform 150ms ease,
       box-shadow 150ms ease;
     flex-shrink: 0;
-    /* Bottom-pinned so it stays put while the input grows; no extra margin —
-       the 36px circle then sits centered on the 37px single-line input. */
-    align-self: end;
+    /* Centered on the input, including when the placeholder/text wraps */
+    align-self: center;
   }
 
   .composer-send-button:not([disabled]):hover,
