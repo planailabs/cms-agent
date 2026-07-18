@@ -95,10 +95,11 @@ const PHASE_STEPS: Array<{ key: WorkflowPhase; label: string }> = [
 const renderAutomatismBar = (state: AppState): string => {
   const a = state.workspace.automatism;
   if (!a || a.forChatId !== state.activeChatId || a.steps.length === 0) return '';
-  const done = a.status === 'done';
+  // A finished automatism leaves the bar — its result lives in the transcript
+  if (a.status === 'done') return '';
   const steps = a.steps
     .map((name, i) => {
-      const cls = done || i < a.step
+      const cls = i < a.step
         ? 'is-done'
         : i === a.step
           ? a.status === 'paused' || a.status === 'failed' ? 'is-failed' : 'is-current'
@@ -112,9 +113,8 @@ const renderAutomatismBar = (state: AppState): string => {
     state.chat?.aiChat?.phase === 'waiting' ||
     state.chat?.aiChat?.phase === 'streaming' ||
     state.chat?.aiChat?.phase === 'tool';
-  const note = done
-    ? '<span class="ws-phase-note">done</span>'
-    : a.status === 'paused'
+  const note =
+    a.status === 'paused'
       ? agentBusy
         ? '<span class="ws-phase-note ws-phase-note--failed">paused — agent investigating</span>'
         : `<div class="ws-phase-actions">
