@@ -149,6 +149,9 @@ export interface AppState {
    *  tracked separately so it survives the chat leaving the sidebar list
    *  (e.g. archived after its automatism finished). */
   activeChatKind: string;
+  /** Active chat is archived (chat history / chat_archived SSE) — the
+   *  composer is replaced by a note and the server rejects turns anyway. */
+  activeChatArchived: boolean;
   /** Workflow phase of the active chat (updated by phase_changed SSE event) */
   workflowPhase: WorkflowPhase;
 
@@ -296,6 +299,7 @@ export const createInitialState = (): AppState => {
     activeBranchId: null,
     activeChatId: null,
     activeChatKind: 'workflow',
+    activeChatArchived: false,
     workflowPhase: 'plan',
     chat: null,
     workspace: createInitialWorkspaceState(),

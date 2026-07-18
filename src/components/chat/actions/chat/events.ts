@@ -122,6 +122,10 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
         const idx = branch.chats.findIndex((c) => c.id === chatId);
         if (idx >= 0) branch.chats.splice(idx, 1);
       }
+      // Still open? Swap the composer for the archived note right away.
+      if (chatId === store.state.activeChatId) {
+        store.state.activeChatArchived = true;
+      }
       store.notify();
       return true;
     }

@@ -72,11 +72,15 @@ export const renderChatSection = (
     const auto = state.workspace.automatism;
     const automatismRunning =
       !!auto && auto.forChatId === state.activeChatId && auto.status === 'running';
-    const inputField = automatismRunning
+    const inputField = state.activeChatArchived
       ? `<div class="chat-automatism chat-automatism--gate">
+          <div class="chat-automatism__body">🗄 ${t(uiLocale(), 'chat.archived.note')}</div>
+        </div>`
+      : automatismRunning
+        ? `<div class="chat-automatism chat-automatism--gate">
           <div class="chat-automatism__body">⚙ ${t(uiLocale(), 'chat.automatism.gate', { step: escapeHtml(auto.steps[auto.step] ?? '…') })}</div>
         </div>`
-      : renderChatComposer(mc, locale, modeLocale);
+        : renderChatComposer(mc, locale, modeLocale);
     const emptyState = renderEmptyState(mc, modeLocale);
 
     return `

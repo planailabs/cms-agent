@@ -37,6 +37,7 @@ export interface ChatHistoryResult {
   } | null;
   targetAhead?: boolean;
   kind?: string;
+  archived?: boolean;
 }
 
 export const initAIChat = (messages: StoredMessage[], phase: 'idle' | 'waiting' = 'idle') => {
@@ -81,6 +82,7 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
       automatism: data.automatism ?? null,
       targetAhead: Boolean(data.targetAhead),
       kind: data.kind,
+      archived: Boolean(data.archived),
     };
   } catch {
     // Network error — fall through
@@ -121,6 +123,7 @@ export const restoreAIChatSession = (): void => {
     if (result) {
       store.state.workspace.targetAhead = Boolean(result.targetAhead);
       if (result.kind) store.state.activeChatKind = result.kind;
+      store.state.activeChatArchived = Boolean(result.archived);
       store.notify();
     }
 

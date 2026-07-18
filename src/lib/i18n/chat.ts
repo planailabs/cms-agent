@@ -49,6 +49,8 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.attention.done': 'Done',
     // Automatism input gate
     'chat.automatism.gate': 'Automatism running ({step}) — chat opens when it pauses or finishes.',
+    // Archived chats take no input
+    'chat.archived.note': 'This chat is archived — it can no longer receive messages.',
     // Sidebar chrome
     'chat.sidebar.resize': 'Resize chat sidebar',
     'chat.sidebar.expand': 'Expand chat sidebar',
@@ -104,6 +106,8 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.attention.done': 'Erledigt',
     // Automatism input gate
     'chat.automatism.gate': 'Automatismus läuft ({step}) — der Chat öffnet sich, sobald er pausiert oder fertig ist.',
+    // Archivierte Chats nehmen keine Eingaben an
+    'chat.archived.note': 'Dieser Chat ist archiviert — er kann keine Nachrichten mehr empfangen.',
     // Sidebar chrome
     'chat.sidebar.resize': 'Größe der Chat-Seitenleiste ändern',
     'chat.sidebar.expand': 'Chat-Seitenleiste ausklappen',
