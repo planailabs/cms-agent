@@ -71,7 +71,8 @@ const renderOnion = (state: AppState, route: string): string => {
         shotUrl(chatId, route, 'after'),
         `After: ${route}`,
         'ws-onion__after',
-        `clip-path: inset(0 ${100 - pct}% 0 0);`,
+        // top layer visible RIGHT of the slider — matches the after label
+        `clip-path: inset(0 0 0 ${pct}%);`,
       )}
       <div class="ws-onion__slider" data-action="ws-onion-handle" style="left: ${pct}%;">
         <span class="ws-onion__grip">⇔</span>
