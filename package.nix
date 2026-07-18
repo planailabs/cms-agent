@@ -11,6 +11,9 @@
   fetchPnpmDeps,
   makeWrapper,
   prisma-engines_7,
+  # Short git commit to embed in the UI next to the version. Passed by the
+  # flake (self.shortRev) — the store source has no .git to resolve it from.
+  gitCommit ? null,
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -109,6 +112,8 @@ stdenv.mkDerivation (finalAttrs: {
     PREVIEW_COOKIE_SECRET = "build-only-build-only-build-only";
     REPO_PATH = "/build/source";
     VAR_DIR = "/build/build-var";
+  } // lib.optionalAttrs (gitCommit != null) {
+    PUBLIC_GIT_COMMIT = gitCommit;
   };
 
   buildPhase = ''

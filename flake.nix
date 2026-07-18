@@ -21,7 +21,11 @@
     {
       packages = forAllSystems (pkgs:
         let
-          cms-agent = pkgs.callPackage ./package.nix { };
+          # Pass the commit in explicitly — the fileset source in the store has
+          # no .git for the build to ask. dirtyShortRev carries a -dirty suffix.
+          cms-agent = pkgs.callPackage ./package.nix {
+            gitCommit = self.shortRev or self.dirtyShortRev or null;
+          };
 
           # Rust pingora reverse-proxy sidecar (public entrypoint).
           proxy = pkgs.rustPlatform.buildRustPackage {

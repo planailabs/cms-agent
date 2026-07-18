@@ -11,6 +11,8 @@
 
 export const APP_NAME = 'CMS Agent';
 export const APP_VERSION = 'v0.1.0';
+/** Short git commit embedded at build time (empty when unknown). */
+export const APP_COMMIT = import.meta.env.PUBLIC_GIT_COMMIT ?? '';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Storage Keys

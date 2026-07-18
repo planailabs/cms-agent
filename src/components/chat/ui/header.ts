@@ -16,7 +16,7 @@ import {
 } from '../content';
 import type { AppState } from '../app/state';
 import { store } from '../app/store';
-import { APP_NAME, APP_VERSION } from '../constants';
+import { APP_COMMIT, APP_NAME, APP_VERSION } from '../constants';
 import { t, uiLocale } from '@/lib/i18n';
 
 /**
@@ -207,7 +207,7 @@ export const renderHeader = ({ locale, state }: HeaderParams): string => {
     <span class="logo-link flex items-center gap-2 text-base font-semibold tracking-tight text-(--text-primary) md:text-lg">
       <span class="flex items-baseline gap-2 leading-none">
         <span>${APP_NAME}</span>
-        <span class="text-[0.5em] font-bold text-(--text-muted)">${APP_VERSION}</span>
+        <span class="text-[0.5em] font-bold text-(--text-muted)">${APP_VERSION}${APP_COMMIT ? ` <span class="font-normal">${APP_COMMIT}</span>` : ''}</span>
       </span>
     </span>
 

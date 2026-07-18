@@ -2,6 +2,18 @@ import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import node from '@astrojs/node';
+import { simpleGit } from 'simple-git';
+
+// Embedded next to the version in the header. The nix build sets it from the
+// flake's self.shortRev (the store source has no .git); in dev we resolve it
+// from the repo here.
+if (!process.env.PUBLIC_GIT_COMMIT) {
+  try {
+    process.env.PUBLIC_GIT_COMMIT = (await simpleGit().revparse(['--short', 'HEAD'])).trim();
+  } catch {
+    /* no git available (e.g. sandboxed build without the env var) — omit */
+  }
+}
 
 export default defineConfig({
   // Fully SSR app (auth middleware on every route) — never prerender.
