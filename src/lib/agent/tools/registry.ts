@@ -23,6 +23,8 @@ export interface ToolContext {
   worktreePath: string;
   /** Target branch the work branch merges into (deployment-chat tools). */
   targetBranchName?: string;
+  /** Deploy flow of the chat's automatism (deployment chats). */
+  deployFlowId?: string;
   /** Live user context per connected editor (fed by the preview overlay). */
   userContext: Map<string, unknown>;
   /** Paths written by tools during this chat's EXECUTE phase. */
@@ -37,6 +39,9 @@ export interface ToolDef<Schema extends z.ZodTypeAny = z.ZodTypeAny> {
   phases: WorkflowPhase[];
   /** Chat kinds the tool belongs to (default: workflow chats only). */
   kinds?: ChatKind[];
+  /** Deploy-flow scoping: only exposed when the chat's automatism runs one
+   *  of these flows (set by registerDeployFlow for flow tools). */
+  flows?: string[];
   /** Client-side tools have no execute — they pause the turn for the browser. */
   execute?: (input: z.infer<Schema>, ctx: ToolContext) => Promise<string>;
 }
@@ -51,9 +56,16 @@ export function getTool(name: string): ToolDef | undefined {
   return registry.get(name);
 }
 
-export function toolsForPhase(phase: WorkflowPhase, kind: ChatKind = 'workflow'): ToolDef[] {
+export function toolsForPhase(
+  phase: WorkflowPhase,
+  kind: ChatKind = 'workflow',
+  deployFlowId?: string,
+): ToolDef[] {
   return [...registry.values()].filter(
-    (t) => t.phases.includes(phase) && (t.kinds ?? ['workflow']).includes(kind),
+    (t) =>
+      t.phases.includes(phase) &&
+      (t.kinds ?? ['workflow']).includes(kind) &&
+      (!t.flows || (deployFlowId != null && t.flows.includes(deployFlowId))),
   );
 }
 
@@ -75,6 +87,9 @@ export async function executeTool(
   if (!tool) return JSON.stringify({ error: `Unknown tool: ${name}` });
   if (!(tool.kinds ?? ['workflow']).includes(ctx.chatKind)) {
     return JSON.stringify({ error: `Tool "${name}" is not available in this chat.` });
+  }
+  if (tool.flows && (!ctx.deployFlowId || !tool.flows.includes(ctx.deployFlowId))) {
+    return JSON.stringify({ error: `Tool "${name}" belongs to another deploy flow.` });
   }
   if (!tool.phases.includes(ctx.workflowPhase)) {
     return JSON.stringify({

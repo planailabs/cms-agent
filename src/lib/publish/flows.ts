@@ -7,8 +7,12 @@
  *                      verify/reconcile by commit_hash via the REST API.
  */
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { simpleGit } from 'simple-git';
+import { z } from 'zod';
 import { env } from '@/lib/env';
+import type { ToolDef } from '@/lib/agent/tools/registry';
 import { sealArtifact } from './artifact';
 import { registerDeployFlow, type DeployFlow } from './types';
 
@@ -43,37 +47,83 @@ async function pushMain(repoPath: string, remote: string, log: (l: string) => vo
 
 const gitPushFlow: DeployFlow = {
   id: 'git-push',
-  async publish({ repoPath, log }) {
-    const remote = env().DEPLOY_GIT_REMOTE ?? 'origin';
-    await pushMain(repoPath, remote, log);
-    return { detail: { remote } };
+  steps: [
+    {
+      name: 'push',
+      async run({ repoPath, log }) {
+        const remote = env().DEPLOY_GIT_REMOTE ?? 'origin';
+        await pushMain(repoPath, remote, log);
+        return { detail: { remote } };
+      },
+    },
+  ],
+};
+
+// Flow tool: inspect the sealed artifact of a deploy sha (web-agency chats)
+const artifactInfoTool: ToolDef = {
+  name: 'artifact_info',
+  description:
+    'Inspect the sealed build artifact of a deploy sha: tarball path, file count, build ' +
+    'metadata. Useful when the build or upload step of this deployment failed.',
+  schema: z.object({ sha: z.string().regex(/^[0-9a-f]{7,40}$/) }),
+  phases: ['plan', 'execute', 'preview', 'published'],
+  async execute(input) {
+    const metaPath = path.join(path.resolve(env().VAR_DIR), 'artifacts', `${input.sha}.json`);
+    if (!fs.existsSync(metaPath)) {
+      return JSON.stringify({ error: `No sealed artifact for ${input.sha} (build not finished?)` });
+    }
+    const info = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    return JSON.stringify({
+      tarball: info.tarballPath,
+      files: Array.isArray(info.manifest) ? info.manifest.length : undefined,
+      buildMeta: info.buildMeta,
+    });
   },
 };
 
 const webAgencyFlow: DeployFlow = {
   id: 'web-agency',
-  async publish({ sha, log }) {
-    const e = env();
-    if (!e.PUBLISH_COMMAND) throw new Error('PUBLISH_COMMAND is not configured');
-    const artifact = await sealArtifact(sha, log);
-    log(`Running publish command: ${e.PUBLISH_COMMAND}`);
-    await runScript(
-      e.PUBLISH_COMMAND,
-      e.REPO_PATH,
-      { TARBALL_PATH: artifact.tarballPath, DIST_DIR: artifact.distDir, GIT_SHA: sha },
-      log,
-    );
-    return { detail: { tarball: artifact.tarballPath, files: artifact.manifest.length } };
-  },
+  // sealArtifact reuses the sealed result per sha, so both steps (and any
+  // resume) are retry-safe without passing state between them.
+  steps: [
+    {
+      name: 'build',
+      async run({ sha, log }) {
+        if (!env().PUBLISH_COMMAND) throw new Error('PUBLISH_COMMAND is not configured');
+        const artifact = await sealArtifact(sha, log);
+        return { detail: { tarball: artifact.tarballPath, files: artifact.manifest.length } };
+      },
+    },
+    {
+      name: 'deploy',
+      async run({ sha, log }) {
+        const e = env();
+        const artifact = await sealArtifact(sha, log); // sealed — instant reuse
+        log(`Running publish command: ${e.PUBLISH_COMMAND}`);
+        await runScript(
+          e.PUBLISH_COMMAND!,
+          e.REPO_PATH,
+          { TARBALL_PATH: artifact.tarballPath, DIST_DIR: artifact.distDir, GIT_SHA: sha },
+          log,
+        );
+      },
+    },
+  ],
+  tools: [artifactInfoTool],
 };
 
 const githubCiFlow: DeployFlow = {
   id: 'github-ci',
-  async publish({ repoPath, log }) {
-    const remote = env().DEPLOY_GIT_REMOTE ?? 'origin';
-    await pushMain(repoPath, remote, log);
-    return {};
-  },
+  steps: [
+    {
+      name: 'push',
+      async run({ repoPath, log }) {
+        const remote = env().DEPLOY_GIT_REMOTE ?? 'origin';
+        await pushMain(repoPath, remote, log);
+        return { detail: { remote } };
+      },
+    },
+  ],
   async verify({ sha, log }) {
     const e = env();
     if (!e.GITHUB_TOKEN || !e.GITHUB_REPO) {
@@ -102,12 +152,40 @@ const githubCiFlow: DeployFlow = {
 
 const cloudflarePagesFlow: DeployFlow = {
   id: 'cloudflare-pages',
-  async publish({ sha, log }) {
-    const e = env();
-    if (!e.CLOUDFLARE_API_TOKEN || !e.CLOUDFLARE_ACCOUNT_ID || !e.CLOUDFLARE_PAGES_PROJECT) {
-      throw new Error('CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_PAGES_PROJECT are required');
+  steps: [
+    {
+      name: 'build',
+      async run({ sha, log }) {
+        const e = env();
+        if (!e.CLOUDFLARE_API_TOKEN || !e.CLOUDFLARE_ACCOUNT_ID || !e.CLOUDFLARE_PAGES_PROJECT) {
+          throw new Error('CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_PAGES_PROJECT are required');
+        }
+        const artifact = await sealArtifact(sha, log);
+        return { detail: { files: artifact.manifest.length } };
+      },
+    },
+    {
+      name: 'deploy',
+      async run({ sha, log }) {
+        return cloudflareUpload(sha, log);
+      },
+    },
+  ],
+  async verify({ sha, log }) {
+    const deployment = await findDeploymentByCommit(sha);
+    if (!deployment) {
+      log('No deployment found for the published commit.');
+      return false;
     }
-    const artifact = await sealArtifact(sha, log);
+    log(`Deployment ${deployment.id} status: ${deployment.status}`);
+    return deployment.status === 'success';
+  },
+};
+
+async function cloudflareUpload(sha: string, log: (l: string) => void) {
+  {
+    const e = env();
+    const artifact = await sealArtifact(sha, log); // sealed — instant reuse
 
     // Reconcile first: a lost response from a previous attempt must not
     // cause a blind second upload (medved §22.4).
@@ -149,17 +227,8 @@ const cloudflarePagesFlow: DeployFlow = {
 
     const deployment = await findDeploymentByCommit(sha);
     return { externalUrl: deployment?.url, detail: { id: deployment?.id } };
-  },
-  async verify({ sha, log }) {
-    const deployment = await findDeploymentByCommit(sha);
-    if (!deployment) {
-      log('No deployment found for the published commit.');
-      return false;
-    }
-    log(`Deployment ${deployment.id} status: ${deployment.status}`);
-    return deployment.status === 'success';
-  },
-};
+  }
+}
 
 async function findDeploymentByCommit(
   sha: string,

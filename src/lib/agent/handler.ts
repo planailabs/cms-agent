@@ -202,6 +202,7 @@ export async function handleChatMessage(
   // Deployment chats operate on the SOURCE chat's work worktree (conflict
   // resolution); the shared deployments system chat has no worktree. ────────
   let worktreePath = '';
+  let deployFlowId: string | undefined;
   if (opts.skipPersistence) {
     worktreePath = opts.worktreePath ?? '';
   } else if (chatKind === 'workflow') {
@@ -211,11 +212,12 @@ export async function handleChatMessage(
       where: { chatId },
       orderBy: { createdAt: 'desc' },
     });
-    const workBranch = (automatism?.data as { workBranch?: string } | null)?.workBranch;
-    if (workBranch) {
-      branchName = workBranch; // repo/git tools act on the source work branch
-      worktreePath = await ensureWorktree(workBranch, targetBranchName);
+    const data = automatism?.data as { workBranch?: string; flowId?: string | null } | null;
+    if (data?.workBranch) {
+      branchName = data.workBranch; // repo/git tools act on the source work branch
+      worktreePath = await ensureWorktree(data.workBranch, targetBranchName);
     }
+    deployFlowId = data?.flowId ?? undefined;
   }
 
   const toolContext: ToolContext = {
@@ -228,6 +230,7 @@ export async function handleChatMessage(
     workflowPhase: chatKind === 'deployment' ? 'execute' : workflowPhase,
     chatKind,
     targetBranchName,
+    deployFlowId,
     worktreePath,
     userContext: getUserContextStore(chatId),
     modifiedPaths: new Set(),
