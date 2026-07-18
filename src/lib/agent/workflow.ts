@@ -220,8 +220,10 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
   }
 
   if (dirty.length > 0) {
+    const { chatCommitTrailer } = await import('@/lib/git/identity');
+    const trailer = await chatCommitTrailer(chat.id, chat.title);
     await withBranchLock(chat.workBranch, () =>
-      commitExecution(chat.workBranch, `Sync team knowledge\n\nChat: ${chat.id}`, {
+      commitExecution(chat.workBranch, `Sync team knowledge\n\n${trailer}`, {
         name: opts.actor.name,
         email: opts.actor.email,
       }),

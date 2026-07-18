@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { broadcast, withBranchLock } from '../bus';
 import { commitExecution } from '@/lib/git/engine';
-import { chatGitIdentity } from '@/lib/git/identity';
+import { chatCommitTrailer, chatGitIdentity } from '@/lib/git/identity';
 import { hasErrors, validateWorktree } from '@/lib/validate';
 import { registerTool, type ToolDef } from './registry';
 
@@ -35,8 +35,9 @@ const gitCommitTool: ToolDef = {
     }
     // Commit as the chat's creator (falling back to the acting user, then CMS).
     const identity = await chatGitIdentity(ctx.chatId, ctx.userId);
+    const trailer = await chatCommitTrailer(ctx.chatId);
     const sha = await withBranchLock(ctx.branchName, () =>
-      commitExecution(ctx.branchName, `${input.message}\n\nChat: ${ctx.chatId}`, identity),
+      commitExecution(ctx.branchName, `${input.message}\n\n${trailer}`, identity),
     );
     if (!sha) return JSON.stringify({ success: false, message: 'Nothing to commit — worktree is clean.' });
     await prisma.execution.create({ data: { chatId: ctx.chatId, sha, summary: input.message } });
