@@ -145,6 +145,10 @@ export interface AppState {
   activeBranchId: string | null;
   /** Currently open chat */
   activeChatId: string | null;
+  /** Kind of the active chat ('workflow' | 'deployment' | 'deployments') —
+   *  tracked separately so it survives the chat leaving the sidebar list
+   *  (e.g. archived after its automatism finished). */
+  activeChatKind: string;
   /** Workflow phase of the active chat (updated by phase_changed SSE event) */
   workflowPhase: WorkflowPhase;
 
@@ -281,6 +285,7 @@ export const createInitialState = (): AppState => {
     branches: [],
     activeBranchId: null,
     activeChatId: null,
+    activeChatKind: 'workflow',
     workflowPhase: 'plan',
     chat: null,
     workspace: createInitialWorkspaceState(),

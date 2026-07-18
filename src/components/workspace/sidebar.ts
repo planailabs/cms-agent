@@ -135,11 +135,9 @@ const renderAutomatismBar = (state: AppState): string => {
 };
 
 export const renderPhaseBar = (state: AppState): string => {
-  // Non-workflow chats have no PLAN→PUBLISH cycle — show automatism steps
-  const activeChat = state.branches
-    .flatMap((b) => b.chats)
-    .find((c) => c.id === state.activeChatId);
-  if (activeChat && (activeChat.kind ?? 'workflow') !== 'workflow') {
+  // Non-workflow chats have no PLAN→PUBLISH cycle — show automatism steps.
+  // activeChatKind survives the chat leaving the sidebar (archived).
+  if (state.activeChatKind !== 'workflow') {
     return renderAutomatismBar(state);
   }
 

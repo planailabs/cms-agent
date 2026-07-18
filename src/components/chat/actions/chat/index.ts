@@ -131,6 +131,7 @@ export const switchChat = (chatId: string): void => {
   if (branch) state.activeBranchId = branch.id;
   const summary = branch?.chats.find((c) => c.id === chatId);
   state.workflowPhase = summary?.workflowPhase ?? 'plan';
+  if (summary) state.activeChatKind = summary.kind ?? 'workflow';
   store.notify();
 
   // Restore the user's saved preview tabs for this chat (best-effort)

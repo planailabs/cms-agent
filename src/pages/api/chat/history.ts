@@ -99,6 +99,7 @@ export const GET: APIRoute = async ({ url }) => {
   return new Response(
     JSON.stringify({
       phase: chat.turnPhase,
+      kind: chat.kind,
       workflowPhase: chat.workflowPhase,
       planJson: chat.planJson,
       lastError: chat.lastError,
