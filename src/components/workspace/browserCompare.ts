@@ -6,10 +6,12 @@
  */
 
 import { escapeHtml } from '../chat/utils/html';
+import { t, uiLocale } from '@/lib/i18n';
 import type { AppState } from '../chat/app/state';
 import type { BrowserName } from './state';
 import { previewBranchName } from './preview';
 
+/** Browser engine names are brand names — not translated. */
 const BROWSERS: Array<{ key: BrowserName; label: string }> = [
   { key: 'chromium', label: 'Chromium' },
   { key: 'firefox', label: 'Firefox' },
@@ -28,7 +30,7 @@ const shotUrl = (
 
 const renderShot = (src: string, alt: string, extraClass = '', extraStyle = ''): string =>
   `<div class="ws-shot ${extraClass}" ${extraStyle ? `style="${extraStyle}"` : ''}>
-    <span class="ws-shot__spinner"><span class="ws-spinner"></span> Rendering ${escapeHtml(alt)}…</span>
+    <span class="ws-shot__spinner"><span class="ws-spinner"></span> ${escapeHtml(t(uiLocale(), 'workspace.bc.renderingShot', { name: alt }))}</span>
     <img data-shot src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" draggable="false" />
   </div>`;
 
@@ -40,6 +42,7 @@ const browserSelect = (which: 'a' | 'b', selected: BrowserName): string =>
   </select>`;
 
 export const renderBrowserCompare = (state: AppState): string => {
+  const locale = uiLocale();
   const bc = state.workspace.browserCompare;
   const branch = previewBranchName(state);
   const route = state.workspace.previewRoute;
@@ -62,26 +65,26 @@ export const renderBrowserCompare = (state: AppState): string => {
         </div>`
       : `<div class="ws-diff-highlight__stack">
           ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'after'), bc.b)}
-          ${bc.overlayVisible ? renderShot(shotUrl(branch, route, bc.a, bc.b, 'diff'), 'differences', 'ws-shot--overlay') : ''}
+          ${bc.overlayVisible ? renderShot(shotUrl(branch, route, bc.a, bc.b, 'diff'), t(locale, 'workspace.bc.differences'), 'ws-shot--overlay') : ''}
         </div>`;
 
   return `<div class="ws-diff">
       <div class="ws-toolbar">
-        <span class="ws-toolbar__branch">Compare browsers</span>
-        ${browserSelect('a', bc.a)}<span class="ws-bc-vs">vs</span>${browserSelect('b', bc.b)}
+        <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.bc.heading'))}</span>
+        ${browserSelect('a', bc.a)}<span class="ws-bc-vs">${escapeHtml(t(locale, 'workspace.bc.vs'))}</span>${browserSelect('b', bc.b)}
         <span class="ws-toolbar__route ws-mono" title="${escapeHtml(route)}">${escapeHtml(route)}</span>
         <span class="ws-toolbar__spacer"></span>
         <button type="button" class="ws-mini-button ${bc.mode === 'highlight' ? 'is-active' : ''}"
-          data-action="ws-bc-mode" data-mode="highlight">Highlight</button>
+          data-action="ws-bc-mode" data-mode="highlight">${escapeHtml(t(locale, 'workspace.diff.mode.highlight'))}</button>
         <button type="button" class="ws-mini-button ${bc.mode === 'onion' ? 'is-active' : ''}"
-          data-action="ws-bc-mode" data-mode="onion">Onion</button>
+          data-action="ws-bc-mode" data-mode="onion">${escapeHtml(t(locale, 'workspace.diff.mode.onion'))}</button>
         ${
           bc.mode === 'highlight'
             ? `<button type="button" class="ws-mini-button ${bc.overlayVisible ? 'is-active' : ''}"
-                data-action="ws-bc-overlay-toggle">${bc.overlayVisible ? 'Hide diff' : 'Show diff'}</button>`
+                data-action="ws-bc-overlay-toggle">${escapeHtml(t(locale, bc.overlayVisible ? 'workspace.bc.hideDiff' : 'workspace.bc.showDiff'))}</button>`
             : ''
         }
-        <button type="button" class="ws-mini-button" data-action="ws-bc-close" title="Close comparison">✕</button>
+        <button type="button" class="ws-mini-button" data-action="ws-bc-close" title="${escapeHtml(t(locale, 'workspace.bc.closeTitle'))}">✕</button>
       </div>
       <div class="ws-diff-body">${body}</div>
     </div>`;

@@ -6,6 +6,7 @@
  * stored value is the number of executions left.
  */
 
+import { t, uiLocale } from '@/lib/i18n';
 import {
   escapeHtml,
   fetchJson,
@@ -30,14 +31,33 @@ type Grant = {
   revokedAt: string | null;
 };
 
-function grantStatus(g: Grant): { label: string; cls: string } {
-  if (g.revokedAt) return { label: 'Revoked', cls: 'dash-badge--danger' };
+function grantStatus(g: Grant): { labelKey: string; cls: string; active: boolean } {
+  if (g.revokedAt)
+    return { labelKey: 'dashboard.grants.statusRevoked', cls: 'dash-badge--danger', active: false };
   if (new Date(g.validUntil).getTime() < Date.now())
-    return { label: 'Expired', cls: 'dash-badge--muted' };
+    return { labelKey: 'dashboard.grants.statusExpired', cls: 'dash-badge--muted', active: false };
   if (g.maxExecutions <= 0)
-    return { label: 'Exhausted', cls: 'dash-badge--muted' };
-  return { label: 'Active', cls: 'dash-badge--ok' };
+    return { labelKey: 'dashboard.grants.statusExhausted', cls: 'dash-badge--muted', active: false };
+  return { labelKey: 'dashboard.grants.statusActive', cls: 'dash-badge--ok', active: true };
 }
+
+/** Localized label for a grant action value (falls back to the raw value). */
+const actionLabel = (action: string): string => {
+  if (action === 'implement') return t(uiLocale(), 'dashboard.grants.actionImplement');
+  if (action === 'publish') return t(uiLocale(), 'dashboard.grants.actionPublish');
+  return action;
+};
+
+/** Localized label for a max-risk value (falls back to the raw value). */
+const riskLabel = (risk: string): string => {
+  const keys: Record<string, string> = {
+    content: 'dashboard.grants.riskContent',
+    template: 'dashboard.grants.riskTemplate',
+    code: 'dashboard.grants.riskCode',
+    dependency: 'dashboard.grants.riskDependency',
+  };
+  return keys[risk] ? t(uiLocale(), keys[risk]) : risk;
+};
 
 export async function initGrants(container: HTMLElement): Promise<void> {
   const tableBody = container.querySelector('.grants-table-body') as HTMLElement;
@@ -57,10 +77,12 @@ export async function initGrants(container: HTMLElement): Promise<void> {
   untilInput.value = inWeek.toISOString().slice(0, 16);
 
   // Populate user picker (empty value = grant applies to all users)
+  const allUsersOption = () =>
+    `<option value="">${t(uiLocale(), 'dashboard.grants.allUsers')}</option>`;
   try {
     const users = await fetchUsers();
     userSelect.innerHTML =
-      '<option value="">All users</option>' +
+      allUsersOption() +
       users
         .map(
           (u) =>
@@ -68,46 +90,45 @@ export async function initGrants(container: HTMLElement): Promise<void> {
         )
         .join('');
   } catch {
-    userSelect.innerHTML = '<option value="">All users</option>';
+    userSelect.innerHTML = allUsersOption();
   }
 
   async function loadGrants() {
-    tableBody.innerHTML =
-      '<tr class="animate-pulse"><td class="dash-td-muted" colspan="8">Loading grants...</td></tr>';
+    tableBody.innerHTML = `<tr class="animate-pulse"><td class="dash-td-muted" colspan="8">${t(uiLocale(), 'dashboard.grants.loadingGrants')}</td></tr>`;
 
     try {
       const data = await fetchJson<{ grants: Grant[] }>('/api/admin/grants');
       renderGrants(data.grants ?? []);
     } catch (err) {
       tableBody.innerHTML = `<tr><td class="dash-td-error" colspan="8">${
-        err instanceof Error ? escapeHtml(err.message) : 'Failed to load grants'
+        err instanceof Error
+          ? escapeHtml(err.message)
+          : t(uiLocale(), 'dashboard.grants.failedLoad')
       }</td></tr>`;
     }
   }
 
   function renderGrants(grants: Grant[]) {
     if (grants.length === 0) {
-      tableBody.innerHTML =
-        '<tr><td class="dash-td-muted" colspan="8">No grants yet</td></tr>';
+      tableBody.innerHTML = `<tr><td class="dash-td-muted" colspan="8">${t(uiLocale(), 'dashboard.grants.noGrants')}</td></tr>`;
       return;
     }
 
     tableBody.innerHTML = grants
       .map((g) => {
         const status = grantStatus(g);
-        const active = status.label === 'Active';
         return `
         <tr>
-          <td>${g.user ? escapeHtml(g.user.email) : '<span class="dash-td-muted">All users</span>'}</td>
-          <td>${g.actions.map((a) => `<span class="dash-badge dash-badge--accent">${escapeHtml(a)}</span>`).join(' ')}</td>
+          <td>${g.user ? escapeHtml(g.user.email) : `<span class="dash-td-muted">${t(uiLocale(), 'dashboard.grants.allUsers')}</span>`}</td>
+          <td>${g.actions.map((a) => `<span class="dash-badge dash-badge--accent">${escapeHtml(actionLabel(a))}</span>`).join(' ')}</td>
           <td class="dash-mono">${g.pathScope.map((p) => escapeHtml(p)).join('<br>')}</td>
-          <td>${escapeHtml(g.maxRisk)}</td>
+          <td>${escapeHtml(riskLabel(g.maxRisk))}</td>
           <td class="dash-num">${g.maxExecutions}</td>
           <td class="dash-td-muted">${formatDateTime(g.validUntil)}</td>
-          <td><span class="dash-badge ${status.cls}">${status.label}</span></td>
+          <td><span class="dash-badge ${status.cls}">${t(uiLocale(), status.labelKey)}</span></td>
           <td>${
-            active
-              ? `<button type="button" class="dash-btn dash-btn--danger revoke-grant-btn" data-grant-id="${escapeHtml(g.id)}">Revoke</button>`
+            status.active
+              ? `<button type="button" class="dash-btn dash-btn--danger revoke-grant-btn" data-grant-id="${escapeHtml(g.id)}">${t(uiLocale(), 'dashboard.grants.revoke')}</button>`
               : ''
           }</td>
         </tr>`;
@@ -116,22 +137,24 @@ export async function initGrants(container: HTMLElement): Promise<void> {
 
     tableBody.querySelectorAll<HTMLButtonElement>('.revoke-grant-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        if (!confirm('Revoke this grant?')) return;
+        if (!confirm(t(uiLocale(), 'dashboard.grants.confirmRevoke'))) return;
         btn.disabled = true;
-        btn.textContent = 'Revoking...';
+        btn.textContent = t(uiLocale(), 'dashboard.grants.revoking');
         try {
           await fetchJson(
             `/api/admin/grants?id=${encodeURIComponent(btn.dataset.grantId!)}`,
             { method: 'DELETE' },
           );
-          showStatus(statusMsg, 'Grant revoked', 'success');
+          showStatus(statusMsg, t(uiLocale(), 'dashboard.grants.revoked'), 'success');
           await loadGrants();
         } catch (err) {
           btn.disabled = false;
-          btn.textContent = 'Revoke';
+          btn.textContent = t(uiLocale(), 'dashboard.grants.revoke');
           showStatus(
             statusMsg,
-            err instanceof Error ? err.message : 'Failed to revoke grant',
+            err instanceof Error
+              ? err.message
+              : t(uiLocale(), 'dashboard.grants.failedRevoke'),
             'error',
           );
         }
@@ -149,20 +172,20 @@ export async function initGrants(container: HTMLElement): Promise<void> {
       .filter(Boolean);
 
     if (actions.length === 0) {
-      showStatus(statusMsg, 'Select at least one action', 'error');
+      showStatus(statusMsg, t(uiLocale(), 'dashboard.grants.errNoAction'), 'error');
       return;
     }
     if (pathScope.length === 0) {
-      showStatus(statusMsg, 'Add at least one path glob', 'error');
+      showStatus(statusMsg, t(uiLocale(), 'dashboard.grants.errNoScope'), 'error');
       return;
     }
     if (!untilInput.value) {
-      showStatus(statusMsg, 'Set a valid-until date', 'error');
+      showStatus(statusMsg, t(uiLocale(), 'dashboard.grants.errNoUntil'), 'error');
       return;
     }
 
     createBtn.disabled = true;
-    createBtn.textContent = 'Creating...';
+    createBtn.textContent = t(uiLocale(), 'dashboard.grants.creating');
 
     try {
       await fetchJson('/api/admin/grants', {
@@ -177,18 +200,20 @@ export async function initGrants(container: HTMLElement): Promise<void> {
           onError: onErrorSelect.value,
         }),
       });
-      showStatus(statusMsg, 'Grant created', 'success');
+      showStatus(statusMsg, t(uiLocale(), 'dashboard.grants.created'), 'success');
       scopeArea.value = '';
       await loadGrants();
     } catch (err) {
       showStatus(
         statusMsg,
-        err instanceof Error ? err.message : 'Failed to create grant',
+        err instanceof Error
+          ? err.message
+          : t(uiLocale(), 'dashboard.grants.failedCreate'),
         'error',
       );
     } finally {
       createBtn.disabled = false;
-      createBtn.textContent = 'Create grant';
+      createBtn.textContent = t(uiLocale(), 'dashboard.grants.create');
     }
   });
 

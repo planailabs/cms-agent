@@ -3,6 +3,7 @@
  * (stop/restart/repair previews, delete branches/chats).
  */
 
+import { t, uiLocale } from '@/lib/i18n';
 import { escapeHtml, fetchJson, formatDateTime, showStatus } from './logic';
 
 type Instance = {
@@ -36,6 +37,26 @@ type ChatRow = {
   createdAt: string;
 };
 
+type PreviewAction = 'stop' | 'restart' | 'repair';
+
+const TRIGGERED_KEYS: Record<PreviewAction, string> = {
+  stop: 'dashboard.system.triggeredStop',
+  restart: 'dashboard.system.triggeredRestart',
+  repair: 'dashboard.system.triggeredRepair',
+};
+
+const FAILED_ACTION_KEYS: Record<PreviewAction, string> = {
+  stop: 'dashboard.system.failedStop',
+  restart: 'dashboard.system.failedRestart',
+  repair: 'dashboard.system.failedRepair',
+};
+
+const ACTION_LABEL_KEYS: Record<PreviewAction, string> = {
+  stop: 'dashboard.system.stop',
+  restart: 'dashboard.system.restart',
+  repair: 'dashboard.system.repair',
+};
+
 export async function initSystem(container: HTMLElement): Promise<void> {
   const statusMsg = container.querySelector('.dash-status') as HTMLElement;
   const previewsBody = container.querySelector('.previews-table-body') as HTMLElement;
@@ -54,7 +75,9 @@ export async function initSystem(container: HTMLElement): Promise<void> {
       renderPreviews(instances, errors);
     } catch (err) {
       previewsBody.innerHTML = `<tr><td class="dash-td-error" colspan="6">${
-        err instanceof Error ? escapeHtml(err.message) : 'Failed to load previews'
+        err instanceof Error
+          ? escapeHtml(err.message)
+          : t(uiLocale(), 'dashboard.system.failedLoadPreviews')
       }</td></tr>`;
     }
   }
@@ -62,8 +85,7 @@ export async function initSystem(container: HTMLElement): Promise<void> {
   function renderPreviews(instances: Instance[], errors: StartError[]) {
     const errored = errors.filter((e) => !instances.some((i) => i.branch === e.branch));
     if (instances.length === 0 && errored.length === 0) {
-      previewsBody.innerHTML =
-        '<tr><td class="dash-td-muted" colspan="6">No running previews</td></tr>';
+      previewsBody.innerHTML = `<tr><td class="dash-td-muted" colspan="6">${t(uiLocale(), 'dashboard.system.noPreviews')}</td></tr>`;
       return;
     }
     previewsBody.innerHTML = [
@@ -76,9 +98,9 @@ export async function initSystem(container: HTMLElement): Promise<void> {
           <td class="dash-td-muted">${formatDateTime(new Date(i.startedAt).toISOString())}</td>
           <td class="dash-td-muted">${formatDateTime(new Date(i.lastUsedAt).toISOString())}</td>
           <td>
-            <button type="button" class="dash-btn preview-action" data-branch="${escapeHtml(i.branch)}" data-action="stop">Stop</button>
-            <button type="button" class="dash-btn preview-action" data-branch="${escapeHtml(i.branch)}" data-action="restart">Restart</button>
-            <button type="button" class="dash-btn preview-action" data-branch="${escapeHtml(i.branch)}" data-action="repair">Repair</button>
+            <button type="button" class="dash-btn preview-action" data-branch="${escapeHtml(i.branch)}" data-action="stop">${t(uiLocale(), 'dashboard.system.stop')}</button>
+            <button type="button" class="dash-btn preview-action" data-branch="${escapeHtml(i.branch)}" data-action="restart">${t(uiLocale(), 'dashboard.system.restart')}</button>
+            <button type="button" class="dash-btn preview-action" data-branch="${escapeHtml(i.branch)}" data-action="repair">${t(uiLocale(), 'dashboard.system.repair')}</button>
           </td>
         </tr>`,
       ),
@@ -86,9 +108,13 @@ export async function initSystem(container: HTMLElement): Promise<void> {
         (e) => `
         <tr>
           <td>${escapeHtml(e.branch)}</td>
-          <td class="dash-td-error" colspan="4" title="${escapeHtml(e.message)}">failed: ${escapeHtml(e.message.split('\n')[0].slice(0, 120))}</td>
+          <td class="dash-td-error" colspan="4" title="${escapeHtml(e.message)}">${t(
+            uiLocale(),
+            'dashboard.system.failedPrefix',
+            { message: escapeHtml(e.message.split('\n')[0].slice(0, 120)) },
+          )}</td>
           <td>
-            <button type="button" class="dash-btn preview-action" data-branch="${escapeHtml(e.branch)}" data-action="repair">Repair</button>
+            <button type="button" class="dash-btn preview-action" data-branch="${escapeHtml(e.branch)}" data-action="repair">${t(uiLocale(), 'dashboard.system.repair')}</button>
           </td>
         </tr>`,
       ),
@@ -97,15 +123,20 @@ export async function initSystem(container: HTMLElement): Promise<void> {
     previewsBody.querySelectorAll<HTMLButtonElement>('.preview-action').forEach((btn) => {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
-        const { branch, action } = btn.dataset;
+        const { branch } = btn.dataset;
+        const action = btn.dataset.action as PreviewAction;
         try {
           await fetchJson('/api/admin/previews', {
             method: 'POST',
             body: JSON.stringify({ branch, action }),
           });
-          showStatus(statusMsg, `${action} of ${branch} triggered`, 'success');
+          showStatus(
+            statusMsg,
+            t(uiLocale(), TRIGGERED_KEYS[action], { branch: branch! }),
+            'success',
+          );
         } catch (err) {
-          report(err, `Failed to ${action} ${branch}`);
+          report(err, t(uiLocale(), FAILED_ACTION_KEYS[action], { branch: branch! }));
         }
         await loadPreviews();
       });
@@ -118,30 +149,38 @@ export async function initSystem(container: HTMLElement): Promise<void> {
       renderBranches(branches);
     } catch (err) {
       branchesBody.innerHTML = `<tr><td class="dash-td-error" colspan="7">${
-        err instanceof Error ? escapeHtml(err.message) : 'Failed to load branches'
+        err instanceof Error
+          ? escapeHtml(err.message)
+          : t(uiLocale(), 'dashboard.system.failedLoadBranches')
       }</td></tr>`;
     }
   }
 
   function renderBranches(branches: BranchRow[]) {
     if (branches.length === 0) {
-      branchesBody.innerHTML = '<tr><td class="dash-td-muted" colspan="7">No branches</td></tr>';
+      branchesBody.innerHTML = `<tr><td class="dash-td-muted" colspan="7">${t(uiLocale(), 'dashboard.system.noBranches')}</td></tr>`;
       return;
     }
     branchesBody.innerHTML = branches
       .map(
         (b) => `
         <tr>
-          <td>${escapeHtml(b.name)}${b.isDefault ? ' <span class="dash-td-muted">(default)</span>' : ''}</td>
+          <td>${escapeHtml(b.name)}${b.isDefault ? ` <span class="dash-td-muted">${t(uiLocale(), 'dashboard.system.defaultSuffix')}</span>` : ''}</td>
           <td class="dash-td-muted">${escapeHtml(b.createdBy ?? '—')}</td>
           <td class="dash-num">${b.chats}</td>
           <td class="dash-num">${b.publications}</td>
-          <td class="dash-td-muted">${b.running ? 'running' : b.inGit ? 'in git' : 'db only'}</td>
+          <td class="dash-td-muted">${
+            b.running
+              ? t(uiLocale(), 'dashboard.system.stateRunning')
+              : b.inGit
+                ? t(uiLocale(), 'dashboard.system.stateInGit')
+                : t(uiLocale(), 'dashboard.system.stateDbOnly')
+          }</td>
           <td class="dash-td-muted">${b.createdAt ? formatDateTime(b.createdAt) : '—'}</td>
           <td>${
             b.isDefault
               ? ''
-              : `<button type="button" class="dash-btn branch-delete" data-name="${escapeHtml(b.name)}">Delete</button>`
+              : `<button type="button" class="dash-btn branch-delete" data-name="${escapeHtml(b.name)}">${t(uiLocale(), 'dashboard.system.delete')}</button>`
           }</td>
         </tr>`,
       )
@@ -150,15 +189,19 @@ export async function initSystem(container: HTMLElement): Promise<void> {
     branchesBody.querySelectorAll<HTMLButtonElement>('.branch-delete').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const name = btn.dataset.name!;
-        if (!confirm(`Delete branch "${name}" including its chats, previews and git ref?`)) return;
+        if (!confirm(t(uiLocale(), 'dashboard.system.confirmDeleteBranch', { name }))) return;
         btn.disabled = true;
         try {
           await fetchJson(`/api/admin/branches?name=${encodeURIComponent(name)}`, {
             method: 'DELETE',
           });
-          showStatus(statusMsg, `Branch ${name} deleted`, 'success');
+          showStatus(
+            statusMsg,
+            t(uiLocale(), 'dashboard.system.branchDeleted', { name }),
+            'success',
+          );
         } catch (err) {
-          report(err, `Failed to delete ${name}`);
+          report(err, t(uiLocale(), 'dashboard.system.failedDeleteBranch', { name }));
         }
         await Promise.all([loadBranches(), loadChats(), loadPreviews()]);
       });
@@ -171,14 +214,16 @@ export async function initSystem(container: HTMLElement): Promise<void> {
       renderChats(chats);
     } catch (err) {
       chatsBody.innerHTML = `<tr><td class="dash-td-error" colspan="8">${
-        err instanceof Error ? escapeHtml(err.message) : 'Failed to load chats'
+        err instanceof Error
+          ? escapeHtml(err.message)
+          : t(uiLocale(), 'dashboard.system.failedLoadChats')
       }</td></tr>`;
     }
   }
 
   function renderChats(chats: ChatRow[]) {
     if (chats.length === 0) {
-      chatsBody.innerHTML = '<tr><td class="dash-td-muted" colspan="8">No chats</td></tr>';
+      chatsBody.innerHTML = `<tr><td class="dash-td-muted" colspan="8">${t(uiLocale(), 'dashboard.system.noChats')}</td></tr>`;
       return;
     }
     chatsBody.innerHTML = chats
@@ -192,7 +237,7 @@ export async function initSystem(container: HTMLElement): Promise<void> {
           <td class="dash-td-muted">${escapeHtml(c.createdBy ?? '—')}</td>
           <td class="dash-num">${c.messages}</td>
           <td class="dash-td-muted">${formatDateTime(c.createdAt)}</td>
-          <td><button type="button" class="dash-btn chat-delete" data-id="${escapeHtml(c.id)}" data-title="${escapeHtml(c.title)}">Delete</button></td>
+          <td><button type="button" class="dash-btn chat-delete" data-id="${escapeHtml(c.id)}" data-title="${escapeHtml(c.title)}">${t(uiLocale(), 'dashboard.system.delete')}</button></td>
         </tr>`,
       )
       .join('');
@@ -200,13 +245,17 @@ export async function initSystem(container: HTMLElement): Promise<void> {
     chatsBody.querySelectorAll<HTMLButtonElement>('.chat-delete').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const { id, title } = btn.dataset;
-        if (!confirm(`Delete chat "${title}" including its work branch and preview?`)) return;
+        if (!confirm(t(uiLocale(), 'dashboard.system.confirmDeleteChat', { title: title! }))) return;
         btn.disabled = true;
         try {
           await fetchJson(`/api/admin/chats?id=${encodeURIComponent(id!)}`, { method: 'DELETE' });
-          showStatus(statusMsg, `Chat "${title}" deleted`, 'success');
+          showStatus(
+            statusMsg,
+            t(uiLocale(), 'dashboard.system.chatDeleted', { title: title! }),
+            'success',
+          );
         } catch (err) {
-          report(err, 'Failed to delete chat');
+          report(err, t(uiLocale(), 'dashboard.system.failedDeleteChat'));
         }
         await Promise.all([loadChats(), loadBranches(), loadPreviews()]);
       });

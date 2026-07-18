@@ -4,6 +4,7 @@
  */
 
 import { escapeHtml } from '../../utils/html';
+import { t, uiLocale } from '@/lib/i18n';
 import type { AppState, ChatState } from '../../app/state';
 
 type AiChat = NonNullable<ChatState['aiChat']>;
@@ -28,6 +29,7 @@ const RISK_CLASSES: Record<string, string> = {
 
 const renderPlanApprovalCard = (mc: AiChat): string => {
   if (mc.phase !== 'question' || mc.clientPrompt?.toolName !== 'propose_plan') return '';
+  const locale = uiLocale();
   const input = mc.clientPrompt.input as ProposePlanInput;
 
   const steps = (input.steps ?? [])
@@ -52,18 +54,18 @@ const renderPlanApprovalCard = (mc: AiChat): string => {
 
   return `<div class="ws-card" data-card="plan-approval">
       <div class="ws-card__header">
-        <span class="ws-card__title">Proposed plan</span>
-        <span class="ws-badge ${RISK_CLASSES[risk] ?? ''}">risk: ${escapeHtml(risk)}</span>
+        <span class="ws-card__title">${escapeHtml(t(locale, 'chat.plan.title'))}</span>
+        <span class="ws-badge ${RISK_CLASSES[risk] ?? ''}">${t(locale, 'chat.plan.risk', { risk: escapeHtml(risk) })}</span>
       </div>
       ${input.summary ? `<p class="ws-card__summary">${escapeHtml(input.summary)}</p>` : ''}
-      ${steps ? `<div class="ws-card__section"><span class="ws-card__label">Steps</span><ol class="ws-card__list ws-card__list--ordered">${steps}</ol></div>` : ''}
-      ${files ? `<div class="ws-card__section"><span class="ws-card__label">Files</span>
-        <table class="ws-table"><thead><tr><th>Path</th><th>Action</th><th>Reason</th></tr></thead><tbody>${files}</tbody></table></div>` : ''}
-      ${pages ? `<div class="ws-card__section"><span class="ws-card__label">Pages</span><ul class="ws-card__list">${pages}</ul></div>` : ''}
-      ${questions ? `<div class="ws-card__section"><span class="ws-card__label">Open questions</span><ul class="ws-card__list">${questions}</ul></div>` : ''}
+      ${steps ? `<div class="ws-card__section"><span class="ws-card__label">${escapeHtml(t(locale, 'chat.plan.steps'))}</span><ol class="ws-card__list ws-card__list--ordered">${steps}</ol></div>` : ''}
+      ${files ? `<div class="ws-card__section"><span class="ws-card__label">${escapeHtml(t(locale, 'chat.plan.files'))}</span>
+        <table class="ws-table"><thead><tr><th>${escapeHtml(t(locale, 'chat.plan.path'))}</th><th>${escapeHtml(t(locale, 'chat.plan.action'))}</th><th>${escapeHtml(t(locale, 'chat.plan.reason'))}</th></tr></thead><tbody>${files}</tbody></table></div>` : ''}
+      ${pages ? `<div class="ws-card__section"><span class="ws-card__label">${escapeHtml(t(locale, 'chat.plan.pages'))}</span><ul class="ws-card__list">${pages}</ul></div>` : ''}
+      ${questions ? `<div class="ws-card__section"><span class="ws-card__label">${escapeHtml(t(locale, 'chat.plan.openQuestions'))}</span><ul class="ws-card__list">${questions}</ul></div>` : ''}
       <div class="ws-card__actions">
-        <button type="button" class="chat-cta-button ws-cta--primary" data-action="ws-approve-plan">Approve plan</button>
-        <button type="button" class="chat-cta-button" data-action="ws-request-changes">Request changes</button>
+        <button type="button" class="chat-cta-button ws-cta--primary" data-action="ws-approve-plan">${escapeHtml(t(locale, 'chat.plan.approve'))}</button>
+        <button type="button" class="chat-cta-button" data-action="ws-request-changes">${escapeHtml(t(locale, 'chat.plan.requestChanges'))}</button>
       </div>
     </div>`;
 };
@@ -73,16 +75,17 @@ const renderPlanApprovalCard = (mc: AiChat): string => {
 const renderExecutionFinishedCard = (mc: AiChat): string => {
   if (mc.phase !== 'question' || mc.clientPrompt?.toolName !== 'finish_execution') return '';
   if (mc.clientPrompt.dismissed) return '';
+  const locale = uiLocale();
   const input = mc.clientPrompt.input as { summary?: string };
 
   return `<div class="ws-card" data-card="execution-finished">
       <div class="ws-card__header">
-        <span class="ws-card__title">Implementation finished</span>
+        <span class="ws-card__title">${escapeHtml(t(locale, 'chat.execution.finishedTitle'))}</span>
       </div>
       ${input.summary ? `<p class="ws-card__summary">${escapeHtml(input.summary)}</p>` : ''}
       <div class="ws-card__actions">
-        <button type="button" class="chat-cta-button ws-cta--primary" data-action="ws-create-preview">Create preview</button>
-        <button type="button" class="chat-cta-button chat-cta-button--cancel" data-action="ws-dismiss-finish">Not yet — keep chatting</button>
+        <button type="button" class="chat-cta-button ws-cta--primary" data-action="ws-create-preview">${escapeHtml(t(locale, 'chat.execution.createPreview'))}</button>
+        <button type="button" class="chat-cta-button chat-cta-button--cancel" data-action="ws-dismiss-finish">${escapeHtml(t(locale, 'chat.execution.notYet'))}</button>
       </div>
     </div>`;
 };
@@ -91,25 +94,29 @@ const renderExecutionFinishedCard = (mc: AiChat): string => {
 // bubbles.ts at its chronological position) ─────────────────────────────
 
 export const renderExecutionCard = (exec: import('../../../workspace/state').ExecutionCard): string => {
+  const locale = uiLocale();
   const shortSha = escapeHtml(exec.sha.slice(0, 8));
   if (exec.reverted) {
     return `<div class="ws-card ws-card--muted" data-card="execution">
         <div class="ws-card__header">
-          <span class="ws-card__title"><span class="ws-mono">${shortSha}</span> reverted</span>
+          <span class="ws-card__title">${t(locale, 'chat.execution.revertedTitle', { sha: `<span class="ws-mono">${shortSha}</span>` })}</span>
         </div>
         <p class="ws-card__summary">${escapeHtml(exec.summary)}</p>
-        <p class="ws-card__note">Undone by ${escapeHtml(exec.reverted.by)} (revert <span class="ws-mono">${escapeHtml(exec.reverted.revertSha.slice(0, 8))}</span>)</p>
+        <p class="ws-card__note">${t(locale, 'chat.execution.undoneBy', {
+          by: escapeHtml(exec.reverted.by),
+          sha: `<span class="ws-mono">${escapeHtml(exec.reverted.revertSha.slice(0, 8))}</span>`,
+        })}</p>
       </div>`;
   }
   return `<div class="ws-card" data-card="execution">
       <div class="ws-card__header">
-        <span class="ws-card__title">Committed <span class="ws-mono">${shortSha}</span></span>
+        <span class="ws-card__title">${t(locale, 'chat.execution.committedTitle', { sha: `<span class="ws-mono">${shortSha}</span>` })}</span>
       </div>
       <p class="ws-card__summary">${escapeHtml(exec.summary)}</p>
       <div class="ws-card__actions">
         <button type="button" class="chat-cta-button" data-action="ws-undo-execution"
           data-sha="${escapeHtml(exec.sha)}" ${exec.busy ? 'disabled' : ''}>
-          ${exec.busy ? 'Undoing…' : 'Undo'}
+          ${escapeHtml(exec.busy ? t(locale, 'chat.execution.undoing') : t(locale, 'chat.execution.undo'))}
         </button>
       </div>
     </div>`;
@@ -120,6 +127,7 @@ export const renderExecutionCard = (exec: import('../../../workspace/state').Exe
 const renderPublishCard = (state: AppState): string => {
   const pub = state.workspace.publish;
   if (!pub) return '';
+  const locale = uiLocale();
 
   const lines = pub.lines.map((l) => escapeHtml(l)).join('\n');
   const log = lines ? `<pre class="ws-publish-log">${lines}</pre>` : '';
@@ -127,7 +135,7 @@ const renderPublishCard = (state: AppState): string => {
   if (pub.status === 'running') {
     return `<div class="ws-card" data-card="publish">
         <div class="ws-card__header">
-          <span class="ws-card__title"><span class="ws-spinner"></span> Publishing <span class="ws-mono">${escapeHtml(pub.sha.slice(0, 8))}</span>…</span>
+          <span class="ws-card__title"><span class="ws-spinner"></span> ${t(locale, 'chat.publish.publishing', { sha: `<span class="ws-mono">${escapeHtml(pub.sha.slice(0, 8))}</span>` })}</span>
         </div>
         ${log}
       </div>`;
@@ -135,11 +143,11 @@ const renderPublishCard = (state: AppState): string => {
 
   if (pub.status === 'succeeded') {
     const link = pub.externalUrl
-      ? `<p class="ws-card__note"><a href="${escapeHtml(pub.externalUrl)}" target="_blank" rel="noopener">View deployment ↗</a></p>`
+      ? `<p class="ws-card__note"><a href="${escapeHtml(pub.externalUrl)}" target="_blank" rel="noopener">${escapeHtml(t(locale, 'chat.publish.viewDeployment'))}</a></p>`
       : '';
     return `<div class="ws-card" data-card="publish">
         <div class="ws-card__header">
-          <span class="ws-card__title">Published <span class="ws-mono">${escapeHtml(pub.sha.slice(0, 8))}</span> ✓</span>
+          <span class="ws-card__title">${t(locale, 'chat.publish.published', { sha: `<span class="ws-mono">${escapeHtml(pub.sha.slice(0, 8))}</span>` })}</span>
         </div>
         ${log}
         ${link}
@@ -148,12 +156,12 @@ const renderPublishCard = (state: AppState): string => {
 
   return `<div class="ws-card ws-card--danger" data-card="publish">
       <div class="ws-card__header">
-        <span class="ws-card__title">Publish failed</span>
+        <span class="ws-card__title">${escapeHtml(t(locale, 'chat.publish.failedTitle'))}</span>
       </div>
       ${pub.error ? `<p class="ws-card__note ws-card__note--danger">${escapeHtml(pub.error)}</p>` : ''}
       ${log}
       <div class="ws-card__actions">
-        <button type="button" class="chat-cta-button" data-action="ws-retry-publish">Retry</button>
+        <button type="button" class="chat-cta-button" data-action="ws-retry-publish">${escapeHtml(t(locale, 'chat.publish.retry'))}</button>
       </div>
     </div>`;
 };
@@ -180,7 +188,7 @@ export const renderContextChip = (state: AppState): string => {
       <span class="ws-chip" title="${escapeHtml(chip.context.route ?? chip.context.url)}">
         <span class="ws-chip__kind">${chip.kind === 'selection' ? '❝' : '⌖'}</span>
         <span class="ws-chip__label">${escapeHtml(label)}</span>
-        <button type="button" class="ws-chip__remove" data-action="ws-chip-remove" aria-label="Remove context">×</button>
+        <button type="button" class="ws-chip__remove" data-action="ws-chip-remove" aria-label="${escapeHtml(t(uiLocale(), 'chat.context.remove'))}">×</button>
       </span>
     </div>`;
 };

@@ -5,6 +5,7 @@
  */
 
 import { store } from '../chat/app/store';
+import { t, uiLocale } from '@/lib/i18n';
 import { delegateEvent } from '../chat/utils/dom';
 import { switchChat } from '../chat/actions/chat';
 import { continueChatSession } from '../chat/actions/chat/session';
@@ -199,9 +200,9 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-request-changes"]', () =>
     openInputModal(
       {
-        title: 'Request changes',
-        hint: 'Describe what should be different — the agent picks it up from there.',
-        placeholder: 'What should be changed?',
+        title: t(uiLocale(), 'workspace.phase.requestChanges'),
+        hint: t(uiLocale(), 'workspace.requestChanges.hint'),
+        placeholder: t(uiLocale(), 'workspace.requestChanges.placeholder'),
       },
       (text) => void requestChangesAction(text),
     ),
@@ -250,9 +251,9 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-new-branch"]', () =>
     openInputModal(
       {
-        title: 'New branch',
-        hint: 'Becomes a git branch and a preview subdomain.',
-        placeholder: 'Branch name (lowercase letters, digits, hyphens)',
+        title: t(uiLocale(), 'workspace.newBranch.title'),
+        hint: t(uiLocale(), 'workspace.newBranch.hint'),
+        placeholder: t(uiLocale(), 'workspace.newBranch.placeholder'),
       },
       (name) => void newBranchAction(name),
     ),

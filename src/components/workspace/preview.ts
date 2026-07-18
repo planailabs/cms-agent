@@ -5,6 +5,7 @@
  */
 
 import { escapeHtml } from '../chat/utils/html';
+import { t, uiLocale } from '@/lib/i18n';
 import type { AppState, ChatSummary } from '../chat/app/state';
 import { branchPreviewUrl } from './config';
 
@@ -39,13 +40,14 @@ export const renderPreviewSkeleton = (): string =>
     </div>`;
 
 const renderTabStrip = (ws: AppState['workspace']): string => {
+  const locale = uiLocale();
   const tabs = ws.previewTabs
     .map((route, i) => {
       const active = i === ws.activeTabIndex;
       const close =
         ws.previewTabs.length > 1
           ? `<span class="ws-tab__close" data-action="ws-tab-close" data-index="${i}"
-              role="button" aria-label="Close tab" title="Close tab">×</span>`
+              role="button" aria-label="${escapeHtml(t(locale, 'workspace.preview.closeTab'))}" title="${escapeHtml(t(locale, 'workspace.preview.closeTab'))}">×</span>`
           : '';
       return `<button type="button" class="ws-tab ${active ? 'is-active' : ''}"
           data-action="ws-tab-switch" data-index="${i}" title="${escapeHtml(route)}">
@@ -56,11 +58,12 @@ const renderTabStrip = (ws: AppState['workspace']): string => {
   return `<div class="ws-tabs" role="tablist">
       ${tabs}
       <button type="button" class="ws-tab ws-tab--new" data-action="ws-tab-new"
-        title="New preview tab" aria-label="New preview tab">+</button>
+        title="${escapeHtml(t(locale, 'workspace.preview.newTab'))}" aria-label="${escapeHtml(t(locale, 'workspace.preview.newTab'))}">+</button>
     </div>`;
 };
 
 export const renderPreviewToolbar = (state: AppState): string => {
+  const locale = uiLocale();
   const target = activeBranchName(state);
   const branch = previewBranchName(state);
   const ws = state.workspace;
@@ -69,25 +72,25 @@ export const renderPreviewToolbar = (state: AppState): string => {
 
   return `${renderTabStrip(ws)}
       <div class="ws-toolbar">
-        <span class="ws-toolbar__branch" title="Work branch → target branch">${label}</span>
-        <form class="ws-address" data-action="ws-address-form" title="Preview route — Enter to navigate">
+        <span class="ws-toolbar__branch" title="${escapeHtml(t(locale, 'workspace.preview.branchTitle'))}">${label}</span>
+        <form class="ws-address" data-action="ws-address-form" title="${escapeHtml(t(locale, 'workspace.preview.addressTitle'))}">
           <input class="ws-address__input ws-mono" type="text" spellcheck="false"
-            autocomplete="off" value="${escapeHtml(ws.previewRoute)}" aria-label="Preview route" />
+            autocomplete="off" value="${escapeHtml(ws.previewRoute)}" aria-label="${escapeHtml(t(locale, 'workspace.preview.addressLabel'))}" />
         </form>
         <span class="ws-toolbar__spacer"></span>
         <button type="button" class="ws-mini-button ${ws.pickerActive ? 'is-active' : ''}"
-          data-action="ws-element-pick" title="Pick an element in the preview">
-          ${ws.pickerActive ? 'Picking… (Esc to cancel)' : '⌖ Element picker'}
+          data-action="ws-element-pick" title="${escapeHtml(t(locale, 'workspace.preview.pickTitle'))}">
+          ${escapeHtml(t(locale, ws.pickerActive ? 'workspace.preview.picking' : 'workspace.preview.elementPicker'))}
         </button>
         <button type="button" class="ws-mini-button" data-action="ws-bc-open"
-          title="Compare how this page renders in different browsers">⧉ Browsers</button>
+          title="${escapeHtml(t(locale, 'workspace.preview.browsersTitle'))}">${escapeHtml(t(locale, 'workspace.preview.browsers'))}</button>
         <a class="ws-mini-button" href="${escapeHtml(branchPreviewUrl(branch, ws.previewRoute))}"
-          target="_blank" rel="noopener" title="Open preview in a new tab">↗</a>
+          target="_blank" rel="noopener" title="${escapeHtml(t(locale, 'workspace.preview.openNewTab'))}">↗</a>
       </div>`;
 };
 
 export const renderPreviewFrame = (state: AppState): string => {
   const branch = previewBranchName(state);
   const src = branchPreviewUrl(branch, '/');
-  return `<iframe id="preview-iframe" src="${escapeHtml(src)}" title="Preview of ${escapeHtml(branch)}"></iframe>`;
+  return `<iframe id="preview-iframe" src="${escapeHtml(src)}" title="${escapeHtml(t(uiLocale(), 'workspace.preview.frameTitle', { branch }))}"></iframe>`;
 };

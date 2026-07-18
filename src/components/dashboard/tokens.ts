@@ -5,6 +5,7 @@
  * per-day stacked input/output ApexCharts chart + per-user totals table.
  */
 
+import { t, uiLocale } from '@/lib/i18n';
 import { escapeHtml, fetchJson, formatNumber } from './logic';
 import { renderUsageChart, type UsageResponse } from './charts';
 
@@ -14,8 +15,7 @@ export async function initTokens(container: HTMLElement): Promise<void> {
   const daysSelect = container.querySelector('.days-select') as HTMLSelectElement;
 
   async function load(days: number) {
-    tableBody.innerHTML =
-      '<tr class="animate-pulse"><td class="dash-td-muted" colspan="4">Loading usage...</td></tr>';
+    tableBody.innerHTML = `<tr class="animate-pulse"><td class="dash-td-muted" colspan="4">${t(uiLocale(), 'dashboard.tokens.loadingUsage')}</td></tr>`;
 
     try {
       const usage = await fetchJson<UsageResponse>(
@@ -29,8 +29,7 @@ export async function initTokens(container: HTMLElement): Promise<void> {
       );
 
       if (perUser.length === 0) {
-        tableBody.innerHTML =
-          '<tr><td class="dash-td-muted" colspan="4">No usage recorded in this period</td></tr>';
+        tableBody.innerHTML = `<tr><td class="dash-td-muted" colspan="4">${t(uiLocale(), 'dashboard.tokens.noUsage')}</td></tr>`;
         return;
       }
 
@@ -52,7 +51,9 @@ export async function initTokens(container: HTMLElement): Promise<void> {
         .join('');
     } catch (err) {
       tableBody.innerHTML = `<tr><td class="dash-td-error" colspan="4">${
-        err instanceof Error ? escapeHtml(err.message) : 'Failed to load usage'
+        err instanceof Error
+          ? escapeHtml(err.message)
+          : t(uiLocale(), 'dashboard.tokens.failedLoadUsage')
       }</td></tr>`;
     }
   }

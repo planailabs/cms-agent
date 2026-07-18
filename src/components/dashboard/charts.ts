@@ -7,6 +7,7 @@
  */
 
 import ApexCharts from 'apexcharts';
+import { t, uiLocale } from '@/lib/i18n';
 import { isDarkTheme } from './logic';
 
 // ── API types (GET /api/admin/usage) ─────────────────────────────────────────
@@ -37,11 +38,11 @@ const cssVar = (name: string, fallback: string): string => {
 
 const buildSeries = (perDay: UsagePerDay[]) => [
   {
-    name: 'Input tokens',
+    name: t(uiLocale(), 'dashboard.tokens.seriesInput'),
     data: perDay.map((d) => ({ x: d.day, y: d.input })),
   },
   {
-    name: 'Output tokens',
+    name: t(uiLocale(), 'dashboard.tokens.seriesOutput'),
     data: perDay.map((d) => ({ x: d.day, y: d.output })),
   },
 ];
@@ -90,7 +91,10 @@ export function renderUsageChart(el: HTMLElement, perDay: UsagePerDay[]): void {
         formatter: (val: number) =>
           val >= 1000 ? `${(val / 1000).toFixed(0)}k` : String(val),
       },
-      title: { text: 'Tokens', style: { color: labelColor } },
+      title: {
+        text: t(uiLocale(), 'dashboard.tokens.yAxisTokens'),
+        style: { color: labelColor },
+      },
     },
     grid: {
       borderColor: cssVar('--border-muted', '#333'),

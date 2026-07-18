@@ -17,6 +17,7 @@ import {
 import type { AppState } from '../app/state';
 import { store } from '../app/store';
 import { APP_NAME, APP_VERSION } from '../constants';
+import { t, uiLocale } from '@/lib/i18n';
 
 /**
  * Counter for unique SVG mask IDs to prevent DOM conflicts.
@@ -183,7 +184,7 @@ export const renderHeader = ({ locale, state }: HeaderParams): string => {
   const dashboardOption =
     state.user?.role === 'admin'
       ? `<a class="dropdown-option" href="/dashboard/" role="menuitem">
-          <span>Dashboard</span>
+          <span>${t(uiLocale(), 'chat.header.dashboard')}</span>
         </a>`
       : '';
 

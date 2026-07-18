@@ -5,6 +5,7 @@
  */
 import { store } from '../chat/app/store';
 import { escapeHtml } from '../chat/utils/html';
+import { t, uiLocale } from '@/lib/i18n';
 import { SEND_ICON_SVG } from '../chat/ui/icons';
 import type { AppState } from '../chat/app/state';
 
@@ -50,7 +51,7 @@ export const renderInputModal = (state: AppState): string => {
         <div class="ws-rc__head">
           <h2 class="ws-rc__heading">${escapeHtml(modal.title)}</h2>
           <button type="button" class="ws-mini-button" data-action="ws-modal-close"
-            aria-label="Close">✕</button>
+            aria-label="${escapeHtml(t(uiLocale(), 'workspace.modal.close'))}">✕</button>
         </div>
         ${modal.hint ? `<p class="ws-rc__hint">${escapeHtml(modal.hint)}</p>` : ''}
         <div class="composer-card">
@@ -70,7 +71,7 @@ export const renderInputModal = (state: AppState): string => {
               type="button"
               class="composer-send-button"
               data-action="ws-modal-send"
-              aria-label="Submit"
+              aria-label="${escapeHtml(t(uiLocale(), 'workspace.modal.submit'))}"
               aria-disabled="true" disabled>
               ${SEND_ICON_SVG}
             </button>

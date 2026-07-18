@@ -3,6 +3,7 @@
  * approved memories. Backed by GET/POST /api/memory.
  */
 
+import { t, uiLocale } from '@/lib/i18n';
 import { escapeHtml, fetchJson, formatDateTime, showStatus } from './logic';
 
 type MemoryCandidate = {
@@ -30,10 +31,16 @@ export async function initMemory(container: HTMLElement): Promise<void> {
   const approvedList = container.querySelector('.memory-approved') as HTMLElement;
   const statusMsg = container.querySelector('.dash-status') as HTMLElement;
 
-  const PAST_TENSE = {
-    approve: 'approved',
-    reject: 'rejected',
-    revoke: 'revoked',
+  const STATUS_KEYS = {
+    approve: 'dashboard.memory.statusApproved',
+    reject: 'dashboard.memory.statusRejected',
+    revoke: 'dashboard.memory.statusRevoked',
+  } as const;
+
+  const FAILED_KEYS = {
+    approve: 'dashboard.memory.failedApprove',
+    reject: 'dashboard.memory.failedReject',
+    revoke: 'dashboard.memory.failedRevoke',
   } as const;
 
   async function decide(id: string, action: 'approve' | 'reject' | 'revoke') {
@@ -44,10 +51,9 @@ export async function initMemory(container: HTMLElement): Promise<void> {
   }
 
   async function load() {
-    pendingList.innerHTML =
-      '<div class="dash-td-muted animate-pulse">Loading...</div>';
-    approvedList.innerHTML =
-      '<div class="dash-td-muted animate-pulse">Loading...</div>';
+    const loading = `<div class="dash-td-muted animate-pulse">${t(uiLocale(), 'dashboard.common.loading')}</div>`;
+    pendingList.innerHTML = loading;
+    approvedList.innerHTML = loading;
 
     try {
       const data = await fetchJson<MemoryResponse>('/api/memory');
@@ -55,7 +61,9 @@ export async function initMemory(container: HTMLElement): Promise<void> {
       renderApproved(data.approved ?? []);
     } catch (err) {
       const msg = `<div class="dash-td-error">${
-        err instanceof Error ? escapeHtml(err.message) : 'Failed to load memories'
+        err instanceof Error
+          ? escapeHtml(err.message)
+          : t(uiLocale(), 'dashboard.memory.failedLoad')
       }</div>`;
       pendingList.innerHTML = msg;
       approvedList.innerHTML = msg;
@@ -74,13 +82,15 @@ export async function initMemory(container: HTMLElement): Promise<void> {
         btn.disabled = true;
         try {
           await decide(btn.dataset.id!, action);
-          showStatus(statusMsg, `Memory ${PAST_TENSE[action]}`, 'success');
+          showStatus(statusMsg, t(uiLocale(), STATUS_KEYS[action]), 'success');
           await load();
         } catch (err) {
           btn.disabled = false;
           showStatus(
             statusMsg,
-            err instanceof Error ? err.message : `Failed to ${action}`,
+            err instanceof Error
+              ? err.message
+              : t(uiLocale(), FAILED_KEYS[action]),
             'error',
           );
         }
@@ -90,8 +100,7 @@ export async function initMemory(container: HTMLElement): Promise<void> {
 
   function renderPending(candidates: MemoryCandidate[]) {
     if (candidates.length === 0) {
-      pendingList.innerHTML =
-        '<div class="dash-td-muted">No pending candidates</div>';
+      pendingList.innerHTML = `<div class="dash-td-muted">${t(uiLocale(), 'dashboard.memory.noPending')}</div>`;
       return;
     }
 
@@ -106,8 +115,8 @@ export async function initMemory(container: HTMLElement): Promise<void> {
             <span class="dash-td-muted">${formatDateTime(c.createdAt)}</span>
           </div>
           <div class="dash-memory__actions">
-            <button type="button" class="dash-btn dash-btn--ok approve-btn" data-id="${escapeHtml(c.id)}">Approve</button>
-            <button type="button" class="dash-btn dash-btn--danger reject-btn" data-id="${escapeHtml(c.id)}">Reject</button>
+            <button type="button" class="dash-btn dash-btn--ok approve-btn" data-id="${escapeHtml(c.id)}">${t(uiLocale(), 'dashboard.memory.approve')}</button>
+            <button type="button" class="dash-btn dash-btn--danger reject-btn" data-id="${escapeHtml(c.id)}">${t(uiLocale(), 'dashboard.memory.reject')}</button>
           </div>
         </div>`,
       )
@@ -119,8 +128,7 @@ export async function initMemory(container: HTMLElement): Promise<void> {
 
   function renderApproved(approved: ApprovedMemory[]) {
     if (approved.length === 0) {
-      approvedList.innerHTML =
-        '<div class="dash-td-muted">No approved memories</div>';
+      approvedList.innerHTML = `<div class="dash-td-muted">${t(uiLocale(), 'dashboard.memory.noApproved')}</div>`;
       return;
     }
 
@@ -130,11 +138,16 @@ export async function initMemory(container: HTMLElement): Promise<void> {
         <div class="dash-card dash-memory">
           <div class="dash-memory__content">${escapeHtml(m.content)}</div>
           <div class="dash-memory__meta">
-            <span>Approved by ${escapeHtml(m.approvedBy?.name ?? 'unknown')}</span>
+            <span>${t(uiLocale(), 'dashboard.memory.approvedBy', {
+              name: escapeHtml(
+                m.approvedBy?.name ??
+                  t(uiLocale(), 'dashboard.memory.unknownApprover'),
+              ),
+            })}</span>
             <span class="dash-td-muted">${formatDateTime(m.createdAt)}</span>
           </div>
           <div class="dash-memory__actions">
-            <button type="button" class="dash-btn dash-btn--danger revoke-btn" data-id="${escapeHtml(m.id)}">Revoke</button>
+            <button type="button" class="dash-btn dash-btn--danger revoke-btn" data-id="${escapeHtml(m.id)}">${t(uiLocale(), 'dashboard.memory.revoke')}</button>
           </div>
         </div>`,
       )
@@ -144,7 +157,7 @@ export async function initMemory(container: HTMLElement): Promise<void> {
       approvedList,
       'revoke',
       '.revoke-btn',
-      'Revoke this memory? The agent will stop using it.',
+      t(uiLocale(), 'dashboard.memory.confirmRevoke'),
     );
   }
 

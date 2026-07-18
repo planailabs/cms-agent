@@ -11,6 +11,7 @@
 import type { LocaleContent } from '../../content';
 import type { AppState } from '../../app/state';
 import { escapeHtml } from '../../utils/html';
+import { t, uiLocale } from '@/lib/i18n';
 
 import { renderMessageBubbles } from './bubbles';
 import { renderStreamingBubble, renderThinkingIndicator, renderToolIndicator, renderErrorMessage, renderContinuePrompt } from './indicators';
@@ -73,7 +74,7 @@ export const renderChatSection = (
       !!auto && auto.forChatId === state.activeChatId && auto.status === 'running';
     const inputField = automatismRunning
       ? `<div class="chat-automatism chat-automatism--gate">
-          <div class="chat-automatism__body">⚙ Automatism running (${escapeHtml(auto.steps[auto.step] ?? '…')}) — chat opens when it pauses or finishes.</div>
+          <div class="chat-automatism__body">⚙ ${t(uiLocale(), 'chat.automatism.gate', { step: escapeHtml(auto.steps[auto.step] ?? '…') })}</div>
         </div>`
       : renderChatComposer(mc, locale, modeLocale);
     const emptyState = renderEmptyState(mc, modeLocale);

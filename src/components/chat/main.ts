@@ -1,5 +1,6 @@
 import './style.css';
 import { locales } from './content/index';
+import { t, uiLocale } from '@/lib/i18n';
 import { renderHeader } from './ui/header';
 import { renderSettingsOverlay } from './ui/settingsOverlay';
 import { renderChatSection } from './ui/chat';
@@ -52,7 +53,7 @@ const initApp = () => {
       <div class="ws-layout flex min-h-0 flex-1">
         <main id="main-region" class="ws-main min-w-0 flex-1"></main>
         <div id="sidebar-resize-handle" class="ws-resize-handle" role="separator"
-          aria-orientation="vertical" aria-label="Resize chat sidebar"></div>
+          aria-orientation="vertical" aria-label="${t(uiLocale(), 'chat.sidebar.resize')}"></div>
         <aside id="sidebar-region" class="ws-sidebar"></aside>
       </div>
     </div>
@@ -112,10 +113,11 @@ const initApp = () => {
         sidebarRegion.classList.add('is-collapsed');
         sidebarRegion.style.width = '';
         if (resizeHandle) resizeHandle.style.display = 'none';
+        const expandLabel = t(uiLocale(), 'chat.sidebar.expand');
         setHtmlIfChanged(
           sidebarRegion,
           `<button type="button" class="ws-sidebar-expand" data-action="ws-sidebar-toggle"
-            title="Expand chat sidebar" aria-label="Expand chat sidebar">💬</button>`,
+            title="${expandLabel}" aria-label="${expandLabel}">💬</button>`,
         );
       } else {
         sidebarRegion.classList.remove('is-collapsed');
@@ -127,7 +129,7 @@ const initApp = () => {
             <div class="ws-sidebar-top__row">
               ${renderBranchSwitcher(state)}
               <button type="button" class="ws-mini-button ws-sidebar-collapse" data-action="ws-sidebar-toggle"
-                title="Collapse chat sidebar" aria-label="Collapse chat sidebar">⇥</button>
+                title="${t(uiLocale(), 'chat.sidebar.collapse')}" aria-label="${t(uiLocale(), 'chat.sidebar.collapse')}">⇥</button>
             </div>
             ${renderPhaseBar(state)}
           </div>

@@ -5,6 +5,7 @@
 
 import { store } from '../../app/store';
 import { locales } from '../../content';
+import { t, uiLocale } from '@/lib/i18n';
 import {
   cacheAIChatMessages,
   readCachedAIChatMessages,
@@ -235,13 +236,13 @@ export const continueChatSession = async (): Promise<void> => {
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       mc.phase = 'error';
-      mc.error = data.error ?? `Continue failed (${res.status})`;
+      mc.error = data.error ?? t(uiLocale(), 'chat.error.continueFailed', { status: res.status });
       store.notify();
     }
     // On 202 the SSE stream (thinking/text_delta/…) drives the UI from here.
   } catch {
     mc.phase = 'error';
-    mc.error = 'Network error — could not continue the session.';
+    mc.error = t(uiLocale(), 'chat.error.network');
     store.notify();
   }
 };

@@ -4,6 +4,7 @@
 
 import { escapeHtml } from '../../utils/html';
 import { renderMarkdown } from '../../utils/markdown';
+import { t, uiLocale } from '@/lib/i18n';
 
 import type { ChatModeLocale } from '../../content';
 import type { ChatState } from '../../app/state';
@@ -52,7 +53,7 @@ export const renderErrorMessage = (mc: AiChat): string =>
             ${escapeHtml(mc.error)}
           </p>
           <button type="button" class="ws-mini-button" data-action="chat-continue">
-            ↻ Retry
+            ↻ ${escapeHtml(t(uiLocale(), 'chat.error.retry'))}
           </button>
         </div>`
     : '';
@@ -62,10 +63,10 @@ export const renderContinuePrompt = (mc: AiChat): string =>
   mc.canContinue && mc.phase === 'idle'
     ? `<div class="flex flex-col items-start gap-2">
           <p class="max-w-full text-sm leading-relaxed text-amber-500">
-            This session was interrupted before the last turn finished.
+            ${escapeHtml(t(uiLocale(), 'chat.continue.interrupted'))}
           </p>
           <button type="button" class="ws-mini-button" data-action="chat-continue">
-            ▶ Continue
+            ▶ ${escapeHtml(t(uiLocale(), 'chat.continue.button'))}
           </button>
         </div>`
     : '';

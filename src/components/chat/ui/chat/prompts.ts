@@ -3,6 +3,7 @@
  */
 
 import { escapeHtml } from '../../utils/html';
+import { t, uiLocale } from '@/lib/i18n';
 
 import type { ChatModeLocale } from '../../content';
 import type { ChatState } from '../../app/state';
@@ -23,13 +24,13 @@ export const renderQuestionUI = (
   if (prompt?.toolName === 'needs_human_attention') {
     const input = prompt.input as { reason?: string; instructions?: string };
     questionLabel = `<div class="chat-attention">
-        <div class="chat-attention__head">⚠ Needs human attention</div>
+        <div class="chat-attention__head">⚠ ${escapeHtml(t(uiLocale(), 'chat.attention.head'))}</div>
         ${input.reason ? `<p class="chat-attention__reason">${escapeHtml(input.reason)}</p>` : ''}
         ${input.instructions ? `<pre class="chat-attention__steps">${escapeHtml(input.instructions)}</pre>` : ''}
       </div>`;
     questionButtons = `<div class="flex flex-wrap gap-2 text-sm text-(--text-primary)">
         <button type="button" class="chat-cta-button" data-action="mc-question-choice" data-choice="Done">
-          ✓ Done
+          ✓ ${escapeHtml(t(uiLocale(), 'chat.attention.done'))}
         </button>
         <button type="button" class="chat-cta-button chat-cta-button--cancel" data-action="mc-question-cancel">
           ${skipLabel}

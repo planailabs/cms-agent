@@ -1,13 +1,18 @@
 ---
+import { t } from '@/lib/i18n';
+
 if (Astro.locals.user) return Astro.redirect('/');
+
+// Pre-auth page — no user language yet; negotiate from Accept-Language.
+const lang = /(^|[,;\s])de\b/i.test(Astro.request.headers.get('accept-language') ?? '') ? 'de' : 'en';
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={lang}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Sign in — CMS</title>
+    <title>{t(lang, 'pages.signin.title')}</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -42,10 +47,15 @@ if (Astro.locals.user) return Astro.redirect('/');
   </head>
   <body>
     <div class="card">
-      <h1>CMS Agent</h1>
-      <p>Sign in with your organization account to continue.</p>
-      <button id="signin">Sign in</button>
-      <p class="error" id="error"></p>
+      <h1>{t(lang, 'pages.signin.heading')}</h1>
+      <p>{t(lang, 'pages.signin.description')}</p>
+      <button id="signin">{t(lang, 'pages.signin.button')}</button>
+      <p
+        class="error"
+        id="error"
+        data-msg-failed={t(lang, 'pages.signin.failed')}
+        data-msg-network={t(lang, 'pages.signin.failedNetwork')}
+      ></p>
     </div>
     <script>
       document.getElementById('signin')!.addEventListener('click', async () => {
@@ -61,10 +71,10 @@ if (Astro.locals.user) return Astro.redirect('/');
           if (data.url) {
             window.location.href = data.url;
           } else {
-            errorEl.textContent = data.message ?? 'Sign-in failed.';
+            errorEl.textContent = data.message ?? errorEl.dataset.msgFailed!;
           }
         } catch {
-          errorEl.textContent = 'Sign-in failed — is the identity provider reachable?';
+          errorEl.textContent = errorEl.dataset.msgNetwork!;
         }
       });
     </script>

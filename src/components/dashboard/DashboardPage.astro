@@ -9,9 +9,12 @@
  * are not ported; grants and memory are new.
  */
 import '../chat/style.css';
+import { t } from '@/lib/i18n';
 
 // User language from the route (server truth) — drives dashboard i18n via
-// uiLocale() reading <html lang>.
+// uiLocale() reading <html lang>. Static shell strings render server-side
+// with t(lang, …) here; client modules re-render dynamic parts with
+// t(uiLocale(), …).
 const { lang = 'en' } = Astro.props;
 ---
 
@@ -19,7 +22,7 @@ const { lang = 'en' } = Astro.props;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Dashboard | CMS Agent</title>
+    <title>{t(lang, 'dashboard.shell.pageTitle')}</title>
 
     <!-- Theme script: resolve stored/system theme before first paint -->
     <script is:inline>
@@ -49,21 +52,21 @@ const { lang = 'en' } = Astro.props;
       <!-- Header -->
       <header class="dash-header">
         <div>
-          <h1 class="dash-title">Admin Dashboard</h1>
-          <p class="dash-subtitle">Users, usage, autonomy &amp; memory</p>
+          <h1 class="dash-title">{t(lang, 'dashboard.shell.title')}</h1>
+          <p class="dash-subtitle">{t(lang, 'dashboard.shell.subtitle')}</p>
         </div>
-        <a href="/" class="dash-btn">Back to app</a>
+        <a href="/" class="dash-btn">{t(lang, 'dashboard.shell.backToApp')}</a>
       </header>
 
       <!-- Tab Navigation -->
       <nav class="dash-tabs">
-        <button type="button" data-tab="overview" class="dash-tab">Overview</button>
-        <button type="button" data-tab="tokens" class="dash-tab">Tokens</button>
-        <button type="button" data-tab="users" class="dash-tab">Users</button>
-        <button type="button" data-tab="prompts" class="dash-tab">System Prompts</button>
-        <button type="button" data-tab="grants" class="dash-tab">Grants</button>
-        <button type="button" data-tab="memory" class="dash-tab">Memory</button>
-        <button type="button" data-tab="system" class="dash-tab">System</button>
+        <button type="button" data-tab="overview" class="dash-tab">{t(lang, 'dashboard.tabs.overview')}</button>
+        <button type="button" data-tab="tokens" class="dash-tab">{t(lang, 'dashboard.tabs.tokens')}</button>
+        <button type="button" data-tab="users" class="dash-tab">{t(lang, 'dashboard.tabs.users')}</button>
+        <button type="button" data-tab="prompts" class="dash-tab">{t(lang, 'dashboard.tabs.prompts')}</button>
+        <button type="button" data-tab="grants" class="dash-tab">{t(lang, 'dashboard.tabs.grants')}</button>
+        <button type="button" data-tab="memory" class="dash-tab">{t(lang, 'dashboard.tabs.memory')}</button>
+        <button type="button" data-tab="system" class="dash-tab">{t(lang, 'dashboard.tabs.system')}</button>
       </nav>
 
       <!-- ═══════════════════════ TAB PANELS ═══════════════════════ -->
@@ -72,7 +75,7 @@ const { lang = 'en' } = Astro.props;
       <div id="tab-overview" class="tab-panel hidden">
         <div class="stats-grid dash-grid">
           <div class="dash-card dash-stat animate-pulse">
-            <div class="dash-stat__label">Loading...</div>
+            <div class="dash-stat__label">{t(lang, 'dashboard.common.loading')}</div>
           </div>
         </div>
       </div>
@@ -80,21 +83,21 @@ const { lang = 'en' } = Astro.props;
       <!-- Tokens Tab -->
       <div id="tab-tokens" class="tab-panel hidden dash-stack">
         <div class="dash-row">
-          <h2 class="dash-section-title">Token usage</h2>
+          <h2 class="dash-section-title">{t(lang, 'dashboard.tokens.title')}</h2>
           <label class="dash-field dash-field--inline">
-            <span>Period</span>
+            <span>{t(lang, 'dashboard.tokens.period')}</span>
             <select class="days-select dash-input">
-              <option value="7">7 days</option>
-              <option value="30" selected>30 days</option>
-              <option value="90">90 days</option>
+              <option value="7">{t(lang, 'dashboard.tokens.days7')}</option>
+              <option value="30" selected>{t(lang, 'dashboard.tokens.days30')}</option>
+              <option value="90">{t(lang, 'dashboard.tokens.days90')}</option>
             </select>
           </label>
         </div>
 
         <div class="dash-card dash-chart-card">
-          <h3 class="dash-card-title">Input / output tokens per day</h3>
+          <h3 class="dash-card-title">{t(lang, 'dashboard.tokens.chartTitle')}</h3>
           <div class="usage-chart">
-            <div class="dash-td-muted">Loading chart...</div>
+            <div class="dash-td-muted">{t(lang, 'dashboard.tokens.loadingChart')}</div>
           </div>
         </div>
 
@@ -102,15 +105,15 @@ const { lang = 'en' } = Astro.props;
           <table class="dash-table">
             <thead>
               <tr>
-                <th>User</th>
-                <th class="dash-num">Input</th>
-                <th class="dash-num">Output</th>
-                <th class="dash-num">Total</th>
+                <th>{t(lang, 'dashboard.tokens.colUser')}</th>
+                <th class="dash-num">{t(lang, 'dashboard.tokens.colInput')}</th>
+                <th class="dash-num">{t(lang, 'dashboard.tokens.colOutput')}</th>
+                <th class="dash-num">{t(lang, 'dashboard.tokens.colTotal')}</th>
               </tr>
             </thead>
             <tbody class="usage-table-body">
               <tr class="animate-pulse">
-                <td class="dash-td-muted" colspan="4">Loading data...</td>
+                <td class="dash-td-muted" colspan="4">{t(lang, 'dashboard.common.loadingData')}</td>
               </tr>
             </tbody>
           </table>
@@ -121,30 +124,30 @@ const { lang = 'en' } = Astro.props;
       <div id="tab-users" class="tab-panel hidden dash-stack">
         <div class="dash-search-row">
           <label class="dash-field">
-            <span>Search by email or name</span>
+            <span>{t(lang, 'dashboard.common.searchByEmailOrName')}</span>
             <input
               type="text"
-              placeholder="user@example.com"
+              placeholder={t(lang, 'dashboard.common.searchPlaceholder')}
               class="search-input dash-input"
             />
           </label>
-          <button type="button" class="search-btn dash-btn">Search</button>
+          <button type="button" class="search-btn dash-btn">{t(lang, 'dashboard.common.search')}</button>
         </div>
 
         <div class="dash-table-wrap">
           <table class="dash-table">
             <thead>
               <tr>
-                <th>Email</th>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Language</th>
-                <th>Created</th>
+                <th>{t(lang, 'dashboard.users.colEmail')}</th>
+                <th>{t(lang, 'dashboard.users.colName')}</th>
+                <th>{t(lang, 'dashboard.users.colRole')}</th>
+                <th>{t(lang, 'dashboard.users.colLanguage')}</th>
+                <th>{t(lang, 'dashboard.users.colCreated')}</th>
               </tr>
             </thead>
             <tbody class="users-table-body">
               <tr class="animate-pulse">
-                <td class="dash-td-muted" colspan="5">Loading data...</td>
+                <td class="dash-td-muted" colspan="5">{t(lang, 'dashboard.common.loadingData')}</td>
               </tr>
             </tbody>
           </table>
@@ -156,39 +159,38 @@ const { lang = 'en' } = Astro.props;
       <!-- System Prompts Tab -->
       <div id="tab-prompts" class="tab-panel hidden dash-stack">
         <p class="dash-subtitle">
-          Pick a user to edit the extension appended to their system prompt.
+          {t(lang, 'dashboard.prompts.intro')}
         </p>
 
         <div class="dash-search-row">
           <label class="dash-field">
-            <span>Search by email or name</span>
+            <span>{t(lang, 'dashboard.common.searchByEmailOrName')}</span>
             <input
               type="text"
-              placeholder="user@example.com"
+              placeholder={t(lang, 'dashboard.common.searchPlaceholder')}
               class="search-input dash-input"
             />
           </label>
-          <button type="button" class="search-btn dash-btn">Search</button>
+          <button type="button" class="search-btn dash-btn">{t(lang, 'dashboard.common.search')}</button>
         </div>
 
         <div class="user-list dash-user-list"></div>
 
         <div class="prompt-editor dash-card dash-stack hidden">
           <div>
-            <h3 class="dash-card-title">Prompt extension</h3>
+            <h3 class="dash-card-title">{t(lang, 'dashboard.prompts.editorTitle')}</h3>
             <div class="prompt-editor-user dash-subtitle"></div>
           </div>
           <textarea
             class="prompt-content dash-input dash-textarea"
             rows="10"
-            placeholder="Additional system prompt instructions for this user..."></textarea>
+            placeholder={t(lang, 'dashboard.prompts.placeholder')}></textarea>
           <p class="dash-hint">
-            Appended to the built-in system prompt for this user. Saving empty
-            content removes the extension.
+            {t(lang, 'dashboard.prompts.hint')}
           </p>
           <div class="dash-row dash-row--end">
-            <button type="button" class="prompt-clear-btn dash-btn dash-btn--danger">Remove</button>
-            <button type="button" class="prompt-save-btn dash-btn dash-btn--primary">Save</button>
+            <button type="button" class="prompt-clear-btn dash-btn dash-btn--danger">{t(lang, 'dashboard.prompts.remove')}</button>
+            <button type="button" class="prompt-save-btn dash-btn dash-btn--primary">{t(lang, 'dashboard.prompts.save')}</button>
           </div>
         </div>
 
@@ -198,55 +200,55 @@ const { lang = 'en' } = Astro.props;
       <!-- Grants Tab -->
       <div id="tab-grants" class="tab-panel hidden dash-stack">
         <div class="grant-form dash-card dash-stack">
-          <h3 class="dash-card-title">Create autonomy grant</h3>
+          <h3 class="dash-card-title">{t(lang, 'dashboard.grants.formTitle')}</h3>
           <div class="dash-form-grid">
             <label class="dash-field">
-              <span>User</span>
+              <span>{t(lang, 'dashboard.grants.user')}</span>
               <select class="grant-user dash-input">
-                <option value="">All users</option>
+                <option value="">{t(lang, 'dashboard.grants.allUsers')}</option>
               </select>
             </label>
             <div class="dash-field">
-              <span>Actions</span>
+              <span>{t(lang, 'dashboard.grants.actions')}</span>
               <div class="dash-checks">
-                <label><input type="checkbox" class="grant-action" value="implement" checked /> implement</label>
-                <label><input type="checkbox" class="grant-action" value="publish" /> publish</label>
+                <label><input type="checkbox" class="grant-action" value="implement" checked /> {t(lang, 'dashboard.grants.actionImplement')}</label>
+                <label><input type="checkbox" class="grant-action" value="publish" /> {t(lang, 'dashboard.grants.actionPublish')}</label>
               </div>
             </div>
             <label class="dash-field">
-              <span>Max risk</span>
+              <span>{t(lang, 'dashboard.grants.maxRisk')}</span>
               <select class="grant-risk dash-input">
-                <option value="content" selected>content</option>
-                <option value="template">template</option>
-                <option value="code">code</option>
-                <option value="dependency">dependency</option>
+                <option value="content" selected>{t(lang, 'dashboard.grants.riskContent')}</option>
+                <option value="template">{t(lang, 'dashboard.grants.riskTemplate')}</option>
+                <option value="code">{t(lang, 'dashboard.grants.riskCode')}</option>
+                <option value="dependency">{t(lang, 'dashboard.grants.riskDependency')}</option>
               </select>
             </label>
             <label class="dash-field">
-              <span>Max executions</span>
+              <span>{t(lang, 'dashboard.grants.maxExecutions')}</span>
               <input type="number" class="grant-executions dash-input" min="1" max="100" value="1" />
             </label>
             <label class="dash-field">
-              <span>Valid until</span>
+              <span>{t(lang, 'dashboard.grants.validUntil')}</span>
               <input type="datetime-local" class="grant-until dash-input" />
             </label>
             <label class="dash-field">
-              <span>On error</span>
+              <span>{t(lang, 'dashboard.grants.onError')}</span>
               <select class="grant-onerror dash-input">
-                <option value="stop" selected>stop</option>
-                <option value="notify">notify</option>
+                <option value="stop" selected>{t(lang, 'dashboard.grants.onErrorStop')}</option>
+                <option value="notify">{t(lang, 'dashboard.grants.onErrorNotify')}</option>
               </select>
             </label>
           </div>
           <label class="dash-field">
-            <span>Path scope (one glob per line)</span>
+            <span>{t(lang, 'dashboard.grants.pathScope')}</span>
             <textarea
               class="grant-scope dash-input dash-textarea"
               rows="3"
               placeholder="src/content/**"></textarea>
           </label>
           <div class="dash-row dash-row--end">
-            <button type="button" class="grant-create-btn dash-btn dash-btn--primary">Create grant</button>
+            <button type="button" class="grant-create-btn dash-btn dash-btn--primary">{t(lang, 'dashboard.grants.create')}</button>
           </div>
         </div>
 
@@ -254,19 +256,19 @@ const { lang = 'en' } = Astro.props;
           <table class="dash-table">
             <thead>
               <tr>
-                <th>User</th>
-                <th>Actions</th>
-                <th>Scope</th>
-                <th>Max risk</th>
-                <th class="dash-num">Executions left</th>
-                <th>Valid until</th>
-                <th>Status</th>
+                <th>{t(lang, 'dashboard.grants.colUser')}</th>
+                <th>{t(lang, 'dashboard.grants.colActions')}</th>
+                <th>{t(lang, 'dashboard.grants.colScope')}</th>
+                <th>{t(lang, 'dashboard.grants.colMaxRisk')}</th>
+                <th class="dash-num">{t(lang, 'dashboard.grants.colExecutionsLeft')}</th>
+                <th>{t(lang, 'dashboard.grants.colValidUntil')}</th>
+                <th>{t(lang, 'dashboard.grants.colStatus')}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody class="grants-table-body">
               <tr class="animate-pulse">
-                <td class="dash-td-muted" colspan="8">Loading data...</td>
+                <td class="dash-td-muted" colspan="8">{t(lang, 'dashboard.common.loadingData')}</td>
               </tr>
             </tbody>
           </table>
@@ -278,16 +280,16 @@ const { lang = 'en' } = Astro.props;
       <!-- Memory Tab -->
       <div id="tab-memory" class="tab-panel hidden dash-stack">
         <section class="dash-stack">
-          <h2 class="dash-section-title">Pending candidates</h2>
+          <h2 class="dash-section-title">{t(lang, 'dashboard.memory.pendingTitle')}</h2>
           <div class="memory-pending dash-stack">
-            <div class="dash-td-muted animate-pulse">Loading...</div>
+            <div class="dash-td-muted animate-pulse">{t(lang, 'dashboard.common.loading')}</div>
           </div>
         </section>
 
         <section class="dash-stack">
-          <h2 class="dash-section-title">Approved memories</h2>
+          <h2 class="dash-section-title">{t(lang, 'dashboard.memory.approvedTitle')}</h2>
           <div class="memory-approved dash-stack">
-            <div class="dash-td-muted animate-pulse">Loading...</div>
+            <div class="dash-td-muted animate-pulse">{t(lang, 'dashboard.common.loading')}</div>
           </div>
         </section>
 
@@ -297,26 +299,26 @@ const { lang = 'en' } = Astro.props;
       <!-- System Tab -->
       <div id="tab-system" class="tab-panel hidden dash-stack">
         <div class="dash-search-row">
-          <button type="button" class="system-refresh dash-btn">Refresh</button>
+          <button type="button" class="system-refresh dash-btn">{t(lang, 'dashboard.system.refresh')}</button>
         </div>
 
         <section class="dash-stack">
-          <h2 class="dash-section-title">Previews</h2>
+          <h2 class="dash-section-title">{t(lang, 'dashboard.system.previewsTitle')}</h2>
           <div class="dash-table-wrap">
             <table class="dash-table">
               <thead>
                 <tr>
-                  <th>Branch</th>
-                  <th>Status</th>
-                  <th>Port / PID</th>
-                  <th>Started</th>
-                  <th>Last used</th>
-                  <th>Actions</th>
+                  <th>{t(lang, 'dashboard.system.colBranch')}</th>
+                  <th>{t(lang, 'dashboard.system.colStatus')}</th>
+                  <th>{t(lang, 'dashboard.system.colPortPid')}</th>
+                  <th>{t(lang, 'dashboard.system.colStarted')}</th>
+                  <th>{t(lang, 'dashboard.system.colLastUsed')}</th>
+                  <th>{t(lang, 'dashboard.system.colActions')}</th>
                 </tr>
               </thead>
               <tbody class="previews-table-body">
                 <tr class="animate-pulse">
-                  <td class="dash-td-muted" colspan="6">Loading data...</td>
+                  <td class="dash-td-muted" colspan="6">{t(lang, 'dashboard.common.loadingData')}</td>
                 </tr>
               </tbody>
             </table>
@@ -324,23 +326,23 @@ const { lang = 'en' } = Astro.props;
         </section>
 
         <section class="dash-stack">
-          <h2 class="dash-section-title">Branches</h2>
+          <h2 class="dash-section-title">{t(lang, 'dashboard.system.branchesTitle')}</h2>
           <div class="dash-table-wrap">
             <table class="dash-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Creator</th>
-                  <th class="dash-num">Chats</th>
-                  <th class="dash-num">Publications</th>
-                  <th>State</th>
-                  <th>Created</th>
-                  <th>Actions</th>
+                  <th>{t(lang, 'dashboard.system.colName')}</th>
+                  <th>{t(lang, 'dashboard.system.colCreator')}</th>
+                  <th class="dash-num">{t(lang, 'dashboard.system.colChats')}</th>
+                  <th class="dash-num">{t(lang, 'dashboard.system.colPublications')}</th>
+                  <th>{t(lang, 'dashboard.system.colState')}</th>
+                  <th>{t(lang, 'dashboard.system.colCreated')}</th>
+                  <th>{t(lang, 'dashboard.system.colActions')}</th>
                 </tr>
               </thead>
               <tbody class="branches-table-body">
                 <tr class="animate-pulse">
-                  <td class="dash-td-muted" colspan="7">Loading data...</td>
+                  <td class="dash-td-muted" colspan="7">{t(lang, 'dashboard.common.loadingData')}</td>
                 </tr>
               </tbody>
             </table>
@@ -348,24 +350,24 @@ const { lang = 'en' } = Astro.props;
         </section>
 
         <section class="dash-stack">
-          <h2 class="dash-section-title">Chats</h2>
+          <h2 class="dash-section-title">{t(lang, 'dashboard.system.chatsTitle')}</h2>
           <div class="dash-table-wrap">
             <table class="dash-table">
               <thead>
                 <tr>
-                  <th>Title</th>
-                  <th>Kind</th>
-                  <th>Phase</th>
-                  <th>Branches</th>
-                  <th>Creator</th>
-                  <th class="dash-num">Messages</th>
-                  <th>Created</th>
-                  <th>Actions</th>
+                  <th>{t(lang, 'dashboard.system.colTitle')}</th>
+                  <th>{t(lang, 'dashboard.system.colKind')}</th>
+                  <th>{t(lang, 'dashboard.system.colPhase')}</th>
+                  <th>{t(lang, 'dashboard.system.colBranches')}</th>
+                  <th>{t(lang, 'dashboard.system.colCreator')}</th>
+                  <th class="dash-num">{t(lang, 'dashboard.system.colMessages')}</th>
+                  <th>{t(lang, 'dashboard.system.colCreated')}</th>
+                  <th>{t(lang, 'dashboard.system.colActions')}</th>
                 </tr>
               </thead>
               <tbody class="chats-table-body">
                 <tr class="animate-pulse">
-                  <td class="dash-td-muted" colspan="8">Loading data...</td>
+                  <td class="dash-td-muted" colspan="8">{t(lang, 'dashboard.common.loadingData')}</td>
                 </tr>
               </tbody>
             </table>

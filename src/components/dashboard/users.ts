@@ -5,6 +5,7 @@
  * (admin/editor) wired to POST /api/admin/users { userId, role }.
  */
 
+import { t, uiLocale } from '@/lib/i18n';
 import {
   escapeHtml,
   fetchJson,
@@ -16,6 +17,13 @@ import {
 
 const ROLES = ['admin', 'editor'] as const;
 
+/** Localized display label for a role value (falls back to the raw value). */
+const roleLabel = (role: string): string => {
+  if (role === 'admin') return t(uiLocale(), 'dashboard.users.roleAdmin');
+  if (role === 'editor') return t(uiLocale(), 'dashboard.users.roleEditor');
+  return role;
+};
+
 export async function initUsers(container: HTMLElement): Promise<void> {
   const searchInput = container.querySelector('.search-input') as HTMLInputElement;
   const searchBtn = container.querySelector('.search-btn') as HTMLButtonElement;
@@ -24,27 +32,27 @@ export async function initUsers(container: HTMLElement): Promise<void> {
 
   async function search() {
     const q = searchInput.value.trim();
-    searchBtn.textContent = 'Searching...';
+    searchBtn.textContent = t(uiLocale(), 'dashboard.common.searching');
     searchBtn.disabled = true;
-    tableBody.innerHTML =
-      '<tr class="animate-pulse"><td class="dash-td-muted" colspan="5">Loading users...</td></tr>';
+    tableBody.innerHTML = `<tr class="animate-pulse"><td class="dash-td-muted" colspan="5">${t(uiLocale(), 'dashboard.common.loadingUsers')}</td></tr>`;
 
     try {
       renderUsers(await fetchUsers(q || undefined));
     } catch (err) {
       tableBody.innerHTML = `<tr><td class="dash-td-error" colspan="5">${
-        err instanceof Error ? escapeHtml(err.message) : 'Failed to load users'
+        err instanceof Error
+          ? escapeHtml(err.message)
+          : t(uiLocale(), 'dashboard.common.failedLoadUsers')
       }</td></tr>`;
     } finally {
-      searchBtn.textContent = 'Search';
+      searchBtn.textContent = t(uiLocale(), 'dashboard.common.search');
       searchBtn.disabled = false;
     }
   }
 
   function renderUsers(users: AdminUser[]) {
     if (users.length === 0) {
-      tableBody.innerHTML =
-        '<tr><td class="dash-td-muted" colspan="5">No users found</td></tr>';
+      tableBody.innerHTML = `<tr><td class="dash-td-muted" colspan="5">${t(uiLocale(), 'dashboard.common.noUsersFound')}</td></tr>`;
       return;
     }
 
@@ -58,7 +66,7 @@ export async function initUsers(container: HTMLElement): Promise<void> {
             <select class="dash-input role-select" data-user-id="${escapeHtml(u.id)}" data-email="${escapeHtml(u.email)}">
               ${ROLES.map(
                 (r) =>
-                  `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`,
+                  `<option value="${r}" ${u.role === r ? 'selected' : ''}>${escapeHtml(roleLabel(r))}</option>`,
               ).join('')}
             </select>
           </td>
@@ -84,12 +92,21 @@ export async function initUsers(container: HTMLElement): Promise<void> {
             body: JSON.stringify({ userId, role }),
           });
           select.dataset.prevRole = role;
-          showStatus(statusMsg, `Role for ${email} set to ${role}`, 'success');
+          showStatus(
+            statusMsg,
+            t(uiLocale(), 'dashboard.users.roleSet', {
+              email,
+              role: roleLabel(role),
+            }),
+            'success',
+          );
         } catch (err) {
           select.value = select.dataset.prevRole ?? 'editor';
           showStatus(
             statusMsg,
-            err instanceof Error ? err.message : 'Failed to update role',
+            err instanceof Error
+              ? err.message
+              : t(uiLocale(), 'dashboard.users.failedUpdateRole'),
             'error',
           );
         } finally {

@@ -6,6 +6,8 @@
  * server-side by the /dashboard page guard and the /api/admin/* routes).
  */
 
+import { t, uiLocale } from '@/lib/i18n';
+
 export { escapeHtml } from '../chat/utils/html';
 
 /**
@@ -23,7 +25,10 @@ export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> 
   const data = (await res.json().catch(() => ({}))) as T;
   if (!res.ok) {
     const message = (data as { error?: string }).error;
-    throw new Error(message ?? `Request failed (${res.status})`);
+    throw new Error(
+      message ??
+        t(uiLocale(), 'dashboard.common.requestFailed', { status: res.status }),
+    );
   }
   return data;
 }

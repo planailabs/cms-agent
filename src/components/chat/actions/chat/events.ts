@@ -4,7 +4,7 @@
 
 import { store } from '../../app/store';
 import type { WorkflowPhase } from '../../app/state';
-import type { TranslatedMessage } from '@/lib/i18n';
+import { t, uiLocale, type TranslatedMessage } from '@/lib/i18n';
 import { cacheAIChatMessages } from './cache';
 import { transition } from './stateMachine';
 import { publishCardReducer } from '../../../workspace/publishCard';
@@ -285,7 +285,7 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
 
     case 'error':
       transition(currentMc, 'error');
-      currentMc.error = (data.message as string) ?? 'Something went wrong';
+      currentMc.error = (data.message as string) ?? t(uiLocale(), 'chat.error.generic');
       store.notify();
       break;
   }

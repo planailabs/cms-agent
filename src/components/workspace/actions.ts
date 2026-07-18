@@ -7,6 +7,7 @@
  */
 
 import { store } from '../chat/app/store';
+import { t, uiLocale } from '@/lib/i18n';
 import { transition } from '../chat/actions/chat/stateMachine';
 import { createChat, switchChat, createBranch, loadBranches } from '../chat/actions/chat';
 import { publishCardReducer } from './publishCard';
@@ -42,11 +43,14 @@ const postJson = async (url: string, body: unknown): Promise<JsonResult> => {
     });
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-      showChatError((data.error as string) ?? `Request failed (${res.status})`);
+      showChatError(
+        (data.error as string) ??
+          t(uiLocale(), 'workspace.error.requestFailed', { status: res.status }),
+      );
     }
     return { ok: res.ok, status: res.status, data };
   } catch {
-    showChatError('Network error — please try again');
+    showChatError(t(uiLocale(), 'workspace.error.network'));
     return { ok: false, status: 0, data: {} };
   }
 };
@@ -124,7 +128,7 @@ export const publishAction = async (sha?: string): Promise<void> => {
   const targetSha = sha ?? ws.executionSha ?? ws.publish?.sha;
   if (!chatId) return;
   if (!targetSha) {
-    showChatError('No reviewed commit to publish yet.');
+    showChatError(t(uiLocale(), 'workspace.error.noReviewedCommit'));
     return;
   }
   const res = await postJson(`/api/chats/${encodeURIComponent(chatId)}/publish`, {
@@ -178,12 +182,12 @@ export const newBranchAction = async (rawName: string): Promise<void> => {
   const name = rawName.trim().toLowerCase();
   if (!name) return;
   if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name)) {
-    showChatError('Branch name must be DNS-safe (lowercase letters, digits, hyphens).');
+    showChatError(t(uiLocale(), 'workspace.error.branchNameInvalid'));
     return;
   }
   const branch = await createBranch(name);
   if (!branch) {
-    showChatError(`Could not create branch "${name}" (it may already exist).`);
+    showChatError(t(uiLocale(), 'workspace.error.branchCreateFailed', { name }));
     return;
   }
   const chat = await createChat(branch.id);
@@ -194,7 +198,7 @@ export const newBranchAction = async (rawName: string): Promise<void> => {
 export const newChatAction = async (branchId: string): Promise<void> => {
   const chat = await createChat(branchId);
   if (chat) switchChat(chat.id);
-  else showChatError('Could not create the chat.');
+  else showChatError(t(uiLocale(), 'workspace.error.chatCreateFailed'));
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,7 +223,9 @@ export const loadDiffPages = async (): Promise<void> => {
     if (store.state.activeChatId !== chatId || cur.forChatId !== chatId) return; // stale
     if (!res.ok) {
       cur.loading = false;
-      cur.error = (data.error as string) ?? `Failed to load changed pages (${res.status})`;
+      cur.error =
+        (data.error as string) ??
+        t(uiLocale(), 'workspace.diff.loadFailed', { status: res.status });
       store.notify();
       return;
     }
@@ -233,7 +239,7 @@ export const loadDiffPages = async (): Promise<void> => {
     const cur = store.state.workspace.diff;
     if (cur.forChatId === chatId) {
       cur.loading = false;
-      cur.error = 'Network error while loading the diff.';
+      cur.error = t(uiLocale(), 'workspace.diff.networkError');
       store.notify();
     }
   }

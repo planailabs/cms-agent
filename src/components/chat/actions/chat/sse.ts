@@ -7,6 +7,7 @@
 import { store } from '../../app/store';
 import { handleServerEvent } from './events';
 import { transition } from './stateMachine';
+import { t, uiLocale } from '@/lib/i18n';
 import type { PageContext } from '../../../workspace/state';
 
 /** Persistent EventSource connection */
@@ -54,7 +55,7 @@ export const postMessage = async (payload: {
     const mc = store.state.chat?.aiChat;
     if (mc) {
       transition(mc, 'error');
-      mc.error = (data as any).error ?? 'Something went wrong';
+      mc.error = (data as any).error ?? t(uiLocale(), 'chat.error.generic');
       store.notify();
     }
   }

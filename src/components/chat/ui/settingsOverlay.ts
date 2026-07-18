@@ -9,6 +9,7 @@
 import type { AppState } from '../app/state';
 import type { LocaleContent } from '../content';
 import { escapeHtml } from '../utils/html';
+import { t, uiLocale } from '@/lib/i18n';
 
 /** Placeholder user icon for users without avatars */
 const userIcon = () => `
@@ -36,9 +37,9 @@ export const renderSettingsOverlay = (params: {
     state.user?.name?.trim() ||
     state.user?.email ||
     locale.settings.sections.profile.fields.name;
-  const email = state.user?.email ?? 'Not signed in';
+  const email = state.user?.email ?? t(uiLocale(), 'chat.settings.notSignedIn');
   const avatar = `<span class="settings-avatar-fallback">${userIcon()}</span>`;
-  const closeLabel = 'Close overlay';
+  const closeLabel = t(uiLocale(), 'chat.settings.closeOverlay');
   const signOutDisabled = state.user ? '' : 'disabled';
   const profileSection = locale.settings.sections.profile;
 
@@ -46,7 +47,7 @@ export const renderSettingsOverlay = (params: {
     <div class="settings-overlay" data-settings-root>
       <button class="settings-overlay__backdrop" data-action="close-settings" aria-label="${escapeHtml(closeLabel)}"></button>
       <section class="settings-panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(locale.settings.title)}">
-        <button type="button" class="settings-close-button" data-action="close-settings" aria-label="Close">
+        <button type="button" class="settings-close-button" data-action="close-settings" aria-label="${escapeHtml(t(uiLocale(), 'chat.settings.close'))}">
           <span aria-hidden="true">&times;</span>
         </button>
         <div class="settings-identity">

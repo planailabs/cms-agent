@@ -8,6 +8,7 @@
  * (empty content deletes the extension).
  */
 
+import { t, uiLocale } from '@/lib/i18n';
 import {
   escapeHtml,
   fetchJson,
@@ -33,26 +34,27 @@ export function initPrompts(container: HTMLElement): void {
 
   async function searchUsers() {
     const q = searchInput.value.trim();
-    searchBtn.textContent = 'Searching...';
+    searchBtn.textContent = t(uiLocale(), 'dashboard.common.searching');
     searchBtn.disabled = true;
-    userList.innerHTML =
-      '<div class="dash-td-muted animate-pulse">Loading users...</div>';
+    userList.innerHTML = `<div class="dash-td-muted animate-pulse">${t(uiLocale(), 'dashboard.common.loadingUsers')}</div>`;
 
     try {
       renderUsers(await fetchUsers(q || undefined));
     } catch (err) {
       userList.innerHTML = `<div class="dash-td-error">${
-        err instanceof Error ? escapeHtml(err.message) : 'Failed to load users'
+        err instanceof Error
+          ? escapeHtml(err.message)
+          : t(uiLocale(), 'dashboard.common.failedLoadUsers')
       }</div>`;
     } finally {
-      searchBtn.textContent = 'Search';
+      searchBtn.textContent = t(uiLocale(), 'dashboard.common.search');
       searchBtn.disabled = false;
     }
   }
 
   function renderUsers(users: AdminUser[]) {
     if (users.length === 0) {
-      userList.innerHTML = '<div class="dash-td-muted">No users found</div>';
+      userList.innerHTML = `<div class="dash-td-muted">${t(uiLocale(), 'dashboard.common.noUsersFound')}</div>`;
       return;
     }
 
@@ -88,7 +90,7 @@ export function initPrompts(container: HTMLElement): void {
     editor.classList.remove('hidden');
     editorUserInfo.textContent = `${user.name} — ${user.email}`;
     contentArea.value = '';
-    contentArea.placeholder = 'Loading...';
+    contentArea.placeholder = t(uiLocale(), 'dashboard.common.loading');
     contentArea.disabled = true;
 
     try {
@@ -99,18 +101,19 @@ export function initPrompts(container: HTMLElement): void {
     } catch (err) {
       showStatus(
         statusMsg,
-        err instanceof Error ? err.message : 'Failed to load extension',
+        err instanceof Error
+          ? err.message
+          : t(uiLocale(), 'dashboard.prompts.failedLoadExtension'),
         'error',
       );
     } finally {
-      contentArea.placeholder =
-        'Additional system prompt instructions for this user...';
+      contentArea.placeholder = t(uiLocale(), 'dashboard.prompts.placeholder');
       contentArea.disabled = false;
       contentArea.focus();
     }
   }
 
-  async function save(content: string, label: string) {
+  async function save(content: string, statusKey: string) {
     if (!selectedUser) return;
     const user = selectedUser;
 
@@ -122,12 +125,18 @@ export function initPrompts(container: HTMLElement): void {
         method: 'PUT',
         body: JSON.stringify({ userId: user.id, content }),
       });
-      showStatus(statusMsg, `${label} for ${user.email}`, 'success');
+      showStatus(
+        statusMsg,
+        t(uiLocale(), statusKey, { email: user.email }),
+        'success',
+      );
       if (!content) contentArea.value = '';
     } catch (err) {
       showStatus(
         statusMsg,
-        err instanceof Error ? err.message : 'Failed to save',
+        err instanceof Error
+          ? err.message
+          : t(uiLocale(), 'dashboard.prompts.failedSave'),
         'error',
       );
     } finally {
@@ -137,13 +146,16 @@ export function initPrompts(container: HTMLElement): void {
   }
 
   saveBtn.addEventListener('click', () => {
-    void save(contentArea.value.trim(), 'Prompt extension saved');
+    void save(contentArea.value.trim(), 'dashboard.prompts.savedFor');
   });
 
   clearBtn.addEventListener('click', () => {
     if (!selectedUser) return;
-    if (!confirm(`Remove prompt extension for ${selectedUser.email}?`)) return;
-    void save('', 'Prompt extension removed');
+    const confirmMsg = t(uiLocale(), 'dashboard.prompts.confirmRemove', {
+      email: selectedUser.email,
+    });
+    if (!confirm(confirmMsg)) return;
+    void save('', 'dashboard.prompts.removedFor');
   });
 
   searchBtn.addEventListener('click', () => void searchUsers());
