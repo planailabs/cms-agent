@@ -4,6 +4,7 @@
 
 import { store } from '../../app/store';
 import type { WorkflowPhase } from '../../app/state';
+import type { TranslatedMessage } from '@/lib/i18n';
 import { cacheAIChatMessages } from './cache';
 import { transition } from './stateMachine';
 import { publishCardReducer } from '../../../workspace/publishCard';
@@ -83,7 +84,11 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
       // Agent-less flow event — appended to the transcript of the open chat
       const mc = store.state.chat?.aiChat;
       if (mc) {
-        mc.messages.push({ role: 'automatism', content: (data.content as string) ?? '' });
+        mc.messages.push({
+          role: 'automatism',
+          content: (data.content as string) ?? '',
+          ...(data.tm ? { tm: data.tm as TranslatedMessage } : {}),
+        });
         cacheAIChatMessages(mc.messages);
         store.notify();
       }

@@ -34,8 +34,10 @@ import {
   registerAutomatism,
   startAutomatism,
   type AutomatismData,
+  type AutomatismMessage,
   type AutomatismStep,
 } from '@/lib/automatism';
+import { tmsg, type TranslatedMessage } from '@/lib/i18n';
 import { registerBuiltinFlows } from './flows';
 import { getDeployFlow, listDeployFlows, type DeployFlow, type DeployFlowStep } from './types';
 
@@ -161,9 +163,14 @@ export async function publish(
 
   await postAutomatismMessage(
     deployChat.id,
-    `Deployment of "${chat.title}" started by ${req.actor.name}: ` +
-      `merge ${chat.workBranch} (${shortSha}) into ${chat.branch.name}, then ` +
-      (flow ? `deploy via "${flow.id}".` : 'no deploy (non-default target).'),
+    tmsg(flow ? 'deploy.startedFlow' : 'deploy.startedMergeOnly', {
+      title: chat.title,
+      actor: req.actor.name,
+      workBranch: chat.workBranch,
+      sha: shortSha,
+      target: chat.branch.name,
+      ...(flow ? { flow: flow.id } : {}),
+    }),
   );
   await startAutomatism(deployAutomatismType(flow ?? null), deployChat.id, data);
 
@@ -197,7 +204,7 @@ export async function startPull(chatId: string, actor: { id: string; name: strin
 
   await postAutomatismMessage(
     chatId,
-    `Sync started by ${actor.name}: rebasing this draft onto the latest ${chat.branch.name}.`,
+    tmsg('pull.started', { actor: actor.name, target: chat.branch.name }),
   );
   return startAutomatism('pull', chatId, {
     actorId: actor.id,
@@ -235,13 +242,10 @@ registerAutomatism({
             });
           }
           throw new AutomatismFailure(
-            `Rebasing the draft onto ${data.targetName} hit conflicts` +
-              (files.length ? ` in:\n${files.map((f) => `- ${f}`).join('\n')}` : '.') +
-              `\nThe rebase is paused in this chat's worktree (markers in place). Use ` +
-              `list_conflicts / show_conflict, target_file for the incoming side, resolve ` +
-              `each file (edit_file or resolve_conflict_take) keeping both sides' intent, ` +
-              `then git_rebase_continue — repeat per replayed commit until the rebase ` +
-              `completes — and finally call resume_automatism to finish the sync.`,
+            tmsg('pull.conflicts', {
+              target: data.targetName,
+              files: files.length ? files.map((f) => `- ${f}`).join('\n') : '- (files unknown)',
+            }),
           );
         };
 
@@ -256,13 +260,14 @@ registerAutomatism({
               );
           if (result.conflicts?.length) await pauseWithConflicts(result.conflicts);
           await post(
-            `Rebased the draft onto the latest ${data.targetName} → ${result.sha!.slice(0, 8)}. ` +
-              `Note: the draft history was rewritten — review the preview again before publishing.`,
+            tmsg('pull.rebased', { target: data.targetName, sha: result.sha!.slice(0, 8) }),
           );
         } catch (err) {
           if (err instanceof AutomatismFailure) throw err;
           const message = err instanceof Error ? err.message : String(err);
-          throw new AutomatismFailure(`Rebasing onto ${data.targetName} failed: ${message}`);
+          throw new AutomatismFailure(
+            tmsg('pull.rebaseFailed', { target: data.targetName, error: message }),
+          );
         }
       },
     },
@@ -281,7 +286,7 @@ registerAutomatism({
           });
           data.restorePhase = undefined;
         }
-        await post(`Sync done — the draft is up to date with ${data.targetName}.`);
+        await post(tmsg('pull.done', { target: data.targetName }));
       },
     },
   ],
@@ -323,16 +328,21 @@ async function failDeploy(data: DeployData, err: unknown): Promise<never> {
     error: message,
   });
   throw new AutomatismFailure(
-    `Deploy of ${(data.mergedSha ?? '').slice(0, 8)} to ${data.targetName} failed: ${message}\n\n` +
-      `Publication id: ${data.publicationId}\nLog tail:\n${(data.logLines ?? []).slice(-40).join('\n')}`,
+    tmsg('deploy.failed', {
+      sha: (data.mergedSha ?? '').slice(0, 8),
+      target: data.targetName,
+      error: message,
+      publicationId: data.publicationId,
+      log: (data.logLines ?? []).slice(-40).join('\n'),
+    }),
   );
 }
 
 /** Deploy tail: artifact record, publication success, notifications. */
 async function recordDeploySuccess(
   data: DeployData,
-  post: (text: string) => Promise<void>,
-  label: string,
+  post: (msg: AutomatismMessage) => Promise<void>,
+  label: TranslatedMessage,
 ): Promise<void> {
   const e = env();
   const sha = data.mergedSha!;
@@ -358,9 +368,13 @@ async function recordDeploySuccess(
     },
   });
   await post(
-    label +
-      (data.result?.externalUrl ? `\nLive at: ${data.result.externalUrl}` : '') +
-      ((data.logLines ?? []).length ? `\n\nLog:\n${(data.logLines ?? []).slice(-20).join('\n')}` : ''),
+    tmsg('deploy.succeeded', {
+      label,
+      live: data.result?.externalUrl ? tmsg('deploy.liveAt', { url: data.result.externalUrl }) : '',
+      log: (data.logLines ?? []).length
+        ? tmsg('deploy.logTail', { log: (data.logLines ?? []).slice(-20).join('\n') })
+        : '',
+    }),
   );
   broadcast(data.workflowChatId, 'publish_done', {
     type: 'publish_done',
@@ -389,12 +403,20 @@ const mergeStep: AutomatismStep = {
         where: { id: data.publicationId },
         data: { sha: targetSha },
       });
-      await post(`Merged ${data.workBranch} into ${data.targetName} → ${targetSha.slice(0, 8)}.`);
+      await post(
+        tmsg('deploy.merged', {
+          workBranch: data.workBranch,
+          target: data.targetName,
+          sha: targetSha.slice(0, 8),
+        }),
+      );
       deployLog(data)(`Merged into ${data.targetName} (${targetSha.slice(0, 8)}).`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (!isConflictError(err)) {
-        throw new AutomatismFailure(`Merge into ${data.targetName} failed: ${message}`);
+        throw new AutomatismFailure(
+          tmsg('deploy.mergeFailed', { target: data.targetName, error: message }),
+        );
       }
       // Materialize the conflict in the source chat's work branch worktree —
       // this deployment chat's tools operate on exactly that worktree, so the
@@ -405,14 +427,11 @@ const mergeStep: AutomatismStep = {
         beginConflictMerge(data.workBranch, data.targetName, identity),
       );
       throw new AutomatismFailure(
-        `Merging ${data.workBranch} into ${data.targetName} hit conflicts` +
-          (files.length ? ` in:\n${files.map((f) => `- ${f}`).join('\n')}` : '.') +
-          `\nThe conflicted merge is materialized in this chat's worktree (markers in ` +
-          `place, merge in progress). Use list_conflicts / show_conflict to inspect, ` +
-          `target_file for the incoming side, then resolve each file — edit_file for ` +
-          `mixed resolutions, resolve_conflict_take for whole-side ones — keeping both ` +
-          `sides' intent. Commit the merge with git_commit, and only then call ` +
-          `resume_automatism to retry the merge and continue the deployment.`,
+        tmsg('deploy.mergeConflicts', {
+          workBranch: data.workBranch,
+          target: data.targetName,
+          files: files.length ? files.map((f) => `- ${f}`).join('\n') : '- (files unknown)',
+        }),
       );
     }
   },
@@ -444,10 +463,14 @@ const genericDeployStep: AutomatismStep = {
           );
           if (!verified) throw new Error('Post-publish verification failed');
         }
-        await recordDeploySuccess(data, post, `Deploy via "${flow.id}" succeeded for ${sha.slice(0, 8)}.`);
+        await recordDeploySuccess(
+          data,
+          post,
+          tmsg('deploy.flowSucceeded', { flow: flow.id, sha: sha.slice(0, 8) }),
+        );
       } else {
         log(`Merged into ${data.targetName} (non-default target — no deployment).`);
-        await recordDeploySuccess(data, post, 'Merge-only publish done.');
+        await recordDeploySuccess(data, post, tmsg('deploy.mergeOnlyDone'));
       }
     } catch (err) {
       if (err instanceof AutomatismFailure) throw err;
@@ -474,7 +497,7 @@ function flowStep(flow: DeployFlow, step: DeployFlowStep): AutomatismStep {
           state: (data.flowState ??= {}),
         });
         if (result) data.result = { ...(data.result ?? {}), ...result };
-        await post(`${flow.id}: ${step.name} done.`);
+        await post(tmsg('deploy.stepDone', { flow: flow.id, step: step.name }));
       } catch (err) {
         if (err instanceof AutomatismFailure) throw err;
         await failDeploy(data, err);
@@ -504,7 +527,7 @@ function verifyStep(flow: DeployFlow): AutomatismStep {
         await recordDeploySuccess(
           data,
           post,
-          `Deploy via "${flow.id}" succeeded for ${data.mergedSha!.slice(0, 8)}.`,
+          tmsg('deploy.flowSucceeded', { flow: flow.id, sha: data.mergedSha!.slice(0, 8) }),
         );
       } catch (err) {
         if (err instanceof AutomatismFailure) throw err;
@@ -537,7 +560,7 @@ const finalizeStep: AutomatismStep = {
       where: { id: data.deployChatId },
       data: { archivedAt: now },
     });
-    await post('Deployment finished — this chat and the source chat are archived.');
+    await post(tmsg('deploy.finished'));
     broadcast(data.workflowChatId, 'phase_changed', {
       type: 'phase_changed',
       workflowPhase: 'published',

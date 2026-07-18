@@ -16,4 +16,4 @@ if (Astro.locals.user?.role !== 'admin') {
 }
 ---
 
-<DashboardPage />
+<DashboardPage lang={Astro.locals.user.language} />

@@ -9,9 +9,13 @@
  * are not ported; grants and memory are new.
  */
 import '../chat/style.css';
+
+// User language from the route (server truth) — drives dashboard i18n via
+// uiLocale() reading <html lang>.
+const { lang = 'en' } = Astro.props;
 ---
 
-<html lang="en">
+<html lang={lang}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

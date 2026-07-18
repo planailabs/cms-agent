@@ -6,6 +6,7 @@
 import { escapeHtml } from '../../utils/html';
 import { renderMarkdown } from '../../utils/markdown';
 import { renderExecutionCard } from './cards';
+import { resolveTranslated, t, uiLocale } from '@/lib/i18n';
 
 import type { ChatState } from '../../app/state';
 import type { ExecutionCard } from '../../../workspace/state';
@@ -15,7 +16,9 @@ type AiChat = NonNullable<ChatState['aiChat']>;
 const renderToolCall = (msg: AiChat['messages'][number]): string => {
   const tool = msg.tool!;
   const input = tool.input !== undefined ? JSON.stringify(tool.input, null, 2) : '';
-  const status = tool.running ? '<span class="animate-pulse">running…</span>' : '';
+  const status = tool.running
+    ? `<span class="animate-pulse">${escapeHtml(t(uiLocale(), 'chat.toolRunning'))}</span>`
+    : '';
   return `
       <details class="group my-1 text-xs text-(--text-muted)">
         <summary class="flex cursor-pointer list-none items-center gap-1.5 rounded-lg px-2 py-1 hover:bg-(--surface-elevated)">
@@ -45,11 +48,14 @@ export const renderMessageBubbles = (mc: AiChat, executions: ExecutionCard[] = [
         return exec ? renderExecutionCard(exec) : '';
       }
       if (msg.role === 'automatism') {
-        // Agent-less flow event — rendered as a system event card
+        // Agent-less flow event — rendered as a system event card, localized
+        // via its TranslatedMessage container (English content as fallback)
+        const locale = uiLocale();
+        const text = msg.tm ? resolveTranslated(locale, msg.tm) : msg.content;
         return `
             <div class="chat-automatism">
-              <div class="chat-automatism__head">⚙ Automatism</div>
-              <pre class="chat-automatism__body">${escapeHtml(msg.content)}</pre>
+              <div class="chat-automatism__head">⚙ ${escapeHtml(t(locale, 'chat.automatismHead'))}</div>
+              <pre class="chat-automatism__body">${escapeHtml(text)}</pre>
             </div>
           `;
       }

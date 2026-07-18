@@ -4,6 +4,7 @@
  * prompt is guidance, the registry is the gate.
  */
 import type { WorkflowPhase } from './types';
+import { languageName } from '@/lib/i18n';
 
 export interface PromptInput {
   /** Non-workflow kinds get their own prompt, phase-independent. */
@@ -26,7 +27,8 @@ You also have a private per-chat scratchpad (scratch_write/read/edit/list/delete
 writable in EVERY phase: draft content and prepare edits there during planning,
 then copy them into the repo with write_file during execution. Scratch files
 never affect the site directly.
-Answer in the user's language (locale: {locale}). Current draft branch: {branch}.`;
+{language_directive}
+Current draft branch: {branch}.`;
 
 const PHASE_PROMPTS: Record<WorkflowPhase, string> = {
   plan: `You are in the PLAN phase (read-only).
@@ -63,8 +65,8 @@ const DEPLOYMENTS_PROMPT = `You are the deployment monitor of a CMS that manages
 Answer questions about deployments and publications using your tools:
 list_publications, get_publication (full logs), check_deployment_status
 (live re-verification). Be precise about statuses and shas; never invent
-deployment state — always read it from the tools. Answer in the user's
-language (locale: {locale}).`;
+deployment state — always read it from the tools.
+{language_directive}`;
 
 const DEPLOYMENT_PROMPT = `You are the deployment agent for one publish of a CMS-managed Astro website.
 This chat belongs to a single deployment (an "automatism": merge → deploy → verify)
@@ -86,17 +88,29 @@ invoked when a step fails. Your job:
 - When the underlying problem is fixed, call resume_automatism to re-run the
   failed step. If the failure needs a human action, use needs_human_attention
   with exact instructions.
-Answer in the user's language (locale: {locale}).`;
+{language_directive}`;
+
+/** Hard language rule: the agent replies in the user's language, only. */
+function languageDirective(locale: string): string {
+  const name = languageName(locale);
+  return (
+    `The user's language is ${name} (locale: ${locale}). Respond ONLY in ${name}: ` +
+    `every reply, question, explanation, plan text, summary, and chat title you produce ` +
+    `must be written in ${name}, regardless of the language of the site content, tool ` +
+    `output, or these instructions.`
+  );
+}
 
 export function buildSystemPrompt(input: PromptInput): string {
+  const directive = languageDirective(input.locale);
   if (input.kind === 'deployments' || input.kind === 'deployment') {
     const base = input.kind === 'deployment' ? DEPLOYMENT_PROMPT : DEPLOYMENTS_PROMPT;
-    let p = base.replace('{locale}', input.locale);
+    let p = base.replace('{language_directive}', directive);
     if (input.extension) p += `\n\n${input.extension}`;
     return p;
   }
   let prompt =
-    COMMON.replace('{locale}', input.locale).replace('{branch}', input.branchName) +
+    COMMON.replace('{language_directive}', directive).replace('{branch}', input.branchName) +
     '\n\n' +
     PHASE_PROMPTS[input.phase].replace(
       '{plan}',
@@ -105,7 +119,7 @@ export function buildSystemPrompt(input: PromptInput): string {
 
   if (input.needsTitle) {
     prompt += `\n\nThis chat is still untitled: call set_chat_title once, early in your reply,
-with a concise 3–6 word title (in the user's language) describing their goal.`;
+with a concise 3–6 word title (in ${languageName(input.locale)}) describing their goal.`;
   }
   if (input.approvedMemories?.length) {
     prompt += `\n\nProject conventions (team-approved memory):\n${input.approvedMemories

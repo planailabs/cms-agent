@@ -182,6 +182,16 @@ const readStoredLocale = (): LocaleKey | null => {
 };
 
 /**
+ * Reads the server-rendered <html lang> (User.language) — the persisted
+ * account preference, present before any client code runs.
+ */
+const readDocumentLocale = (): LocaleKey | null => {
+  if (typeof document === 'undefined') return null;
+  const lang = document.documentElement.lang.slice(0, 2);
+  return supportedLocales.includes(lang as LocaleKey) ? (lang as LocaleKey) : null;
+};
+
+/**
  * Detects browser locale from navigator.language.
  * Falls back to default locale if detection fails.
  */
@@ -275,7 +285,7 @@ export const createInitialState = (): AppState => {
   const cachedUser = readCachedUserState();
 
   return {
-    localeKey: readStoredLocale() ?? detectBrowserLocale(),
+    localeKey: readDocumentLocale() ?? readStoredLocale() ?? detectBrowserLocale(),
     themeMode: 'system', // Initial default, will be updated by initTheme
     isLanguageMenuOpen: false,
     isAuthMenuOpen: false,

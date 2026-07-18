@@ -1,4 +1,6 @@
-export type LocaleKey = 'en' | 'de';
+// Single source of truth for the locale union lives in the shared i18n core.
+export type { LocaleKey } from '@/lib/i18n/types';
+import type { LocaleKey } from '@/lib/i18n/types';
 
 export interface StreamConfig {
   initialDelayMs: number;

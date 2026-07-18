@@ -5,6 +5,7 @@
 
 import { store } from '../../app/store';
 import { chatStorageKey } from '../../constants';
+import type { TranslatedMessage } from '@/lib/i18n';
 
 /** Tool-call display info attached to role:'tool' messages. */
 export interface ToolCallInfo {
@@ -20,6 +21,9 @@ export type StoredMessage = {
   // execution card at its chronological place in the transcript
   role: 'user' | 'assistant' | 'cancel' | 'tool' | 'automatism' | 'execution';
   content: string;
+  /** role 'automatism': i18n container — rendered in the viewer's language,
+   *  falling back to the stored English `content`. */
+  tm?: TranslatedMessage;
   tool?: ToolCallInfo;
   /** role 'execution': commit sha, resolved against workspace.executions. */
   sha?: string;

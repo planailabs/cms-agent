@@ -12,12 +12,17 @@
  */
 import { prisma } from '@/lib/db';
 import { acquireTurnLock, broadcast, releaseTurnLock } from '@/lib/agent/bus';
+import { tmsg, type TranslatedMessage } from '@/lib/i18n';
 
 export type AutomatismData = Record<string, unknown> & { actorId: string };
 
+/** Messages posted into the chat: plain string or a TranslatedMessage
+ *  (i18n key + params + rendered-English fallback, localized per viewer). */
+export type AutomatismMessage = string | TranslatedMessage;
+
 export interface AutomatismStep {
   name: string;
-  run(data: AutomatismData, post: (text: string) => Promise<void>): Promise<void>;
+  run(data: AutomatismData, post: (msg: AutomatismMessage) => Promise<void>): Promise<void>;
 }
 
 export interface AutomatismDef {
@@ -29,8 +34,11 @@ export interface AutomatismDef {
 export class AutomatismFailure extends Error {
   /** Chat the agent is invoked in (defaults to the automatism's chat). */
   agentChatId?: string;
-  constructor(message: string, agentChatId?: string) {
-    super(message);
+  /** Localizable form of the failure message, when the step provides one. */
+  tm?: TranslatedMessage;
+  constructor(message: AutomatismMessage, agentChatId?: string) {
+    super(typeof message === 'string' ? message : message.fallback);
+    if (typeof message !== 'string') this.tm = message;
     this.agentChatId = agentChatId;
   }
 }
@@ -82,7 +90,12 @@ export async function automatismStateFor(chatId: string): Promise<AutomatismStat
  * assigned by read-back; a concurrent agent turn can race the unique
  * (chatId, ordinal) constraint — retry a few times.
  */
-export async function postAutomatismMessage(chatId: string, content: string): Promise<void> {
+export async function postAutomatismMessage(chatId: string, msg: AutomatismMessage): Promise<void> {
+  // content carries the rendered English text (LLM context, compatibility);
+  // the TranslatedMessage container goes into contentBlocks for per-viewer
+  // localization at render time.
+  const content = typeof msg === 'string' ? msg : msg.fallback;
+  const tm = typeof msg === 'string' ? null : msg;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const last = await prisma.message.findFirst({
@@ -91,14 +104,20 @@ export async function postAutomatismMessage(chatId: string, content: string): Pr
         select: { ordinal: true },
       });
       await prisma.message.create({
-        data: { chatId, role: 'automatism', content, ordinal: (last?.ordinal ?? -1) + 1 },
+        data: {
+          chatId,
+          role: 'automatism',
+          content,
+          ...(tm ? { contentBlocks: tm as object } : {}),
+          ordinal: (last?.ordinal ?? -1) + 1,
+        },
       });
       break;
     } catch (err) {
       if (attempt === 4) throw err;
     }
   }
-  broadcast(chatId, 'automatism', { type: 'automatism', content });
+  broadcast(chatId, 'automatism', { type: 'automatism', content, tm });
 }
 
 export async function startAutomatism(
@@ -136,7 +155,7 @@ async function advance(id: string): Promise<void> {
   }
 
   const data = row.data as AutomatismData;
-  const post = (text: string) => postAutomatismMessage(row.chatId, text);
+  const post = (msg: AutomatismMessage) => postAutomatismMessage(row.chatId, msg);
 
   for (let step = row.step; step < def.steps.length; step++) {
     const s = def.steps[step];
@@ -173,14 +192,13 @@ async function pauseOnFailure(
   });
   emitState(stateOf({ ...row, status: 'paused', step, lastError: message }));
 
-  const context =
-    `Step "${stepName}" FAILED:\n${message}\n\n` +
-    `Investigate and fix the cause, then call resume_automatism to re-run the ` +
-    `failed step and continue. If a human decision is needed, explain what and why.`;
+  // The step's own failure text nests into the wrapper message and resolves
+  // in the viewer's locale; plain errors stay verbatim as a string param.
+  const error = (err instanceof AutomatismFailure && err.tm) || message;
   if (agentChatId !== chatId) {
-    await postAutomatismMessage(chatId, `Step "${stepName}" failed — the agent takes over in another chat.\n${message}`);
+    await postAutomatismMessage(chatId, tmsg('automatism.takeover', { step: stepName, error }));
   }
-  await postAutomatismMessage(agentChatId, context);
+  await postAutomatismMessage(agentChatId, tmsg('automatism.stepFailed', { step: stepName, error }));
   await invokeAgent(agentChatId, data.actorId);
 }
 
@@ -226,10 +244,7 @@ export async function recoverAutomatisms(): Promise<void> {
   for (const row of orphans) {
     console.log(`[automatism] recovering ${row.id} (${row.type}) from step ${row.step}`);
     try {
-      await postAutomatismMessage(
-        row.chatId,
-        `Server restarted mid-flow — resuming automatically from step ${row.step + 1}.`,
-      );
+      await postAutomatismMessage(row.chatId, tmsg('automatism.recovered', { step: row.step + 1 }));
     } catch (err) {
       console.error('[automatism] recovery notice failed:', err);
     }
