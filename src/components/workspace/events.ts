@@ -146,7 +146,8 @@ const registerOnionSlider = (app: HTMLElement): void => {
 
     const after = container.querySelector<HTMLElement>('.ws-onion__after');
     const slider = container.querySelector<HTMLElement>('.ws-onion__slider');
-    if (after) after.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+    // top layer shows RIGHT of the slider (before left / after right)
+    if (after) after.style.clipPath = `inset(0 0 0 ${pct}%)`;
     if (slider) slider.style.left = `${pct}%`;
     // Route to the right state slice (silent — DOM already updated)
     if (container.dataset.onionTarget === 'browserCompare') {

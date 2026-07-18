@@ -52,7 +52,7 @@ export const renderBrowserCompare = (state: AppState): string => {
             shotUrl(branch, route, bc.a, bc.b, 'after'),
             bc.b,
             'ws-onion__after',
-            `clip-path: inset(0 ${100 - bc.onionPercent}% 0 0);`,
+            `clip-path: inset(0 0 0 ${bc.onionPercent}%);`,
           )}
           <div class="ws-onion__slider" data-action="ws-bc-onion-handle" style="left: ${bc.onionPercent}%;">
             <span class="ws-onion__grip">⇔</span>
