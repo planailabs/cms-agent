@@ -103,6 +103,7 @@ export const GET: APIRoute = async ({ url }) => {
     JSON.stringify({
       phase: chat.turnPhase,
       kind: chat.kind,
+      title: chat.title,
       archived: Boolean(chat.archivedAt),
       workflowPhase: chat.workflowPhase,
       planJson: chat.planJson,

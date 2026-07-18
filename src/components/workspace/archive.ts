@@ -40,18 +40,11 @@ export const closeArchive = (): void => {
   store.notify();
 };
 
-/** Open an archived chat read-only: it isn't in the sidebar list anymore, so
- *  carry its kind/title over and mark it archived right away (history
- *  confirms both) — the composer stays replaced by the archived note. */
+/** Open an archived chat read-only. Kind, title and the archived flag sync
+ *  over with the history load — no carry-over needed here. */
 export const openArchivedChat = (id: string): void => {
-  const row = store.state.workspace.archive.chats.find((c) => c.id === id);
-  if (!row) return;
   closeArchive();
   switchChat(id);
-  store.state.activeChatKind = row.kind;
-  store.state.activeChatTitle = row.title;
-  store.state.activeChatArchived = true;
-  store.notify();
 };
 
 export const deleteArchivedChat = async (id: string): Promise<void> => {

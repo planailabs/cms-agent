@@ -37,6 +37,7 @@ export interface ChatHistoryResult {
   } | null;
   targetAhead?: boolean;
   kind?: string;
+  title?: string;
   archived?: boolean;
 }
 
@@ -82,6 +83,7 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
       automatism: data.automatism ?? null,
       targetAhead: Boolean(data.targetAhead),
       kind: data.kind,
+      title: data.title,
       archived: Boolean(data.archived),
     };
   } catch {
@@ -123,6 +125,7 @@ export const restoreAIChatSession = (): void => {
     if (result) {
       store.state.workspace.targetAhead = Boolean(result.targetAhead);
       if (result.kind) store.state.activeChatKind = result.kind;
+      if (result.title) store.state.activeChatTitle = result.title;
       store.state.activeChatArchived = Boolean(result.archived);
       store.notify();
     }
