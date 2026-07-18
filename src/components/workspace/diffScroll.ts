@@ -11,21 +11,30 @@
 const IFRAME_IDS = ['ws-diff-before', 'ws-diff-after'] as const;
 
 // Runs inside each preview iframe (has `agent` in scope, per bootstrap eval).
+// Echo suppression is by position, not timing: the scroll event caused by a
+// programmatic scrollTop can arrive after the next rAF, so a timed "applying"
+// flag leaks echoes back to the other pane and the two fight (jitter). Instead
+// we remember the target we set and swallow the one event that lands on it.
 const SYNC_CODE = `
 if (!window.__cmsScrollSync) {
   window.__cmsScrollSync = true;
   var el = document.scrollingElement || document.documentElement;
-  var applying = false;
+  var expected = -1;
   window.addEventListener('scroll', function () {
-    if (applying) return;
+    if (expected >= 0) {
+      var wasEcho = Math.abs(el.scrollTop - expected) < 2;
+      expected = -1;
+      if (wasEcho) return;
+    }
     var max = el.scrollHeight - el.clientHeight;
     agent.post({ type: 'cms:scroll', frac: max > 0 ? el.scrollTop / max : 0 });
   }, { passive: true });
   agent.on('cms:scroll-to', function (d) {
     var max = el.scrollHeight - el.clientHeight;
-    applying = true;
-    el.scrollTop = (d && typeof d.frac === 'number' ? d.frac : 0) * max;
-    requestAnimationFrame(function () { applying = false; });
+    var top = (d && typeof d.frac === 'number' ? d.frac : 0) * max;
+    if (Math.abs(el.scrollTop - top) < 1) return;
+    expected = top;
+    el.scrollTop = top;
   });
 }
 `;
@@ -46,6 +55,13 @@ const postTo = (f: HTMLIFrameElement, msg: Record<string, unknown>): void => {
 let seq = 0;
 let registered = false;
 
+/** Leader latch: whichever pane scrolled most recently drives; cms:scroll from
+ *  the other pane is dropped while the latch is fresh, so a late echo can't
+ *  steer the pane the user is actually scrolling. */
+let leaderId: string | null = null;
+let leaderUntil = 0;
+const LEADER_MS = 150;
+
 /** Register once at app init; acts only while the diff iframes exist. */
 export const registerDiffScrollSync = (): void => {
   if (registered) return;
@@ -63,6 +79,10 @@ export const registerDiffScrollSync = (): void => {
     if (data.type === 'cms:agent-ready') {
       postTo(src, { type: 'cms:eval', id: `scroll-sync-${++seq}`, code: SYNC_CODE });
     } else if (data.type === 'cms:scroll' && typeof data.frac === 'number') {
+      const now = performance.now();
+      if (leaderId && leaderId !== src.id && now < leaderUntil) return;
+      leaderId = src.id;
+      leaderUntil = now + LEADER_MS;
       const other = frames.find((f) => f && f !== src);
       if (other) postTo(other, { type: 'cms:scroll-to', frac: data.frac });
     }
