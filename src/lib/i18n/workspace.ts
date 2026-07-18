@@ -129,6 +129,9 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.bc.hideDiff': 'Hide diff',
     'workspace.bc.showDiff': 'Show diff',
     'workspace.bc.closeTitle': 'Close comparison',
+
+    // ── Injected preview overlay ──
+    'workspace.injected.chatAboutThis': '💬 Chat about this',
   },
   de: {
     // ── Sidebar: Branch-Umschalter + Chat-Liste ──
@@ -258,5 +261,8 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.bc.hideDiff': 'Diff ausblenden',
     'workspace.bc.showDiff': 'Diff einblenden',
     'workspace.bc.closeTitle': 'Vergleich schließen',
+
+    // ── Injiziertes Vorschau-Overlay ──
+    'workspace.injected.chatAboutThis': '💬 Darüber chatten',
   },
 };

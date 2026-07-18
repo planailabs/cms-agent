@@ -14,6 +14,7 @@
  */
 
 import type { AgentEnvelope } from '@/injected/protocol';
+import { t, uiLocale } from '@/lib/i18n';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -98,9 +99,23 @@ const fetchModuleSource = (): Promise<string> => {
 const pushModule = (): void => {
   void fetchModuleSource()
     .then((source) => request({ type: 'cms:load-module', source }))
+    .then(() => pushConfig())
     .catch((err) => {
       console.error('[preview-agent] module load failed:', err);
     });
+};
+
+// ── Theme/locale sync (main window → overlay) ───────────────────────────────
+
+/** Sends the workspace's effective theme + locale-resolved overlay labels. */
+const pushConfig = (): void => {
+  const locale = uiLocale();
+  postToPreview({
+    type: 'cms:config',
+    theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
+    locale,
+    labels: { chatAboutThis: t(locale, 'workspace.injected.chatAboutThis') },
+  });
 };
 
 // ── Fire-and-forget commands ─────────────────────────────────────────────────
@@ -125,6 +140,12 @@ export const onPreviewAgentEvent = (type: string, handler: AgentEventHandler): v
 };
 
 export const registerPreviewAgent = (): void => {
+  // Follow the main window's theme (data-theme) and locale (lang) live
+  new MutationObserver(() => pushConfig()).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'lang'],
+  });
+
   window.addEventListener('message', (event: MessageEvent) => {
     // Accept messages ONLY from the current preview iframe, at its own origin
     const iframe = getPreviewIframe();

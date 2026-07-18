@@ -3,6 +3,7 @@
  * a text-quote anchor (exact + prefix/suffix + CSS path).
  */
 import type { AgentApi } from '../protocol';
+import { cfg, onConfigChange } from './config';
 import { cssPath, isOurs, type Listen } from './dom';
 
 const MAX_EXACT = 500;
@@ -62,9 +63,9 @@ export const initSelection = (agent: AgentApi, listen: Listen): void => {
 
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'cms-ov-btn';
+    btn.className = `cms-ov-btn${cfg.theme === 'light' ? ' cms-ov-light' : ''}`;
     btn.setAttribute('data-cms-overlay', '');
-    btn.textContent = '💬 Chat about this';
+    btn.textContent = cfg.labels.chatAboutThis;
     btn.style.left = `${Math.max(4, rect.left + window.scrollX)}px`;
     btn.style.top = `${Math.max(4, rect.bottom + window.scrollY + 6)}px`;
     btn.addEventListener('mousedown', (ev) => {
@@ -92,6 +93,13 @@ export const initSelection = (agent: AgentApi, listen: Listen): void => {
     );
     document.body.appendChild(btn);
     selBtn = btn;
+  });
+
+  // Live theme/locale switch in the main window — restyle a visible button
+  onConfigChange(() => {
+    if (!selBtn) return;
+    selBtn.classList.toggle('cms-ov-light', cfg.theme === 'light');
+    selBtn.textContent = cfg.labels.chatAboutThis;
   });
 
   const queueSelBtn = (): void => {

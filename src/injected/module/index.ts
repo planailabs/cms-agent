@@ -12,6 +12,7 @@
  * a new module replaces this one cleanly.
  */
 import type { AgentApi } from '../protocol';
+import { initConfig } from './config';
 import { createListen } from './dom';
 import { initNavigation } from './navigation';
 import { initSelection } from './selection';
@@ -22,6 +23,8 @@ const STYLE =
   'border:1px solid #7852ee;background:#1e1e1e;color:#eee;font:12px/1.4 system-ui,sans-serif;' +
   'cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35);white-space:nowrap}' +
   '.cms-ov-btn:hover{background:#2a2a2a}' +
+  '.cms-ov-btn.cms-ov-light{background:#fff;color:#222;box-shadow:0 4px 14px rgba(0,0,0,.18)}' +
+  '.cms-ov-btn.cms-ov-light:hover{background:#f3f0ff}' +
   '.cms-ov-hl{position:fixed;z-index:2147483645;pointer-events:none;' +
   'outline:2px solid #7852ee;outline-offset:-1px;background:rgba(120,82,238,.12);border-radius:2px}';
 
@@ -32,6 +35,7 @@ export default function cmsAgentModule(agent: AgentApi): void {
   (document.head || document.documentElement).appendChild(style);
   agent.onTeardown(() => style.remove());
 
+  initConfig(agent);
   const listen = createListen(agent);
   initNavigation(agent, listen);
   initSelection(agent, listen);
