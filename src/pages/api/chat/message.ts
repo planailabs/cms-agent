@@ -28,6 +28,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return json({ error: 'Invalid body: need { chatId, type, text }' }, 400);
   }
 
+  // Archived chats are done — nothing may start a turn on them again.
+  const chat = await prisma.chat.findUnique({
+    where: { id: body.chatId },
+    select: { archivedAt: true },
+  });
+  if (!chat) return json({ error: 'Chat not found' }, 404);
+  if (chat.archivedAt) {
+    return json({ error: 'This chat is archived and no longer accepts messages.' }, 409);
+  }
+
   // While an automatism is actively running its steps, its chat takes no
   // user messages — wait for it to finish or pause (then the agent engages).
   if (body.type === 'message') {
