@@ -2805,6 +2805,171 @@ html.is-first-visit #app {
   color: #dc2626;
 }
 
+/* ── Git modal (commit list + diffs, GitHub-flavored) ── */
+
+.ws-git__head-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.ws-git__head-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ws-git__branch {
+  max-width: 24rem;
+}
+
+.ws-git__body {
+  gap: 0;
+}
+
+/* Commit rows joined into one bordered list, GitHub-style */
+.ws-git__row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-muted);
+  border-top-width: 0;
+  background: var(--surface-elevated);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-git__row:first-of-type {
+  border-top-width: 1px;
+  border-radius: 0.6rem 0.6rem 0 0;
+}
+
+.ws-git__row:last-of-type {
+  border-radius: 0 0 0.6rem 0.6rem;
+}
+
+.ws-git__row:first-of-type:last-of-type {
+  border-radius: 0.6rem;
+}
+
+.ws-git__row:hover {
+  background: var(--surface-hover);
+}
+
+.ws-git__row.is-target {
+  opacity: 0.45;
+}
+
+.ws-git__info {
+  min-width: 0;
+  flex: 1;
+}
+
+.ws-git__message {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.ws-git__meta {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ws-git__sha {
+  flex-shrink: 0;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border-muted);
+  border-radius: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--accent);
+}
+
+.ws-git__divider {
+  padding: 0.9rem 0.25rem 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ws-git__empty {
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Diff view */
+.ws-git__preamble {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-muted);
+  border-radius: 0.6rem;
+  background: var(--surface-elevated);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  color: var(--text-muted);
+}
+
+.ws-git__file {
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-muted);
+  border-radius: 0.6rem;
+  overflow: hidden;
+}
+
+.ws-git__file-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-elevated);
+  border-bottom: 1px solid var(--border-muted);
+  font-size: 0.78rem;
+}
+
+.ws-git__counts .is-add { color: #16a34a; }
+.ws-git__counts .is-del { color: #dc2626; }
+
+.ws-git__patch {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.ws-git__line {
+  padding: 0 0.75rem;
+  white-space: pre;
+}
+
+.ws-git__line.is-add {
+  background: color-mix(in srgb, #16a34a 14%, transparent);
+}
+
+.ws-git__line.is-del {
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+}
+
+.ws-git__line.is-hunk {
+  padding-block: 0.15rem;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-muted);
+}
+
 /* ── Automatism step bar states ── */
 
 .ws-phase-step.is-failed {

@@ -82,6 +82,7 @@ export const renderBranchSwitcher = (state: AppState): string => {
         <div class="ws-branch-panel__actions">
           <button type="button" class="ws-mini-button" data-action="ws-new-branch">${escapeHtml(t(locale, 'workspace.sidebar.newBranch'))}</button>
           <button type="button" class="ws-mini-button" data-action="ws-archive-open" title="${escapeHtml(t(locale, 'workspace.sidebar.archiveTitle'))}">${escapeHtml(t(locale, 'workspace.sidebar.archiveButton'))}</button>
+          <button type="button" class="ws-mini-button" data-action="ws-git-open" title="${escapeHtml(t(locale, 'workspace.sidebar.gitTitle'))}">${escapeHtml(t(locale, 'workspace.sidebar.gitButton'))}</button>
         </div>
         <div class="ws-branch-panel__list">${renderBranchList(state) || `<span class="ws-empty-note">${escapeHtml(t(locale, 'workspace.sidebar.noBranches'))}</span>`}</div>
       </div>`

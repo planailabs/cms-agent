@@ -169,4 +169,23 @@ describe('git engine', () => {
     );
     expect(engine.untrackedMergeCollisions(evil)).toEqual([]);
   });
+
+  it('flags commits already on the target in branchCommits', async () => {
+    const wt = await engine.ensureWorktree('commit-list-test', 'main');
+    fs.writeFileSync(path.join(wt, 'exclusive.txt'), 'only here\n');
+    const ownSha = await engine.commitExecution('commit-list-test', 'Exclusive change', AUTHOR);
+
+    const commits = await engine.branchCommits('commit-list-test', 'main', 50);
+    expect(commits[0].sha).toBe(ownSha);
+    expect(commits[0].onTarget).toBe(false);
+    // Everything inherited from main is greyed out
+    const inherited = commits.slice(1);
+    expect(inherited.length).toBeGreaterThan(0);
+    expect(inherited.every((c) => c.onTarget)).toBe(true);
+
+    // Viewing the target itself: nothing is flagged
+    const targetView = await engine.branchCommits('main', null, 50);
+    expect(targetView.length).toBeGreaterThan(0);
+    expect(targetView.every((c) => !c.onTarget)).toBe(true);
+  });
 });

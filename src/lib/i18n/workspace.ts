@@ -132,6 +132,19 @@ export const workspaceCatalogs: AreaCatalogs = {
 
     // ── Injected preview overlay ──
     'workspace.injected.chatAboutThis': '💬 Chat about this',
+
+    // ── Git modal ──
+    'workspace.sidebar.gitButton': 'Commits',
+    'workspace.sidebar.gitTitle': 'Browse commits and diffs',
+    'workspace.git.heading': 'Commits',
+    'workspace.git.close': 'Close',
+    'workspace.git.back': 'Back',
+    'workspace.git.loading': 'Loading commits…',
+    'workspace.git.diffLoading': 'Loading diff…',
+    'workspace.git.empty': 'No commits on this branch.',
+    'workspace.git.onTarget': 'earlier history on {target}',
+    'workspace.git.loadFailed': 'Loading failed ({status})',
+    'workspace.git.networkError': 'Network error — please try again.',
   },
   de: {
     // ── Sidebar: Branch-Umschalter + Chat-Liste ──
@@ -264,5 +277,18 @@ export const workspaceCatalogs: AreaCatalogs = {
 
     // ── Injiziertes Vorschau-Overlay ──
     'workspace.injected.chatAboutThis': '💬 Darüber chatten',
+
+    // ── Git-Modal ──
+    'workspace.sidebar.gitButton': 'Commits',
+    'workspace.sidebar.gitTitle': 'Commits und Diffs ansehen',
+    'workspace.git.heading': 'Commits',
+    'workspace.git.close': 'Schließen',
+    'workspace.git.back': 'Zurück',
+    'workspace.git.loading': 'Commits werden geladen…',
+    'workspace.git.diffLoading': 'Diff wird geladen…',
+    'workspace.git.empty': 'Keine Commits auf diesem Branch.',
+    'workspace.git.onTarget': 'frühere Historie auf {target}',
+    'workspace.git.loadFailed': 'Laden fehlgeschlagen ({status})',
+    'workspace.git.networkError': 'Netzwerkfehler — bitte erneut versuchen.',
   },
 };

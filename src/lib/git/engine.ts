@@ -453,6 +453,31 @@ export interface CommitInfo {
   date: string;
 }
 
+export interface BranchCommit extends CommitInfo {
+  /** True when the commit is already on the target branch (not exclusive). */
+  onTarget: boolean;
+}
+
+/**
+ * Commit list for the git modal: full history of `branch`, with commits that
+ * are already on `target` flagged (the UI greys them out). No target (viewing
+ * the target branch itself) → everything is "exclusive".
+ */
+export async function branchCommits(
+  branch: string,
+  target: string | null,
+  maxCount = 50,
+): Promise<BranchCommit[]> {
+  const all = await branchLog(branch, maxCount);
+  if (!target) return all.map((c) => ({ ...c, onTarget: false }));
+  const exclusive = new Set(
+    (await repoGit().raw(['rev-list', `--max-count=${maxCount}`, `${target}..${branch}`]))
+      .split('\n')
+      .filter(Boolean),
+  );
+  return all.map((c) => ({ ...c, onTarget: !exclusive.has(c.sha) }));
+}
+
 export async function branchLog(branch: string, maxCount = 50): Promise<CommitInfo[]> {
   const SEP = '\x1f';
   const out = await repoGit().raw([

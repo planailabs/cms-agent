@@ -88,6 +88,32 @@ export interface ArchivedChatRow {
   publication: { status: string; sha: string; externalUrl: string | null } | null;
 }
 
+/** A commit row in the git modal (GET /api/git/commits). */
+export interface GitCommitRow {
+  sha: string;
+  message: string;
+  authorName: string;
+  date: string;
+  /** Already on the target branch — rendered greyed out. */
+  onTarget: boolean;
+}
+
+/** Full-screen git modal: commit list per branch + per-commit diff. */
+export interface GitModalState {
+  open: boolean;
+  loading: boolean;
+  error: string | null;
+  /** Branch whose commits are listed (work branch or target branch). */
+  branch: string | null;
+  /** Target branch of a work branch (null when viewing a target branch). */
+  target: string | null;
+  commits: GitCommitRow[];
+  /** Commit whose diff is shown (null = list view). */
+  selectedSha: string | null;
+  patch: string | null;
+  patchLoading: boolean;
+}
+
 /** Full-screen archive modal (done chats; delete = chat + branch + data). */
 export interface ArchiveState {
   open: boolean;
@@ -152,6 +178,9 @@ export interface WorkspaceState {
   /** Archive modal (not chat-scoped — survives chat switches). */
   archive: ArchiveState;
 
+  /** Git modal (commit list + diffs; not chat-scoped). */
+  git: GitModalState;
+
   /** Step progress of the active chat's automatism (deployment chats). */
   automatism: AutomatismProgress | null;
 
@@ -200,9 +229,22 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   diff: createInitialDiffState(),
   browserCompare: createInitialBrowserCompareState(),
   archive: { open: false, loading: false, error: null, chats: [], busyId: null },
+  git: createInitialGitModalState(),
   automatism: null,
   inputModal: null,
   targetAhead: false,
+});
+
+export const createInitialGitModalState = (): GitModalState => ({
+  open: false,
+  loading: false,
+  error: null,
+  branch: null,
+  target: null,
+  commits: [],
+  selectedSha: null,
+  patch: null,
+  patchLoading: false,
 });
 
 export const createInitialBrowserCompareState = (): BrowserCompareState => ({

@@ -43,6 +43,7 @@ import {
   cancelElementPick,
 } from './previewAgent';
 import { openArchive, closeArchive, deleteArchivedChat } from './archive';
+import { openGitModal, closeGitModal, loadGitCommits, selectGitCommit, backToGitList } from './gitModal';
 import type { DiffViewMode, PageContextElement, PageContextSelection } from './state';
 
 const SIDEBAR_MIN_WIDTH = 300;
@@ -276,6 +277,18 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-archive-delete"]', (_e, target) => {
     const chatId = target.getAttribute('data-chat-id');
     if (chatId) void deleteArchivedChat(chatId);
+  });
+
+  // Git modal (commit list + diffs)
+  delegateEvent(app, 'click', '[data-action="ws-git-open"]', () => openGitModal());
+  delegateEvent(app, 'click', '[data-action="ws-git-close"]', () => closeGitModal());
+  delegateEvent(app, 'click', '[data-action="ws-git-back"]', () => backToGitList());
+  delegateEvent(app, 'click', '[data-action="ws-git-commit"]', (_e, target) => {
+    const sha = target.getAttribute('data-sha');
+    if (sha) void selectGitCommit(sha);
+  });
+  delegateEvent<Event>(app, 'change', '[data-action="ws-git-branch"]', (_e, target) => {
+    void loadGitCommits((target as HTMLSelectElement).value || null);
   });
 
   // Sidebar collapse/expand
