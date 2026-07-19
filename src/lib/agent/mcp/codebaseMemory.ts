@@ -23,6 +23,24 @@ const warnOnce = (msg: string): void => {
   warned = true;
 };
 
+/**
+ * Auto-index is off upstream by default; with it on, the MCP server refreshes
+ * the graph on start when the branch changed (the agent commits between
+ * turns). The flag persists in the per-chat jail HOME (sqlite config), so
+ * setting it once per chat is enough — the memo just skips repeat spawns.
+ */
+const autoIndexEnabled = new Set<string>();
+async function ensureAutoIndex(sb: Awaited<ReturnType<typeof ensureSandbox>>, ctx: ToolContext) {
+  if (autoIndexEnabled.has(ctx.chatId)) return;
+  const res = await runSandboxed(sb, `${BIN} config set auto_index true`, {
+    cwd: ctx.worktreePath,
+    sessionKey: ctx.chatId,
+    timeoutMs: 30_000,
+  });
+  if (res.code === 0) autoIndexEnabled.add(ctx.chatId);
+  else console.warn(`[codebase-memory] enabling auto_index failed: ${res.stderr || res.stdout}`);
+}
+
 export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMcp | null> {
   let sb;
   try {
@@ -37,6 +55,7 @@ export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMc
   }
 
   try {
+    await ensureAutoIndex(sb, ctx);
     const { command, args } = sandboxCommand(sb, [BIN], {
       cwd: ctx.worktreePath,
       sessionKey: ctx.chatId,
