@@ -260,6 +260,7 @@ export async function handleChatMessage(
       extension,
       approvedMemories,
       needsTitle,
+      worktreePath,
     },
     setPhase,
     appendMsg,

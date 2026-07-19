@@ -69,9 +69,8 @@ const readJson = (file: string): Record<string, unknown> | null => {
   }
 };
 
-const loadSkills = (plugin: string, dir: string, skillsRef: string): PluginSkill[] => {
-  const skillsDir = path.resolve(dir, skillsRef);
-  if (!skillsDir.startsWith(dir) || !fs.existsSync(skillsDir)) return [];
+const skillsFromDir = (plugin: string, skillsDir: string): PluginSkill[] => {
+  if (!fs.existsSync(skillsDir)) return [];
   const skills: PluginSkill[] = [];
   for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -87,6 +86,22 @@ const loadSkills = (plugin: string, dir: string, skillsRef: string): PluginSkill
   }
   return skills;
 };
+
+const loadSkills = (plugin: string, dir: string, skillsRef: string): PluginSkill[] => {
+  const skillsDir = path.resolve(dir, skillsRef);
+  if (!skillsDir.startsWith(dir)) return [];
+  return skillsFromDir(plugin, skillsDir);
+};
+
+/**
+ * Skills carried by the managed site itself: <worktree>/.agents/skills/
+ * (generic agent-conventions layout). Read fresh every time — the agent can
+ * add or edit them mid-chat, and each chat has its own worktree.
+ */
+export function loadBranchSkills(worktreePath: string | undefined): PluginSkill[] {
+  if (!worktreePath) return [];
+  return skillsFromDir('site repo', path.join(worktreePath, '.agents', 'skills'));
+}
 
 const loadRules = (plugin: string, dir: string, rulesRef?: string): PluginRule[] => {
   const candidates: string[] = [];
@@ -141,9 +156,21 @@ export function loadPluginRegistry(): PluginRegistry {
   return registry;
 }
 
+/** All skills visible to a chat: branch-local first (they win name clashes),
+ *  then installed plugin skills. */
+export function skillsForChat(worktreePath?: string): PluginSkill[] {
+  const branch = loadBranchSkills(worktreePath);
+  const taken = new Set(branch.map((s) => s.name.toLowerCase()));
+  return [
+    ...branch,
+    ...loadPluginRegistry().skills.filter((s) => !taken.has(s.name.toLowerCase())),
+  ];
+}
+
 /** System-prompt section: always-on rules + the on-demand skill list. */
-export function pluginPromptSection(): string {
-  const { skills, rules } = loadPluginRegistry();
+export function pluginPromptSection(worktreePath?: string): string {
+  const { rules } = loadPluginRegistry();
+  const skills = skillsForChat(worktreePath);
   const parts: string[] = [];
   if (rules.length > 0) {
     parts.push(
@@ -155,7 +182,12 @@ export function pluginPromptSection(): string {
     parts.push(
       'Available skills — call use_skill with a name to load its full instructions ' +
         'when the task (or the user) calls for it:\n' +
-        skills.map((s) => `- ${s.name}: ${s.description.slice(0, 300)}`).join('\n'),
+        skills
+          .map(
+            (s) =>
+              `- ${s.name}${s.plugin === 'site repo' ? ' (from the site repo)' : ''}: ${s.description.slice(0, 300)}`,
+          )
+          .join('\n'),
     );
   }
   return parts.join('\n\n');

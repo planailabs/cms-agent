@@ -5,7 +5,7 @@
  * actually needed.
  */
 import { z } from 'zod';
-import { loadPluginRegistry } from '../plugins';
+import { skillsForChat } from '../plugins';
 import { registerTool, type ToolDef } from './registry';
 
 const useSkillTool: ToolDef = {
@@ -18,8 +18,9 @@ const useSkillTool: ToolDef = {
   }),
   phases: ['plan', 'execute', 'preview', 'published'],
   kinds: ['workflow', 'deployment', 'deployments'],
-  async execute(input) {
-    const { skills } = loadPluginRegistry();
+  async execute(input, ctx) {
+    // Branch-local skills (worktree .agents/skills/) shadow installed ones
+    const skills = skillsForChat(ctx.worktreePath);
     const skill = skills.find((s) => s.name.toLowerCase() === input.name.toLowerCase());
     if (!skill) {
       return JSON.stringify({

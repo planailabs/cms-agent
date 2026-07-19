@@ -18,6 +18,8 @@ export interface PromptInput {
   extension?: string;
   /** True while the chat still carries the default title. */
   needsTitle?: boolean;
+  /** Worktree of the chat's work branch — source of branch-local skills. */
+  worktreePath?: string;
 }
 
 const COMMON = `You are the editorial agent of a CMS that manages an Astro website through git.
@@ -104,7 +106,7 @@ function languageDirective(locale: string): string {
 
 export function buildSystemPrompt(input: PromptInput): string {
   const directive = languageDirective(input.locale);
-  const plugins = pluginPromptSection();
+  const plugins = pluginPromptSection(input.worktreePath);
   if (input.kind === 'deployments' || input.kind === 'deployment') {
     const base = input.kind === 'deployment' ? DEPLOYMENT_PROMPT : DEPLOYMENTS_PROMPT;
     let p = base.replace('{language_directive}', directive);

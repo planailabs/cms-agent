@@ -8,10 +8,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
+  loadBranchSkills,
   loadPluginRegistry,
   parseFrontmatter,
   pluginPromptSection,
   resetPluginCache,
+  skillsForChat,
 } from '@/lib/agent/plugins';
 
 const REPO_ROOT = process.cwd();
@@ -95,6 +97,41 @@ describe('agent plugins', () => {
     const err = await tool.execute!({ name: 'nope' }, {} as never);
     expect(err).toContain('Unknown skill');
     expect(err).toContain('hello');
+  });
+
+  it('loads branch-local skills from a worktree, shadowing installed ones', async () => {
+    process.env.CMS_PLUGINS_ROOT = root;
+    const wt = path.join(root, 'worktree');
+    fs.mkdirSync(path.join(wt, '.agents', 'skills', 'site-style'), { recursive: true });
+    fs.writeFileSync(
+      path.join(wt, '.agents', 'skills', 'site-style', 'SKILL.md'),
+      '---\nname: site-style\ndescription: House style rules.\n---\n\nUse sentence case.\n',
+    );
+    // Same name as the installed plugin skill — the branch one must win
+    fs.mkdirSync(path.join(wt, '.agents', 'skills', 'hello'), { recursive: true });
+    fs.writeFileSync(
+      path.join(wt, '.agents', 'skills', 'hello', 'SKILL.md'),
+      '---\nname: hello\ndescription: Site-specific greeting.\n---\n\nBranch hello wins.\n',
+    );
+
+    expect(loadBranchSkills(undefined)).toEqual([]);
+    expect(loadBranchSkills(wt)).toHaveLength(2);
+
+    const merged = skillsForChat(wt);
+    expect(merged.filter((s) => s.name === 'hello')).toHaveLength(1);
+    expect(merged.find((s) => s.name === 'hello')!.body).toContain('Branch hello wins.');
+
+    const section = pluginPromptSection(wt);
+    expect(section).toContain('site-style (from the site repo)');
+
+    const { getTool } = await import('@/lib/agent/tools/registry');
+    const { registerSkillTools } = await import('@/lib/agent/tools/skillTools');
+    registerSkillTools();
+    const out = await getTool('use_skill')!.execute!(
+      { name: 'hello' },
+      { worktreePath: wt } as never,
+    );
+    expect(out).toContain('Branch hello wins.');
   });
 
   it.skipIf(!fs.existsSync(PONYTAIL))('loads the real plugin dirs (flake inputs)', () => {
