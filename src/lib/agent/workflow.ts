@@ -274,7 +274,7 @@ export async function revertExecution(opts: {
   );
 
   await prisma.execution.updateMany({
-    where: { sha: opts.sha, revertedBySha: null },
+    where: { sha: opts.sha, chat: { branchId: opts.branchId }, revertedBySha: null },
     data: { revertedBySha: revertSha },
   });
 

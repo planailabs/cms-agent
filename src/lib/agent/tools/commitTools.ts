@@ -77,8 +77,10 @@ const gitRevertTool: ToolDef = {
       });
     }
     // If the reverted commit was an execution, mark its card as reverted.
+    // Scoped to THIS chat: shared object store means the sha (or a short
+    // prefix) can also match executions of unrelated chats/branches.
     const reverted = await prisma.execution.updateMany({
-      where: { sha: { startsWith: input.sha.toLowerCase() }, revertedBySha: null },
+      where: { chatId: ctx.chatId, sha: { startsWith: input.sha.toLowerCase() }, revertedBySha: null },
       data: { revertedBySha: revertSha },
     });
     if (reverted.count > 0) {
