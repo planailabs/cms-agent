@@ -62,6 +62,24 @@ export const postMessage = async (payload: {
   // 202 — events arrive via EventSource
 };
 
+/** Drop a dead EventSource and schedule a backoff reconnect. */
+const dropAndScheduleReconnect = (es: EventSource): void => {
+  console.warn('[sse-client] EventSource error/disconnected');
+  if (eventSource === es) {
+    eventSource = null;
+    connectedChatId = null;
+    connectPromise = null;
+  }
+  es.close();
+
+  if (!intentionalClose) {
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30_000);
+    reconnectAttempt++;
+    console.log(`[sse-client] Reconnecting in ${delay}ms (attempt ${reconnectAttempt})`);
+    reconnectTimer = setTimeout(() => { void connectEvents(); }, delay);
+  }
+};
+
 /**
  * Opens a persistent EventSource connection for receiving server events
  * for the active chat. Returns a promise that resolves when the
@@ -111,6 +129,7 @@ export const connectEvents = (): Promise<void> => {
         });
       }
 
+      const wasReconnect = reconnectAttempt > 0;
       await new Promise<void>((resolve) => {
         es.onopen = () => {
           console.log('[sse-client] EventSource connected');
@@ -118,30 +137,26 @@ export const connectEvents = (): Promise<void> => {
           resolve();
         };
 
-        // Also resolve on first error to avoid hanging forever
+        // Also resolve on first error to avoid hanging forever. A fatal
+        // first error fires before es.onerror below is assigned — without
+        // handling it here the closed EventSource would never retry.
         const errorOnce = () => {
           es.removeEventListener('error', errorOnce);
+          if (es.readyState === EventSource.CLOSED) dropAndScheduleReconnect(es);
           resolve();
         };
         es.addEventListener('error', errorOnce);
       });
 
-      es.onerror = () => {
-        console.warn('[sse-client] EventSource error/disconnected');
-        if (eventSource === es) {
-          eventSource = null;
-          connectedChatId = null;
-          connectPromise = null;
-          es.close();
-        }
+      es.onerror = () => dropAndScheduleReconnect(es);
 
-        if (!intentionalClose) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30_000);
-          reconnectAttempt++;
-          console.log(`[sse-client] Reconnecting in ${delay}ms (attempt ${reconnectAttempt})`);
-          reconnectTimer = setTimeout(() => { void connectEvents(); }, delay);
-        }
-      };
+      // Events broadcast during the disconnect gap are gone — the server
+      // replays only the pending question. Refetch history so the transcript,
+      // executions and publish card catch up (server-wins resync).
+      if (wasReconnect && es.readyState === EventSource.OPEN) {
+        const { resyncChatHistory } = await import('./session');
+        void resyncChatHistory(chatId);
+      }
     } catch (err) {
       console.error('[sse-client] Failed to connect:', err);
     } finally {

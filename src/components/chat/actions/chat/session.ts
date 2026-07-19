@@ -12,6 +12,7 @@ import {
   type StoredMessage,
 } from './cache';
 import { connectEvents } from './sse';
+import { getTranscriptEventSeq } from './events';
 import { sendChatMessage } from './stateMachine';
 import { MAX_PUBLISH_LOG_LINES } from '../../../workspace/publishCard';
 
@@ -128,71 +129,110 @@ export const restoreAIChatSession = (): void => {
   void connectEvents();
 
   // Fetch authoritative history from server — then decide whether to auto-send greeting
-  const applyHistory = (result: ChatHistoryResult | null) => {
-    const mc = store.state.chat?.aiChat;
-    if (!mc || store.state.activeChatId !== chatId) return;
+  const seqAtStart = getTranscriptEventSeq();
+  void fetchAIChatHistory(chatId).then((result) =>
+    applyHistoryResult(chatId, result, { mode: 'restore', transcriptSeqAtStart: seqAtStart }),
+  );
+};
 
-    if (result) {
-      store.state.workspace.targetAhead = Boolean(result.targetAhead);
-      if (result.kind) store.state.activeChatKind = result.kind;
-      if (result.title) store.state.activeChatTitle = result.title;
-      store.state.activeChatArchived = Boolean(result.archived);
-      store.notify();
+/**
+ * Re-sync after an SSE reconnect: events broadcast while disconnected are
+ * gone, so the server snapshot is NEWER than the screen — server wins.
+ */
+export const resyncChatHistory = async (chatId: string): Promise<void> => {
+  const result = await fetchAIChatHistory(chatId);
+  applyHistoryResult(chatId, result, { mode: 'resync', transcriptSeqAtStart: -1 });
+};
+
+/**
+ * Apply a history snapshot to the store. 'restore' (page load / chat switch)
+ * lets live SSE state that landed during the fetch win; 'resync' (after a
+ * reconnect gap) is server-wins.
+ */
+const applyHistoryResult = (
+  chatId: string,
+  result: ChatHistoryResult | null,
+  opts: { mode: 'restore' | 'resync'; transcriptSeqAtStart: number },
+): void => {
+  const mc = store.state.chat?.aiChat;
+  if (!mc || store.state.activeChatId !== chatId) return;
+  const serverWins = opts.mode === 'resync';
+
+  if (result) {
+    store.state.workspace.targetAhead = Boolean(result.targetAhead);
+    if (result.kind) store.state.activeChatKind = result.kind;
+    if (result.title) store.state.activeChatTitle = result.title;
+    store.state.activeChatArchived = Boolean(result.archived);
+    store.notify();
+  }
+
+  // Rehydrate the automatism step bar (deployment chats)
+  if (result?.automatism) {
+    store.state.workspace.automatism = {
+      forChatId: chatId,
+      automatismType: result.automatism.automatismType,
+      status: result.automatism.status,
+      step: result.automatism.step,
+      steps: result.automatism.steps,
+      lastError: result.automatism.lastError,
+    };
+    store.notify();
+  }
+
+  // Rehydrate persisted executions (cards + publishable sha). On restore,
+  // live SSE events that landed while the fetch was in flight win.
+  if (result && (serverWins || result.executions.length > 0)) {
+    const ws = store.state.workspace;
+    if (serverWins || ws.executions.length === 0) {
+      ws.executions = result.executions.map((e) => ({
+        sha: e.sha,
+        summary: e.summary,
+        ...(e.revertedBySha ? { reverted: { revertSha: e.revertedBySha, by: '' } } : {}),
+      }));
     }
-
-    // Rehydrate the automatism step bar (deployment chats)
-    if (result?.automatism) {
-      store.state.workspace.automatism = {
-        forChatId: chatId,
-        automatismType: result.automatism.automatismType,
-        status: result.automatism.status,
-        step: result.automatism.step,
-        steps: result.automatism.steps,
-        lastError: result.automatism.lastError,
-      };
-      store.notify();
+    if (serverWins || !ws.executionSha) {
+      const publishable = result.executions.filter((e) => !e.revertedBySha);
+      ws.executionSha = publishable[publishable.length - 1]?.sha ?? null;
     }
+    store.notify();
+  }
 
-    // Rehydrate persisted executions (cards + publishable sha). Live SSE
-    // events may have landed while the fetch was in flight — they win.
-    if (result && result.executions.length > 0) {
-      const ws = store.state.workspace;
-      if (ws.executions.length === 0) {
-        ws.executions = result.executions.map((e) => ({
-          sha: e.sha,
-          summary: e.summary,
-          ...(e.revertedBySha ? { reverted: { revertSha: e.revertedBySha, by: '' } } : {}),
-        }));
-      }
-      if (!ws.executionSha) {
-        const publishable = result.executions.filter((e) => !e.revertedBySha);
-        ws.executionSha = publishable[publishable.length - 1]?.sha ?? null;
-      }
-      store.notify();
-    }
-
-    // Rehydrate the publish card from the latest publication. Live SSE events
-    // that landed while the fetch was in flight win ('external_unknown' has no
-    // card equivalent and stays hidden).
-    const pub = result?.publication;
-    if (pub && (pub.status === 'running' || pub.status === 'succeeded' || pub.status === 'failed')) {
-      const ws = store.state.workspace;
-      if (!ws.publish) {
-        ws.publish = {
+  // Rehydrate the publish card from the latest publication ('external_unknown'
+  // has no card equivalent and stays hidden).
+  if (result) {
+    const pub = result.publication;
+    const ws = store.state.workspace;
+    const status =
+      pub && (pub.status === 'running' || pub.status === 'succeeded' || pub.status === 'failed')
+        ? (pub.status as 'running' | 'succeeded' | 'failed')
+        : null;
+    const card =
+      pub && status
+        ? {
           sha: pub.sha,
           publicationId: pub.id,
           lines: pub.log
             ? pub.log.split('\n').filter(Boolean).slice(-MAX_PUBLISH_LOG_LINES)
             : [],
-          status: pub.status,
-          externalUrl: pub.externalUrl ?? undefined,
-        };
-        store.notify();
-      }
+            status,
+            externalUrl: pub.externalUrl ?? undefined,
+          }
+        : null;
+    if (serverWins) {
+      ws.publish = card;
+      store.notify();
+    } else if (card && !ws.publish) {
+      ws.publish = card;
+      store.notify();
     }
+  }
 
-    if (result && result.messages.length > 0) {
-      const cancelLabel = locales[store.state.localeKey].chatMode.cancelLabel;
+  if (result && result.messages.length > 0) {
+    // Live transcript events advanced the screen while the fetch was in
+    // flight — this snapshot is older; applying it would erase them.
+    if (!serverWins && getTranscriptEventSeq() !== opts.transcriptSeqAtStart) return;
+    if (serverWins) mc.streamingText = undefined; // deltas in the gap are lost
+    const cancelLabel = locales[store.state.localeKey].chatMode.cancelLabel;
       mc.messages = result.messages.map((m) =>
         m.role === 'cancel' ? { ...m, content: m.content || cancelLabel } : m,
       );
@@ -236,17 +276,13 @@ export const restoreAIChatSession = (): void => {
       }
 
       store.notify();
-    } else {
-      // Server has no history — auto-send greeting if configured
-      const locale = locales[store.state.localeKey];
-      const greeting = locale.chatMode.greeting;
-      if (greeting) {
-        void sendChatMessage(greeting);
-      }
+  } else if (opts.mode === 'restore') {
+    // Server has no history — auto-send greeting if configured
+    const greeting = locales[store.state.localeKey].chatMode.greeting;
+    if (greeting) {
+      void sendChatMessage(greeting);
     }
-  };
-
-  void fetchAIChatHistory(chatId).then(applyHistory);
+  }
 };
 
 /**

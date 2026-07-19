@@ -146,11 +146,19 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
   return false;
 };
 
+/** Monotonic count of live transcript-mutating events (active-turn stream).
+ *  applyHistory compares it against its fetch-start snapshot: if the stream
+ *  advanced meanwhile, the fetched history is older than the screen. */
+let transcriptEventSeq = 0;
+export const getTranscriptEventSeq = (): number => transcriptEventSeq;
+const TRANSCRIPT_EVENTS = new Set(['text_delta', 'text_done', 'tool_start', 'tool_end']);
+
 /**
  * Handles all server → client events from the SSE stream.
  */
 export const handleServerEvent = (type: string, data: Record<string, unknown>) => {
   console.log('[sse-client] Received:', type);
+  if (TRANSCRIPT_EVENTS.has(type)) transcriptEventSeq++;
 
   if (handleWorkspaceEvent(type, data)) return;
 
