@@ -99,6 +99,13 @@ export const GET: APIRoute = async ({ url }) => {
       .catch(() => false);
   }
 
+  // Latest publication — rehydrates the publish card after reload.
+  const publication = await prisma.publication.findFirst({
+    where: { chatId },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, sha: true, status: true, log: true, externalUrl: true },
+  });
+
   return new Response(
     JSON.stringify({
       phase: chat.turnPhase,
@@ -108,6 +115,10 @@ export const GET: APIRoute = async ({ url }) => {
       workflowPhase: chat.workflowPhase,
       planJson: chat.planJson,
       lastError: chat.lastError,
+      // The pending client tool (propose_plan / finish_execution /
+      // ask_question) — the client re-renders its card after reload.
+      pendingQuestion: chat.turnPhase === 'waiting_for_answer' ? chat.pendingQuestion : undefined,
+      publication,
       automatism,
       targetAhead,
       messages,

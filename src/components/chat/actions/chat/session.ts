@@ -13,6 +13,7 @@ import {
 } from './cache';
 import { connectEvents } from './sse';
 import { sendChatMessage } from './stateMachine';
+import { MAX_PUBLISH_LOG_LINES } from '../../../workspace/publishCard';
 
 export interface HistoryExecution {
   sha: string;
@@ -39,6 +40,14 @@ export interface ChatHistoryResult {
   kind?: string;
   title?: string;
   archived?: boolean;
+  /** Latest publication (GET /api/chat/history) — rehydrates the publish card. */
+  publication?: {
+    id: string;
+    sha: string;
+    status: string;
+    log: string;
+    externalUrl: string | null;
+  } | null;
 }
 
 export const initAIChat = (messages: StoredMessage[], phase: 'idle' | 'waiting' = 'idle') => {
@@ -85,6 +94,7 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
       kind: data.kind,
       title: data.title,
       archived: Boolean(data.archived),
+      publication: data.publication ?? null,
     };
   } catch {
     // Network error — fall through
@@ -159,6 +169,26 @@ export const restoreAIChatSession = (): void => {
         ws.executionSha = publishable[publishable.length - 1]?.sha ?? null;
       }
       store.notify();
+    }
+
+    // Rehydrate the publish card from the latest publication. Live SSE events
+    // that landed while the fetch was in flight win ('external_unknown' has no
+    // card equivalent and stays hidden).
+    const pub = result?.publication;
+    if (pub && (pub.status === 'running' || pub.status === 'succeeded' || pub.status === 'failed')) {
+      const ws = store.state.workspace;
+      if (!ws.publish) {
+        ws.publish = {
+          sha: pub.sha,
+          publicationId: pub.id,
+          lines: pub.log
+            ? pub.log.split('\n').filter(Boolean).slice(-MAX_PUBLISH_LOG_LINES)
+            : [],
+          status: pub.status,
+          externalUrl: pub.externalUrl ?? undefined,
+        };
+        store.notify();
+      }
     }
 
     if (result && result.messages.length > 0) {

@@ -31,11 +31,35 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // Archived chats are done — nothing may start a turn on them again.
   const chat = await prisma.chat.findUnique({
     where: { id: body.chatId },
-    select: { archivedAt: true },
+    select: { archivedAt: true, turnPhase: true, pendingQuestion: true },
   });
   if (!chat) return json({ error: 'Chat not found' }, 404);
   if (chat.archivedAt) {
     return json({ error: 'This chat is archived and no longer accepts messages.' }, 409);
+  }
+
+  // A proposed plan awaits a DECISION (approve / request changes) — a typed
+  // message must not resolve the propose_plan tool as a plain answer and skip
+  // the workflow transition. Route it as a change request instead.
+  const pending = chat.pendingQuestion as { toolName?: string } | null;
+  if (
+    body.type === 'answer' &&
+    body.text !== '__cancel__' &&
+    chat.turnPhase === 'waiting_for_answer' &&
+    pending?.toolName === 'propose_plan'
+  ) {
+    const { requestChanges, WorkflowError } = await import('@/lib/agent/workflow');
+    try {
+      await requestChanges({
+        chatId: body.chatId,
+        actor: { id: user.id, name: user.name ?? '', email: user.email ?? '', language: user.language ?? undefined },
+        feedback: body.text,
+      });
+      return json({ status: 'accepted', routedTo: 'request-changes' }, 202);
+    } catch (err) {
+      if (err instanceof WorkflowError) return json({ error: err.message }, err.status);
+      throw err;
+    }
   }
 
   // While an automatism is actively running its steps, its chat takes no

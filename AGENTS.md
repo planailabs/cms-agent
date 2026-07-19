@@ -44,6 +44,31 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
   namespaces; systempaths lets it mount a fresh /proc). See
   `deploy/docker-compose.yml`.
 
+## Client state: rehydrate + sync (pitfalls)
+
+The server is the source of truth; SSE events only mutate LIVE state. Any
+UI state that outlives a page reload or chat switch MUST be persisted
+server-side and rebuilt from `GET /api/chat/history` in `applyHistory`
+(`session.ts`) — the single sync point. Rehydrated today: messages, phase +
+`pendingQuestion` (plan/finish/question cards), executions, latest
+publication (publish card), automatism progress, `targetAhead`, title,
+archived. Pitfalls that actually bit:
+
+- A card rendered only from an SSE event vanishes on reload. Persist the
+  fact (chat row / own table), return it from history, restore it in
+  `applyHistory` — never carry state over client-side from another view.
+- History rehydration must not clobber fresher live state: SSE events that
+  landed while the fetch was in flight win (`if (!ws.publish)` etc.).
+- `resetWorkspaceChatState` clears chat-scoped workspace state on switch;
+  anything it clears must come back via history, or it's lost.
+- Workflow decisions are POST transitions (`approve-plan`,
+  `request-changes`, `to-preview`), never chat text. The message API
+  converts a typed answer to a pending `propose_plan` into a
+  `requestChanges` — don't add paths that resolve workflow client tools
+  as plain answers.
+- Sandbox env binaries are absolute `/nix/store` symlinks that only resolve
+  inside the jail — host-side checks must `lstat` the link, not follow it.
+
 ## Git commits
 
 Every commit-creating op (`commitExecution`, `mergeInto`, `revertCommit`,
