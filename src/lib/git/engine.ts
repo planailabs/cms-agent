@@ -157,6 +157,11 @@ export function historicalRef(name: string): string | null {
  * For the default branch, the repo itself is the worktree. `v-<sha>` names
  * produce detached read-only checkouts of that commit (historical preview).
  */
+// In-flight creations: concurrent callers (chat handler, preview manager,
+// capabilities probe) would otherwise race the exists-check and the second
+// `worktree add` fails with "already exists".
+const worktreeCreating = new Map<string, Promise<string>>();
+
 export async function ensureWorktree(branch: string, base?: string): Promise<string> {
   const repoPath = path.resolve(env().REPO_PATH);
   if (branch === (await defaultBranch())) return repoPath;
@@ -164,18 +169,24 @@ export async function ensureWorktree(branch: string, base?: string): Promise<str
   const dir = worktreeDir(branch);
   if (fs.existsSync(path.join(dir, '.git'))) return dir;
 
-  fs.mkdirSync(path.dirname(dir), { recursive: true });
-  // Prune stale registrations (e.g. VAR_DIR wiped) before adding
-  await repoGit().raw(['worktree', 'prune']);
+  const inflight = worktreeCreating.get(branch);
+  if (inflight) return inflight;
+  const creating = (async () => {
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+    // Prune stale registrations (e.g. VAR_DIR wiped) before adding
+    await repoGit().raw(['worktree', 'prune']);
 
-  const sha = historicalRef(branch);
-  if (sha) {
-    await repoGit().raw(['worktree', 'add', '--detach', dir, sha]);
-  } else {
-    await ensureBranch(branch, base);
-    await repoGit().raw(['worktree', 'add', dir, branch]);
-  }
-  return dir;
+    const sha = historicalRef(branch);
+    if (sha) {
+      await repoGit().raw(['worktree', 'add', '--detach', dir, sha]);
+    } else {
+      await ensureBranch(branch, base);
+      await repoGit().raw(['worktree', 'add', dir, branch]);
+    }
+    return dir;
+  })().finally(() => worktreeCreating.delete(branch));
+  worktreeCreating.set(branch, creating);
+  return creating;
 }
 
 export async function removeWorktree(branch: string): Promise<void> {

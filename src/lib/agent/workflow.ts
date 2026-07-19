@@ -84,28 +84,6 @@ function emitPhase(chatId: string, workflowPhase: WorkflowPhase, extra: object =
   broadcast(chatId, 'phase_changed', { type: 'phase_changed', workflowPhase, ...extra });
 }
 
-async function recordApproval(
-  chat: { id: string; workBranch: string; branch: { name: string } },
-  actorId: string,
-  action: 'plan' | 'publish',
-  opts: { planHash?: string; targetSha?: string; idempotencyKey?: string },
-): Promise<void> {
-  // The chat's work branch may not exist yet before the first turn
-  await ensureBranch(chat.workBranch, chat.branch.name);
-  await prisma.approval.create({
-    data: {
-      chatId: chat.id,
-      actorId,
-      action,
-      planHash: opts.planHash,
-      baseSha: await branchSha(chat.workBranch),
-      targetSha: opts.targetSha,
-      idempotencyKey: opts.idempotencyKey ?? randomUUID(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    },
-  });
-}
-
 // ─── Transitions ─────────────────────────────────────────────────────────────
 
 /** PLAN → EXECUTE. Binds the pending propose_plan payload as the approved plan. */
@@ -120,14 +98,31 @@ export async function approvePlan(opts: TransitionOpts): Promise<void> {
   if (!plan) throw new WorkflowError('There is no proposed plan to approve yet.');
 
   const planHash = createHash('sha256').update(JSON.stringify(plan)).digest('hex');
+  // Git prep BEFORE the phase flip — a failure after updatePhase would leave
+  // the chat in execute with no approval and the paused turn never resumed.
+  // (The work branch may not exist yet before the first turn.)
+  await ensureBranch(chat.workBranch, chat.branch.name);
+  const baseSha = await branchSha(chat.workBranch);
   await updatePhase(opts.chatId, opts.expectedVersion ?? chat.entityVersion, {
     workflowPhase: 'execute',
     planJson: plan,
   });
-  await recordApproval(chat, opts.actor.id, 'plan', {
-    planHash,
-    idempotencyKey: opts.idempotencyKey,
-  });
+  try {
+    await prisma.approval.create({
+      data: {
+        chatId: chat.id,
+        actorId: opts.actor.id,
+        action: 'plan',
+        planHash,
+        baseSha,
+        idempotencyKey: opts.idempotencyKey ?? randomUUID(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+  } catch (err) {
+    // Audit record only — failing to write it must not strand the transition.
+    console.error('[workflow] approval record failed:', err);
+  }
   emitPhase(opts.chatId, 'execute');
 
   if (chat.turnPhase === 'waiting_for_answer') {
