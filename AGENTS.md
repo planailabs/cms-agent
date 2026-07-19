@@ -43,6 +43,11 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
   systempaths=unconfined]` (targeted profile lets bwrap make user+mount
   namespaces; systempaths lets it mount a fresh /proc). See
   `deploy/docker-compose.yml`.
+- "Read-only" tools are not exempt: linters/formatters/`astro check` execute
+  repo config files (`eslint.config.js`, `astro.config.mjs`) as code. A host
+  spawn with inherited `process.env` in the agent-writable worktree is RCE +
+  secret exfiltration (the lint tools had exactly this). Never spread
+  `process.env` into a child that runs site code.
 
 ## Client state: rehydrate + sync (pitfalls)
 
@@ -68,6 +73,18 @@ archived. Pitfalls that actually bit:
   as plain answers.
 - Sandbox env binaries are absolute `/nix/store` symlinks that only resolve
   inside the jail — host-side checks must `lstat` the link, not follow it.
+- SSE reconnects lose everything broadcast in the gap (the server replays
+  only the pending question). After a reconnect, `resyncChatHistory` refetches
+  history and applies it SERVER-WINS; the initial restore stays live-wins.
+  Keep both modes in `applyHistoryResult` when adding rehydrated state.
+- Async UI loads (modals, tab saves, history fetches) must be guarded
+  against chat/selection switches mid-flight: seq token or captured-id
+  check before applying the response (`loadDiffPages`' `forChatId` is the
+  pattern).
+- The turn lock is per-chat and in-process. Anything that resumes a turn
+  (`resumeTurn` via `approvePlan`/`requestChanges`) silently no-ops while
+  the lock is held — never call transitions from code that still holds the
+  chat's turn lock (the autonomy auto-approve deadlocked this way).
 
 ## Git commits
 
