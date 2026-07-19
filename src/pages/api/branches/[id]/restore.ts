@@ -18,7 +18,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 });
   }
-  if (!body.sha) return new Response(JSON.stringify({ error: 'sha required' }), { status: 400 });
+  // Strict sha only — a leading '-' would be parsed by git as an option.
+  if (!body.sha || !/^[0-9a-f]{7,40}$/i.test(body.sha)) {
+    return new Response(JSON.stringify({ error: 'sha required (hex commit sha)' }), { status: 400 });
+  }
 
   const branch = await prisma.branch.findUnique({ where: { id: params.id! } });
   if (!branch) return new Response(JSON.stringify({ error: 'Branch not found' }), { status: 404 });
