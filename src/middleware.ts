@@ -90,7 +90,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return context.redirect('/signin/');
     }
     const retry = new URL(context.request.url).searchParams.has('retry');
-    return handlePreviewBoot(bootMatch[1], retry);
+    // Locale: the signed-in editor's language; preview-cookie visitors have
+    // no user, so negotiate from Accept-Language (as on the sign-in page).
+    const locale =
+      context.locals.user?.language ??
+      (/(^|[,;\s])de\b/i.test(context.request.headers.get('accept-language') ?? '') ? 'de' : 'en');
+    return handlePreviewBoot(bootMatch[1], retry, locale);
   }
 
   const isPublic = PUBLIC_PATHS.some((re) => re.test(pathname));

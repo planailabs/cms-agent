@@ -10,12 +10,17 @@
  */
 import { prisma } from '@/lib/db';
 import { ensureBranch } from '@/lib/git/engine';
+import { t } from '@/lib/i18n';
 import { ensureInstance, getStartError, clearStartError } from './manager';
 import { escapeHtml } from './html';
 
 export const BOOT_PATH_RE = /^\/__preview\/boot\/([a-z0-9][a-z0-9-]{0,62})\/?$/;
 
-export async function handlePreviewBoot(branch: string, retry = false): Promise<Response> {
+export async function handlePreviewBoot(
+  branch: string,
+  retry = false,
+  locale = 'en',
+): Promise<Response> {
   if (retry) clearStartError(branch);
   // v-<sha> labels are historical read-only checkouts (plan §12)
   const isHistorical = /^v-[0-9a-f]{7,40}$/.test(branch);
@@ -45,21 +50,24 @@ export async function handlePreviewBoot(branch: string, retry = false): Promise<
     })().catch((err) => console.error(`[preview] failed to start ${branch}:`, err));
   }
 
+  // The branch param is pre-escaped and wrapped here, so interpolation
+  // stays HTML-safe.
   const safe = escapeHtml(branch);
+  const strong = { branch: `<strong>${safe}</strong>` };
   const body = startError
-    ? `<div class="error"><p>Preview for <strong>${safe}</strong> failed to start:</p>` +
+    ? `<div class="error"><p>${t(locale, 'pages.preview.failed', strong)}</p>` +
       `<pre>${escapeHtml(startError.message)}</pre>` +
-      `<p><a href="/__preview/boot/${safe}?retry=1">Retry</a></p></div>`
+      `<p><a href="/__preview/boot/${safe}?retry=1">${t(locale, 'pages.preview.retry')}</a></p></div>`
     : bootable
-      ? `<p class="pulse">Starting preview for <strong>${safe}</strong> — this page reloads automatically…</p>`
-      : `<p>Unknown branch <strong>${safe}</strong>.</p>`;
+      ? `<p class="pulse">${t(locale, 'pages.preview.starting', strong)}</p>`
+      : `<p>${t(locale, 'pages.preview.unknownBranch', strong)}</p>`;
 
   const html = `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(locale)}">
   <head>
     <meta charset="utf-8" />
     ${bootable && !startError ? '<meta http-equiv="refresh" content="2" />' : ''}
-    <title>${startError ? 'Preview failed' : 'Starting preview…'}</title>
+    <title>${t(locale, startError ? 'pages.preview.failedTitle' : 'pages.preview.startingTitle')}</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
