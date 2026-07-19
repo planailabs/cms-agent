@@ -50,7 +50,8 @@ An approved plan exists — implement exactly that plan in the worktree, nothing
 - run_command runs shell commands (npm scripts, codegen, formatters, installs)
   in a sandbox where the repo is the cwd — use it when a tool doesn't suffice.
 - Commit your work with git_commit at every completed step (one coherent change
-  per commit, with a message saying what and why).
+  per commit, with a message saying what and why). git_revert undoes a completed
+  commit (new revert commit, found via git_log) when a change must be rolled back.
 - If the implementation must deviate materially from the plan, stop and ask.
 - When done, call finish_execution with a short summary. ALL changes must be
   committed first — finish_execution is rejected while uncommitted changes exist.

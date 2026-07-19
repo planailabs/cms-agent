@@ -223,11 +223,17 @@ export async function worktreeStatus(branch: string): Promise<string[]> {
   return status.files.map((f) => f.path);
 }
 
-/** Revert a commit on the branch (new revert commit; never destructive). */
+/** Revert a commit on the branch (new revert commit; never destructive).
+ *  A conflicting revert is aborted so the worktree stays clean. */
 export async function revertCommit(branch: string, sha: string, author: GitIdentity): Promise<string> {
   const dir = await ensureWorktree(branch);
   const git = gitAs(dir, author);
-  await git.raw(['revert', '--no-edit', sha]);
+  try {
+    await git.raw(['revert', '--no-edit', sha]);
+  } catch (err) {
+    await git.raw(['revert', '--abort']).catch(() => {});
+    throw err;
+  }
   return (await git.revparse(['HEAD'])).trim();
 }
 

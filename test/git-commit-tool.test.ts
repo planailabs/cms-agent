@@ -93,3 +93,33 @@ describe('git_commit', () => {
     expect(res.error).toMatch(/not allowed in the plan phase/);
   });
 });
+
+describe('git_revert', () => {
+  it('reverts a commit, marks its execution card, restores the file', async () => {
+    fs.writeFileSync(path.join(repo, 'news.md'), '# News\n');
+    const committed = JSON.parse(await executeTool('git_commit', { message: 'add news' }, ctx()));
+
+    const res = JSON.parse(await executeTool('git_revert', { sha: committed.sha }, ctx()));
+    expect(res.success).toBe(true);
+    expect(res.revertSha).toMatch(/^[0-9a-f]{40}$/);
+
+    expect(fs.existsSync(path.join(repo, 'news.md'))).toBe(false);
+    expect(await dirStatus(repo)).toEqual([]);
+    const row = await prisma.execution.findFirst({ where: { chatId: CHAT_ID, sha: committed.sha } });
+    expect(row?.revertedBySha).toBe(res.revertSha);
+  });
+
+  it('aborts a conflicting revert and leaves the worktree clean', async () => {
+    fs.writeFileSync(path.join(repo, 'index.md'), '# Home v2\n');
+    const a = JSON.parse(await executeTool('git_commit', { message: 'v2 change' }, ctx()));
+    if (!a.sha) throw new Error('commit v2 failed: ' + JSON.stringify(a));
+    fs.writeFileSync(path.join(repo, 'index.md'), '# Home v3\n');
+    const b = JSON.parse(await executeTool('git_commit', { message: 'v3 change' }, ctx()));
+    if (!b.sha) throw new Error('commit v3 failed: ' + JSON.stringify(b));
+
+    const res = JSON.parse(await executeTool('git_revert', { sha: a.sha }, ctx()));
+    expect(res.error).toMatch(/Revert failed/);
+    expect(await dirStatus(repo)).toEqual([]);
+    expect(fs.readFileSync(path.join(repo, 'index.md'), 'utf8')).toBe('# Home v3\n');
+  });
+});

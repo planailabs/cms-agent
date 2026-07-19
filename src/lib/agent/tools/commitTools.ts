@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { broadcast, withBranchLock } from '../bus';
-import { commitExecution } from '@/lib/git/engine';
+import { commitExecution, revertCommit } from '@/lib/git/engine';
 import { chatCommitTrailer, chatGitIdentity } from '@/lib/git/identity';
 import { hasErrors, validateWorktree } from '@/lib/validate';
 import { registerTool, type ToolDef } from './registry';
@@ -50,6 +50,50 @@ const gitCommitTool: ToolDef = {
   },
 };
 
+const gitRevertTool: ToolDef = {
+  name: 'git_revert',
+  description:
+    'Revert a commit on the work branch (creates a new revert commit; never rewrites ' +
+    'history). Find the sha with git_log. A conflicting revert is aborted — in that ' +
+    'case undo the change by editing the files and committing with git_commit.',
+  schema: z.object({
+    sha: z
+      .string()
+      .regex(/^[0-9a-f]{7,40}$/i, 'expected a commit sha')
+      .describe('Sha of the commit to revert'),
+  }),
+  phases: ['execute'],
+  kinds: ['workflow', 'deployment'],
+  async execute(input, ctx) {
+    const identity = await chatGitIdentity(ctx.chatId, ctx.userId);
+    let revertSha: string;
+    try {
+      revertSha = await withBranchLock(ctx.branchName, () =>
+        revertCommit(ctx.branchName, input.sha, identity),
+      );
+    } catch (err) {
+      return JSON.stringify({
+        error: `Revert failed (aborted, worktree unchanged): ${err instanceof Error ? err.message : err}`,
+      });
+    }
+    // If the reverted commit was an execution, mark its card as reverted.
+    const reverted = await prisma.execution.updateMany({
+      where: { sha: { startsWith: input.sha.toLowerCase() }, revertedBySha: null },
+      data: { revertedBySha: revertSha },
+    });
+    if (reverted.count > 0) {
+      broadcast(ctx.chatId, 'execution_reverted', {
+        type: 'execution_reverted',
+        sha: input.sha,
+        revertSha,
+        by: identity.name,
+      });
+    }
+    return JSON.stringify({ success: true, revertSha });
+  },
+};
+
 export function registerCommitTools(): void {
   registerTool(gitCommitTool);
+  registerTool(gitRevertTool);
 }
