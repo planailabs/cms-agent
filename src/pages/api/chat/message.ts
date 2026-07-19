@@ -80,15 +80,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const locale = user.language ?? 'en';
 
   void (async () => {
+    let turnOk = false;
     try {
       // A starting turn clears the previous failure (Retry sends 'continue')
       await prisma.chat
         .updateMany({ where: { id: body.chatId, lastError: { not: null } }, data: { lastError: null } })
         .catch(() => {});
       await handleChatMessage(user.id, locale, body);
-      // Autonomy grants may auto-approve a plan the turn just proposed
-      const { maybeAutoApprovePlan } = await import('@/lib/autonomy');
-      await maybeAutoApprovePlan(body.chatId, user.id);
+      turnOk = true;
     } catch (err) {
       console.error('[chat/message] Handler error:', err);
       const message = err instanceof Error ? err.message : 'Internal error';
@@ -99,6 +98,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
       broadcast(body.chatId, 'error', { type: 'error', message });
     } finally {
       releaseTurnLock(body.chatId, lockId);
+    }
+    // Autonomy grants may auto-approve a plan the turn just proposed. This
+    // must run AFTER the turn lock is released: approvePlan resumes the turn
+    // via acquireTurnLock, which silently no-ops while this request still
+    // holds the lock — stranding the chat in execute + waiting_for_answer.
+    if (turnOk) {
+      try {
+        const { maybeAutoApprovePlan } = await import('@/lib/autonomy');
+        await maybeAutoApprovePlan(body.chatId, user.id);
+      } catch (err) {
+        console.error('[chat/message] autonomy error:', err);
+      }
     }
   })();
 
