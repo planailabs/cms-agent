@@ -38,6 +38,7 @@
 | `PUBLISH_COMMAND` | flow | web-agency script; receives `TARBALL_PATH`, `DIST_DIR`, `GIT_SHA` (runs through a shell) |
 | `GITHUB_TOKEN` / `GITHUB_REPO` | flow | github-ci check polling (`owner/repo`) |
 | `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_PAGES_PROJECT` | flow | cloudflare-pages direct upload |
+| `CONTEXT7_API_KEY` | no | Attach the Context7 docs MCP (mcp.context7.com) to agent chats |
 | `VAR_DIR` | yes | Runtime state: worktrees, previews, artifacts, uploads, proxy files |
 | `INPUT_TOKEN_BUDGET_PER_HOUR` / `OUTPUT_TOKEN_BUDGET_PER_HOUR` | no | Per-user hourly budgets (0 = unlimited) |
 | `PREVIEW_IDLE_TIMEOUT_MS` | no | Stop idle previews (default 10 min) |

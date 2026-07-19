@@ -12,6 +12,8 @@ import type OpenAI from 'openai';
 import { z } from 'zod';
 import { executeTool, isClientSideTool, toolsForPhase, type ToolContext } from '../tools/registry';
 import { attachCodebaseMemory } from './codebaseMemory';
+import { attachContext7 } from './context7';
+import type { ExternalMcp } from './external';
 
 export interface McpBridge {
   /** OpenAI function-tool definitions for the current phase. */
@@ -45,8 +47,10 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   const client = new Client({ name: 'cms-agent-loop', version: '1.0.0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
-  // External sandboxed MCP (codebase graph memory) — merged into the tool set
-  const external = await attachCodebaseMemory(ctx);
+  // External MCPs (sandboxed codebase graph, Context7 docs) — merged into the tool set
+  const externals = (await Promise.all([attachCodebaseMemory(ctx), attachContext7()])).filter(
+    (e): e is ExternalMcp => e !== null,
+  );
 
   return {
     async asOpenAiTools() {
@@ -65,10 +69,11 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
           },
         };
       });
-      return external ? [...own, ...external.openAiTools] : own;
+      return [...own, ...externals.flatMap((e) => e.openAiTools)];
     },
     async callTool(name, input) {
-      if (external?.toolNames.has(name)) return external.callTool(name, input);
+      const ext = externals.find((e) => e.toolNames.has(name));
+      if (ext) return ext.callTool(name, input);
       const result = await client.callTool({ name, arguments: input });
       const content = (result.content ?? []) as Array<{ type: string; text?: string }>;
       return content
@@ -77,7 +82,7 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
         .join('\n');
     },
     async close() {
-      await Promise.allSettled([client.close(), server.close(), external?.close()]);
+      await Promise.allSettled([client.close(), server.close(), ...externals.map((e) => e.close())]);
     },
   };
 }

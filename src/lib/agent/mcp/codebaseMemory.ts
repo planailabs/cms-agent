@@ -10,8 +10,8 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import type OpenAI from 'openai';
 import { ensureSandbox, runSandboxed, sandboxCommand, sandboxHasBin } from '@/lib/sandbox';
+import { externalMcp, type ExternalMcp } from './external';
 import type { ToolContext } from '../tools/registry';
 
 const BIN = 'codebase-memory-mcp';
@@ -22,13 +22,6 @@ const warnOnce = (msg: string): void => {
   if (!warned) console.warn(`[codebase-memory] ${msg} — graph tools disabled`);
   warned = true;
 };
-
-export interface ExternalMcp {
-  toolNames: Set<string>;
-  openAiTools: OpenAI.Chat.Completions.ChatCompletionTool[];
-  callTool(name: string, input: Record<string, unknown>): Promise<string>;
-  close(): Promise<void>;
-}
 
 export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMcp | null> {
   let sb;
@@ -51,37 +44,12 @@ export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMc
     const transport = new StdioClientTransport({ command, args });
     const client = new Client({ name: 'cms-agent-codebase-memory', version: '1.0.0' });
     await client.connect(transport);
-    const { tools } = await client.listTools();
-
-    const openAiTools = tools.map((t) => {
-      const { $schema: _drop, ...parameters } = (t.inputSchema as Record<string, unknown>) ?? {};
-      return {
-        type: 'function' as const,
-        function: {
-          name: t.name,
-          description:
-            `${t.description ?? ''} (Codebase graph of this chat's branch — ` +
-            `the repository path inside the sandbox is ${IN_JAIL_REPO}.)`,
-          parameters: Object.keys(parameters).length > 0 ? parameters : { type: 'object' },
-        },
-      };
-    });
-
-    return {
-      toolNames: new Set(tools.map((t) => t.name)),
-      openAiTools,
-      async callTool(name, input) {
-        const result = await client.callTool({ name, arguments: input });
-        const content = (result.content ?? []) as Array<{ type: string; text?: string }>;
-        return content
-          .filter((c) => c.type === 'text' && typeof c.text === 'string')
-          .map((c) => c.text)
-          .join('\n');
-      },
-      async close() {
-        await client.close().catch(() => {});
-      },
-    };
+    return await externalMcp(
+      client,
+      (d) =>
+        `${d} (Codebase graph of this chat's branch — ` +
+        `the repository path inside the sandbox is ${IN_JAIL_REPO}.)`,
+    );
   } catch (err) {
     warnOnce(`connect failed (${err instanceof Error ? err.message : err})`);
     return null;
