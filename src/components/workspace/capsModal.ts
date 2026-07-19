@@ -23,7 +23,11 @@ export const closeCapsModal = (): void => {
   store.notify();
 };
 
+/** Load token — a newer load supersedes in-flight responses. */
+let capsLoadSeq = 0;
+
 export const loadCapabilities = async (chatId: string | null): Promise<void> => {
+  const seq = ++capsLoadSeq;
   const c = store.state.workspace.caps;
   c.chatId = chatId;
   c.skills = [];
@@ -39,6 +43,7 @@ export const loadCapabilities = async (chatId: string | null): Promise<void> => 
   try {
     const res = await fetch(`/api/agent/capabilities?chat=${encodeURIComponent(chatId)}`);
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (seq !== capsLoadSeq) return;
     if (res.ok) {
       c.skills = (data.skills as CapabilitySkillRow[]) ?? [];
       c.rules = (data.rules as Array<{ plugin: string }>) ?? [];
@@ -48,6 +53,7 @@ export const loadCapabilities = async (chatId: string | null): Promise<void> => 
         (data.error as string) ?? t(uiLocale(), 'workspace.git.loadFailed', { status: res.status });
     }
   } catch {
+    if (seq !== capsLoadSeq) return;
     c.error = t(uiLocale(), 'workspace.git.networkError');
   }
   c.loading = false;

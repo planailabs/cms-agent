@@ -35,7 +35,11 @@ export const closeGitModal = (): void => {
   store.notify();
 };
 
+/** Load token — a newer load supersedes in-flight responses. */
+let gitLoadSeq = 0;
+
 export const loadGitCommits = async (branch: string | null): Promise<void> => {
+  const seq = ++gitLoadSeq;
   const g = store.state.workspace.git;
   g.branch = branch;
   g.commits = [];
@@ -52,6 +56,7 @@ export const loadGitCommits = async (branch: string | null): Promise<void> => {
   try {
     const res = await fetch(`/api/git/commits?branch=${encodeURIComponent(branch)}`);
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (seq !== gitLoadSeq) return;
     if (res.ok) {
       g.target = (data.target as string | null) ?? null;
       g.commits = (data.commits as GitCommitRow[]) ?? [];
@@ -60,6 +65,7 @@ export const loadGitCommits = async (branch: string | null): Promise<void> => {
         (data.error as string) ?? t(uiLocale(), 'workspace.git.loadFailed', { status: res.status });
     }
   } catch {
+    if (seq !== gitLoadSeq) return;
     g.error = t(uiLocale(), 'workspace.git.networkError');
   }
   g.loading = false;
@@ -76,6 +82,8 @@ export const selectGitCommit = async (sha: string): Promise<void> => {
   try {
     const res = await fetch(`/api/git/commit?sha=${encodeURIComponent(sha)}`);
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    // Superseded: another commit was selected (or the list reloaded) meanwhile
+    if (store.state.workspace.git.selectedSha !== sha) return;
     if (res.ok) {
       g.patch = (data.patch as string) ?? '';
     } else {
@@ -84,6 +92,7 @@ export const selectGitCommit = async (sha: string): Promise<void> => {
       g.selectedSha = null;
     }
   } catch {
+    if (store.state.workspace.git.selectedSha !== sha) return;
     g.error = t(uiLocale(), 'workspace.git.networkError');
     g.selectedSha = null;
   }

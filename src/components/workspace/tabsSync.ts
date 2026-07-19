@@ -54,10 +54,13 @@ const saveTabs = (): void => {
 };
 
 export const scheduleTabsSave = (): void => {
+  // Bind the chat at schedule time: firing after a chat switch would save
+  // the NEW chat's freshly-reset default tabs under it, wiping its state.
+  const chatId = store.state.activeChatId;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    saveTabs();
+    if (store.state.activeChatId === chatId) saveTabs();
   }, 600);
 };
 

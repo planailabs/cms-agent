@@ -314,4 +314,6 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.browserCompare = createInitialBrowserCompareState();
   ws.automatism = null;
   ws.targetAhead = false;
+  ws.pickerActive = false;
+  ws.inputModal = null;
 };
