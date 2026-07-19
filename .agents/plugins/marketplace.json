@@ -7,6 +7,12 @@
       "source": { "source": "local", "path": "./plugins/ponytail" },
       "policy": { "installation": "AVAILABLE" },
       "category": "Productivity"
+    },
+    {
+      "name": "codebase-memory",
+      "source": { "source": "local", "path": "./plugins/codebase-memory" },
+      "policy": { "installation": "AVAILABLE" },
+      "category": "Productivity"
     }
   ]
 }

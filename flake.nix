@@ -10,13 +10,54 @@
     gitlab-incus-image.url = "git+https://git.mkg20001.io/mkg20001/gitlab-incus-image.git";
     xzar.url = "github:mkg20001/xzar";
     xzar.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Agent plugins/tools. ponytail has no flake.nix — consume it as a plain
+    # source tree; codebase-memory-mcp is a proper flake (static C binary).
+    ponytail = { url = "github:DietrichGebert/ponytail"; flake = false; };
+    codebase-memory-mcp.url = "github:DeusData/codebase-memory-mcp";
   };
 
-  outputs = { self, nixpkgs, gitlab-incus-image, xzar }:
+  outputs = { self, nixpkgs, gitlab-incus-image, xzar, ponytail, codebase-memory-mcp }:
     let
       lib = nixpkgs.lib;
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+
+      # ── Agent plugins (marketplace dirs under $CMS_PLUGINS_ROOT/plugins) ──
+      # The codebase-memory skill is embedded in the MCP's C sources (the CLI
+      # installer's single source of truth) — extract the string constant at
+      # build time so it tracks the pinned input.
+      extractSkillPy = builtins.toFile "extract-skill.py" ''
+        import re, sys
+        src = open(sys.argv[1]).read()
+        m = re.search(r'static const char skill_content\[\] =\s*(.*?);\n', src, re.S)
+        assert m, 'skill_content constant not found in cli.c'
+        segs = re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1))
+        text = re.sub(r'\\([nt"\\])',
+                      lambda g: {'n': '\n', 't': '\t'}.get(g.group(1), g.group(1)),
+                      "".join(segs))
+        open(sys.argv[2], 'w').write(text)
+      '';
+      cbmPluginJson = builtins.toFile "cbm-plugin.json" (builtins.toJSON {
+        name = "codebase-memory";
+        version = codebase-memory-mcp.shortRev or "dev";
+        description = "Codebase knowledge-graph memory — skill for the sandboxed MCP tools";
+        skills = "./skills/";
+      });
+      agentPluginsFor = pkgs: rec {
+        codebaseMemoryPlugin = pkgs.runCommand "cms-plugin-codebase-memory"
+          { nativeBuildInputs = [ pkgs.python3 ]; } ''
+            mkdir -p $out/.codex-plugin $out/skills/codebase-memory
+            python3 ${extractSkillPy} ${codebase-memory-mcp}/src/cli/cli.c \
+              $out/skills/codebase-memory/SKILL.md
+            grep -q "^name: codebase-memory" $out/skills/codebase-memory/SKILL.md
+            cp ${cbmPluginJson} $out/.codex-plugin/plugin.json
+          '';
+        dir = pkgs.linkFarm "cms-agent-plugins" [
+          { name = "ponytail"; path = ponytail; }
+          { name = "codebase-memory"; path = codebaseMemoryPlugin; }
+        ];
+      };
     in
     {
       packages = forAllSystems (pkgs:
@@ -25,7 +66,12 @@
           # no .git for the build to ask. dirtyShortRev carries a -dirty suffix.
           cms-agent = pkgs.callPackage ./package.nix {
             gitCommit = self.shortRev or self.dirtyShortRev or null;
+            agentPlugins = (agentPluginsFor pkgs).dir;
           };
+
+          # Codebase-memory MCP binary — lives in the SANDBOX env (the agent's
+          # MCP server runs jailed with only the worktree visible).
+          cbm = codebase-memory-mcp.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
           # Rust pingora reverse-proxy sidecar (public entrypoint).
           proxy = pkgs.rustPlatform.buildRustPackage {
@@ -75,6 +121,10 @@
             # Alternative package managers for managed sites (npm ships with node)
             pnpm
             yarn
+          ] ++ [
+            # Codebase graph memory: MCP server + CLI, attached to the agent
+            # through the jail (index + queries see only /work).
+            cbm
           ];
 
           mkSandboxEnv = major: node: pkgs.buildEnv {
@@ -309,6 +359,12 @@
 
             export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
             export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+
+            # Agent plugins for dev: same store dirs the image ships (plugins/
+            # is gitignored; ponytail + codebase-memory come from flake inputs).
+            mkdir -p plugins
+            ln -sfn ${ponytail} plugins/ponytail
+            ln -sfn ${(agentPluginsFor pkgs).codebaseMemoryPlugin} plugins/codebase-memory
           '';
         };
       });

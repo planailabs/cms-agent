@@ -205,6 +205,24 @@ export function ensureSandbox(major = env().SANDBOX_NODE_MAJOR): Promise<Sandbox
   return p;
 }
 
+/**
+ * Full argv for running `command` in the jail — for callers that spawn the
+ * process themselves (e.g. an MCP stdio transport). The command must exist
+ * in the sandbox env (its bin/ is on the jail PATH).
+ */
+export function sandboxCommand(
+  sb: SandboxState,
+  command: string[],
+  opts: SandboxRunOptions,
+): { command: string; args: string[] } {
+  return { command: 'bwrap', args: [...bwrapArgs(sb, opts), ...command] };
+}
+
+/** True when `bin` exists in the sandbox env (host-side check). */
+export function sandboxHasBin(sb: SandboxState, bin: string): boolean {
+  return fs.existsSync(path.join(sb.envRootHost, 'bin', bin));
+}
+
 /** Spawn a long-lived sandboxed process (e.g. the preview dev server). */
 export function spawnSandboxed(
   sb: SandboxState,

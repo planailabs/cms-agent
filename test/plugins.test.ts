@@ -97,11 +97,14 @@ describe('agent plugins', () => {
     expect(err).toContain('hello');
   });
 
-  it.skipIf(!fs.existsSync(PONYTAIL))('loads the real ponytail submodule', () => {
+  it.skipIf(!fs.existsSync(PONYTAIL))('loads the real plugin dirs (flake inputs)', () => {
     process.env.CMS_PLUGINS_ROOT = REPO_ROOT;
     const reg = loadPluginRegistry();
     expect(reg.plugins).toContain('ponytail');
     expect(reg.skills.map((s) => s.name)).toContain('ponytail');
     expect(reg.rules.some((r) => r.text.includes('lazy senior developer'))).toBe(true);
+    if (fs.existsSync(path.join(REPO_ROOT, 'plugins', 'codebase-memory'))) {
+      expect(reg.skills.map((s) => s.name)).toContain('codebase-memory');
+    }
   });
 });

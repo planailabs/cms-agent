@@ -33,5 +33,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
       createdById: user.id,
     },
   });
+
+  // Index the branch into the codebase graph memory (fire-and-forget — the
+  // agent's graph tools work as soon as it finishes).
+  void (async () => {
+    const { ensureWorktree } = await import('@/lib/git/engine');
+    const { indexChatWorktree } = await import('@/lib/agent/mcp/codebaseMemory');
+    const worktree = await ensureWorktree(chat.workBranch, branch.name);
+    await indexChatWorktree(chat.id, worktree);
+  })().catch((err) => console.warn('[codebase-memory] chat-create index failed:', err));
+
   return json({ chat }, 201);
 };

@@ -11,6 +11,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type OpenAI from 'openai';
 import { z } from 'zod';
 import { executeTool, isClientSideTool, toolsForPhase, type ToolContext } from '../tools/registry';
+import { attachCodebaseMemory } from './codebaseMemory';
 
 export interface McpBridge {
   /** OpenAI function-tool definitions for the current phase. */
@@ -44,10 +45,13 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   const client = new Client({ name: 'cms-agent-loop', version: '1.0.0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
+  // External sandboxed MCP (codebase graph memory) — merged into the tool set
+  const external = await attachCodebaseMemory(ctx);
+
   return {
     async asOpenAiTools() {
       const { tools } = await client.listTools();
-      return tools.map((t) => {
+      const own = tools.map((t) => {
         // Strip the $schema marker — some OpenAI-compatible backends reject
         // parameters carrying it and then expose the tool WITHOUT parameters.
         const { $schema: _drop, ...parameters } =
@@ -61,8 +65,10 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
           },
         };
       });
+      return external ? [...own, ...external.openAiTools] : own;
     },
     async callTool(name, input) {
+      if (external?.toolNames.has(name)) return external.callTool(name, input);
       const result = await client.callTool({ name, arguments: input });
       const content = (result.content ?? []) as Array<{ type: string; text?: string }>;
       return content
@@ -71,7 +77,7 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
         .join('\n');
     },
     async close() {
-      await Promise.allSettled([client.close(), server.close()]);
+      await Promise.allSettled([client.close(), server.close(), external?.close()]);
     },
   };
 }

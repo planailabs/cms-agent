@@ -14,6 +14,9 @@
   # Short git commit to embed in the UI next to the version. Passed by the
   # flake (self.shortRev) — the store source has no .git to resolve it from.
   gitCommit ? null,
+  # Agent plugin dirs (ponytail, codebase-memory, …) assembled by the flake
+  # from its inputs; shipped to $out/share/cms-agent/plugins.
+  agentPlugins ? null,
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -28,6 +31,7 @@ stdenv.mkDerivation (finalAttrs: {
           ./dist
           ./.astro
           ./node_modules
+          ./plugins
           ./src/generated
           ./chat
           ./flake.lock
@@ -166,11 +170,15 @@ stdenv.mkDerivation (finalAttrs: {
     cp -r prisma/migrations $out/share/cms-agent/prisma/migrations
     cp prisma.config.ts $out/share/cms-agent/
 
-    # Agent plugins (marketplace + submodule plugin dirs). Submodule content
-    # is only present when the flake is built with ?submodules=1 — the loader
-    # skips empty plugin dirs with a warning otherwise.
+    # Agent plugins: marketplace from the source, plugin dirs from the flake
+    # inputs (deref the linkFarm symlinks into real dirs).
     if [ -d .agents ]; then cp -r .agents $out/share/cms-agent/.agents; fi
-    if [ -d plugins ]; then cp -r plugins $out/share/cms-agent/plugins; fi
+    ${lib.optionalString (agentPlugins != null) ''
+      mkdir -p $out/share/cms-agent/plugins
+      for p in ${agentPlugins}/*; do
+        cp -rL "$p" "$out/share/cms-agent/plugins/$(basename "$p")"
+      done
+    ''}
 
     mkdir -p $out/bin
 
