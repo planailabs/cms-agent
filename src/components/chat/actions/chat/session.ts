@@ -41,6 +41,8 @@ export interface ChatHistoryResult {
   kind?: string;
   title?: string;
   archived?: boolean;
+  workflowPhase?: string;
+  branchId?: string;
   /** Latest publication (GET /api/chat/history) — rehydrates the publish card. */
   publication?: {
     id: string;
@@ -95,6 +97,8 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
       kind: data.kind,
       title: data.title,
       archived: Boolean(data.archived),
+      workflowPhase: data.workflowPhase,
+      branchId: data.branchId,
       publication: data.publication ?? null,
     };
   } catch {
@@ -163,6 +167,13 @@ const applyHistoryResult = (
     if (result.kind) store.state.activeChatKind = result.kind;
     if (result.title) store.state.activeChatTitle = result.title;
     store.state.activeChatArchived = Boolean(result.archived);
+    // Server truth for phase/branch: archived chats are missing from the
+    // sidebar list switchChat derives these from, which left the PREVIOUS
+    // chat's branch (and a 'plan' fallback) active.
+    if (result.workflowPhase) {
+      store.state.workflowPhase = result.workflowPhase as typeof store.state.workflowPhase;
+    }
+    if (result.branchId) store.state.activeBranchId = result.branchId;
     store.notify();
   }
 

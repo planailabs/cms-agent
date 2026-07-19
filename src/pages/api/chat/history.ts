@@ -99,12 +99,17 @@ export const GET: APIRoute = async ({ url }) => {
       .catch(() => false);
   }
 
-  // Latest publication — rehydrates the publish card after reload.
-  const publication = await prisma.publication.findFirst({
-    where: { chatId },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true, sha: true, status: true, log: true, externalUrl: true },
-  });
+  // Latest publication — rehydrates the publish card after reload. Only in
+  // the published phase: a request-changes round after a publish must not
+  // resurrect the previous round's card.
+  const publication =
+    chat.workflowPhase === 'published'
+      ? await prisma.publication.findFirst({
+          where: { chatId },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, sha: true, status: true, log: true, externalUrl: true },
+        })
+      : null;
 
   return new Response(
     JSON.stringify({
@@ -113,6 +118,7 @@ export const GET: APIRoute = async ({ url }) => {
       title: chat.title,
       archived: Boolean(chat.archivedAt),
       workflowPhase: chat.workflowPhase,
+      branchId: chat.branchId,
       planJson: chat.planJson,
       lastError: chat.lastError,
       // The pending client tool (propose_plan / finish_execution /

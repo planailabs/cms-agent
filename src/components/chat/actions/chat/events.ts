@@ -275,6 +275,9 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
         ws.executionSha = data.executionSha;
       }
       ws.diff = createInitialDiffState();
+      // A new plan round (request changes after a publish) — the previous
+      // round's publish card no longer describes the draft.
+      if (workflowPhase === 'plan') ws.publish = null;
       store.notify();
       break;
     }
