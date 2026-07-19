@@ -131,7 +131,8 @@ const renderBody = (state: AppState): string => {
 
 // ── Modal shell ──────────────────────────────────────────────────────────
 
-/** All chats offered by the selector, grouped per target branch. */
+/** All chats offered by the selector, labeled by their own work branch
+ *  (deployment chats have none — fall back to the target branch). */
 const chatOptions = (state: AppState, selected: string | null): string =>
   state.branches
     .map((branch) =>
@@ -139,7 +140,7 @@ const chatOptions = (state: AppState, selected: string | null): string =>
         .map(
           (c) =>
             `<option value="${escapeHtml(c.id)}" ${c.id === selected ? 'selected' : ''}>
-              ⎇ ${escapeHtml(branch.name)} · ${escapeHtml(c.title)}</option>`,
+              ⎇ ${escapeHtml(c.workBranch || branch.name)} · ${escapeHtml(c.title)}</option>`,
         )
         .join(''),
     )

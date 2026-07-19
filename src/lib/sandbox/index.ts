@@ -218,9 +218,13 @@ export function sandboxCommand(
   return { command: 'bwrap', args: [...bwrapArgs(sb, opts), ...command] };
 }
 
-/** True when `bin` exists in the sandbox env (host-side check). */
+/** True when `bin` exists in the sandbox env (host-side check). lstat, not
+ *  existsSync: env bin entries are absolute /nix/store symlinks that only
+ *  resolve INSIDE the jail (the extracted store is bound at /nix/store there);
+ *  in the container the host store lacks those paths, so following the link
+ *  reports absent binaries that work fine in the jail. */
 export function sandboxHasBin(sb: SandboxState, bin: string): boolean {
-  return fs.existsSync(path.join(sb.envRootHost, 'bin', bin));
+  return fs.lstatSync(path.join(sb.envRootHost, 'bin', bin), { throwIfNoEntry: false }) != null;
 }
 
 /** Spawn a long-lived sandboxed process (e.g. the preview dev server). */
