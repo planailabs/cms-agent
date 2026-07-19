@@ -33,9 +33,10 @@ const stubClient = (calls: string[]) =>
 describe('external MCP', () => {
   it('wraps a client: annotated tools, $schema stripped, text-joined results', async () => {
     const calls: string[] = [];
-    const ext = await externalMcp(stubClient(calls), (d) => `${d} (annotated)`);
+    const ext = await externalMcp(stubClient(calls), (d) => `${d} (annotated)`, 'Use for docs.');
 
     expect(ext.toolNames).toEqual(new Set(['query-docs', 'bare']));
+    expect(ext.promptHint).toBe('Use for docs.');
     const [docs, bare] = ext.openAiTools;
     expect(docs.function.description).toBe('Query docs. (annotated)');
     expect(docs.function.parameters).not.toHaveProperty('$schema');

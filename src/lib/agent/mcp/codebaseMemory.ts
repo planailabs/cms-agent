@@ -68,6 +68,8 @@ export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMc
       (d) =>
         `${d} (Codebase graph of this chat's branch — ` +
         `the repository path inside the sandbox is ${IN_JAIL_REPO}.)`,
+      'Use the codebase-memory graph tools to query the syntax tree of the branch ' +
+        '(symbols, call paths, dependencies, architecture) instead of grepping for structure.',
     );
   } catch (err) {
     warnOnce(`connect failed (${err instanceof Error ? err.message : err})`);

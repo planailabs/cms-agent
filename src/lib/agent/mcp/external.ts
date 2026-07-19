@@ -8,6 +8,8 @@ import type OpenAI from 'openai';
 export interface ExternalMcp {
   toolNames: Set<string>;
   openAiTools: OpenAI.Chat.Completions.ChatCompletionTool[];
+  /** One line of system-prompt guidance, added only while the server is attached. */
+  promptHint: string;
   callTool(name: string, input: Record<string, unknown>): Promise<string>;
   close(): Promise<void>;
 }
@@ -16,6 +18,7 @@ export interface ExternalMcp {
 export async function externalMcp(
   client: Client,
   annotate: (description: string) => string,
+  promptHint: string,
 ): Promise<ExternalMcp> {
   const { tools } = await client.listTools();
 
@@ -36,6 +39,7 @@ export async function externalMcp(
   return {
     toolNames: new Set(tools.map((t) => t.name)),
     openAiTools,
+    promptHint,
     async callTool(name, input) {
       const result = await client.callTool({ name, arguments: input });
       const content = (result.content ?? []) as Array<{ type: string; text?: string }>;

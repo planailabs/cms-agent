@@ -112,7 +112,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
 
   try {
     const tools = await bridge.asOpenAiTools();
-    const systemPrompt = buildSystemPrompt(input.promptInput);
+    const systemPrompt = buildSystemPrompt({ ...input.promptInput, mcpHints: bridge.promptHints() });
     const detectLoop = createLoopDetector();
 
     // ── Pre-step: resume from tool_pending (crash/restart recovery) ─────────

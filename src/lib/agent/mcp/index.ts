@@ -18,6 +18,8 @@ import type { ExternalMcp } from './external';
 export interface McpBridge {
   /** OpenAI function-tool definitions for the current phase. */
   asOpenAiTools(): Promise<OpenAI.Chat.Completions.ChatCompletionTool[]>;
+  /** System-prompt guidance lines for the external MCPs that actually attached. */
+  promptHints(): string[];
   /** Dispatch a model tool call through MCP; returns the tool result string. */
   callTool(name: string, input: Record<string, unknown>): Promise<string>;
   close(): Promise<void>;
@@ -70,6 +72,9 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
         };
       });
       return [...own, ...externals.flatMap((e) => e.openAiTools)];
+    },
+    promptHints() {
+      return externals.map((e) => e.promptHint);
     },
     async callTool(name, input) {
       const ext = externals.find((e) => e.toolNames.has(name));

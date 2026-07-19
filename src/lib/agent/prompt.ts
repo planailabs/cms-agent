@@ -20,6 +20,8 @@ export interface PromptInput {
   needsTitle?: boolean;
   /** Worktree of the chat's work branch — source of branch-local skills. */
   worktreePath?: string;
+  /** Guidance lines for external MCP tools that attached this turn. */
+  mcpHints?: string[];
 }
 
 const COMMON = `You are the editorial agent of a CMS that manages an Astro website through git.
@@ -107,11 +109,13 @@ function languageDirective(locale: string): string {
 export function buildSystemPrompt(input: PromptInput): string {
   const directive = languageDirective(input.locale);
   const plugins = pluginPromptSection(input.worktreePath);
+  const hints = input.mcpHints?.length ? input.mcpHints.map((h) => `- ${h}`).join('\n') : '';
   if (input.kind === 'deployments' || input.kind === 'deployment') {
     const base = input.kind === 'deployment' ? DEPLOYMENT_PROMPT : DEPLOYMENTS_PROMPT;
     let p = base.replace('{language_directive}', directive);
     if (input.extension) p += `\n\n${input.extension}`;
     if (plugins) p += `\n\n${plugins}`;
+    if (hints) p += `\n\n${hints}`;
     return p;
   }
   let prompt =
@@ -136,6 +140,9 @@ with a concise 3–6 word title (in ${languageName(input.locale)}) describing th
   }
   if (plugins) {
     prompt += `\n\n${plugins}`;
+  }
+  if (hints) {
+    prompt += `\n\n${hints}`;
   }
   return prompt;
 }

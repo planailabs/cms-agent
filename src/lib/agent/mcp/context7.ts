@@ -33,6 +33,8 @@ export async function attachContext7(): Promise<ExternalMcp | null> {
     return await externalMcp(
       client,
       (d) => `${d} (Context7 — up-to-date official library documentation.)`,
+      'Use the Context7 tools (resolve-library-id, query-docs) to check current API ' +
+        'documentation for libraries and frameworks instead of relying on memorized APIs.',
     );
   } catch (err) {
     warnOnce(`connect failed (${err instanceof Error ? err.message : err})`);
