@@ -61,6 +61,11 @@ interface DeployData extends AutomatismData {
   targetBranchId: string;
   publicationId: string;
   flowId: string | null;
+  /** Work-branch head the publish approval bound (re-checked at merge time). */
+  approvedSha: string;
+  /** Set once a conflict round began — the reverse-merge commit legitimately
+   *  moves the work-branch head past approvedSha. */
+  conflictStarted?: boolean;
   /** Set by the merge step; the deploy steps publish exactly this sha. */
   mergedSha?: string;
   /** Deploy log accumulated across steps (publication log source). */
@@ -159,6 +164,7 @@ export async function publish(
     targetBranchId: chat.branchId,
     publicationId: publication.id,
     flowId: flow?.id ?? null,
+    approvedSha: req.sha,
   };
 
   await postAutomatismMessage(
@@ -191,8 +197,22 @@ interface PullData extends AutomatismData {
   restorePhase?: string;
 }
 
+/** In-flight startPull chatIds — the DB guard below is check-then-create,
+ *  so a double-click could otherwise start two pulls. */
+const pullStarting = new Set<string>();
+
 /** Start a target→work sync for a workflow chat. Throws on invalid state. */
 export async function startPull(chatId: string, actor: { id: string; name: string }): Promise<string> {
+  if (pullStarting.has(chatId)) throw new WorkflowError('A sync is already starting.', 409);
+  pullStarting.add(chatId);
+  try {
+    return await startPullInner(chatId, actor);
+  } finally {
+    pullStarting.delete(chatId);
+  }
+}
+
+async function startPullInner(chatId: string, actor: { id: string; name: string }): Promise<string> {
   const chat = await prisma.chat.findUnique({ where: { id: chatId }, include: { branch: true } });
   if (!chat) throw new WorkflowError('Chat not found', 404);
   if (chat.kind !== 'workflow') throw new WorkflowError('Only workflow chats can sync.');
@@ -201,6 +221,13 @@ export async function startPull(chatId: string, actor: { id: string; name: strin
     where: { chatId, status: { in: ['running', 'paused'] } },
   });
   if (active) throw new WorkflowError(`A ${active.type} automatism is already ${active.status}.`, 409);
+  // The deploy automatism lives on the DEPLOYMENT chat, so the check above
+  // misses it — a rebase during a pending merge would rewrite the reviewed
+  // branch state. The publication row lives on THIS chat: gate on it.
+  const activePub = await prisma.publication.findFirst({ where: { chatId, status: 'running' } });
+  if (activePub) {
+    throw new WorkflowError('A publication for this chat is in progress — sync after it finishes.', 409);
+  }
 
   await postAutomatismMessage(
     chatId,
@@ -394,6 +421,21 @@ const mergeStep: AutomatismStep = {
       where: { id: data.publicationId },
       data: { status: 'running' },
     });
+    // The publish approval bound the work-branch head; publish() checked it
+    // synchronously, but the merge runs later — re-check so nothing that
+    // moved the branch in between (e.g. a sync/rebase) gets deployed under
+    // the old approval. A conflict round legitimately moves the head.
+    if (data.approvedSha && !data.conflictStarted) {
+      const head = await branchSha(data.workBranch);
+      if (head !== data.approvedSha) {
+        throw new AutomatismFailure(
+          tmsg('deploy.mergeFailed', {
+            target: data.targetName,
+            error: `work branch ${data.workBranch} moved since the publish was approved (${data.approvedSha.slice(0, 8)} → ${head.slice(0, 8)}) — review and publish again`,
+          }),
+        );
+      }
+    }
     try {
       const targetSha = await withBranchLock(data.targetBranchId, () =>
         mergeInto(data.workBranch, data.targetName, identity),
@@ -423,9 +465,17 @@ const mergeStep: AutomatismStep = {
       // agent resolves it here. Committing the reverse merge makes the
       // retried forward merge clean.
       await abortMerge(data.workBranch);
+      data.conflictStarted = true;
       const files = await withBranchLock(data.workBranch, () =>
         beginConflictMerge(data.workBranch, data.targetName, identity),
       );
+      // Keep the publish card truthful while the automatism is paused: the
+      // publication stays 'running', so surface the conflict in its log.
+      deployLog(data)(`Merge conflicts with ${data.targetName} — being resolved in the deployment chat.`);
+      await prisma.publication.update({
+        where: { id: data.publicationId },
+        data: { log: (data.logLines ?? []).join('\n') },
+      });
       throw new AutomatismFailure(
         tmsg('deploy.mergeConflicts', {
           workBranch: data.workBranch,
