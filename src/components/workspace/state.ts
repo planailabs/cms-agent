@@ -114,6 +114,37 @@ export interface GitModalState {
   patchLoading: boolean;
 }
 
+/** A skill row in the capabilities modal (GET /api/agent/capabilities). */
+export interface CapabilitySkillRow {
+  name: string;
+  description: string;
+  plugin: string;
+  source: 'plugin' | 'branch';
+  /** Installed skill hidden by a same-named branch-local one. */
+  shadowed: boolean;
+}
+
+/** An MCP row in the capabilities modal. */
+export interface CapabilityMcpRow {
+  name: string;
+  attached: boolean;
+  reason?: string;
+  tools: string[];
+  indexStatus?: string;
+}
+
+/** Full-screen skills/MCP capabilities modal (per-chat status). */
+export interface CapsModalState {
+  open: boolean;
+  loading: boolean;
+  error: string | null;
+  /** Chat whose capabilities are shown. */
+  chatId: string | null;
+  skills: CapabilitySkillRow[];
+  rules: Array<{ plugin: string }>;
+  mcps: CapabilityMcpRow[];
+}
+
 /** Full-screen archive modal (done chats; delete = chat + branch + data). */
 export interface ArchiveState {
   open: boolean;
@@ -181,6 +212,9 @@ export interface WorkspaceState {
   /** Git modal (commit list + diffs; not chat-scoped). */
   git: GitModalState;
 
+  /** Skills/MCP capabilities modal (not chat-scoped; shows any chat). */
+  caps: CapsModalState;
+
   /** Step progress of the active chat's automatism (deployment chats). */
   automatism: AutomatismProgress | null;
 
@@ -230,9 +264,20 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   browserCompare: createInitialBrowserCompareState(),
   archive: { open: false, loading: false, error: null, chats: [], busyId: null },
   git: createInitialGitModalState(),
+  caps: createInitialCapsModalState(),
   automatism: null,
   inputModal: null,
   targetAhead: false,
+});
+
+export const createInitialCapsModalState = (): CapsModalState => ({
+  open: false,
+  loading: false,
+  error: null,
+  chatId: null,
+  skills: [],
+  rules: [],
+  mcps: [],
 });
 
 export const createInitialGitModalState = (): GitModalState => ({

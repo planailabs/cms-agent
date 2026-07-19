@@ -24,6 +24,7 @@ const post = (chatId: string, type = 'message') =>
 let branchId: string;
 
 beforeAll(async () => {
+  await prisma.chat.deleteMany({ where: { workBranch: { in: ['c-archgate1', 'c-archgate2'] } } });
   await prisma.user.deleteMany({ where: { id: ACTOR.id } });
   const u = await prisma.user.create({
     data: { id: ACTOR.id, name: ACTOR.name, email: 'archive-gate@example.com' },

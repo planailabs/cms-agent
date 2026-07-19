@@ -21,7 +21,6 @@ beforeAll(async () => {
   repo = path.join(base, 'site');
   bare = path.join(base, 'remote.git');
   fs.cpSync(path.join(ROOT, 'examples', 'basic-site'), repo, { recursive: true });
-  fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(base, 'node_modules'), 'dir');
 
   await simpleGit(base).raw(['init', '--bare', '--initial-branch=main', bare]);
   const git = simpleGit(repo);
@@ -36,7 +35,9 @@ beforeAll(async () => {
   process.env.REPO_PATH = repo;
   process.env.VAR_DIR = path.join(base, 'var');
   process.env.DEPLOY_GIT_REMOTE = 'origin';
-  process.env.REPO_BUILD_COMMAND = `node ${path.join(ROOT, 'node_modules', 'astro', 'bin', 'astro.mjs')} build`;
+  // Default REPO_BUILD_COMMAND (npx astro build): host paths are invisible in
+  // the jail — sealArtifact installs the site's deps into the checkout.
+  delete process.env.REPO_BUILD_COMMAND;
   resetEnvCache();
 }, 60_000);
 

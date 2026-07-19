@@ -40,11 +40,13 @@ describe('mcp → openai tool schemas', () => {
         const p = t.function.parameters as { properties?: Record<string, unknown> } | undefined;
         return !p?.properties || Object.keys(p.properties).length === 0;
       });
-      // Tools with genuinely empty schemas (z.object({})) are fine
+      // Tools with genuinely empty schemas (z.object({})) are fine.
+      // list_projects is external (codebase-memory) — attached only when the
+      // test runs with a sandbox; its empty schema is upstream's.
       const legitimatelyEmpty = new Set([
         'list_pages', 'git_status', 'git_branches', 'get_user_context', 'list_conflicts',
         'resume_automatism', 'git_rebase_continue', 'git_rebase_abort', 'scratch_list',
-        'list_uploads', 'content_inventory', 'site_structure',
+        'list_uploads', 'content_inventory', 'site_structure', 'list_projects',
       ]);
       const unexpected = empty.map((t) => t.function.name).filter((n) => !legitimatelyEmpty.has(n));
       expect(unexpected).toEqual([]);

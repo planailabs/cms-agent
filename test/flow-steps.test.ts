@@ -11,6 +11,14 @@ import '@/lib/publish/publisher'; // registers flows, flow tools, automatism typ
 
 describe('flow-defined deploy steps', () => {
   it('registers a per-flow automatism type with the flow phase names', async () => {
+    const stale = await prisma.chat.findMany({
+      where: { workBranch: 'c-flowtest1' },
+      select: { id: true },
+    });
+    await prisma.automatism.deleteMany({ where: { chatId: { in: stale.map((c) => c.id) } } });
+    await prisma.chat.deleteMany({ where: { id: { in: stale.map((c) => c.id) } } });
+    await prisma.branch.deleteMany({ where: { name: 'flow-target' } });
+    await prisma.user.deleteMany({ where: { id: 'flow-user' } });
     const u = await prisma.user.create({
       data: { id: 'flow-user', name: 'F', email: 'flow@example.com' },
     });

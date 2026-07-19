@@ -29,7 +29,6 @@ describe.skipIf(!available)('visual diff', () => {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-vdiff-'));
     const repo = path.join(base, 'site');
     fs.cpSync(path.join(ROOT, 'examples', 'basic-site'), repo, { recursive: true });
-    fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(base, 'node_modules'), 'dir');
 
     const git = simpleGit(repo);
     await git.init(['--initial-branch=main'] as never);
@@ -40,7 +39,9 @@ describe.skipIf(!available)('visual diff', () => {
 
     process.env.REPO_PATH = repo;
     process.env.VAR_DIR = path.join(base, 'var');
-    process.env.REPO_DEV_COMMAND = `node ${path.join(ROOT, 'node_modules', 'astro', 'bin', 'astro.mjs')} dev`;
+    // Default REPO_DEV_COMMAND (npx astro dev): host paths are invisible in
+    // the jail — the manager installs the site's deps into the worktree.
+    delete process.env.REPO_DEV_COMMAND;
     resetEnvCache();
     manager = await import('@/lib/preview/manager');
 

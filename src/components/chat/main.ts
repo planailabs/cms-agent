@@ -25,6 +25,7 @@ import { renderBrowserCompare } from '../workspace/browserCompare';
 import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
 import { renderArchiveModal } from '../workspace/archive';
 import { renderGitModal } from '../workspace/gitModal';
+import { renderCapsModal } from '../workspace/capsModal';
 import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
@@ -156,6 +157,7 @@ const initApp = () => {
         renderSettingsOverlay({ state, locale }) +
         renderArchiveModal(state) +
         renderGitModal(state) +
+        renderCapsModal(state) +
         renderInputModal(state);
       if (overlayRegion.innerHTML !== overlayMarkup) {
         overlayRegion.innerHTML = overlayMarkup;

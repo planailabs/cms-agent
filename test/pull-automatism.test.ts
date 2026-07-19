@@ -49,6 +49,12 @@ beforeAll(async () => {
   engine = await import('@/lib/git/engine');
   publisher = await import('@/lib/publish/publisher');
 
+  const stale = await prisma.chat.findMany({
+    where: { workBranch: { in: ['c-pullclean', 'c-pullconf'] } },
+    select: { id: true },
+  });
+  await prisma.automatism.deleteMany({ where: { chatId: { in: stale.map((c) => c.id) } } });
+  await prisma.chat.deleteMany({ where: { id: { in: stale.map((c) => c.id) } } });
   await prisma.user.deleteMany({ where: { id: ACTOR.id } });
   await prisma.branch.deleteMany({ where: { name: 'pull-main' } });
   const u = await prisma.user.create({

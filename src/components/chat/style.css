@@ -2923,6 +2923,48 @@ html.is-first-visit #app {
   color: var(--text-muted);
 }
 
+/* Capabilities modal (skills + MCP status) */
+.ws-caps__row {
+  cursor: default;
+}
+
+.ws-caps__row:hover {
+  background: var(--surface-elevated);
+}
+
+.ws-caps__badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.ws-caps__badge.is-on {
+  background: color-mix(in srgb, #16a34a 15%, transparent);
+  color: #16a34a;
+}
+
+.ws-caps__badge.is-off {
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent);
+  color: var(--text-muted);
+}
+
+.ws-caps__index {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-muted);
+  border-radius: 0.4rem;
+  background: var(--surface-base);
+  font-size: 0.7rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 14rem;
+  overflow: auto;
+}
+
 /* Diff view */
 .ws-git__preamble {
   margin-bottom: 1rem;
