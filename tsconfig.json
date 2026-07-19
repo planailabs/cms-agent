@@ -5,9 +5,22 @@
     "jsxImportSource": "astro",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
-  "include": [".astro/types.d.ts", "src", "test", "scripts"],
-  "exclude": ["dist", "chat", "examples", "proxy"]
+  "include": [
+    ".astro/types.d.ts",
+    "src",
+    "test",
+    "scripts"
+  ],
+  "exclude": [
+    "dist",
+    "chat",
+    "examples",
+    "proxy",
+    "plugins"
+  ]
 }

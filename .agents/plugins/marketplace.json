@@ -1,0 +1,12 @@
+{
+  "name": "cms-agent-plugins",
+  "interface": { "displayName": "CMS Agent Plugins" },
+  "plugins": [
+    {
+      "name": "ponytail",
+      "source": { "source": "local", "path": "./plugins/ponytail" },
+      "policy": { "installation": "AVAILABLE" },
+      "category": "Productivity"
+    }
+  ]
+}

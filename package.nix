@@ -166,11 +166,18 @@ stdenv.mkDerivation (finalAttrs: {
     cp -r prisma/migrations $out/share/cms-agent/prisma/migrations
     cp prisma.config.ts $out/share/cms-agent/
 
+    # Agent plugins (marketplace + submodule plugin dirs). Submodule content
+    # is only present when the flake is built with ?submodules=1 — the loader
+    # skips empty plugin dirs with a warning otherwise.
+    if [ -d .agents ]; then cp -r .agents $out/share/cms-agent/.agents; fi
+    if [ -d plugins ]; then cp -r plugins $out/share/cms-agent/plugins; fi
+
     mkdir -p $out/bin
 
     makeWrapper ${lib.getExe nodejs_22} $out/bin/cms-agent \
       --add-flags "$out/share/cms-agent/server.mjs" \
-      --set-default PRISMA_SCHEMA_ENGINE_BINARY "${prisma-engines_7}/bin/schema-engine"
+      --set-default PRISMA_SCHEMA_ENGINE_BINARY "${prisma-engines_7}/bin/schema-engine" \
+      --set-default CMS_PLUGINS_ROOT "$out/share/cms-agent"
 
     # Prisma CLI against the packaged schema/migrations, e.g.:
     #   cms-agent-prisma migrate deploy

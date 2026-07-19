@@ -29,6 +29,7 @@ import { registerCommitTools } from './tools/commitTools';
 import { registerCommandTools } from './tools/commandTools';
 import { registerAutomatismTools } from './tools/automatismTools';
 import { registerConflictTools } from './tools/conflictTools';
+import { registerSkillTools } from './tools/skillTools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
@@ -54,6 +55,7 @@ registerCommitTools();
 registerCommandTools();
 registerAutomatismTools();
 registerConflictTools();
+registerSkillTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */

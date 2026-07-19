@@ -5,6 +5,7 @@
  */
 import type { WorkflowPhase } from './types';
 import { languageName } from '@/lib/i18n';
+import { pluginPromptSection } from './plugins';
 
 export interface PromptInput {
   /** Non-workflow kinds get their own prompt, phase-independent. */
@@ -103,10 +104,12 @@ function languageDirective(locale: string): string {
 
 export function buildSystemPrompt(input: PromptInput): string {
   const directive = languageDirective(input.locale);
+  const plugins = pluginPromptSection();
   if (input.kind === 'deployments' || input.kind === 'deployment') {
     const base = input.kind === 'deployment' ? DEPLOYMENT_PROMPT : DEPLOYMENTS_PROMPT;
     let p = base.replace('{language_directive}', directive);
     if (input.extension) p += `\n\n${input.extension}`;
+    if (plugins) p += `\n\n${plugins}`;
     return p;
   }
   let prompt =
@@ -128,6 +131,9 @@ with a concise 3–6 word title (in ${languageName(input.locale)}) describing th
   }
   if (input.extension) {
     prompt += `\n\n${input.extension}`;
+  }
+  if (plugins) {
+    prompt += `\n\n${plugins}`;
   }
   return prompt;
 }
