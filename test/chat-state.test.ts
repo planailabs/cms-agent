@@ -103,17 +103,9 @@ describe('streamed chat state', () => {
     const res = await historyGet({
       url: new URL(`http://localhost/api/chat/history?chatId=${chatId}`),
     } as never);
-    const body = (await res.json()) as {
-      state: Record<string, unknown>;
-      workflowPhase: string;
-      executions: unknown[];
-      planJson: unknown;
-    };
+    const body = (await res.json()) as { state: Record<string, unknown>; phase: string };
     const rebuilt = await buildChatState(chatId);
     expect({ ...body.state, seq: 0 }).toEqual(JSON.parse(JSON.stringify({ ...rebuilt, seq: 0 })));
-    // flat compat fields mirror the snapshot
-    expect(body.workflowPhase).toBe(body.state.workflowPhase);
-    expect(body.planJson).toEqual(body.state.planJson);
-    expect(body.executions).toEqual(body.state.executions);
+    expect(body.phase).toBeDefined(); // turn phase stays a flat field
   });
 });

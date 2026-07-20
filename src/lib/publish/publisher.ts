@@ -126,7 +126,6 @@ export async function publish(
   if (versionGate.count === 0) {
     throw new WorkflowError('The chat changed while you were deciding — reload and retry.');
   }
-  broadcast(chat.id, 'phase_changed', { type: 'phase_changed', workflowPhase: 'published' });
   emitChatState(chat.id);
 
   // The deployment chat hosts the automatism: its events, and the agent when
@@ -265,10 +264,6 @@ registerAutomatism({
               where: { id: data.workflowChatId },
               data: { workflowPhase: 'execute', entityVersion: { increment: 1 } },
             });
-            broadcast(data.workflowChatId, 'phase_changed', {
-              type: 'phase_changed',
-              workflowPhase: 'execute',
-            });
             emitChatState(data.workflowChatId);
           }
           throw new AutomatismFailure(
@@ -310,10 +305,6 @@ registerAutomatism({
             where: { id: data.workflowChatId },
             data: { workflowPhase: data.restorePhase, entityVersion: { increment: 1 } },
           });
-          broadcast(data.workflowChatId, 'phase_changed', {
-            type: 'phase_changed',
-            workflowPhase: data.restorePhase,
-          });
           emitChatState(data.workflowChatId);
           data.restorePhase = undefined;
         }
@@ -351,12 +342,6 @@ async function failDeploy(data: DeployData, err: unknown): Promise<never> {
   await prisma.publication.update({
     where: { id: data.publicationId },
     data: { status: 'failed', log: (data.logLines ?? []).join('\n') },
-  });
-  broadcast(data.workflowChatId, 'publish_done', {
-    type: 'publish_done',
-    publicationId: data.publicationId,
-    ok: false,
-    error: message,
   });
   emitChatState(data.workflowChatId);
   throw new AutomatismFailure(
@@ -408,13 +393,6 @@ async function recordDeploySuccess(
         : '',
     }),
   );
-  broadcast(data.workflowChatId, 'publish_done', {
-    type: 'publish_done',
-    publicationId: data.publicationId,
-    ok: true,
-    sha,
-    externalUrl: data.result?.externalUrl,
-  });
   emitChatState(data.workflowChatId);
 }
 
@@ -617,18 +595,6 @@ const finalizeStep: AutomatismStep = {
       data: { archivedAt: now },
     });
     await post(tmsg('deploy.finished'));
-    broadcast(data.workflowChatId, 'phase_changed', {
-      type: 'phase_changed',
-      workflowPhase: 'published',
-    });
-    broadcast(data.workflowChatId, 'chat_archived', {
-      type: 'chat_archived',
-      chatId: data.workflowChatId,
-    });
-    broadcast(data.deployChatId, 'chat_archived', {
-      type: 'chat_archived',
-      chatId: data.deployChatId,
-    });
     emitChatState(data.workflowChatId);
     emitChatState(data.deployChatId);
   },

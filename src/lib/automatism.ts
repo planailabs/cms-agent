@@ -60,9 +60,8 @@ export interface AutomatismState {
 }
 
 function emitState(s: AutomatismState): void {
-  broadcast(s.chatId, 'automatism_state', { type: 'automatism_state', ...s });
-  // streamed-state phase 1: full snapshot alongside (lazy import breaks the
-  // automatism ⇄ publisher ⇄ chatState registration cycle)
+  // The full snapshot carries the step bar (lazy import breaks the
+  // automatism ⇄ publisher ⇄ chatState registration cycle).
   void import('@/lib/agent/chatState').then(({ emitChatState }) => emitChatState(s.chatId));
 }
 

@@ -4,6 +4,8 @@
  */
 
 import { store } from '../../app/store';
+import type { WorkflowPhase } from '../../app/state';
+import { createInitialDiffState } from '../../../workspace/state';
 import { locales } from '../../content';
 import { t, uiLocale } from '@/lib/i18n';
 import {
@@ -60,30 +62,61 @@ export interface ChatStateSnapshot {
 /** Per-chat stale-drop guard for `state` events (epoch resets on server restart). */
 const stateSeqByChat = new Map<string, { epoch: string; seq: number }>();
 
+/** Highest applied snapshot seq for a chat — captured before a history fetch
+ *  so a stale (seq-0) snapshot can be skipped when live events overtook it. */
+export const getChatStateSeq = (chatId: string): number =>
+  stateSeqByChat.get(chatId)?.seq ?? 0;
+
 /**
  * Apply a full server snapshot by plain replacement — the server always
  * wins. Transcript messages and local UI state are untouched by design.
+ * `staleGuard` (restore-mode history): skip if a sequenced snapshot arrived
+ * since the fetch started — the live stream is newer than the fetch.
  */
-export const applyChatState = (snapshot: ChatStateSnapshot, clientId?: string): void => {
+export const applyChatState = (
+  snapshot: ChatStateSnapshot,
+  clientId?: string,
+  opts?: { staleGuard?: number },
+): void => {
   const st = store.state;
-  if (snapshot.chatId !== st.activeChatId) return;
   const guard = stateSeqByChat.get(snapshot.chatId);
-  // seq 0 = history snapshot (unsequenced): always apply, never recorded.
+
+  // Sidebar effects apply for ANY chat on this SSE channel (rename/archive
+  // reach non-active viewers of the same chat list).
+  for (const branch of st.branches) {
+    const idx = branch.chats.findIndex((x) => x.id === snapshot.chatId);
+    if (idx < 0) continue;
+    if (snapshot.archived) {
+      branch.chats.splice(idx, 1); // done chats live in the archive view
+    } else {
+      branch.chats[idx].title = snapshot.title;
+      branch.chats[idx].workflowPhase = snapshot.workflowPhase as WorkflowPhase;
+    }
+  }
+
+  if (snapshot.chatId !== st.activeChatId) {
+    store.notify();
+    return;
+  }
+  // seq 0 = history snapshot (unsequenced): applied unless live events
+  // overtook the fetch (staleGuard); never recorded in the guard map.
   if (snapshot.seq !== 0) {
     if (guard && guard.epoch === snapshot.epoch && snapshot.seq <= guard.seq) return;
     stateSeqByChat.set(snapshot.chatId, { epoch: snapshot.epoch, seq: snapshot.seq });
+  } else if (opts?.staleGuard !== undefined && (guard?.seq ?? 0) > opts.staleGuard) {
+    return;
   }
 
+  const phaseChanged = st.workflowPhase !== snapshot.workflowPhase;
   st.workflowPhase = snapshot.workflowPhase as typeof st.workflowPhase;
   st.activeBranchId = snapshot.branchId;
   st.activeChatTitle = snapshot.title;
+  st.activeChatKind = snapshot.kind as typeof st.activeChatKind;
   st.activeChatArchived = snapshot.archived;
-  for (const branch of st.branches) {
-    const c = branch.chats.find((x) => x.id === snapshot.chatId);
-    if (c) c.title = snapshot.title;
-  }
 
   const ws = st.workspace;
+  // Reset the diff viewer so it reloads on (re-)entering PREVIEW.
+  if (phaseChanged) ws.diff = createInitialDiffState();
   ws.plan = (snapshot.planJson as typeof ws.plan) ?? null;
   ws.executions = snapshot.executions.map((e) => ({
     sha: e.sha,
@@ -150,36 +183,13 @@ export const applyChatState = (snapshot: ChatStateSnapshot, clientId?: string): 
 
 export interface ChatHistoryResult {
   messages: StoredMessage[];
+  /** Turn phase (idle / waiting_for_answer / tool_pending). */
   phase?: string;
   pendingQuestion?: Record<string, unknown>;
-  executions: HistoryExecution[];
   lastError?: string | null;
-  automatism?: {
-    chatId: string;
-    automatismType: string;
-    status: string;
-    step: number;
-    steps: string[];
-    lastError: string | null;
-  } | null;
-  targetAhead?: boolean;
-  kind?: string;
-  title?: string;
-  archived?: boolean;
-  workflowPhase?: string;
-  branchId?: string;
-  /** Approved plan (chat.planJson) — feeds the fullscreen plan modal. */
-  planJson?: unknown;
-  /** Full snapshot (streamed-state phase 1) — becomes the only source in phase 2. */
+  /** Full workflow/side-state snapshot — the ONLY state source (streamed-
+   *  state plan): applied via applyChatState, same shape as SSE `state`. */
   state?: ChatStateSnapshot;
-  /** Latest publication (GET /api/chat/history) — rehydrates the publish card. */
-  publication?: {
-    id: string;
-    sha: string;
-    status: string;
-    log: string;
-    externalUrl: string | null;
-  } | null;
 }
 
 export const initAIChat = (messages: StoredMessage[], phase: 'idle' | 'waiting' = 'idle') => {
@@ -219,16 +229,8 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
       messages,
       phase: data.phase,
       pendingQuestion: data.pendingQuestion,
-      executions: (data.executions ?? []) as HistoryExecution[],
       lastError: data.lastError ?? null,
-      automatism: data.automatism ?? null,
-      targetAhead: Boolean(data.targetAhead),
-      kind: data.kind,
-      title: data.title,
-      archived: Boolean(data.archived),
-      workflowPhase: data.workflowPhase,
-      branchId: data.branchId,
-      publication: data.publication ?? null,
+      state: data.state as ChatStateSnapshot | undefined,
     };
   } catch {
     // Network error — fall through
@@ -263,8 +265,13 @@ export const restoreAIChatSession = (): void => {
 
   // Fetch authoritative history from server — then decide whether to auto-send greeting
   const seqAtStart = getTranscriptEventSeq();
+  const stateSeqAtStart = getChatStateSeq(chatId);
   void fetchAIChatHistory(chatId).then((result) =>
-    applyHistoryResult(chatId, result, { mode: 'restore', transcriptSeqAtStart: seqAtStart }),
+    applyHistoryResult(chatId, result, {
+      mode: 'restore',
+      transcriptSeqAtStart: seqAtStart,
+      stateSeqAtStart,
+    }),
   );
 };
 
@@ -278,97 +285,26 @@ export const resyncChatHistory = async (chatId: string): Promise<void> => {
 };
 
 /**
- * Apply a history snapshot to the store. 'restore' (page load / chat switch)
- * lets live SSE state that landed during the fetch win; 'resync' (after a
- * reconnect gap) is server-wins.
+ * Apply a history snapshot to the store. Workflow/side state comes as ONE
+ * full snapshot (result.state) applied server-wins via applyChatState; the
+ * restore/resync distinction only matters for the transcript ('restore'
+ * lets a live stream that advanced during the fetch win).
  */
 const applyHistoryResult = (
   chatId: string,
   result: ChatHistoryResult | null,
-  opts: { mode: 'restore' | 'resync'; transcriptSeqAtStart: number },
+  opts: { mode: 'restore' | 'resync'; transcriptSeqAtStart: number; stateSeqAtStart?: number },
 ): void => {
   const mc = store.state.chat?.aiChat;
   if (!mc || store.state.activeChatId !== chatId) return;
   const serverWins = opts.mode === 'resync';
 
-  if (result) {
-    store.state.workspace.targetAhead = Boolean(result.targetAhead);
-    if (result.kind) store.state.activeChatKind = result.kind;
-    if (result.title) store.state.activeChatTitle = result.title;
-    store.state.activeChatArchived = Boolean(result.archived);
-    // Server truth for phase/branch: archived chats are missing from the
-    // sidebar list switchChat derives these from, which left the PREVIOUS
-    // chat's branch (and a 'plan' fallback) active.
-    if (result.workflowPhase) {
-      store.state.workflowPhase = result.workflowPhase as typeof store.state.workflowPhase;
-    }
-    if (result.branchId) store.state.activeBranchId = result.branchId;
-    // Server truth in both modes — the plan only changes via server-side
-    // transitions (approval persists it). Keeps it viewable in every phase.
-    store.state.workspace.plan =
-      (result.planJson as typeof store.state.workspace.plan) ?? null;
-    store.notify();
-  }
-
-  // Rehydrate the automatism step bar (deployment chats)
-  if (result?.automatism) {
-    store.state.workspace.automatism = {
-      forChatId: chatId,
-      automatismType: result.automatism.automatismType,
-      status: result.automatism.status,
-      step: result.automatism.step,
-      steps: result.automatism.steps,
-      lastError: result.automatism.lastError,
-    };
-    store.notify();
-  }
-
-  // Rehydrate persisted executions (cards + publishable sha). On restore,
-  // live SSE events that landed while the fetch was in flight win.
-  if (result && (serverWins || result.executions.length > 0)) {
-    const ws = store.state.workspace;
-    if (serverWins || ws.executions.length === 0) {
-      ws.executions = result.executions.map((e) => ({
-        sha: e.sha,
-        summary: e.summary,
-        ...(e.revertedBySha ? { reverted: { revertSha: e.revertedBySha, by: '' } } : {}),
-      }));
-    }
-    if (serverWins || !ws.executionSha) {
-      const publishable = result.executions.filter((e) => !e.revertedBySha);
-      ws.executionSha = publishable[publishable.length - 1]?.sha ?? null;
-    }
-    store.notify();
-  }
-
-  // Rehydrate the publish card from the latest publication ('external_unknown'
-  // has no card equivalent and stays hidden).
-  if (result) {
-    const pub = result.publication;
-    const ws = store.state.workspace;
-    const status =
-      pub && (pub.status === 'running' || pub.status === 'succeeded' || pub.status === 'failed')
-        ? (pub.status as 'running' | 'succeeded' | 'failed')
-        : null;
-    const card =
-      pub && status
-        ? {
-          sha: pub.sha,
-          publicationId: pub.id,
-          lines: pub.log
-            ? pub.log.split('\n').filter(Boolean).slice(-MAX_PUBLISH_LOG_LINES)
-            : [],
-            status,
-            externalUrl: pub.externalUrl ?? undefined,
-          }
-        : null;
-    if (serverWins) {
-      ws.publish = card;
-      store.notify();
-    } else if (card && !ws.publish) {
-      ws.publish = card;
-      store.notify();
-    }
+  if (result?.state) {
+    applyChatState(
+      result.state,
+      undefined,
+      serverWins ? undefined : { staleGuard: opts.stateSeqAtStart ?? 0 },
+    );
   }
 
   if (result && result.messages.length > 0) {
@@ -381,7 +317,7 @@ const applyHistoryResult = (
         m.role === 'cancel' ? { ...m, content: m.content || cancelLabel } : m,
       );
       // Interleave committed-execution cards at their chronological place
-      for (const e of result.executions) {
+      for (const e of result.state?.executions ?? []) {
         if (!e.createdAt) continue;
         const at = new Date(e.createdAt).getTime();
         let idx = mc.messages.findIndex(

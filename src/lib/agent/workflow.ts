@@ -81,9 +81,9 @@ function resumeTurn(chatId: string, actor: TransitionOpts['actor'], text: string
   })();
 }
 
-function emitPhase(chatId: string, workflowPhase: WorkflowPhase, extra: object = {}): void {
-  broadcast(chatId, 'phase_changed', { type: 'phase_changed', workflowPhase, ...extra });
-  emitChatState(chatId); // streamed-state phase 1: full snapshot alongside
+/** Every transition funnels through here — the snapshot IS the phase event. */
+function emitPhase(chatId: string, _workflowPhase: WorkflowPhase, _extra: object = {}): void {
+  emitChatState(chatId);
 }
 
 // ─── Transitions ─────────────────────────────────────────────────────────────
@@ -234,12 +234,9 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
   await updatePhase(opts.chatId, opts.expectedVersion ?? chat.entityVersion, {
     workflowPhase: 'preview',
   });
+  // The snapshot from emitPhase carries the refreshed executionSha; the
+  // transcript card was already anchored by git_commit's event.
   emitPhase(opts.chatId, 'preview', { executionSha: sha });
-  if (sha) {
-    // Cards are broadcast per git_commit; this only refreshes executionSha
-    // for clients (execution_committed dedupes by sha client-side).
-    broadcast(opts.chatId, 'execution_committed', { type: 'execution_committed', sha, summary });
-  }
 
   if (chat.turnPhase === 'waiting_for_answer') {
     resumeTurn(
@@ -277,14 +274,6 @@ export async function revertExecution(opts: {
 
   // Notify every chat on the branch
   const chats = await prisma.chat.findMany({ where: { branchId: opts.branchId }, select: { id: true } });
-  for (const c of chats) {
-    broadcast(c.id, 'execution_reverted', {
-      type: 'execution_reverted',
-      sha: opts.sha,
-      revertSha,
-      by: opts.actor.name,
-    });
-    emitChatState(c.id);
-  }
+  for (const c of chats) emitChatState(c.id);
   return revertSha;
 }

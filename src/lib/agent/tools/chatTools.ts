@@ -5,7 +5,6 @@
  */
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { broadcast } from '../bus';
 import { emitChatState } from '../chatState';
 import { registerTool } from './registry';
 
@@ -23,11 +22,6 @@ export function registerChatTools(): void {
       const title = input.title.trim().replace(/\s+/g, ' ').slice(0, 80);
       if (!title) return JSON.stringify({ error: 'Title must not be empty' });
       await prisma.chat.update({ where: { id: ctx.chatId }, data: { title } });
-      broadcast(ctx.chatId, 'chat_renamed', {
-        type: 'chat_renamed',
-        chatId: ctx.chatId,
-        title,
-      });
       emitChatState(ctx.chatId);
       return JSON.stringify({ ok: true, title });
     },

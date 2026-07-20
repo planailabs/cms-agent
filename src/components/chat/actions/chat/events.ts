@@ -3,13 +3,10 @@
  */
 
 import { store } from '../../app/store';
-import type { WorkflowPhase } from '../../app/state';
 import { t, uiLocale, type TranslatedMessage } from '@/lib/i18n';
 import { cacheAIChatMessages } from './cache';
 import { transition } from './stateMachine';
 import { publishCardReducer } from '../../../workspace/publishCard';
-import { createInitialDiffState } from '../../../workspace/state';
-import { onRemoteTabsUpdated } from '../../../workspace/tabsSync';
 
 /**
  * Handles workspace-level events (execution/publish lifecycle). These don't
@@ -35,52 +32,16 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
     }
 
     case 'execution_committed': {
+      // Transcript-anchor event: the card's chronological place in the LIVE
+      // transcript. Its state part (ws.executions/executionSha) comes from
+      // the `state` snapshot that follows it.
       const sha = data.sha as string;
-      const summary = (data.summary as string) ?? '';
-      if (!ws.executions.some((e) => e.sha === sha)) {
-        ws.executions.push({ sha, summary });
-      }
-      ws.executionSha = sha;
-      // Anchor the card inline at its chronological place in the transcript
       const mc = store.state.chat?.aiChat;
       if (mc && !mc.messages.some((m) => m.role === 'execution' && m.sha === sha)) {
         mc.messages.push({ role: 'execution', content: '', sha });
         cacheAIChatMessages(mc.messages);
-      }
-      store.notify();
-      return true;
-    }
-
-    case 'tabs_updated': {
-      onRemoteTabsUpdated(data);
-      return true;
-    }
-
-    case 'chat_renamed': {
-      const chatId = data.chatId as string;
-      const title = data.title as string;
-      if (chatId && title) {
-        for (const branch of store.state.branches) {
-          const chat = branch.chats.find((c) => c.id === chatId);
-          if (chat) chat.title = title;
-        }
         store.notify();
       }
-      return true;
-    }
-
-    case 'execution_reverted': {
-      const sha = data.sha as string;
-      const revertSha = data.revertSha as string;
-      const by = (data.by as string) ?? '';
-      const card = ws.executions.find((e) => e.sha === sha);
-      if (card) {
-        card.reverted = { revertSha, by };
-        card.busy = false;
-      }
-      // A reverted sha must not be published
-      if (ws.executionSha === sha) ws.executionSha = null;
-      store.notify();
       return true;
     }
 
@@ -109,53 +70,6 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
       return true;
     }
 
-    case 'automatism_state': {
-      // Step-bar progress for the active chat's automatism
-      if (data.chatId === store.state.activeChatId) {
-        store.state.workspace.automatism = {
-          forChatId: data.chatId as string,
-          automatismType: (data.automatismType as string) ?? '',
-          status: (data.status as string) ?? 'running',
-          step: (data.step as number) ?? 0,
-          steps: (data.steps as string[]) ?? [],
-          lastError: (data.lastError as string | null) ?? null,
-        };
-        // A finished sync means the draft now contains the target
-        if (data.automatismType === 'pull' && data.status === 'done') {
-          ws.targetAhead = false;
-        }
-        store.notify();
-      }
-      return true;
-    }
-
-    case 'chat_archived': {
-      // Done chats leave the sidebar (they live in the archive view now)
-      const chatId = data.chatId as string;
-      for (const branch of store.state.branches) {
-        const idx = branch.chats.findIndex((c) => c.id === chatId);
-        if (idx >= 0) branch.chats.splice(idx, 1);
-      }
-      // Still open? Swap the composer for the archived note right away.
-      if (chatId === store.state.activeChatId) {
-        store.state.activeChatArchived = true;
-      }
-      store.notify();
-      return true;
-    }
-
-    case 'publish_done': {
-      ws.publish = publishCardReducer(ws.publish, {
-        type: 'done',
-        publicationId: data.publicationId as string,
-        ok: Boolean(data.ok),
-        sha: data.sha as string | undefined,
-        error: data.error as string | undefined,
-        externalUrl: data.externalUrl as string | undefined,
-      });
-      store.notify();
-      return true;
-    }
   }
   return false;
 };
@@ -269,29 +183,6 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
       }
 
       cacheAIChatMessages(mc2.messages);
-      store.notify();
-      break;
-    }
-
-    case 'phase_changed': {
-      const workflowPhase = data.workflowPhase as WorkflowPhase;
-      store.state.workflowPhase = workflowPhase;
-      // Keep the branch list summary in sync with the active chat
-      const activeChatId = store.state.activeChatId;
-      for (const branch of store.state.branches) {
-        const chat = branch.chats.find((c) => c.id === activeChatId);
-        if (chat) chat.workflowPhase = workflowPhase;
-      }
-      // Workspace: remember the reviewed sha (used by the Publish action) and
-      // reset the diff viewer so it reloads on (re-)entering PREVIEW.
-      const ws = store.state.workspace;
-      if (typeof data.executionSha === 'string' && data.executionSha) {
-        ws.executionSha = data.executionSha;
-      }
-      ws.diff = createInitialDiffState();
-      // A new plan round (request changes after a publish) — the previous
-      // round's publish card no longer describes the draft.
-      if (workflowPhase === 'plan') ws.publish = null;
       store.notify();
       break;
     }

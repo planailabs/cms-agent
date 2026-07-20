@@ -7,6 +7,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { addConnection, type SSEWriter } from '@/lib/agent/bus';
+import { currentChatState } from '@/lib/agent/chatState';
 import { prisma } from '@/lib/db';
 
 export const GET: APIRoute = async ({ request, url }) => {
@@ -20,7 +21,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
-    select: { turnPhase: true, pendingQuestion: true, workflowPhase: true },
+    select: { turnPhase: true, pendingQuestion: true },
   });
   if (!chat) {
     return new Response(JSON.stringify({ error: 'Chat not found' }), {
@@ -52,7 +53,11 @@ export const GET: APIRoute = async ({ request, url }) => {
 
       const unsubscribe = addConnection(chatId, writer);
 
-      writer.write('phase_changed', { type: 'phase_changed', workflowPhase: chat.workflowPhase });
+      // Connect replay: the full authoritative snapshot (a client that
+      // already applied this seq skips it; a reconnecting one catches up).
+      void currentChatState(chatId).then((state) => {
+        if (state) writer.write('state', { type: 'state', state });
+      });
       if (chat.turnPhase === 'waiting_for_answer' && chat.pendingQuestion) {
         const q = chat.pendingQuestion as { toolName: string; input: Record<string, unknown> };
         writer.write('question', { type: 'question', toolName: q.toolName, input: q.input });

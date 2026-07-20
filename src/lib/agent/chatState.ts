@@ -131,6 +131,16 @@ export async function buildChatState(
   };
 }
 
+/**
+ * Snapshot at the CURRENT seq (no bump) — the SSE connect replay. A client
+ * that already applied this seq skips it; a fresh client applies it.
+ */
+export async function currentChatState(chatId: string): Promise<ChatStateSnapshot | null> {
+  const state = await buildChatState(chatId);
+  if (state) state.seq = seqs.get(chatId) ?? 0;
+  return state;
+}
+
 interface EmitOpts {
   /** Originating browser session — that client ignores its own echo. */
   clientId?: string;

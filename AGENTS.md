@@ -60,23 +60,36 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
   the definition loader filtered to `source.kind === 'local'` (mcporter
   otherwise layers in servers imported from `~/.claude.json` etc.).
 
-## Client state: rehydrate + sync (pitfalls)
+## Client state: streamed snapshots
 
-The server is the source of truth; SSE events only mutate LIVE state. Any
-UI state that outlives a page reload or chat switch MUST be persisted
-server-side and rebuilt from `GET /api/chat/history` in `applyHistory`
-(`session.ts`) — the single sync point. Rehydrated today: messages, phase +
-`pendingQuestion` (plan/finish/question cards), executions, latest
-publication (publish card), automatism progress, `targetAhead`, title,
-archived. Pitfalls that actually bit:
+Workflow/side state (phase, branch, plan, executions, publish card,
+automatism, targetAhead, title/archived, tabs) is ONE server-computed
+snapshot: `buildChatState()` in `src/lib/agent/chatState.ts`. Rules:
 
-- A card rendered only from an SSE event vanishes on reload. Persist the
-  fact (chat row / own table), return it from history, restore it in
-  `applyHistory` — never carry state over client-side from another view.
-- History rehydration must not clobber fresher live state: SSE events that
-  landed while the fetch was in flight win (`if (!ws.publish)` etc.).
+- After ANY mutation of synced state, call `emitChatState(chatId)` — never
+  invent a bespoke SSE state event. The snapshot is broadcast in full and
+  the client applies it by plain replacement (`applyChatState`); there is no
+  patching or merging. `/api/chat/history` and the SSE connect replay use
+  the same builder, so snapshot and stream cannot drift
+  (`test/chat-state.test.ts` pins that parity).
+- Only the transcript stream (`text_delta`, `question`, `done`, …) and
+  append-only events (`publish_log`, `automatism` messages,
+  `execution_committed` as the transcript card anchor) bypass snapshots.
+- `seq`/`epoch` are a stale-drop guard, nothing more. History snapshots are
+  seq-0; on restore they are skipped when a live sequenced snapshot arrived
+  during the fetch (`staleGuard`).
+
+## Client state: remaining pitfalls
+
+- New synced state? Persist it server-side, add it to `buildChatState`, and
+  it flows everywhere (history, live stream, reconnect replay) for free. A
+  card rendered only from a bespoke SSE event vanishes on reload.
 - `resetWorkspaceChatState` clears chat-scoped workspace state on switch;
-  anything it clears must come back via history, or it's lost.
+  anything it clears must come back via the snapshot, or it's lost.
+- The TRANSCRIPT still has restore-vs-resync semantics: on restore, a live
+  stream that advanced during the history fetch wins
+  (`transcriptSeqAtStart`); after an SSE reconnect, `resyncChatHistory`
+  applies the fetched messages server-wins.
 - Workflow decisions are POST transitions (`approve-plan`,
   `request-changes`, `to-preview`), never chat text. The message API
   converts a typed answer to a pending `propose_plan` into a
@@ -84,9 +97,6 @@ archived. Pitfalls that actually bit:
   as plain answers.
 - Sandbox env binaries are absolute `/nix/store` symlinks that only resolve
   inside the jail — host-side checks must `lstat` the link, not follow it.
-- SSE reconnects lose everything broadcast in the gap (the server replays
-  only the pending question). After a reconnect, `resyncChatHistory` refetches
-  history and applies it SERVER-WINS; the initial restore stays live-wins.
   Keep both modes in `applyHistoryResult` when adding rehydrated state.
 - Async UI loads (modals, tab saves, history fetches) must be guarded
   against chat/selection switches mid-flight: seq token or captured-id

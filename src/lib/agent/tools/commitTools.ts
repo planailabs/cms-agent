@@ -86,12 +86,6 @@ const gitRevertTool: ToolDef = {
       data: { revertedBySha: revertSha },
     });
     if (reverted.count > 0) {
-      broadcast(ctx.chatId, 'execution_reverted', {
-        type: 'execution_reverted',
-        sha: input.sha,
-        revertSha,
-        by: identity.name,
-      });
       emitChatState(ctx.chatId);
     }
     return JSON.stringify({ success: true, revertSha });

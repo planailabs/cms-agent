@@ -90,23 +90,12 @@ export const GET: APIRoute = async ({ url }) => {
   return new Response(
     JSON.stringify({
       state,
-      // Flat fields kept for the phase-1 client — removed in phase 2.
       phase: chat.turnPhase,
-      kind: state.kind,
-      title: state.title,
-      archived: state.archived,
-      workflowPhase: state.workflowPhase,
-      branchId: state.branchId,
-      planJson: state.planJson,
       lastError: chat.lastError,
       // The pending client tool (propose_plan / finish_execution /
       // ask_question) — the client re-renders its card after reload.
       pendingQuestion: chat.turnPhase === 'waiting_for_answer' ? chat.pendingQuestion : undefined,
-      publication: state.publication,
-      automatism: state.automatism,
-      targetAhead: state.targetAhead,
       messages,
-      executions: state.executions,
     }),
     { headers: { 'Content-Type': 'application/json' } },
   );
