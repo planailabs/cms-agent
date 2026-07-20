@@ -176,10 +176,29 @@ impl ProxyHttp for CmsProxy {
                     return Ok(true);
                 }
                 self.access.touch(&branch, auth::now_ms());
-                // Rewrite to the CMS boot endpoint; method stays as-is (a GET stays a GET).
-                let uri: http::Uri = format!("/__preview/boot/{branch}")
+                // Rewrite to the CMS boot endpoint; method stays as-is (a GET
+                // stays a GET). The query is preserved (?retry=1 drives the
+                // boot page's retry flow) and the original path+query travels
+                // in a header so the CMS can send the browser back to it —
+                // the /__preview/boot path itself never reaches the browser.
+                let orig = session
+                    .req_header()
+                    .uri
+                    .path_and_query()
+                    .map(|pq| pq.as_str().to_string())
+                    .unwrap_or_else(|| "/".to_string());
+                let query = session
+                    .req_header()
+                    .uri
+                    .query()
+                    .map(|q| format!("?{q}"))
+                    .unwrap_or_default();
+                let uri: http::Uri = format!("/__preview/boot/{branch}{query}")
                     .parse()
-                    .expect("validated branch label forms a valid path");
+                    .expect("validated branch label + query from a parsed URI form a valid path");
+                session
+                    .req_header_mut()
+                    .insert_header("x-cms-boot-origin", &orig)?;
                 session.req_header_mut().set_uri(uri);
                 ctx.upstream = Some(upstream);
             }
