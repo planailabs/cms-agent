@@ -19,7 +19,7 @@ export const pagesCatalogs: AreaCatalogs = {
     'pages.preview.retry': 'Retry',
     'pages.preview.unknownBranch': 'Unknown branch {branch}.',
     'pages.preview.installing': 'Installing site dependencies…',
-    'pages.preview.startingServer': 'Starting the dev server…',
+    'pages.preview.startingServer': 'Starting the development environment…',
   },
   de: {
     'pages.signin.title': 'Anmelden — CMS',
@@ -36,6 +36,6 @@ export const pagesCatalogs: AreaCatalogs = {
     'pages.preview.retry': 'Erneut versuchen',
     'pages.preview.unknownBranch': 'Unbekannter Branch {branch}.',
     'pages.preview.installing': 'Website-Abhängigkeiten werden installiert…',
-    'pages.preview.startingServer': 'Der Dev-Server wird gestartet…',
+    'pages.preview.startingServer': 'Die Entwicklungsumgebung wird gestartet…',
   },
 };

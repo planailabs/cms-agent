@@ -181,7 +181,7 @@ async function waitForHttp(host: string, port: number, timeoutMs = 90_000): Prom
       await new Promise((r) => setTimeout(r, 500));
     }
   }
-  throw new Error(`Preview dev server at ${url} did not come up within ${timeoutMs}ms`);
+  throw new Error(`Preview development environment at ${url} did not come up within ${timeoutMs}ms`);
 }
 
 function startSweeper(): void {
@@ -313,7 +313,11 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
       const earlyExit = new Promise<never>((_, reject) => {
         child.on('exit', (code) => {
           if (info.status === 'starting') {
-            reject(new Error(`dev server exited (${code}) before ready:\n${logTail.slice(-2000)}`));
+            reject(
+              new Error(
+                `development environment exited (${code}) before ready:\n${logTail.slice(-2000)}`,
+              ),
+            );
           }
         });
       });
