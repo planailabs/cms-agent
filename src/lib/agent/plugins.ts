@@ -118,6 +118,25 @@ export function loadAdminSkills(): PluginSkill[] {
   }
 }
 
+/**
+ * Admin-global rules: ${VAR_DIR}/rules/*.md — always-on prompt rules from
+ * the data volume, read fresh like the admin skills.
+ */
+export function loadAdminRules(): PluginRule[] {
+  try {
+    const dir = path.join(path.resolve(env().VAR_DIR), 'rules');
+    if (!fs.existsSync(dir)) return [];
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.md'))
+      .sort()
+      .map((f) => ({ plugin: 'admin', text: fs.readFileSync(path.join(dir, f), 'utf8').trim() }));
+  } catch {
+    // unconfigured env (e.g. astro build) — no admin rules
+    return [];
+  }
+}
+
 const loadRules = (plugin: string, dir: string, rulesRef?: string): PluginRule[] => {
   const candidates: string[] = [];
   if (rulesRef) {
@@ -185,9 +204,10 @@ export function skillsForChat(worktreePath?: string): PluginSkill[] {
   ];
 }
 
-/** System-prompt section: always-on rules + the on-demand skill list. */
+/** System-prompt section: always-on rules (plugins + VAR_DIR/rules) and the
+ *  on-demand skill list. */
 export function pluginPromptSection(worktreePath?: string): string {
-  const { rules } = loadPluginRegistry();
+  const rules = [...loadPluginRegistry().rules, ...loadAdminRules()];
   const skills = skillsForChat(worktreePath);
   const parts: string[] = [];
   if (rules.length > 0) {

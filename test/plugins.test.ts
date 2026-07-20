@@ -167,6 +167,13 @@ describe('agent plugins', () => {
       expect(withBranch.map((s) => s.name)).toContain('ops-notes');
 
       expect(pluginPromptSection(undefined)).toContain('ops-notes (admin-provided)');
+
+      // Admin rules: VAR_DIR/rules/*.md are always-on prompt rules
+      fs.mkdirSync(path.join(varDir, 'rules'), { recursive: true });
+      fs.writeFileSync(path.join(varDir, 'rules', 'style.md'), 'Always be terse.\n');
+      const { loadAdminRules } = await import('@/lib/agent/plugins');
+      expect(loadAdminRules()).toEqual([{ plugin: 'admin', text: 'Always be terse.' }]);
+      expect(pluginPromptSection(undefined)).toContain('[admin]\nAlways be terse.');
     } finally {
       process.env.VAR_DIR = prevVarDir;
       resetEnvCache();

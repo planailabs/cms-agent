@@ -9,7 +9,12 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
 import { ensureWorktree } from '@/lib/git/engine';
-import { loadAdminSkills, loadBranchSkills, loadPluginRegistry } from '@/lib/agent/plugins';
+import {
+  loadAdminRules,
+  loadAdminSkills,
+  loadBranchSkills,
+  loadPluginRegistry,
+} from '@/lib/agent/plugins';
 import { attachCodebaseMemory } from '@/lib/agent/mcp/codebaseMemory';
 import { attachContext7 } from '@/lib/agent/mcp/context7';
 import { customMcpCapabilities } from '@/lib/agent/mcp/custom';
@@ -125,7 +130,12 @@ export const GET: APIRoute = async ({ url }) => {
   );
 
   return new Response(
-    JSON.stringify({ chatId, skills, rules: reg.rules.map((r) => ({ plugin: r.plugin })), mcps }),
+    JSON.stringify({
+      chatId,
+      skills,
+      rules: [...reg.rules, ...loadAdminRules()].map((r) => ({ plugin: r.plugin })),
+      mcps,
+    }),
     { headers: { 'Content-Type': 'application/json' } },
   );
 };
