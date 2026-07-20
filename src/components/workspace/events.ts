@@ -48,10 +48,12 @@ import { openCapsModal, closeCapsModal, loadCapabilities } from './capsModal';
 import { openPlanModal, closePlanModal } from './planModal';
 import {
   addCodeContext,
+  beginLineSelect,
   closeCodeBrowser,
+  dragLineSelect,
+  endLineSelect,
   openCodeBrowser,
   openFile,
-  selectLine,
   toggleDir,
 } from './codeBrowser';
 import type { DiffViewMode, PageContextElement, PageContextSelection } from './state';
@@ -320,10 +322,17 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-cb-file"]', (_e, target) => {
     if (target.dataset.path) void openFile(target.dataset.path);
   });
-  delegateEvent<MouseEvent>(app, 'click', '[data-action="ws-cb-line"]', (event, target) => {
+  delegateEvent<PointerEvent>(app, 'pointerdown', '[data-action="ws-cb-line"]', (event, target) => {
+    if (event.button !== 0) return;
+    event.preventDefault(); // native text selection would fight the drag
     const line = Number(target.dataset.line);
-    if (line > 0) selectLine(line, event.shiftKey);
+    if (line > 0) beginLineSelect(line, event.shiftKey);
   });
+  delegateEvent(app, 'pointerover', '[data-action="ws-cb-line"]', (_event, target) => {
+    const line = Number(target.dataset.line);
+    if (line > 0) dragLineSelect(line);
+  });
+  window.addEventListener('pointerup', () => endLineSelect());
   delegateEvent(app, 'click', '[data-action="ws-cb-add"]', () => addCodeContext());
   delegateEvent(app, 'click', '[data-action="ws-compare-align"]', () => {
     const ws = store.state.workspace;

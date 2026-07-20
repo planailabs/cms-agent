@@ -114,20 +114,52 @@ export const openFile = async (path: string): Promise<void> => {
   }
 };
 
-/** Click = single line; shift-click extends to a range (picker-style). */
-export const selectLine = (line: number, extend: boolean): void => {
+// Multi-line selection: press starts an anchor, dragging over lines extends
+// the range live (rAF-throttled — every update re-renders the modal), and
+// shift-press extends from the existing anchor instead of restarting.
+let dragAnchor = 0;
+let dragging = false;
+let pendingLine = 0;
+let rafId = 0;
+
+const applyRange = (line: number): void => {
   const cb = store.state.workspace.codeBrowser;
-  if (extend && cb.selStart > 0) {
-    cb.selEnd = line;
-    if (cb.selEnd < cb.selStart) [cb.selStart, cb.selEnd] = [cb.selEnd, cb.selStart];
-  } else if (cb.selStart === line && cb.selEnd === line) {
-    cb.selStart = 0; // click the single selected line again = deselect
-    cb.selEnd = 0;
-  } else {
-    cb.selStart = line;
-    cb.selEnd = line;
-  }
+  cb.selStart = Math.min(dragAnchor, line);
+  cb.selEnd = Math.max(dragAnchor, line);
   store.notify();
+};
+
+export const beginLineSelect = (line: number, extend: boolean): void => {
+  const cb = store.state.workspace.codeBrowser;
+  if (!extend && cb.selStart === line && cb.selEnd === line) {
+    // pressing the single selected line again = deselect
+    cb.selStart = 0;
+    cb.selEnd = 0;
+    dragAnchor = 0;
+    store.notify();
+    return;
+  }
+  if (!(extend && dragAnchor > 0)) dragAnchor = line;
+  dragging = true;
+  applyRange(line);
+};
+
+export const dragLineSelect = (line: number): void => {
+  if (!dragging) return;
+  pendingLine = line;
+  if (typeof requestAnimationFrame !== 'function') {
+    applyRange(pendingLine);
+    return;
+  }
+  if (rafId) return;
+  rafId = requestAnimationFrame(() => {
+    rafId = 0;
+    if (dragging) applyRange(pendingLine);
+  });
+};
+
+export const endLineSelect = (): void => {
+  dragging = false;
 };
 
 /** Attach the selection as the composer's context chip and close. */

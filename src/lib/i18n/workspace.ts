@@ -162,7 +162,8 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.caps.tools': 'Tools',
     'workspace.code.heading': 'Code',
     'workspace.code.openTitle': 'Browse the branch code and attach line comments to the chat',
-    'workspace.code.pickFile': 'Pick a file — click a line, shift-click to extend the range.',
+    'workspace.code.pickFile':
+      'Pick a file — click or drag over lines to select; shift-click extends the range.',
     'workspace.code.add': 'Add as chat context',
     'workspace.code.addTitle':
       'Attach the selected lines to your next chat message (like a picked element)',
@@ -343,7 +344,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.code.heading': 'Code',
     'workspace.code.openTitle': 'Branch-Code durchsuchen und Zeilenkommentare an den Chat anhängen',
     'workspace.code.pickFile':
-      'Datei wählen — Zeile anklicken, Shift-Klick erweitert die Auswahl.',
+      'Datei wählen — Zeilen anklicken oder darüberziehen; Shift-Klick erweitert die Auswahl.',
     'workspace.code.add': 'Als Chat-Kontext anhängen',
     'workspace.code.addTitle':
       'Ausgewählte Zeilen an die nächste Chat-Nachricht anhängen (wie ein ausgewähltes Element)',
