@@ -1,43 +1,59 @@
 /**
- * Custom MCP servers — admin-configured, merged into the agent's tool set.
- * Config is the generic `mcpServers` standard (stdio: command/args/env,
- * web: url) read from ${VAR_DIR}/mcp.json.
+ * Custom MCP servers — merged into the agent's tool set from TWO sources,
+ * both the generic `mcpServers` standard (stdio: command/args/env, web: url):
  *
- * The whole mcporter runtime lives INSIDE the bwrap jail: a bundled bridge
- * (bridgeEntry.ts) is staged into the jail HOME together with a copy of the
- * config and spawned through sandboxCommand, then attached like every other
- * external MCP over stdio. Stdio servers therefore run jailed — they must
- * exist in the sandbox toolset (node/npx, python3, uv, pnpm, yarn) and see
- * neither host paths nor the app's env/secrets; web servers dial out from
- * the jail and need SANDBOX_ALLOW_NETWORK.
+ *  - ${VAR_DIR}/mcp.json    admin-global, staged into the bridge session HOME
+ *  - <worktree>/.mcp.json   per-branch, committed in the SITE REPO — each
+ *                           worktree carries its own set
  *
- * Config stays in VAR_DIR (admin volume), never the managed site repo, so
- * only admins decide what runs. The bridge is a process-wide singleton
- * (per-turn attach reuses it; ExternalMcp.close is a no-op); config mtime
- * changes tear it down and start a fresh one. Fails soft at every level.
+ * Every bridge runs INSIDE the sandbox (bridgeEntry.ts bundled as
+ * virtual:mcp-bridge, spawned via sandboxCommand): it hosts the mcporter
+ * runtime and re-exposes all tools over one stdio MCP connection with
+ * mcp_<server>_<tool> names. Repo-defined stdio servers are safe BECAUSE of
+ * that jail — they execute with exactly the privileges the agent's
+ * run_command already has there (worktree at /work, clean env, sandbox
+ * toolset) and MUST never run outside it. Name collisions: the global config
+ * wins (index.ts merges globals first and dedupes tool names).
+ *
+ * Bridges are cached per source (global / worktree path) across turns;
+ * a config mtime change or removal tears the bridge down. Fails soft.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { env } from '@/lib/env';
-import { ensureSandbox, sandboxCommand, sandboxHomeDir } from '@/lib/sandbox';
+import {
+  ensureSandbox,
+  sandboxCommand,
+  sandboxHomeDir,
+  type SandboxState,
+} from '@/lib/sandbox';
 import { externalMcp, type ExternalMcp } from './external';
 
-const SESSION_KEY = 'mcp-bridge';
+const GLOBAL_SESSION_KEY = 'mcp-bridge';
 const BRIDGE_FILE = 'mcp-bridge.cjs';
 const BRIDGE_CONFIG = 'mcp-bridge.json';
+/** Repo-scoped config file name (the cross-tool `.mcp.json` convention). */
+export const WORKTREE_CONFIG = '.mcp.json';
 
-interface CustomMcpState {
+/** Chat context for the per-worktree bridge. */
+export interface CustomMcpContext {
+  worktreePath: string;
+  chatId: string;
+}
+
+interface BridgeState {
   configMtimeMs: number;
   attachment: Promise<ExternalMcp | null>;
   client: Client | null;
 }
 
 // Survive Vite HMR module reloads in dev (same pattern as preview/manager)
-const g = globalThis as unknown as { __customMcp?: CustomMcpState | null };
+const g = globalThis as unknown as { __customMcp?: Map<string, BridgeState> };
+const bridges = (): Map<string, BridgeState> => (g.__customMcp ??= new Map());
 
-const configPath = () => path.join(path.resolve(env().VAR_DIR), 'mcp.json');
+const globalConfigPath = () => path.join(path.resolve(env().VAR_DIR), 'mcp.json');
 
 let bridgeCache: string | null = null;
 /**
@@ -68,9 +84,9 @@ async function bridgeCode(): Promise<string> {
   return bridgeCache;
 }
 
-const serverNames = (): string[] => {
+const serverNames = (configPath: string): string[] => {
   try {
-    const raw = JSON.parse(fs.readFileSync(configPath(), 'utf8')) as {
+    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
       mcpServers?: Record<string, unknown>;
     };
     return Object.keys(raw.mcpServers ?? {});
@@ -79,74 +95,166 @@ const serverNames = (): string[] => {
   }
 };
 
-/** Attach the sandboxed bridge for all configured servers; [] without config. */
-export async function attachCustomMcps(): Promise<ExternalMcp[]> {
-  let mtimeMs = 0;
+interface StartOpts {
+  configHostPath: string;
+  /** Copy the config into the session HOME (sources outside any jail bind). */
+  stageConfig: boolean;
+  /** Bridge reads the config from the WORKTREE (/work in the jail). */
+  workConfig: boolean;
+  cwd: string;
+  sessionKey: string;
+  hint: (names: string[]) => string;
+}
+
+async function startBridge(
+  opts: StartOpts,
+): Promise<{ ext: ExternalMcp | null; client: Client | null }> {
+  const sb: SandboxState = await ensureSandbox();
+  const home = sandboxHomeDir(opts.sessionKey);
+  fs.writeFileSync(path.join(home, BRIDGE_FILE), await bridgeCode());
+  if (opts.stageConfig) fs.copyFileSync(opts.configHostPath, path.join(home, BRIDGE_CONFIG));
+
+  // In-jail the session home is /home/sandbox and the cwd is /work; the
+  // none-mode fallback runs with the host paths directly.
+  const bridgePath =
+    sb.mode === 'none' ? path.join(home, BRIDGE_FILE) : `/home/sandbox/${BRIDGE_FILE}`;
+  const extraEnv = opts.workConfig
+    ? {
+        MCP_BRIDGE_CONFIG:
+          sb.mode === 'none'
+            ? path.join(opts.cwd, WORKTREE_CONFIG)
+            : `/work/${WORKTREE_CONFIG}`,
+      }
+    : undefined;
+
+  const { command, args } = sandboxCommand(sb, ['node', bridgePath], {
+    cwd: opts.cwd,
+    sessionKey: opts.sessionKey,
+    extraEnv,
+  });
+  const client = new Client({ name: 'cms-agent-custom-mcp', version: '1.0.0' });
+  await client.connect(new StdioClientTransport({ command, args }));
+
+  // Tool names/descriptions arrive pre-annotated from the bridge.
+  const ext = await externalMcp(client, (d) => d, opts.hint(serverNames(opts.configHostPath)));
+  if (ext.toolNames.size === 0) {
+    // No server delivered tools — an idle bridge child is useless, drop it.
+    await client.close().catch(() => {});
+    return { ext: null, client: null };
+  }
+  // The bridge outlives the turn; per-turn close must not kill it.
+  return { ext: { ...ext, close: async () => {} }, client };
+}
+
+async function cachedAttach(
+  key: string,
+  configHostPath: string,
+  make: () => Promise<{ ext: ExternalMcp | null; client: Client | null }>,
+): Promise<ExternalMcp | null> {
+  let mtimeMs: number;
   try {
-    mtimeMs = fs.statSync(configPath()).mtimeMs;
+    mtimeMs = fs.statSync(configHostPath).mtimeMs;
   } catch {
-    // no config file — feature off
-    if (g.__customMcp) void closeState(g.__customMcp);
-    g.__customMcp = null;
-    return [];
+    // config gone (or worktree removed) — tear the bridge down
+    const old = bridges().get(key);
+    if (old) {
+      void closeState(old);
+      bridges().delete(key);
+    }
+    return null;
   }
 
-  if (g.__customMcp && g.__customMcp.configMtimeMs === mtimeMs) {
-    const a = await g.__customMcp.attachment;
-    return a ? [a] : [];
-  }
-  if (g.__customMcp) void closeState(g.__customMcp);
+  const cur = bridges().get(key);
+  if (cur && cur.configMtimeMs === mtimeMs) return cur.attachment;
+  if (cur) void closeState(cur);
 
-  const state: CustomMcpState = {
+  const state: BridgeState = {
     configMtimeMs: mtimeMs,
     client: null,
     attachment: Promise.resolve(null),
   };
-  state.attachment = (async (): Promise<ExternalMcp | null> => {
-    const sb = await ensureSandbox();
-    const home = sandboxHomeDir(SESSION_KEY);
-    fs.writeFileSync(path.join(home, BRIDGE_FILE), await bridgeCode());
-    fs.copyFileSync(configPath(), path.join(home, BRIDGE_CONFIG));
-    // An empty dedicated dir for the jail's writable /work — never a worktree.
-    const workDir = path.join(path.resolve(env().VAR_DIR), 'mcp-bridge-work');
-    fs.mkdirSync(workDir, { recursive: true });
-
-    // In-jail the session home is /home/sandbox; the none-mode fallback runs
-    // with HOME = the host dir itself.
-    const bridgePath =
-      sb.mode === 'none' ? path.join(home, BRIDGE_FILE) : `/home/sandbox/${BRIDGE_FILE}`;
-    const { command, args } = sandboxCommand(sb, ['node', bridgePath], {
-      cwd: workDir,
-      sessionKey: SESSION_KEY,
-    });
-    const client = new Client({ name: 'cms-agent-custom-mcp', version: '1.0.0' });
-    await client.connect(new StdioClientTransport({ command, args }));
-    state.client = client;
-
-    // Tool names/descriptions arrive pre-annotated from the bridge.
-    const ext = await externalMcp(
-      client,
-      (d) => d,
-      `Tools prefixed mcp_ come from the admin-connected MCP servers ` +
-        `(${serverNames().join(', ')}), running sandboxed; use them when they fit the task.`,
-    );
-    if (ext.toolNames.size === 0) {
-      // No server delivered tools — a idle bridge child is useless, drop it.
-      state.client = null;
-      await client.close().catch(() => {});
+  state.attachment = make()
+    .then(({ ext, client }) => {
+      state.client = client;
+      return ext;
+    })
+    .catch((err: unknown) => {
+      console.warn(
+        `[mcp] bridge for ${configHostPath} failed: ${err instanceof Error ? err.message : err}`,
+      );
       return null;
-    }
-    // The bridge outlives the turn; per-turn close must not kill it.
-    return { ...ext, close: async () => {} };
-  })().catch((err: unknown) => {
-    console.warn(
-      `[mcp] bridge for ${configPath()} failed: ${err instanceof Error ? err.message : err}`,
+    });
+  bridges().set(key, state);
+  return state.attachment;
+}
+
+/** Attachments labeled by source (capabilities view needs the split). */
+export interface CustomMcpAttachments {
+  global: ExternalMcp | null;
+  worktree: ExternalMcp | null;
+}
+
+export async function attachCustomMcpsLabeled(
+  ctx?: CustomMcpContext,
+): Promise<CustomMcpAttachments> {
+  const globalExt = await cachedAttach('global', globalConfigPath(), () =>
+    startBridge({
+      configHostPath: globalConfigPath(),
+      stageConfig: true,
+      workConfig: false,
+      cwd: globalWorkDir(),
+      sessionKey: GLOBAL_SESSION_KEY,
+      hint: (names) =>
+        `Tools prefixed mcp_ come from the admin-connected MCP servers ` +
+        `(${names.join(', ')}), running sandboxed; use them when they fit the task.`,
+    }),
+  );
+
+  let wtExt: ExternalMcp | null = null;
+  if (ctx?.worktreePath) {
+    const cfg = path.join(ctx.worktreePath, WORKTREE_CONFIG);
+    wtExt = await cachedAttach(`wt:${ctx.worktreePath}`, cfg, () =>
+      startBridge({
+        configHostPath: cfg,
+        stageConfig: false,
+        workConfig: true,
+        cwd: ctx.worktreePath,
+        sessionKey: ctx.chatId,
+        hint: (names) =>
+          `Tools prefixed mcp_ come from this branch's ${WORKTREE_CONFIG} MCP servers ` +
+          `(${names.join(', ')}), running sandboxed with the branch checkout at /work.`,
+      }),
     );
-    return null;
-  });
-  g.__customMcp = state;
-  const attachment = await state.attachment;
-  return attachment ? [attachment] : [];
+  }
+
+  return { global: globalExt, worktree: wtExt };
+}
+
+/**
+ * Attach the sandboxed bridges: the admin-global config, plus the chat
+ * branch's repo config when a context is given. [] without any config.
+ * Order matters — global first; index.ts dedupes colliding tool names in
+ * that order, so the global config wins.
+ */
+export async function attachCustomMcps(ctx?: CustomMcpContext): Promise<ExternalMcp[]> {
+  const { global, worktree } = await attachCustomMcpsLabeled(ctx);
+  return [global, worktree].filter((e): e is ExternalMcp => e !== null);
+}
+
+/** Empty dedicated dir for the global bridge's jail /work — never a worktree. */
+function globalWorkDir(): string {
+  const dir = path.join(path.resolve(env().VAR_DIR), 'mcp-bridge-work');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+async function closeState(state: BridgeState): Promise<void> {
+  try {
+    await state.attachment;
+    await state.client?.close();
+  } catch {
+    /* old bridge teardown must not affect the new one */
+  }
 }
 
 /** Must match the bridge's tool-name prefixing (bridgeEntry.ts safe()). */
@@ -154,29 +262,37 @@ const safeName = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 24);
 
 /**
  * Per-server attachment status for the capabilities modal: one row per
- * configured server, with the (prefixed) tools the bridge exposes for it.
- * Reuses the shared bridge — attaching is exactly what a chat turn does.
+ * configured server (global + branch), with the (prefixed) tools its bridge
+ * exposes. Reuses the shared bridges — attaching is what a chat turn does.
  */
-export async function customMcpCapabilities(): Promise<
-  Array<{ name: string; attached: boolean; reason?: string; tools: string[] }>
+export async function customMcpCapabilities(
+  ctx?: CustomMcpContext,
+): Promise<
+  Array<{ name: string; source: 'config' | 'worktree'; attached: boolean; reason?: string; tools: string[] }>
 > {
-  const names = serverNames();
-  if (names.length === 0) return [];
-  const attachments = await attachCustomMcps();
-  const tools = attachments[0] ? [...attachments[0].toolNames] : [];
-  return names.map((name) => {
-    const own = tools.filter((t) => t.startsWith(`mcp_${safeName(name)}_`)).sort();
-    return own.length > 0
-      ? { name, attached: true, tools: own }
-      : { name, attached: false, reason: 'unavailable', tools: [] };
-  });
-}
+  const { global, worktree } = await attachCustomMcpsLabeled(ctx);
+  const toolsOf = (ext: ExternalMcp | null, name: string): string[] =>
+    ext ? [...ext.toolNames].filter((t) => t.startsWith(`mcp_${safeName(name)}_`)).sort() : [];
 
-async function closeState(state: CustomMcpState): Promise<void> {
-  try {
-    await state.attachment;
-    await state.client?.close();
-  } catch {
-    /* old bridge teardown must not affect the new one */
+  const sources: Array<{
+    source: 'config' | 'worktree';
+    configPath: string;
+    ext: ExternalMcp | null;
+  }> = [{ source: 'config', configPath: globalConfigPath(), ext: global }];
+  if (ctx?.worktreePath) {
+    sources.push({
+      source: 'worktree',
+      configPath: path.join(ctx.worktreePath, WORKTREE_CONFIG),
+      ext: worktree,
+    });
   }
+
+  return sources.flatMap(({ source, configPath, ext }) =>
+    serverNames(configPath).map((name) => {
+      const tools = toolsOf(ext, name);
+      return tools.length > 0
+        ? { name, source, attached: true, tools }
+        : { name, source, attached: false, reason: 'unavailable' as const, tools: [] };
+    }),
+  );
 }

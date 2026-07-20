@@ -50,10 +50,18 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   const client = new Client({ name: 'cms-agent-loop', version: '1.0.0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
-  // External MCPs (sandboxed codebase graph, Context7 docs, admin-configured
-  // custom servers) — merged into the tool set
+  // External MCPs (sandboxed codebase graph, Context7 docs, custom servers
+  // from the admin config + the branch's .mcp.json) — merged into the tool
+  // set. Order matters: on tool-name collisions the earlier source wins
+  // (asOpenAiTools dedupes, callTool matches first).
   const externals = (
-    await Promise.all([attachCodebaseMemory(ctx), attachContext7(), attachCustomMcps()])
+    await Promise.all([
+      attachCodebaseMemory(ctx),
+      attachContext7(),
+      attachCustomMcps(
+        ctx.worktreePath ? { worktreePath: ctx.worktreePath, chatId: ctx.chatId } : undefined,
+      ),
+    ])
   )
     .flat()
     .filter((e): e is ExternalMcp => e !== null);
@@ -75,7 +83,13 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
           },
         };
       });
-      return [...own, ...externals.flatMap((e) => e.openAiTools)];
+      // Dedupe colliding tool names across externals (e.g. the same server
+      // name in the admin config and a branch .mcp.json) — first wins.
+      const seen = new Set(own.map((t) => t.function.name));
+      const extTools = externals
+        .flatMap((e) => e.openAiTools)
+        .filter((t) => (seen.has(t.function.name) ? false : (seen.add(t.function.name), true)));
+      return [...own, ...extTools];
     },
     promptHints() {
       return externals.map((e) => e.promptHint);

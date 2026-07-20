@@ -75,10 +75,39 @@ describe('custom MCP bridge (sandboxed)', () => {
     expect(second[0]).toBe(first[0]);
   });
 
+  it('attaches a per-worktree bridge from the repo .mcp.json', async () => {
+    const worktree = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-mcp-wt-'));
+    fs.copyFileSync(FIXTURE, path.join(worktree, 'echo-server.mjs'));
+    fs.writeFileSync(
+      path.join(worktree, '.mcp.json'),
+      // /work = the worktree inside the jail — repo-relative server command
+      JSON.stringify({
+        mcpServers: { wt: { command: 'node', args: ['/work/echo-server.mjs'] } },
+      }),
+    );
+    try {
+      const ctx = { worktreePath: worktree, chatId: 'chat-wt-test' };
+      const attachments = await custom.attachCustomMcps(ctx);
+      expect(attachments).toHaveLength(2); // global + worktree
+      const wt = attachments[1];
+      expect(wt.toolNames).toEqual(new Set(['mcp_wt_echo', 'mcp_wt_env']));
+      expect(await wt.callTool('mcp_wt_echo', { text: 'branch' })).toBe('echo:branch');
+
+      const rows = await custom.customMcpCapabilities(ctx);
+      expect(rows).toEqual([
+        { name: 'echo', source: 'config', attached: true, tools: ['mcp_echo_echo', 'mcp_echo_env'] },
+        { name: 'wt', source: 'worktree', attached: true, tools: ['mcp_wt_echo', 'mcp_wt_env'] },
+      ]);
+    } finally {
+      fs.rmSync(path.join(worktree, '.mcp.json')); // next attach closes the bridge
+      await custom.attachCustomMcps({ worktreePath: worktree, chatId: 'chat-wt-test' });
+    }
+  }, 120_000);
+
   it('reports per-server rows for the capabilities modal', async () => {
     const rows = await custom.customMcpCapabilities();
     expect(rows).toEqual([
-      { name: 'echo', attached: true, tools: ['mcp_echo_echo', 'mcp_echo_env'] },
+      { name: 'echo', source: 'config', attached: true, tools: ['mcp_echo_echo', 'mcp_echo_env'] },
     ]);
   });
 });

@@ -102,9 +102,13 @@ const renderMcpRow = (m: CapabilityMcpRow, locale: string): string => {
   const index = m.indexStatus
     ? `<pre class="ws-caps__index ws-mono">${escapeHtml(formatIndexStatus(m.indexStatus))}</pre>`
     : '';
+  const sourceBadge =
+    m.source === 'worktree'
+      ? `<span class="ws-caps__badge">${escapeHtml(t(locale, 'workspace.caps.fromBranch'))}</span> `
+      : '';
   return `<div class="ws-git__row ws-caps__row ${m.attached ? '' : 'is-target'}">
       <span class="ws-git__info">
-        <span class="ws-git__message">${escapeHtml(m.name)} ${mcpStatus(m, locale)}</span>
+        <span class="ws-git__message">${escapeHtml(m.name)} ${sourceBadge}${mcpStatus(m, locale)}</span>
         ${tools}${index}
       </span>
     </div>`;

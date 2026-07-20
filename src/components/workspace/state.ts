@@ -131,6 +131,8 @@ export interface CapabilityMcpRow {
   reason?: string;
   tools: string[];
   indexStatus?: string;
+  /** Custom servers: 'config' (VAR_DIR/mcp.json) or 'worktree' (.mcp.json). */
+  source?: 'config' | 'worktree';
 }
 
 /** Full-screen skills/MCP capabilities modal (per-chat status). */

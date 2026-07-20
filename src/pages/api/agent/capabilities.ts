@@ -95,9 +95,13 @@ export const GET: APIRoute = async ({ url }) => {
         },
   );
 
-  // Admin-configured custom servers (VAR_DIR/mcp.json) — one row each,
-  // via the shared sandboxed bridge. [] without a config.
-  mcps.push(...(await customMcpCapabilities()));
+  // Custom servers — admin config (VAR_DIR/mcp.json) plus the branch's
+  // .mcp.json — one row each, via the shared sandboxed bridges.
+  mcps.push(
+    ...(await customMcpCapabilities(
+      worktreePath ? { worktreePath, chatId } : undefined,
+    )),
+  );
 
   const hasKey = Boolean(process.env.CONTEXT7_API_KEY);
   const c7 = hasKey ? await probe(await attachContext7()) : null;
