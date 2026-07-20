@@ -176,6 +176,12 @@ impl ProxyHttp for CmsProxy {
                     return Ok(true);
                 }
                 self.access.touch(&branch, auth::now_ms());
+                // /__preview/* (the boot page's SSE wait stream) passes
+                // through unrewritten — the CMS serves it on this host.
+                if session.req_header().uri.path().starts_with("/__preview/") {
+                    ctx.upstream = Some(upstream);
+                    return Ok(false);
+                }
                 // Rewrite to the CMS boot endpoint; method stays as-is (a GET
                 // stays a GET). The query is preserved (?retry=1 drives the
                 // boot page's retry flow) and the original path+query travels
