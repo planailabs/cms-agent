@@ -161,6 +161,43 @@ const workBranchName = (state: AppState): string | undefined => {
 
 // ── Rendering ────────────────────────────────────────────────────────────
 
+/** Per-filetype icon glyph + color (language brand colors, GitHub-style). */
+const FILE_META: Record<string, { glyph: string; color: string }> = {
+  astro: { glyph: 'A', color: '#ff5d01' },
+  ts: { glyph: 'TS', color: '#3178c6' },
+  mts: { glyph: 'TS', color: '#3178c6' },
+  tsx: { glyph: 'TX', color: '#3178c6' },
+  js: { glyph: 'JS', color: '#f1e05a' },
+  mjs: { glyph: 'JS', color: '#f1e05a' },
+  cjs: { glyph: 'JS', color: '#f1e05a' },
+  jsx: { glyph: 'JX', color: '#f1e05a' },
+  json: { glyph: '{}', color: '#8bc34a' },
+  css: { glyph: '#', color: '#663399' },
+  scss: { glyph: '#', color: '#c6538c' },
+  md: { glyph: 'M↓', color: '#9e9e9e' },
+  mdx: { glyph: 'M↓', color: '#fcb32c' },
+  html: { glyph: '<>', color: '#e34c26' },
+  yml: { glyph: '⚙', color: '#a0a0a0' },
+  yaml: { glyph: '⚙', color: '#a0a0a0' },
+  toml: { glyph: '⚙', color: '#a0a0a0' },
+  sh: { glyph: '$', color: '#89e051' },
+  py: { glyph: 'PY', color: '#3572a5' },
+  rs: { glyph: 'RS', color: '#dea584' },
+  svg: { glyph: '◍', color: '#ffb13b' },
+  png: { glyph: '◍', color: '#26a69a' },
+  jpg: { glyph: '◍', color: '#26a69a' },
+  jpeg: { glyph: '◍', color: '#26a69a' },
+  webp: { glyph: '◍', color: '#26a69a' },
+  gif: { glyph: '◍', color: '#26a69a' },
+  ico: { glyph: '◍', color: '#26a69a' },
+};
+
+const fileIcon = (name: string): string => {
+  const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+  const meta = FILE_META[ext] ?? { glyph: '·', color: 'inherit' };
+  return `<span class="ws-cb-icon" style="color:${meta.color}" aria-hidden="true">${escapeHtml(meta.glyph)}</span>`;
+};
+
 const renderTree = (state: AppState, dir: string, depth: number): string => {
   const cb = state.workspace.codeBrowser;
   const entries = cb.dirs[dir];
@@ -168,15 +205,15 @@ const renderTree = (state: AppState, dir: string, depth: number): string => {
   return entries
     .map((e) => {
       const child = dir === '.' ? e.name : `${dir}/${e.name}`;
-      const pad = `style="padding-left:${depth * 0.9 + 0.5}rem"`;
+      const pad = `style="padding-left:${depth * 0.9 + 0.4}rem"`;
       if (e.dir) {
         const open = cb.expanded.includes(child);
         return `<button type="button" class="ws-cb-entry ws-cb-entry--dir" ${pad}
-            data-action="ws-cb-dir" data-path="${escapeHtml(child)}">${open ? '▾' : '▸'} ${escapeHtml(e.name)}</button>${renderTree(state, child, depth + 1)}`;
+            data-action="ws-cb-dir" data-path="${escapeHtml(child)}"><span class="ws-cb-icon" aria-hidden="true">${open ? '▾' : '▸'}</span><span class="ws-cb-name">${escapeHtml(e.name)}</span></button>${renderTree(state, child, depth + 1)}`;
       }
       const active = cb.filePath === child ? 'is-active' : '';
       return `<button type="button" class="ws-cb-entry ${active}" ${pad}
-          data-action="ws-cb-file" data-path="${escapeHtml(child)}">${escapeHtml(e.name)}</button>`;
+          data-action="ws-cb-file" data-path="${escapeHtml(child)}">${fileIcon(e.name)}<span class="ws-cb-name">${escapeHtml(e.name)}</span></button>`;
     })
     .join('');
 };

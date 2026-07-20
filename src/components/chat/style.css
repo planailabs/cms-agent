@@ -2205,88 +2205,6 @@ html.is-first-visit #app {
     background-repeat: no-repeat;
   }
 
-  /* ── Code browser modal ── */
-  .ws-cb-body {
-    display: flex;
-    gap: 0;
-    min-height: 0;
-  }
-
-  .ws-cb-tree {
-    flex: 0 0 16rem;
-    overflow: auto;
-    border-right: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.25));
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .ws-cb-entry {
-    background: none;
-    border: 0;
-    color: inherit;
-    text-align: left;
-    padding: 0.15rem 0.5rem;
-    font: inherit;
-    font-size: 0.85rem;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .ws-cb-entry:hover {
-    background: color-mix(in lab, currentColor 8%, transparent);
-  }
-
-  .ws-cb-entry.is-active {
-    color: var(--accent);
-  }
-
-  .ws-cb-view {
-    flex: 1;
-    overflow: auto;
-    min-width: 0;
-    /* github-dark shiki colors need a matching pane in BOTH ui themes */
-    background: #0d1117;
-    color: #c9d1d9;
-  }
-
-  .ws-cb-file {
-    font-size: 0.8rem;
-    line-height: 1.45;
-  }
-
-  .ws-cb-line {
-    display: flex;
-    cursor: pointer;
-    white-space: pre;
-  }
-
-  .ws-cb-line:hover {
-    background: color-mix(in lab, currentColor 6%, transparent);
-  }
-
-  .ws-cb-line.is-selected {
-    background: color-mix(in lab, var(--accent) 18%, transparent);
-  }
-
-  .ws-cb-ln {
-    flex: 0 0 3.2rem;
-    text-align: right;
-    padding-right: 0.75rem;
-    opacity: 0.45;
-    user-select: none;
-  }
-
-  .ws-cb-code {
-    flex: 1;
-  }
-
-  .ws-cb-path {
-    font-size: 0.8rem;
-    opacity: 0.75;
-  }
 }
 
 .icon-size {
@@ -2961,6 +2879,116 @@ html.is-first-visit #app {
 
 .ws-git__body {
   gap: 0;
+}
+
+/* ── Code browser modal ── */
+/* UNLAYERED on purpose: it must override the (unlayered) .ws-archive__list
+   column layout — layered rules always lose to it. Tree pane on the LEFT,
+   file view fills the rest. */
+.ws-cb-body {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+  min-height: 0;
+}
+
+.ws-cb-tree {
+  flex: 0 0 17rem;
+  overflow: auto;
+  border-right: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.25));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0.5rem 0;
+}
+
+.ws-cb-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  padding: 0.18rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ws-cb-entry:hover {
+  background: color-mix(in lab, currentColor 8%, transparent);
+}
+
+.ws-cb-entry.is-active {
+  background: color-mix(in lab, var(--accent) 14%, transparent);
+}
+
+.ws-cb-entry--dir {
+  font-weight: 600;
+}
+
+.ws-cb-icon {
+  flex: 0 0 1.4rem;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  border-radius: 4px;
+  line-height: 1.35;
+}
+
+.ws-cb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-cb-view {
+  flex: 1;
+  overflow: auto;
+  min-width: 0;
+  /* github-dark shiki colors need a matching pane in BOTH ui themes */
+  background: #0d1117;
+  color: #c9d1d9;
+}
+
+.ws-cb-file {
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.ws-cb-line {
+  display: flex;
+  cursor: pointer;
+  white-space: pre;
+}
+
+.ws-cb-line:hover {
+  background: color-mix(in lab, currentColor 6%, transparent);
+}
+
+.ws-cb-line.is-selected {
+  background: color-mix(in lab, var(--accent) 18%, transparent);
+}
+
+.ws-cb-ln {
+  flex: 0 0 3.2rem;
+  text-align: right;
+  padding-right: 0.75rem;
+  opacity: 0.45;
+  user-select: none;
+}
+
+.ws-cb-code {
+  flex: 1;
+}
+
+.ws-cb-path {
+  font-size: 0.8rem;
+  opacity: 0.75;
 }
 
 /* Commit rows joined into one bordered list, GitHub-style */
