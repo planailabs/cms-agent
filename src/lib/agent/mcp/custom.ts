@@ -1,30 +1,37 @@
 /**
  * Custom MCP servers — admin-configured, merged into the agent's tool set.
  * Config is the generic `mcpServers` standard (stdio: command/args/env,
- * web: url) read from ${VAR_DIR}/mcp.json through the mcporter runtime,
- * which handles both transports, connection caching, and timeouts.
+ * web: url) read from ${VAR_DIR}/mcp.json.
  *
- * SECURITY: the config lives in VAR_DIR (admin-controlled volume), NEVER in
- * the managed site repo — stdio entries execute commands on the host, so an
- * agent-writable location would be an RCE vector.
+ * The whole mcporter runtime lives INSIDE the bwrap jail: a bundled bridge
+ * (bridgeEntry.ts) is staged into the jail HOME together with a copy of the
+ * config and spawned through sandboxCommand, then attached like every other
+ * external MCP over stdio. Stdio servers therefore run jailed — they must
+ * exist in the sandbox toolset (node/npx, python3, uv, pnpm, yarn) and see
+ * neither host paths nor the app's env/secrets; web servers dial out from
+ * the jail and need SANDBOX_ALLOW_NETWORK.
  *
- * The runtime is a process-wide singleton (stdio children are expensive to
- * spawn per turn); per-turn ExternalMcp wrappers never close it. Config
- * edits are picked up via mtime, replacing the runtime. Fails soft per
- * server: an unreachable server is skipped with a warning, the rest attach.
+ * Config stays in VAR_DIR (admin volume), never the managed site repo, so
+ * only admins decide what runs. The bridge is a process-wide singleton
+ * (per-turn attach reuses it; ExternalMcp.close is a no-op); config mtime
+ * changes tear it down and start a fresh one. Fails soft at every level.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Runtime } from 'mcporter';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { env } from '@/lib/env';
-import type { ExternalMcp } from './external';
+import { ensureSandbox, sandboxCommand, sandboxHomeDir } from '@/lib/sandbox';
+import { externalMcp, type ExternalMcp } from './external';
 
-const CALL_TIMEOUT_MS = 60_000;
+const SESSION_KEY = 'mcp-bridge';
+const BRIDGE_FILE = 'mcp-bridge.cjs';
+const BRIDGE_CONFIG = 'mcp-bridge.json';
 
 interface CustomMcpState {
   configMtimeMs: number;
-  attachments: Promise<ExternalMcp[]>;
-  runtime: Runtime | null;
+  attachment: Promise<ExternalMcp | null>;
+  client: Client | null;
 }
 
 // Survive Vite HMR module reloads in dev (same pattern as preview/manager)
@@ -32,66 +39,47 @@ const g = globalThis as unknown as { __customMcp?: CustomMcpState | null };
 
 const configPath = () => path.join(path.resolve(env().VAR_DIR), 'mcp.json');
 
-/** OpenAI tool-name charset: [A-Za-z0-9_-], capped length. */
-const safeName = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 24);
-
-const resultText = (result: unknown): string => {
-  const content = (result as { content?: Array<{ type: string; text?: string }> })?.content ?? [];
-  return content
-    .filter((c) => c.type === 'text' && typeof c.text === 'string')
-    .map((c) => c.text)
-    .join('\n');
-};
-
-async function buildAttachments(runtime: Runtime): Promise<ExternalMcp[]> {
-  const attachments: ExternalMcp[] = [];
-  for (const server of runtime.listServers()) {
-    try {
-      const tools = await runtime.listTools(server, { includeSchema: true, disableOAuth: true });
-      const prefix = `mcp_${safeName(server)}_`;
-      /** prefixed OpenAI name -> real MCP tool name */
-      const names = new Map(tools.map((t) => [`${prefix}${safeName(t.name)}`, t.name]));
-      attachments.push({
-        toolNames: new Set(names.keys()),
-        openAiTools: tools.map((t) => {
-          // Strip the $schema marker — some OpenAI-compatible backends
-          // reject parameters carrying it (see ./external.ts).
-          const { $schema: _drop, ...parameters } =
-            (t.inputSchema as Record<string, unknown>) ?? {};
-          return {
-            type: 'function' as const,
-            function: {
-              name: `${prefix}${safeName(t.name)}`,
-              description: `${t.description ?? ''} (MCP server "${server}")`,
-              parameters: Object.keys(parameters).length > 0 ? parameters : { type: 'object' },
-            },
-          };
-        }),
-        promptHint:
-          `Tools prefixed ${prefix} come from the admin-connected "${server}" MCP server; ` +
-          'use them when they fit the task.',
-        async callTool(name, input) {
-          const result = await runtime.callTool(server, names.get(name) ?? name, {
-            args: input,
-            timeoutMs: CALL_TIMEOUT_MS,
-            disableOAuth: true,
-          });
-          return resultText(result);
-        },
-        // The shared runtime outlives the turn — closing happens on config
-        // change (see below), not per bridge.
-        close: async () => {},
-      });
-    } catch (err) {
-      console.warn(
-        `[mcp] server "${server}" unavailable (${err instanceof Error ? err.message : err}) — skipped`,
-      );
-    }
+let bridgeCache: string | null = null;
+/**
+ * The bridge source: embedded by the virtual:mcp-bridge Vite plugin in the
+ * server build (and astro dev); bundled on the fly from src in vitest,
+ * where the plugin is absent.
+ */
+async function bridgeCode(): Promise<string> {
+  if (bridgeCache) return bridgeCache;
+  try {
+    bridgeCache = (await import('virtual:mcp-bridge')).default;
+  } catch {
+    const { build } = await import('esbuild');
+    const result = await build({
+      entryPoints: [path.resolve(process.cwd(), 'src/lib/agent/mcp/bridgeEntry.ts')],
+      bundle: true,
+      write: false,
+      platform: 'node',
+      format: 'cjs',
+      target: 'node22',
+      // Prefer ESM builds: UMD entries (jsonc-parser) hide requires from
+      // esbuild's static analysis and break at runtime in the jail.
+      mainFields: ['module', 'main'],
+      legalComments: 'none',
+    });
+    bridgeCache = result.outputFiles[0].text;
   }
-  return attachments;
+  return bridgeCache;
 }
 
-/** Attach all configured custom MCP servers; [] when no config exists. */
+const serverNames = (): string[] => {
+  try {
+    const raw = JSON.parse(fs.readFileSync(configPath(), 'utf8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    return Object.keys(raw.mcpServers ?? {});
+  } catch {
+    return [];
+  }
+};
+
+/** Attach the sandboxed bridge for all configured servers; [] without config. */
 export async function attachCustomMcps(): Promise<ExternalMcp[]> {
   let mtimeMs = 0;
   try {
@@ -104,45 +92,64 @@ export async function attachCustomMcps(): Promise<ExternalMcp[]> {
   }
 
   if (g.__customMcp && g.__customMcp.configMtimeMs === mtimeMs) {
-    return g.__customMcp.attachments;
+    const a = await g.__customMcp.attachment;
+    return a ? [a] : [];
   }
   if (g.__customMcp) void closeState(g.__customMcp);
 
   const state: CustomMcpState = {
     configMtimeMs: mtimeMs,
-    runtime: null,
-    attachments: Promise.resolve([]),
+    client: null,
+    attachment: Promise.resolve(null),
   };
-  state.attachments = (async () => {
-    const { createRuntime, loadServerDefinitions } = await import('mcporter');
-    // mcporter layers imports from other clients' configs (~/.claude.json,
-    // …) on top of the explicit file — keep ONLY entries from our file so
-    // the attached set is exactly what the admin wrote there.
-    const defs = (await loadServerDefinitions({ configPath: configPath() })).filter(
-      (d) => d.source?.kind === 'local' && d.source.path === configPath(),
-    );
-    if (defs.length === 0) return [];
-    const runtime = await createRuntime({
-      servers: defs,
-      clientInfo: { name: 'cms-agent', version: '1.0.0' },
+  state.attachment = (async (): Promise<ExternalMcp | null> => {
+    const sb = await ensureSandbox();
+    const home = sandboxHomeDir(SESSION_KEY);
+    fs.writeFileSync(path.join(home, BRIDGE_FILE), await bridgeCode());
+    fs.copyFileSync(configPath(), path.join(home, BRIDGE_CONFIG));
+    // An empty dedicated dir for the jail's writable /work — never a worktree.
+    const workDir = path.join(path.resolve(env().VAR_DIR), 'mcp-bridge-work');
+    fs.mkdirSync(workDir, { recursive: true });
+
+    const { command, args } = sandboxCommand(sb, ['node', `/home/sandbox/${BRIDGE_FILE}`], {
+      cwd: workDir,
+      sessionKey: SESSION_KEY,
     });
-    state.runtime = runtime;
-    return buildAttachments(runtime);
+    const client = new Client({ name: 'cms-agent-custom-mcp', version: '1.0.0' });
+    await client.connect(new StdioClientTransport({ command, args }));
+    state.client = client;
+
+    // Tool names/descriptions arrive pre-annotated from the bridge.
+    const ext = await externalMcp(
+      client,
+      (d) => d,
+      `Tools prefixed mcp_ come from the admin-connected MCP servers ` +
+        `(${serverNames().join(', ')}), running sandboxed; use them when they fit the task.`,
+    );
+    if (ext.toolNames.size === 0) {
+      // No server delivered tools — a idle bridge child is useless, drop it.
+      state.client = null;
+      await client.close().catch(() => {});
+      return null;
+    }
+    // The bridge outlives the turn; per-turn close must not kill it.
+    return { ...ext, close: async () => {} };
   })().catch((err: unknown) => {
     console.warn(
-      `[mcp] config ${configPath()} failed to load: ${err instanceof Error ? err.message : err}`,
+      `[mcp] bridge for ${configPath()} failed: ${err instanceof Error ? err.message : err}`,
     );
-    return [];
+    return null;
   });
   g.__customMcp = state;
-  return state.attachments;
+  const attachment = await state.attachment;
+  return attachment ? [attachment] : [];
 }
 
 async function closeState(state: CustomMcpState): Promise<void> {
   try {
-    await state.attachments;
-    await state.runtime?.close();
+    await state.attachment;
+    await state.client?.close();
   } catch {
-    /* old runtime teardown must not affect the new one */
+    /* old bridge teardown must not affect the new one */
   }
 }

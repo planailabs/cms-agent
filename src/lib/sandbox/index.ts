@@ -218,6 +218,16 @@ export function sandboxCommand(
   return { command: 'bwrap', args: [...bwrapArgs(sb, opts), ...command] };
 }
 
+/**
+ * Host path of a session's jail HOME (bound to /home/sandbox inside). For
+ * callers that stage files for a sandboxed process (e.g. the MCP bridge).
+ */
+export function sandboxHomeDir(sessionKey: string): string {
+  const home = path.join(varRoot(), 'home', sessionKey);
+  fs.mkdirSync(home, { recursive: true });
+  return home;
+}
+
 /** True when `bin` exists in the sandbox env (host-side check). lstat, not
  *  existsSync: env bin entries are absolute /nix/store symlinks that only
  *  resolve INSIDE the jail (the extracted store is bound at /nix/store there);

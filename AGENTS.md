@@ -49,10 +49,14 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
   secret exfiltration (the lint tools had exactly this). Never spread
   `process.env` into a child that runs site code.
 - Custom MCP servers (`src/lib/agent/mcp/custom.ts`) load from
-  `${VAR_DIR}/mcp.json` — the admin-controlled volume — because stdio entries
-  execute host commands. Never read MCP/tool configs from the managed site
-  repo, and keep the loader filtered to `source.kind === 'local'` (mcporter
-  otherwise layers in servers imported from `~/.claude.json` etc.).
+  `${VAR_DIR}/mcp.json` — the admin-controlled volume, never the managed
+  site repo. The whole mcporter runtime runs INSIDE the jail via the bundled
+  bridge (`bridgeEntry.ts`, embedded as `virtual:mcp-bridge`): stdio server
+  commands must exist in the sandbox toolset (node/npx, python3, uv, pnpm,
+  yarn), web servers need `SANDBOX_ALLOW_NETWORK`, and no server ever sees
+  the app env. Keep the definition loader filtered to `source.kind ===
+  'local'` (mcporter otherwise layers in servers imported from
+  `~/.claude.json` etc.).
 
 ## Client state: rehydrate + sync (pitfalls)
 
