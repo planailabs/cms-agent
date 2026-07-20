@@ -24,4 +24,6 @@ cms: rm -f var/proxy-routes.json; SKIP_AUTH=true HOST=::1 bash scripts/launch-wi
 #   user-owned layers, and the proxy used to survive until the pty teardown.
 #   The trap relays the stop as root (pkill -INT → pingora fast shutdown);
 #   cargo-watch restarts TERM the wrapper, so rebuilds relay too.
-proxy: PREVIEW_REQUIRE_AUTH=false cargo-watch -C proxy -w src -w Cargo.toml -- bash -c 'trap "sudo pkill -INT -x cms-agent-proxy 2>/dev/null" INT TERM; sudo -E env PROXY_LISTEN=127.0.0.1:80 CMS_UPSTREAM=[::1]:4321 VAR_DIR=$PWD/var CARGO_TARGET_DIR=/tmp/cms-proxy cargo run & wait' | cat
+# - CMS_VAR_DIR is expanded OUTSIDE the single-quoted wrapper ($PWD = repo
+#   root at Procfile parse time; inside the wrapper cwd is proxy/ via -C).
+proxy: PREVIEW_REQUIRE_AUTH=false CMS_VAR_DIR=$PWD/var cargo-watch -C proxy -w src -w Cargo.toml -- bash -c 'trap "sudo pkill -INT -x cms-agent-proxy 2>/dev/null" INT TERM; sudo -E env PROXY_LISTEN=127.0.0.1:80 CMS_UPSTREAM=[::1]:4321 VAR_DIR="$CMS_VAR_DIR" CARGO_TARGET_DIR=/tmp/cms-proxy cargo run & wait' | cat
