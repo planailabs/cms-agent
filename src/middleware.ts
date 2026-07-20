@@ -12,7 +12,7 @@ import {
   verifyPreviewCookie,
   PREVIEW_COOKIE_NAME,
 } from '@/lib/previewCookie';
-import { BOOT_PATH_RE, handlePreviewBoot } from '@/lib/preview/bootPage';
+import { BOOT_PATH_RE, cleanBootOrigin, handlePreviewBoot } from '@/lib/preview/bootPage';
 import { initRoutesFile } from '@/lib/preview/manager';
 import { getInternalToken } from '@/lib/internalToken';
 import { env } from '@/lib/env';
@@ -84,18 +84,33 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // the better-auth cookie doesn't exist).
   const bootMatch = BOOT_PATH_RE.exec(pathname);
   if (bootMatch) {
+    const url = new URL(context.request.url);
+    // Direct hits on the CMS host would refresh-loop on this internal URL
+    // forever (the CMS always serves the boot page here) — send the browser
+    // to the real preview host, where the sidecar handles booting without
+    // exposing this path. Sidecar-rewritten requests keep the preview Host.
+    const reqHost = (context.request.headers.get('host') ?? url.host)
+      .replace(/:\d+$/, '')
+      .toLowerCase();
+    if (reqHost === env().BASE_DOMAIN.toLowerCase()) {
+      const scheme =
+        env().PUBLIC_SCHEME ?? (url.protocol === 'https:' ? 'https' : 'http');
+      const hostWithPort = context.request.headers.get('host') ?? url.host;
+      return context.redirect(`${scheme}://${bootMatch[1]}.${hostWithPort}/`);
+    }
     const previewCookie = context.cookies.get(PREVIEW_COOKIE_NAME)?.value;
     const previewAuth = previewCookie ? verifyPreviewCookie(previewCookie) : null;
     if (!context.locals.user && !previewAuth) {
       return context.redirect('/signin/');
     }
-    const retry = new URL(context.request.url).searchParams.has('retry');
+    const retry = url.searchParams.has('retry');
     // Locale: the signed-in editor's language; preview-cookie visitors have
     // no user, so negotiate from Accept-Language (as on the sign-in page).
     const locale =
       context.locals.user?.language ??
       (/(^|[,;\s])de\b/i.test(context.request.headers.get('accept-language') ?? '') ? 'de' : 'en');
-    return handlePreviewBoot(bootMatch[1], retry, locale);
+    const origin = cleanBootOrigin(context.request.headers.get('x-cms-boot-origin'));
+    return handlePreviewBoot(bootMatch[1], retry, locale, origin);
   }
 
   const isPublic = PUBLIC_PATHS.some((re) => re.test(pathname));
