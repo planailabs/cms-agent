@@ -118,6 +118,7 @@
             gnugrep
             ripgrep
             python3
+            uv
             # Alternative package managers for managed sites (npm ships with node)
             pnpm
             yarn
