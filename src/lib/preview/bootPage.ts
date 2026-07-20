@@ -16,6 +16,10 @@ import { escapeHtml } from './html';
 
 export const BOOT_PATH_RE = /^\/__preview\/boot\/([a-z0-9][a-z0-9-]{0,62})\/?$/;
 
+/** Reload interval — also the spinner's rotation period, so one full turn
+ * of the fading line lasts exactly until the next reload. */
+const REFRESH_SECONDS = 2;
+
 /**
  * Redirect target after a retry: the visitor's original path+query (from the
  * sidecar's x-cms-boot-origin header) minus the retry param. Falls back to /
@@ -86,21 +90,32 @@ export async function handlePreviewBoot(
   // stays HTML-safe.
   const safe = escapeHtml(branch);
   const strong = { branch: `<strong>${safe}</strong>` };
+  // Spinner: circular fading line whose rotation period equals the reload
+  // interval — one full turn per refresh. Info glyph sits in its center;
+  // failed/unknown states get error/warning badges instead.
+  const spinner =
+    `<span class="spin" aria-hidden="true"><span class="spin__ring"></span>` +
+    `<span class="spin__glyph">i</span></span>`;
   const body = startError
-    ? `<div class="error"><p>${t(locale, 'pages.preview.failed', strong)}</p>` +
+    ? `<div class="state"><span class="badge badge--error" aria-hidden="true">✕</span>` +
+      `<p>${t(locale, 'pages.preview.failed', strong)}</p>` +
       `<pre>${escapeHtml(startError.message)}</pre>` +
       // Relative link: stays on the visitor's URL; the sidecar forwards the
       // query to the boot endpoint, so /__preview/boot is never exposed.
       `<p><a href="?retry=1">${t(locale, 'pages.preview.retry')}</a></p></div>`
     : bootable
-      ? `<p class="pulse">${t(locale, 'pages.preview.starting', strong)}</p>`
-      : `<p>${t(locale, 'pages.preview.unknownBranch', strong)}</p>`;
+      ? `<div class="state">${spinner}` +
+        `<p class="pulse">${t(locale, 'pages.preview.starting', strong)}</p></div>`
+      : `<div class="state"><span class="badge badge--warn" aria-hidden="true">!</span>` +
+        `<p>${t(locale, 'pages.preview.unknownBranch', strong)}</p></div>`;
 
+  const mask =
+    'radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px))';
   const html = `<!doctype html>
 <html lang="${escapeHtml(locale)}">
   <head>
     <meta charset="utf-8" />
-    ${bootable && !startError ? '<meta http-equiv="refresh" content="2" />' : ''}
+    ${bootable && !startError ? `<meta http-equiv="refresh" content="${REFRESH_SECONDS}" />` : ''}
     <title>${t(locale, startError ? 'pages.preview.failedTitle' : 'pages.preview.startingTitle')}</title>
     <style>
       body {
@@ -113,11 +128,56 @@ export async function handlePreviewBoot(
         background: #0b0d10;
         color: #e6e8ea;
       }
+      .state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.25rem;
+        max-width: 60rem;
+        padding: 1rem;
+        text-align: center;
+      }
       .pulse { animation: pulse 1.2s ease-in-out infinite; }
       @keyframes pulse { 50% { opacity: 0.4; } }
-      .error { max-width: 60rem; padding: 1rem; }
-      .error pre { white-space: pre-wrap; background: #14181d; padding: 1rem; overflow: auto; }
-      .error a { color: #7ab7ff; }
+      pre {
+        white-space: pre-wrap;
+        background: #14181d;
+        padding: 1rem;
+        overflow: auto;
+        max-width: 100%;
+        text-align: left;
+      }
+      a { color: #7ab7ff; }
+      .spin { position: relative; width: 48px; height: 48px; }
+      .spin__ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: conic-gradient(rgba(122, 183, 255, 0), #7ab7ff);
+        -webkit-mask: ${mask};
+        mask: ${mask};
+        animation: spin ${REFRESH_SECONDS}s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(1turn); } }
+      .spin__glyph {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #7ab7ff;
+        font: italic 700 1.1rem/1 Georgia, serif;
+      }
+      .badge {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 1.4rem;
+        font-weight: 700;
+      }
+      .badge--error { background: #3a151b; color: #ff8ea0; }
+      .badge--warn { background: #3a2f12; color: #ffd479; }
     </style>
   </head>
   <body>${body}</body>
