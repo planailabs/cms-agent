@@ -173,7 +173,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.compare.height': 'Height',
     'workspace.compare.content': 'Content',
     'workspace.compare.title':
-      'Alignment: by height, or by matching content (stretches matched sections so identical content lines up)',
+      'Alignment: by height, or by matching content (fills gaps with matching background so identical content lines up)',
     'workspace.caps.fromBranch': 'site repo',
     'workspace.caps.fromAdmin': 'server config',
     'workspace.caps.fromPlugin': 'plugin {plugin}',
@@ -354,7 +354,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.compare.height': 'Höhe',
     'workspace.compare.content': 'Inhalt',
     'workspace.compare.title':
-      'Ausrichtung: nach Höhe oder nach übereinstimmendem Inhalt (streckt zugeordnete Abschnitte, damit gleicher Inhalt auf gleicher Höhe liegt)',
+      'Ausrichtung: nach Höhe oder nach übereinstimmendem Inhalt (füllt Lücken mit passendem Hintergrund, damit gleicher Inhalt auf gleicher Höhe liegt)',
     'workspace.caps.fromBranch': 'Site-Repo',
     'workspace.caps.fromAdmin': 'Server-Konfiguration',
     'workspace.caps.fromPlugin': 'Plugin {plugin}',
