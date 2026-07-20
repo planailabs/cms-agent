@@ -346,7 +346,13 @@ fn main() {
         access,
     };
 
-    let mut server = Server::new(None).expect("pingora server init");
+    // Short, explicit shutdown timings. Pingora's SIGTERM default sleeps a
+    // 5-MINUTE grace period — long-lived SSE/HMR connections never drain, so
+    // docker stop (10s) and overmind both ended up SIGKILLing the proxy.
+    let mut server_conf = pingora::server::configuration::ServerConf::default();
+    server_conf.grace_period_seconds = Some(2);
+    server_conf.graceful_shutdown_timeout_seconds = Some(3);
+    let mut server = Server::new_with_opt_and_conf(None, server_conf);
     server.bootstrap();
     let mut service = http_proxy_service(&server.configuration, proxy);
     service.add_tcp(&cfg.listen);

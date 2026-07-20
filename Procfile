@@ -19,4 +19,9 @@
 cms: rm -f var/proxy-routes.json; SKIP_AUTH=true HOST=::1 bash scripts/launch-with-sandbox.sh pnpm dev -- --host '::1' | cat
 # cargo-watch needs the crate as its workdir (-C proxy); $PWD still expands
 # to the repo root when the shell parses the line, keeping VAR_DIR absolute.
-proxy: PREVIEW_REQUIRE_AUTH=false cargo-watch -C proxy -w src -w Cargo.toml -- sudo -E env PROXY_LISTEN=127.0.0.1:80 CMS_UPSTREAM=[::1]:4321 VAR_DIR=$PWD/var CARGO_TARGET_DIR=/tmp/cms-proxy cargo run | cat
+# - The bash trap: overmind (unprivileged) cannot signal the root-owned
+#   sudo/cargo/proxy processes (EPERM) — its SIGINT/SIGTERM only reach the
+#   user-owned layers, and the proxy used to survive until the pty teardown.
+#   The trap relays the stop as root (pkill -INT → pingora fast shutdown);
+#   cargo-watch restarts TERM the wrapper, so rebuilds relay too.
+proxy: PREVIEW_REQUIRE_AUTH=false cargo-watch -C proxy -w src -w Cargo.toml -- bash -c 'trap "sudo pkill -INT -x cms-agent-proxy 2>/dev/null" INT TERM; sudo -E env PROXY_LISTEN=127.0.0.1:80 CMS_UPSTREAM=[::1]:4321 VAR_DIR=$PWD/var CARGO_TARGET_DIR=/tmp/cms-proxy cargo run & wait' | cat
