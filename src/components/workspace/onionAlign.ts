@@ -53,17 +53,33 @@ const imageSize = (src: string): Promise<{ w: number; h: number } | null> => {
   return p;
 };
 
-const buildColumn = (src: string, segs: AlignedSegment[], side: 'a' | 'b', scale: number): HTMLElement => {
+const buildColumn = (
+  src: string,
+  segs: AlignedSegment[],
+  side: 'a' | 'b',
+  scale: number,
+  naturalH: number,
+): HTMLElement => {
   const col = document.createElement('div');
   col.className = 'ws-onion__segments';
   for (const seg of segs) {
     const div = document.createElement('div');
     div.className = 'ws-onion__segment';
     const top = side === 'a' ? seg.topA : seg.topB;
+    const own = side === 'a' ? seg.hA : seg.hB;
     div.style.height = `${seg.h * scale}px`;
-    div.style.backgroundImage = `url("${src}")`;
-    div.style.backgroundSize = '100% auto';
-    div.style.backgroundPosition = `0px ${-top * scale}px`;
+    if (own > 0) {
+      // STRETCH the slice to the common row height (fy = h/own): matched
+      // content is rendered similarly large on both sides, so side-by-side
+      // scrolling lines up without blank gaps. Whole-image vertical scale +
+      // matching offset keeps the slice exactly filling the row.
+      const fy = seg.h / own;
+      div.style.backgroundImage = `url("${src}")`;
+      div.style.backgroundSize = `100% ${naturalH * scale * fy}px`;
+      div.style.backgroundPosition = `0px ${-top * scale * fy}px`;
+    }
+    // own === 0 (pure insertion on the other side): nothing to stretch —
+    // the row stays blank on this side.
     col.appendChild(div);
   }
   return col;
@@ -99,14 +115,15 @@ async function enhance(container: HTMLElement, mode: 'height' | 'content'): Prom
   const sig = `${beforeImg.src}|${afterImg.src}|${width}`;
   if (container.dataset.alignSig === sig) return;
 
-  const [a, b, size] = await Promise.all([
+  const [a, b, sizeA, sizeB] = await Promise.all([
     fetchMarkers(beforeImg.src),
     fetchMarkers(afterImg.src),
     imageSize(beforeImg.src),
+    imageSize(afterImg.src),
   ]);
   // Re-check: render passes may have replaced the DOM while we fetched
   if (!container.isConnected || container.clientWidth !== width) return;
-  if (!a || !b || !size || size.w <= 0) {
+  if (!a || !b || !sizeA || !sizeB || sizeA.w <= 0) {
     cleanup(container); // no markers → height mode for this pair
     return;
   }
@@ -116,11 +133,11 @@ async function enhance(container: HTMLElement, mode: 'height' | 'content'): Prom
     cleanup(container);
     return;
   }
-  const scale = width / size.w;
+  const scale = width / sizeA.w;
 
   for (const el of container.querySelectorAll('.ws-onion__segments')) el.remove();
-  beforeWrap.appendChild(buildColumn(beforeImg.src, segs, 'a', scale));
-  afterWrap.appendChild(buildColumn(afterImg.src, segs, 'b', scale));
+  beforeWrap.appendChild(buildColumn(beforeImg.src, segs, 'a', scale, sizeA.h));
+  afterWrap.appendChild(buildColumn(afterImg.src, segs, 'b', scale, sizeB.h));
   container.classList.add('is-content-aligned');
   container.dataset.alignSig = sig;
 
