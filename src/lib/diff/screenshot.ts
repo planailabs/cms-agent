@@ -9,6 +9,7 @@ import path from 'node:path';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import { env } from '@/lib/env';
+import { COLLECT_MARKERS_JS } from '@/lib/compare/markers';
 import { branchSha, defaultBranch } from '@/lib/git/engine';
 import { ensureInstance } from '@/lib/preview/manager';
 
@@ -55,6 +56,15 @@ async function screenshot(
     const host = env().HOST;
     const h = host.includes(':') ? `[${host}]` : host;
     await page.goto(`http://${h}:${port}${route}`, { waitUntil: 'networkidle', timeout: 30_000 });
+    // Content markers next to the shot — the compare views use them for
+    // content-aligned spacing/scrolling (fail-soft: a marker-less shot just
+    // falls back to height mode). Captured BEFORE the shot: same layout.
+    try {
+      const markers = await page.evaluate(COLLECT_MARKERS_JS);
+      fs.writeFileSync(`${outFile}.markers.json`, JSON.stringify(markers));
+    } catch (err) {
+      console.warn(`[diff] marker collection failed for ${route}:`, err);
+    }
     await page.screenshot({ path: outFile, fullPage: true });
   } finally {
     await launched.close();

@@ -1,0 +1,84 @@
+/**
+ * Content markers — LCS anchor matching, piecewise position mapping, and
+ * the aligned-segment math the onion content mode renders from.
+ */
+import { describe, expect, it } from 'vitest';
+import {
+  alignedSegments,
+  bracketAnchors,
+  computeAnchors,
+  mapPosition,
+  type Marker,
+} from '@/lib/compare/markers';
+
+const mk = (k: string, y: number): Marker => ({ k, y });
+
+describe('computeAnchors', () => {
+  it('matches identical content in order', () => {
+    const a = [mk('H1:Title#1', 0), mk('P:Intro#1', 100), mk('P:Outro#1', 300)];
+    const b = [mk('H1:Title#1', 0), mk('P:Intro#1', 150), mk('P:Outro#1', 500)];
+    expect(computeAnchors(a, b)).toEqual([
+      { a: 0, b: 0 },
+      { a: 100, b: 150 },
+      { a: 300, b: 500 },
+    ]);
+  });
+
+  it('skips inserted/removed blocks without crossing alignments', () => {
+    const a = [mk('H1:Title#1', 0), mk('P:Kept#1', 100), mk('P:Removed#1', 200)];
+    const b = [mk('H1:Title#1', 0), mk('P:New#1', 80), mk('P:Kept#1', 240)];
+    expect(computeAnchors(a, b)).toEqual([
+      { a: 0, b: 0 },
+      { a: 100, b: 240 },
+    ]);
+  });
+
+  it('drops matches that would fold the mapping backwards', () => {
+    // 'Moved' appears before Kept in A but after in B — LCS picks the longer
+    // chain; the survivor set must stay strictly increasing on both sides.
+    const a = [mk('P:Moved#1', 50), mk('P:Kept#1', 100), mk('P:Tail#1', 200)];
+    const b = [mk('P:Kept#1', 40), mk('P:Moved#1', 90), mk('P:Tail#1', 300)];
+    const anchors = computeAnchors(a, b);
+    for (let i = 1; i < anchors.length; i++) {
+      expect(anchors[i].a).toBeGreaterThan(anchors[i - 1].a);
+      expect(anchors[i].b).toBeGreaterThan(anchors[i - 1].b);
+    }
+  });
+
+  it('distinguishes duplicate content by occurrence', () => {
+    const a = [mk('LI:Item#1', 10), mk('LI:Item#2', 20)];
+    const b = [mk('LI:Item#1', 10), mk('LI:Item#2', 40)];
+    expect(computeAnchors(a, b)).toHaveLength(2);
+  });
+});
+
+describe('mapPosition', () => {
+  const bracketed = bracketAnchors([{ a: 100, b: 200 }], 400, 800);
+
+  it('interpolates inside a segment and clamps outside', () => {
+    expect(mapPosition(0, bracketed)).toBe(0);
+    expect(mapPosition(50, bracketed)).toBe(100); // half of 0→100 maps to half of 0→200
+    expect(mapPosition(100, bracketed)).toBe(200);
+    expect(mapPosition(250, bracketed)).toBe(500); // half of 100→400 maps to half of 200→800
+    expect(mapPosition(400, bracketed)).toBe(800);
+    expect(mapPosition(9999, bracketed)).toBe(800);
+  });
+});
+
+describe('alignedSegments', () => {
+  it('pads each row to the taller side', () => {
+    const segs = alignedSegments([{ a: 100, b: 300 }], 400, 500);
+    expect(segs).toEqual([
+      { topA: 0, topB: 0, hA: 100, hB: 300, h: 300 },
+      { topA: 100, topB: 300, hA: 300, hB: 200, h: 300 },
+    ]);
+    // aligned total height is identical for both columns
+    const total = segs.reduce((s, x) => s + x.h, 0);
+    expect(total).toBe(600);
+  });
+
+  it('drops out-of-range anchors via bracketing', () => {
+    const segs = alignedSegments([{ a: 450, b: 100 }], 400, 500); // a beyond heightA
+    expect(segs).toEqual([{ topA: 0, topB: 0, hA: 400, hB: 500, h: 500 }]);
+  });
+});

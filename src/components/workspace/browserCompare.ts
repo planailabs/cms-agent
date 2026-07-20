@@ -84,7 +84,8 @@ export const renderBrowserCompare = (state: AppState): string => {
           bc.mode === 'highlight'
             ? `<button type="button" class="ws-mini-button ${bc.overlayVisible ? 'is-active' : ''}"
                 data-action="ws-bc-overlay-toggle">${escapeHtml(t(locale, bc.overlayVisible ? 'workspace.bc.hideDiff' : 'workspace.bc.showDiff'))}</button>`
-            : ''
+            : `<button type="button" class="ws-mini-button ${state.workspace.compareMode === 'content' ? 'is-active' : ''}"
+                data-action="ws-compare-align" title="${escapeHtml(t(locale, 'workspace.compare.title'))}">${escapeHtml(t(locale, state.workspace.compareMode === 'content' ? 'workspace.compare.content' : 'workspace.compare.height'))}</button>`
         }
         <button type="button" class="ws-mini-button" data-action="ws-bc-close" title="${escapeHtml(t(locale, 'workspace.bc.closeTitle'))}">✕</button>
       </div>

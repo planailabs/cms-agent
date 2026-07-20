@@ -2184,6 +2184,26 @@ html.is-first-visit #app {
   .ws-onion__label--right {
     right: 0.5rem;
   }
+
+  /* Content-aligned mode: sliced columns replace the plain imgs */
+  [data-onion].is-content-aligned .ws-shot img {
+    display: none;
+  }
+
+  [data-onion].is-content-aligned .ws-shot {
+    min-height: 0;
+  }
+
+  .ws-onion__segments {
+    position: relative;
+    width: 100%;
+    background: #fff;
+  }
+
+  .ws-onion__segment {
+    width: 100%;
+    background-repeat: no-repeat;
+  }
 }
 
 .icon-size {

@@ -160,6 +160,10 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.caps.rules': 'Rules from plugins',
     'workspace.caps.attached': 'attached',
     'workspace.caps.tools': 'Tools',
+    'workspace.compare.height': 'Height',
+    'workspace.compare.content': 'Content',
+    'workspace.compare.title':
+      'Alignment: by height, or by matching content (adds space so identical content lines up)',
     'workspace.caps.fromBranch': 'site repo',
     'workspace.caps.fromAdmin': 'server config',
     'workspace.caps.fromPlugin': 'plugin {plugin}',
@@ -327,6 +331,10 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.caps.rules': 'Regeln aus Plugins',
     'workspace.caps.attached': 'verbunden',
     'workspace.caps.tools': 'Werkzeuge',
+    'workspace.compare.height': 'Höhe',
+    'workspace.compare.content': 'Inhalt',
+    'workspace.compare.title':
+      'Ausrichtung: nach Höhe oder nach übereinstimmendem Inhalt (fügt Platz ein, damit gleicher Inhalt auf gleicher Höhe liegt)',
     'workspace.caps.fromBranch': 'Site-Repo',
     'workspace.caps.fromAdmin': 'Server-Konfiguration',
     'workspace.caps.fromPlugin': 'Plugin {plugin}',

@@ -10,6 +10,34 @@
 
 const IFRAME_IDS = ['ws-diff-before', 'ws-diff-after'] as const;
 
+import {
+  COLLECT_MARKERS_JS,
+  bracketAnchors,
+  computeAnchors,
+  mapPosition,
+  type Anchor,
+  type MarkerDoc,
+} from '@/lib/compare/markers';
+import { store } from '../chat/app/store';
+
+/** Marker docs per iframe id (repopulated on every document load). */
+const markerDocs = new Map<string, MarkerDoc>();
+/** Bracketed anchors keyed by direction ("srcId>dstId"), invalidated on
+ *  marker updates. */
+let anchorCache = new Map<string, Anchor[]>();
+
+const anchorsFor = (srcId: string, dstId: string): Anchor[] | null => {
+  const key = `${srcId}>${dstId}`;
+  const cached = anchorCache.get(key);
+  if (cached) return cached;
+  const a = markerDocs.get(srcId);
+  const b = markerDocs.get(dstId);
+  if (!a || !b) return null;
+  const bracketed = bracketAnchors(computeAnchors(a.m, b.m), a.h, b.h);
+  anchorCache.set(key, bracketed);
+  return bracketed;
+};
+
 // Runs inside each preview iframe (has `agent` in scope, per bootstrap eval).
 // Echo suppression is by position, not timing: the scroll event caused by a
 // programmatic scrollTop can arrive after the next rAF, so a timed "applying"
@@ -27,15 +55,22 @@ if (!window.__cmsScrollSync) {
       if (wasEcho) return;
     }
     var max = el.scrollHeight - el.clientHeight;
-    agent.post({ type: 'cms:scroll', frac: max > 0 ? el.scrollTop / max : 0 });
+    agent.post({
+      type: 'cms:scroll',
+      frac: max > 0 ? el.scrollTop / max : 0,
+      top: el.scrollTop,
+    });
   }, { passive: true });
   agent.on('cms:scroll-to', function (d) {
     var max = el.scrollHeight - el.clientHeight;
-    var top = (d && typeof d.frac === 'number' ? d.frac : 0) * max;
+    var top = d && typeof d.top === 'number'
+      ? Math.min(Math.max(0, d.top), max)
+      : (d && typeof d.frac === 'number' ? d.frac : 0) * max;
     if (Math.abs(el.scrollTop - top) < 1) return;
     expected = top;
     el.scrollTop = top;
   });
+  agent.post({ type: 'cms:markers', doc: ${COLLECT_MARKERS_JS} });
 }
 `;
 
@@ -73,18 +108,39 @@ export const registerDiffScrollSync = (): void => {
     if (!src) return; // not one of the diff iframes
     if (ev.origin !== originOf(src)) return; // origin pin
 
-    const data = ev.data as { type?: string; frac?: number } | null;
+    const data = ev.data as {
+      type?: string;
+      frac?: number;
+      top?: number;
+      doc?: MarkerDoc;
+    } | null;
     if (!data || typeof data.type !== 'string') return;
 
     if (data.type === 'cms:agent-ready') {
+      markerDocs.delete(src.id); // new document — old markers are stale
+      anchorCache = new Map();
       postTo(src, { type: 'cms:eval', id: `scroll-sync-${++seq}`, code: SYNC_CODE });
+    } else if (data.type === 'cms:markers' && data.doc && Array.isArray(data.doc.m)) {
+      markerDocs.set(src.id, data.doc);
+      anchorCache = new Map();
     } else if (data.type === 'cms:scroll' && typeof data.frac === 'number') {
       const now = performance.now();
       if (leaderId && leaderId !== src.id && now < leaderUntil) return;
       leaderId = src.id;
       leaderUntil = now + LEADER_MS;
       const other = frames.find((f) => f && f !== src);
-      if (other) postTo(other, { type: 'cms:scroll-to', frac: data.frac });
+      if (!other) return;
+      // 'content' mode: map the absolute position through the matched
+      // content anchors; fall back to fraction sync without markers.
+      const anchors =
+        store.state.workspace.compareMode === 'content' && typeof data.top === 'number'
+          ? anchorsFor(src.id, other.id)
+          : null;
+      if (anchors) {
+        postTo(other, { type: 'cms:scroll-to', top: mapPosition(data.top!, anchors) });
+      } else {
+        postTo(other, { type: 'cms:scroll-to', frac: data.frac });
+      }
     }
   });
 };

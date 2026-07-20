@@ -143,6 +143,11 @@ export const renderDiffViewer = (state: AppState): string => {
       class="ws-mini-button ${m.key === diff.mode ? 'is-active' : ''}"
       data-action="ws-diff-mode" data-mode="${m.key}">${escapeHtml(t(locale, m.labelKey))}</button>`,
   ).join('');
+  const contentMode = state.workspace.compareMode === 'content';
+  const alignToggle = `<button type="button"
+      class="ws-mini-button ${contentMode ? 'is-active' : ''}"
+      data-action="ws-compare-align" title="${escapeHtml(t(locale, 'workspace.compare.title'))}">
+      ${escapeHtml(t(locale, contentMode ? 'workspace.compare.content' : 'workspace.compare.height'))}</button>`;
 
   const route = diff.selectedRoute ?? diff.pages[0]!.route;
   let body = '';
@@ -153,7 +158,7 @@ export const renderDiffViewer = (state: AppState): string => {
   return `<div class="ws-diff">
       ${header}
       <div class="ws-diff-tabs">${tabs}</div>
-      <div class="ws-diff-modes">${modes}</div>
+      <div class="ws-diff-modes">${modes}<span class="ws-toolbar__spacer"></span>${alignToggle}</div>
       ${diff.unresolved.length ? unresolvedNote(diff.unresolved) : ''}
       <div class="ws-diff-body">${body}</div>
     </div>`;

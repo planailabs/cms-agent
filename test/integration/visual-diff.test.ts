@@ -67,6 +67,17 @@ describe.skipIf(!available)('visual diff', () => {
       expect(fs.existsSync(file)).toBe(true);
     }
 
+    // Content markers captured next to before/after shots (compare modes)
+    for (const kind of ['before', 'after'] as const) {
+      const doc = JSON.parse(fs.readFileSync(`${result.files[kind]}.markers.json`, 'utf8')) as {
+        h: number;
+        m: Array<{ k: string; y: number }>;
+      };
+      expect(doc.h).toBeGreaterThan(0);
+      expect(doc.m.length).toBeGreaterThan(0);
+      expect(doc.m[0]).toMatchObject({ k: expect.any(String), y: expect.any(Number) });
+    }
+
     // Cached on second call (same shas) — no new screenshots needed
     const again = await diffRoute('vdiff-branch', '/about/');
     expect(again.changedPixels).toBe(result.changedPixels);

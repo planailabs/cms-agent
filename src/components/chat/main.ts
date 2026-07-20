@@ -24,6 +24,7 @@ import { renderArchiveModal } from '../workspace/archive';
 import { renderGitModal } from '../workspace/gitModal';
 import { renderCapsModal } from '../workspace/capsModal';
 import { renderPlanModal } from '../workspace/planModal';
+import { syncOnionAlignment } from '../workspace/onionAlign';
 import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
@@ -107,6 +108,9 @@ const initApp = () => {
         // by an innerHTML pass (that reloads every tab).
         if (frameRegion) syncPreviewFrames(frameRegion, state);
       }
+      // Content-aligned onion columns (compare mode 'content') — imperative
+      // enhancement over the rendered onion markup.
+      syncOnionAlignment(state);
     }
 
     // 3. Right sidebar: branch switcher, phase bar, chat.

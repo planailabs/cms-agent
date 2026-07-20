@@ -210,6 +210,11 @@ export interface WorkspaceState {
   plan: ProposedPlan | null;
   planModalOpen: boolean;
 
+  /** Compare alignment for onion views + diff scroll sync: 'height'
+   *  (natural heights / fraction scrolling) or 'content' (marker-aligned).
+   *  A viewer preference — survives chat switches. */
+  compareMode: 'height' | 'content';
+
   /** Sha to publish — from phase_changed.executionSha / execution_committed. */
   executionSha: string | null;
   /** Committed-execution cards shown in the chat. */
@@ -279,6 +284,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   pickerActive: false,
   plan: null,
   planModalOpen: false,
+  compareMode: 'height',
   executionSha: null,
   executions: [],
   publish: null,

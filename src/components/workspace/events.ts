@@ -304,6 +304,11 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => openCapsModal());
   delegateEvent(app, 'click', '[data-action="ws-plan-open"]', () => openPlanModal());
   delegateEvent(app, 'click', '[data-action="ws-plan-close"]', () => closePlanModal());
+  delegateEvent(app, 'click', '[data-action="ws-compare-align"]', () => {
+    const ws = store.state.workspace;
+    ws.compareMode = ws.compareMode === 'content' ? 'height' : 'content';
+    store.notify();
+  });
   delegateEvent(app, 'click', '[data-action="ws-caps-close"]', () => closeCapsModal());
   delegateEvent<Event>(app, 'change', '[data-action="ws-caps-chat"]', (_e, target) => {
     void loadCapabilities((target as HTMLSelectElement).value || null);

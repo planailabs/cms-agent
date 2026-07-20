@@ -40,6 +40,15 @@ export const GET: APIRoute = async ({ url, locals }) => {
         totalPixels: result.totalPixels,
       });
     }
+    if (url.searchParams.get('markers')) {
+      const markersFile = `${result.files[kind]}.markers.json`;
+      if (!fs.existsSync(markersFile)) {
+        return json({ error: 'No markers for this shot' }, 404);
+      }
+      return new Response(fs.readFileSync(markersFile), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=300' },
+      });
+    }
     return new Response(fs.readFileSync(result.files[kind]), {
       headers: { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=300' },
     });
