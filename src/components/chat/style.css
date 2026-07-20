@@ -2247,6 +2247,9 @@ html.is-first-visit #app {
     flex: 1;
     overflow: auto;
     min-width: 0;
+    /* github-dark shiki colors need a matching pane in BOTH ui themes */
+    background: #0d1117;
+    color: #c9d1d9;
   }
 
   .ws-cb-file {

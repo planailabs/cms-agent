@@ -153,6 +153,8 @@ export interface CodeBrowserState {
   /** Currently open file (relative path) and its content lines. */
   filePath: string | null;
   fileLines: string[];
+  /** Server-highlighted HTML per line (shiki), aligned with fileLines. */
+  fileHighlighted: string[] | null;
   fileTruncated: boolean;
   /** 1-based inclusive selection range (0 = none). */
   selStart: number;
@@ -167,6 +169,7 @@ export const createInitialCodeBrowserState = (): CodeBrowserState => ({
   expanded: [],
   filePath: null,
   fileLines: [],
+  fileHighlighted: null,
   fileTruncated: false,
   selStart: 0,
   selEnd: 0,

@@ -81,6 +81,7 @@ export const openFile = async (path: string): Promise<void> => {
   cb.loading = true;
   cb.filePath = path;
   cb.fileLines = [];
+  cb.fileHighlighted = null;
   cb.fileTruncated = false;
   cb.selStart = 0;
   cb.selEnd = 0;
@@ -90,6 +91,7 @@ export const openFile = async (path: string): Promise<void> => {
     const res = await fetch(api(path));
     const data = (await res.json()) as {
       content?: string;
+      highlighted?: string[] | null;
       truncated?: boolean;
       binary?: boolean;
       error?: string;
@@ -100,6 +102,7 @@ export const openFile = async (path: string): Promise<void> => {
     else if (data.binary) cb.error = t(uiLocale(), 'workspace.code.binary');
     else {
       cb.fileLines = (data.content ?? '').split('\n');
+      cb.fileHighlighted = data.highlighted ?? null;
       cb.fileTruncated = Boolean(data.truncated);
     }
     store.notify();
@@ -188,7 +191,9 @@ const renderFile = (state: AppState): string => {
     .map((line, i) => {
       const n = i + 1;
       const sel = n >= cb.selStart && n <= cb.selEnd ? 'is-selected' : '';
-      return `<div class="ws-cb-line ${sel}" data-action="ws-cb-line" data-line="${n}"><span class="ws-cb-ln">${n}</span><span class="ws-cb-code">${escapeHtml(line) || ' '}</span></div>`;
+      // Highlighted HTML comes from OUR server (shiki-escaped) — trusted.
+      const code = cb.fileHighlighted?.[i] ?? escapeHtml(line);
+      return `<div class="ws-cb-line ${sel}" data-action="ws-cb-line" data-line="${n}"><span class="ws-cb-ln">${n}</span><span class="ws-cb-code">${code || ' '}</span></div>`;
     })
     .join('');
   return `<div class="ws-cb-file ws-mono">${lines}</div>

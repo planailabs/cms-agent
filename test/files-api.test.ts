@@ -26,6 +26,7 @@ beforeAll(async () => {
   fs.mkdirSync(path.join(repo, 'src', 'pages'), { recursive: true });
   fs.mkdirSync(path.join(repo, 'node_modules'), { recursive: true });
   fs.writeFileSync(path.join(repo, 'index.md'), '# Home\nline two\nline three\n');
+  fs.writeFileSync(path.join(repo, 'demo.ts'), 'const x = 1;\nexport default x;\n');
   fs.writeFileSync(path.join(repo, 'src', 'pages', 'about.md'), '# About\n');
   fs.writeFileSync(path.join(repo, 'node_modules', 'x.js'), 'skip me');
   fs.writeFileSync(path.join(repo, 'blob.bin'), Buffer.from([0x89, 0x50, 0x00, 0x01]));
@@ -75,6 +76,19 @@ describe('files API', () => {
     expect(file.body.content).toContain('line two');
     expect(file.body.truncated).toBe(false);
   });
+
+  it('highlights known languages per line, none for unknown', async () => {
+    const { body } = await get('demo.ts');
+    expect(body.content).toContain('const x');
+    const hl = body.highlighted as string[] | null;
+    expect(Array.isArray(hl)).toBe(true);
+    expect(hl!.length).toBeGreaterThanOrEqual(2);
+    expect(hl![0]).toContain('<span style="color:');
+    expect(hl![0]).toContain('const');
+
+    const md = await get('index.md');
+    expect(Array.isArray(md.body.highlighted)).toBe(true);
+  }, 60_000);
 
   it('flags binary files instead of returning bytes', async () => {
     const { body } = await get('blob.bin');

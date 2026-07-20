@@ -17,6 +17,52 @@ import type { ToolContext } from '@/lib/agent/tools/registry';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro']);
 const MAX_FILE_CHARS = 100_000;
+const MAX_HIGHLIGHT_LINES = 5000;
+
+// ── Syntax highlighting (shiki — the same engine Astro bundles) ──────────
+const HL_LANGS = [
+  'astro', 'typescript', 'tsx', 'javascript', 'jsx', 'json', 'css', 'scss',
+  'markdown', 'mdx', 'html', 'yaml', 'toml', 'shellscript', 'python', 'rust',
+];
+const EXT_LANG: Record<string, string> = {
+  astro: 'astro', ts: 'typescript', mts: 'typescript', cts: 'typescript',
+  tsx: 'tsx', js: 'javascript', mjs: 'javascript', cjs: 'javascript',
+  jsx: 'jsx', json: 'json', css: 'css', scss: 'scss', md: 'markdown',
+  mdx: 'mdx', html: 'html', htm: 'html', yml: 'yaml', yaml: 'yaml',
+  toml: 'toml', sh: 'shellscript', bash: 'shellscript', py: 'python',
+  rs: 'rust',
+};
+
+let hlPromise: Promise<import('shiki').Highlighter> | null = null;
+const highlighter = () => {
+  hlPromise ??= import('shiki').then((shiki) =>
+    shiki.createHighlighter({ themes: ['github-dark'], langs: HL_LANGS }),
+  );
+  return hlPromise;
+};
+
+const escHtml = (s: string) =>
+  s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
+/** Per-line highlighted HTML (aligned with content.split('\n')), or null
+ *  for unknown languages / failures — the client falls back to plain text. */
+async function highlightLines(text: string, filePath: string): Promise<string[] | null> {
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const lang = EXT_LANG[ext];
+  if (!lang || text.split('\n').length > MAX_HIGHLIGHT_LINES) return null;
+  try {
+    const hl = await highlighter();
+    const { tokens } = hl.codeToTokens(text, { lang: lang as never, theme: 'github-dark' });
+    return tokens.map((line) =>
+      line
+        .map((tk) => `<span style="color:${tk.color ?? 'inherit'}">${escHtml(tk.content)}</span>`)
+        .join(''),
+    );
+  } catch (err) {
+    console.warn(`[files] highlight failed for ${filePath}:`, err);
+    return null;
+  }
+}
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -61,9 +107,11 @@ export const GET: APIRoute = async ({ params, url }) => {
     return json({ file: relPath, binary: true, size: stat.size });
   }
   const text = buf.toString('utf8');
+  const content = text.slice(0, MAX_FILE_CHARS);
   return json({
     file: relPath,
-    content: text.slice(0, MAX_FILE_CHARS),
+    content,
+    highlighted: await highlightLines(content, resolved),
     truncated: text.length > MAX_FILE_CHARS,
     size: stat.size,
   });
