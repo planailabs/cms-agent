@@ -12,6 +12,9 @@
 #   [::1] upstream (CMS_UPSTREAM fallback, then the CMS-written file).
 # - launch-with-sandbox.sh builds the node sandbox squashfs on the fly (nix)
 #   and exports SANDBOX_DIR_* so the CMS can jail all site shell commands.
+#   On macOS (no bubblewrap) it auto-selects SANDBOX_MODE=none: no jail —
+#   commands run with the matching `nix develop .#sandbox-node<major>`
+#   shell's PATH instead (development only).
 # - VAR_DIR=$PWD/var: the proxy must see the SAME var dir as the CMS; $PWD
 #   expands to the repo root when overmind parses the line, so the value is
 #   absolute and survives sudo/cargo-watch working-directory changes.

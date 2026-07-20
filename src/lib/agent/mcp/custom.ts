@@ -111,7 +111,11 @@ export async function attachCustomMcps(): Promise<ExternalMcp[]> {
     const workDir = path.join(path.resolve(env().VAR_DIR), 'mcp-bridge-work');
     fs.mkdirSync(workDir, { recursive: true });
 
-    const { command, args } = sandboxCommand(sb, ['node', `/home/sandbox/${BRIDGE_FILE}`], {
+    // In-jail the session home is /home/sandbox; the none-mode fallback runs
+    // with HOME = the host dir itself.
+    const bridgePath =
+      sb.mode === 'none' ? path.join(home, BRIDGE_FILE) : `/home/sandbox/${BRIDGE_FILE}`;
+    const { command, args } = sandboxCommand(sb, ['node', bridgePath], {
       cwd: workDir,
       sessionKey: SESSION_KEY,
     });

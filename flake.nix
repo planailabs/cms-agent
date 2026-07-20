@@ -44,6 +44,34 @@
         description = "Codebase knowledge-graph memory — skill for the sandboxed MCP tools";
         skills = "./skills/";
       });
+      # ── Sandbox toolset — single source for BOTH the bwrap jail envs and
+      #    the per-major `sandbox-node*` dev shells (the SANDBOX_MODE=none
+      #    dev mode, e.g. on macOS, runs site commands in those shells). ──
+      sandboxNodesFor = pkgs: {
+        "22" = pkgs.nodejs_22;
+        "24" = pkgs.nodejs_24;
+        "26" = pkgs.nodejs_26;
+      };
+      cbmFor = pkgs:
+        codebase-memory-mcp.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      sandboxCommonPkgsFor = pkgs: (with pkgs; [
+        coreutils
+        bashInteractive
+        cacert
+        gawk
+        gnugrep
+        ripgrep
+        python3
+        uv
+        # Alternative package managers for managed sites (npm ships with node)
+        pnpm
+        yarn
+      ]) ++ [
+        # Codebase graph memory: MCP server + CLI, attached to the agent
+        # through the jail (index + queries see only /work).
+        (cbmFor pkgs)
+      ];
+
       agentPluginsFor = pkgs: rec {
         codebaseMemoryPlugin = pkgs.runCommand "cms-plugin-codebase-memory"
           { nativeBuildInputs = [ pkgs.python3 ]; } ''
@@ -71,7 +99,7 @@
 
           # Codebase-memory MCP binary — lives in the SANDBOX env (the agent's
           # MCP server runs jailed with only the worktree visible).
-          cbm = codebase-memory-mcp.packages.${pkgs.stdenv.hostPlatform.system}.default;
+          cbm = cbmFor pkgs;
 
           # Rust pingora reverse-proxy sidecar (public entrypoint).
           proxy = pkgs.rustPlatform.buildRustPackage {
@@ -101,32 +129,12 @@
           # so shell commands see ONLY these tools — never the app's store.
           # Selected via SANDBOX_NODE_MAJOR; built on the fly in dev by
           # scripts/launch-with-sandbox.sh, baked into the image in prod.
-          sandboxNodes = {
-            "22" = pkgs.nodejs_22;
-            "24" = pkgs.nodejs_24;
-            "26" = pkgs.nodejs_26;
-          };
+          sandboxNodes = sandboxNodesFor pkgs;
 
           # Tools every sandbox env carries, regardless of node major. cacert:
           # self-contained TLS trust (the app's store is overshadowed, so the
           # jail must carry its own CA bundle for `npm install`).
-          sandboxCommonPkgs = with pkgs; [
-            coreutils
-            bashInteractive
-            cacert
-            gawk
-            gnugrep
-            ripgrep
-            python3
-            uv
-            # Alternative package managers for managed sites (npm ships with node)
-            pnpm
-            yarn
-          ] ++ [
-            # Codebase graph memory: MCP server + CLI, attached to the agent
-            # through the jail (index + queries see only /work).
-            cbm
-          ];
+          sandboxCommonPkgs = sandboxCommonPkgsFor pkgs;
 
           mkSandboxEnv = major: node: pkgs.buildEnv {
             name = "cms-sandbox-env-node${major}";
@@ -368,7 +376,15 @@
             ln -sfn ${(agentPluginsFor pkgs).codebaseMemoryPlugin} plugins/codebase-memory
           '';
         };
-      });
+      } // lib.mapAttrs' (major: node:
+        # One shell per sandbox node major — the same toolset as the bwrap
+        # jail env. The SANDBOX_MODE=none dev mode (default on macOS, where
+        # bwrap does not exist) resolves this shell's PATH once and runs all
+        # site commands with it instead of entering a jail.
+        lib.nameValuePair "sandbox-node${major}" (pkgs.mkShell {
+          packages = [ node ] ++ sandboxCommonPkgsFor pkgs;
+        })) (sandboxNodesFor pkgs)
+      );
 
       checks = forAllSystems (pkgs:
         let

@@ -21,12 +21,18 @@ import { env } from '@/lib/env';
 
 export interface SandboxState {
   major: string;
+  /** 'bwrap' = the jail; 'none' = dev-only fallback (macOS): commands run
+   *  with the matching `nix develop .#sandbox-node<major>` shell's PATH and
+   *  a scrubbed env, no isolation. */
+  mode: 'bwrap' | 'none';
   /** Host dir whose contents are the sandbox /nix/store (bound over it). */
   storeRoot: string;
   /** In-jail absolute path of the env root (…/bin has node, npm, bash, env). */
   envRootInJail: string;
   /** Host path of the env root (for --ro-bind sources). */
   envRootHost: string;
+  /** none-mode: the resolved dev-shell PATH commands run with. */
+  shellPath?: string;
 }
 
 const MAX_OUTPUT_CHARS = 50_000;
@@ -165,10 +171,73 @@ export interface SandboxRunOptions {
   nodeEnv?: 'development' | 'production';
 }
 
+/** Shell-quote for the none-mode command lines. */
+const shq = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+
+/** none-mode env for a run: dev-shell PATH + per-session HOME, nothing else. */
+function noneEnv(sb: SandboxState, opts: SandboxRunOptions): Record<string, string> {
+  const home = path.join(varRoot(), 'home', opts.sessionKey ?? 'default');
+  fs.mkdirSync(home, { recursive: true });
+  return {
+    PATH: `${path.join(opts.cwd, 'node_modules', '.bin')}:${sb.shellPath ?? ''}`,
+    HOME: home,
+    NODE_ENV: opts.nodeEnv ?? 'development',
+    ...opts.extraEnv,
+  };
+}
+
+/** Resolve the `nix develop .#sandbox-node<major>` shell's PATH (builds the
+ *  shell on first use). Dev only — the repo flake must be the cwd. */
+function resolveShellPath(major: string): string {
+  const r = spawnSync(
+    'nix',
+    ['develop', `${process.cwd()}#sandbox-node${major}`, '--command', 'sh', '-c', 'echo -n "$PATH"'],
+    { encoding: 'utf8', timeout: 10 * 60_000 },
+  );
+  if (r.status !== 0 || !r.stdout.includes('/nix/store/')) {
+    throw new Error(
+      `SANDBOX_MODE=none: resolving the sandbox-node${major} dev shell failed ` +
+        `(is nix installed and the repo the working directory?): ${r.stderr || `exit ${r.status}`}`,
+    );
+  }
+  return r.stdout.trim();
+}
+
 /** Ensure the sandbox for a node major is usable. Required — throws on failure. */
 export function ensureSandbox(major = env().SANDBOX_NODE_MAJOR): Promise<SandboxState> {
   const cached = state.get(major);
   if (cached) return cached;
+
+  if (env().SANDBOX_MODE === 'none') {
+    const p = (async (): Promise<SandboxState> => {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('SANDBOX_MODE=none is a development fallback — refusing in production.');
+      }
+      const shellPath = resolveShellPath(major);
+      const sb: SandboxState = {
+        major,
+        mode: 'none',
+        storeRoot: '',
+        envRootInJail: '',
+        envRootHost: '',
+        shellPath,
+      };
+      const probe = spawnSync('/bin/sh', ['-c', 'node --version'], {
+        encoding: 'utf8',
+        env: { PATH: shellPath },
+      });
+      if (probe.status !== 0 || !new RegExp(`^v${major}\\.`).test(probe.stdout.trim())) {
+        throw new Error(
+          `SANDBOX_MODE=none probe failed (wanted node ${major}): ${probe.stderr || probe.stdout}`,
+        );
+      }
+      console.log(`[sandbox] mode=none, node ${major} via nix develop shell`);
+      return sb;
+    })();
+    state.set(major, p);
+    p.catch(() => state.delete(major));
+    return p;
+  }
 
   const p = (async (): Promise<SandboxState> => {
     if (spawnSync('bwrap', ['--version']).status !== 0) {
@@ -181,6 +250,7 @@ export function ensureSandbox(major = env().SANDBOX_NODE_MAJOR): Promise<Sandbox
     if (!envName) throw new Error(`Sandbox env for node ${major} missing in ${storeRoot}`);
     const sb: SandboxState = {
       major,
+      mode: 'bwrap',
       storeRoot,
       envRootHost: path.join(storeRoot, envName),
       envRootInJail: `/nix/store/${envName}`,
@@ -215,6 +285,17 @@ export function sandboxCommand(
   command: string[],
   opts: SandboxRunOptions,
 ): { command: string; args: string[] } {
+  if (sb.mode === 'none') {
+    // env -i scrubs whatever env the eventual spawner would pass in.
+    const pairs = Object.entries(noneEnv(sb, opts)).map(([k, v]) => `${k}=${v}`);
+    return {
+      command: '/bin/sh',
+      args: [
+        '-c',
+        `cd ${shq(opts.cwd)} && exec env -i ${pairs.map(shq).join(' ')} ${command.map(shq).join(' ')}`,
+      ],
+    };
+  }
   return { command: 'bwrap', args: [...bwrapArgs(sb, opts), ...command] };
 }
 
@@ -234,6 +315,12 @@ export function sandboxHomeDir(sessionKey: string): string {
  *  in the container the host store lacks those paths, so following the link
  *  reports absent binaries that work fine in the jail. */
 export function sandboxHasBin(sb: SandboxState, bin: string): boolean {
+  if (sb.mode === 'none') {
+    return (
+      spawnSync('/bin/sh', ['-c', `command -v ${shq(bin)}`], { env: { PATH: sb.shellPath ?? '' } })
+        .status === 0
+    );
+  }
   return fs.lstatSync(path.join(sb.envRootHost, 'bin', bin), { throwIfNoEntry: false }) != null;
 }
 
@@ -243,6 +330,14 @@ export function spawnSandboxed(
   command: string[],
   opts: SandboxRunOptions,
 ): ChildProcess {
+  if (sb.mode === 'none') {
+    const [cmd, ...args] = command;
+    return spawn(cmd, args, {
+      cwd: opts.cwd,
+      env: noneEnv(sb, opts),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  }
   return spawn('bwrap', [...bwrapArgs(sb, opts), ...command], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -262,9 +357,16 @@ export function runSandboxed(
   opts: SandboxRunOptions & { timeoutMs?: number },
 ): Promise<SandboxResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn('bwrap', [...bwrapArgs(sb, opts), '/bin/sh', '-lc', command], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child =
+      sb.mode === 'none'
+        ? spawn('/bin/sh', ['-c', command], {
+            cwd: opts.cwd,
+            env: noneEnv(sb, opts),
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+        : spawn('bwrap', [...bwrapArgs(sb, opts), '/bin/sh', '-lc', command], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
     let stdout = '';
     let stderr = '';
     let timedOut = false;

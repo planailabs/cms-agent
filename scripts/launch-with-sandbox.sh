@@ -10,6 +10,17 @@
 # squashfs holds all three.
 set -euo pipefail
 
+# macOS has no bubblewrap — fall back to SANDBOX_MODE=none: the runtime
+# resolves the matching `nix develop .#sandbox-node<major>` shell and runs
+# site commands with its PATH (no jail; development only).
+if [ "$(uname -s)" = "Darwin" ]; then
+  export SANDBOX_MODE="${SANDBOX_MODE:-none}"
+fi
+if [ "${SANDBOX_MODE:-bwrap}" = "none" ]; then
+  echo "launch-with-sandbox: SANDBOX_MODE=none — no jail; using the nix dev shell PATH" >&2
+  exec "$@"
+fi
+
 if [ -z "${SANDBOX_DIR:-}" ]; then
   if ! command -v nix >/dev/null 2>&1; then
     echo "launch-with-sandbox: SANDBOX_DIR unset and nix not found — cannot build the sandbox" >&2

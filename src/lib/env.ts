@@ -73,6 +73,12 @@ const schema = z.object({
   // Sandbox (bubblewrap jail for ALL site shell calls — install, dev server,
   // build, run_command). Requires the container to run with the targeted
   // seccomp profile (deploy/seccomp/cms-agent.json).
+  // 'none' (dev only, default on macOS where bwrap does not exist): no jail —
+  // site commands run with the PATH of the matching `nix develop
+  // .#sandbox-node<major>` shell and a scrubbed environment instead.
+  SANDBOX_MODE: z
+    .enum(['bwrap', 'none'])
+    .default(process.platform === 'darwin' ? 'none' : 'bwrap'),
   SANDBOX_NODE_MAJOR: z.enum(['22', '24', '26']).default('26'),
   // Keep network in the jail (needed for `npm install`); set 0 to isolate.
   SANDBOX_ALLOW_NETWORK: z

@@ -10,12 +10,16 @@
  * the empty /work, the bridge HOME — and the clean bwrap env, never the
  * app's secrets. Web servers dial out from the jail (SANDBOX_ALLOW_NETWORK).
  */
+import os from 'node:os';
+import path from 'node:path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { createRuntime, loadServerDefinitions } from 'mcporter';
 
-const CONFIG_PATH = '/home/sandbox/mcp-bridge.json';
+// HOME-relative: /home/sandbox in the jail; the staged session home dir in
+// the SANDBOX_MODE=none dev fallback. custom.ts writes the file next to us.
+const CONFIG_PATH = path.join(os.homedir(), 'mcp-bridge.json');
 /** Below the app-side SDK client's 60s default, so the inner call loses. */
 const CALL_TIMEOUT_MS = 55_000;
 

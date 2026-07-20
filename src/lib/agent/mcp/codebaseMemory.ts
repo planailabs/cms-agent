@@ -15,7 +15,10 @@ import { externalMcp, type ExternalMcp } from './external';
 import type { ToolContext } from '../tools/registry';
 
 const BIN = 'codebase-memory-mcp';
-const IN_JAIL_REPO = '/work';
+/** Repo path as the sandboxed MCP server sees it: /work in the jail, the
+ *  real worktree path in the SANDBOX_MODE=none dev fallback. */
+const repoPathFor = (sb: { mode: 'bwrap' | 'none' }, worktreePath: string): string =>
+  sb.mode === 'none' ? worktreePath : '/work';
 
 let warned = false;
 const warnOnce = (msg: string): void => {
@@ -67,7 +70,7 @@ export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMc
       client,
       (d) =>
         `${d} (Codebase graph of this chat's branch — ` +
-        `the repository path inside the sandbox is ${IN_JAIL_REPO}.)`,
+        `the repository path inside the sandbox is ${repoPathFor(sb, ctx.worktreePath)}.)`,
       'Use the codebase-memory graph tools to query the syntax tree of the branch ' +
         '(symbols, call paths, dependencies, architecture) instead of grepping for structure.',
     );
@@ -88,7 +91,7 @@ export async function indexChatWorktree(chatId: string, worktreePath: string): P
     if (!sandboxHasBin(sb, BIN)) return;
     const res = await runSandboxed(
       sb,
-      `${BIN} cli index_repository '{"repo_path":"${IN_JAIL_REPO}"}'`,
+      `${BIN} cli index_repository '{"repo_path":"${repoPathFor(sb, worktreePath)}"}'`,
       { cwd: worktreePath, sessionKey: chatId, timeoutMs: 10 * 60_000 },
     );
     if (res.code === 0) {
