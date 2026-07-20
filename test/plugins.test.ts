@@ -134,6 +134,45 @@ describe('agent plugins', () => {
     expect(out).toContain('Branch hello wins.');
   });
 
+  it('loads admin skills from VAR_DIR/skills, between branch and plugins', async () => {
+    process.env.CMS_PLUGINS_ROOT = root;
+    const varDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-admin-skills-'));
+    const prevVarDir = process.env.VAR_DIR;
+    process.env.VAR_DIR = varDir;
+    const { resetEnvCache } = await import('@/lib/env');
+    resetEnvCache();
+    try {
+      const mk = (name: string, desc: string, body: string) => {
+        fs.mkdirSync(path.join(varDir, 'skills', name), { recursive: true });
+        fs.writeFileSync(
+          path.join(varDir, 'skills', name, 'SKILL.md'),
+          `---\nname: ${name}\ndescription: ${desc}\n---\n\n${body}\n`,
+        );
+      };
+      mk('ops-notes', 'Deployment conventions.', 'Admin body.');
+      mk('hello', 'Admin greeting.', 'Admin hello.'); // clashes with plugin + branch
+
+      const { loadAdminSkills } = await import('@/lib/agent/plugins');
+      expect(loadAdminSkills().map((s) => s.name).sort()).toEqual(['hello', 'ops-notes']);
+
+      // admin shadows the plugin skill of the same name…
+      const merged = skillsForChat(undefined);
+      expect(merged.filter((s) => s.name === 'hello')).toHaveLength(1);
+      expect(merged.find((s) => s.name === 'hello')!.body).toContain('Admin hello.');
+
+      // …but the branch skill shadows the admin one
+      const wt = path.join(root, 'worktree');
+      const withBranch = skillsForChat(wt);
+      expect(withBranch.find((s) => s.name === 'hello')!.body).toContain('Branch hello wins.');
+      expect(withBranch.map((s) => s.name)).toContain('ops-notes');
+
+      expect(pluginPromptSection(undefined)).toContain('ops-notes (admin-provided)');
+    } finally {
+      process.env.VAR_DIR = prevVarDir;
+      resetEnvCache();
+    }
+  });
+
   it.skipIf(!fs.existsSync(PONYTAIL))('loads the real plugin dirs (flake inputs)', () => {
     process.env.CMS_PLUGINS_ROOT = REPO_ROOT;
     const reg = loadPluginRegistry();

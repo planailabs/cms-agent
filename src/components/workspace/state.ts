@@ -119,7 +119,7 @@ export interface CapabilitySkillRow {
   name: string;
   description: string;
   plugin: string;
-  source: 'plugin' | 'branch';
+  source: 'plugin' | 'branch' | 'admin';
   /** Installed skill hidden by a same-named branch-local one. */
   shadowed: boolean;
 }

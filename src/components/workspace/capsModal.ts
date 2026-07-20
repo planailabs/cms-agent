@@ -66,7 +66,9 @@ const renderSkillRow = (s: CapabilitySkillRow, locale: string): string => {
   const origin =
     s.source === 'branch'
       ? t(locale, 'workspace.caps.fromBranch')
-      : t(locale, 'workspace.caps.fromPlugin', { plugin: s.plugin });
+      : s.source === 'admin'
+        ? t(locale, 'workspace.caps.fromAdmin')
+        : t(locale, 'workspace.caps.fromPlugin', { plugin: s.plugin });
   const badge = s.shadowed
     ? `<span class="ws-caps__badge is-off">${escapeHtml(t(locale, 'workspace.caps.shadowed'))}</span>`
     : '';

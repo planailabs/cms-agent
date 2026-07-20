@@ -13,6 +13,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { env } from '@/lib/env';
 
 export interface PluginSkill {
   plugin: string;
@@ -103,6 +104,20 @@ export function loadBranchSkills(worktreePath: string | undefined): PluginSkill[
   return skillsFromDir('site repo', path.join(worktreePath, '.agents', 'skills'));
 }
 
+/**
+ * Admin-global skills: ${VAR_DIR}/skills/<name>/SKILL.md — dropped on the
+ * data volume next to mcp.json. Read fresh every call, so admins can add or
+ * edit skills without a restart (mirrors how the MCP config is picked up).
+ */
+export function loadAdminSkills(): PluginSkill[] {
+  try {
+    return skillsFromDir('admin', path.join(path.resolve(env().VAR_DIR), 'skills'));
+  } catch {
+    // unconfigured env (e.g. astro build) — no admin skills
+    return [];
+  }
+}
+
 const loadRules = (plugin: string, dir: string, rulesRef?: string): PluginRule[] => {
   const candidates: string[] = [];
   if (rulesRef) {
@@ -156,13 +171,16 @@ export function loadPluginRegistry(): PluginRegistry {
   return registry;
 }
 
-/** All skills visible to a chat: branch-local first (they win name clashes),
- *  then installed plugin skills. */
+/** All skills visible to a chat, in shadowing order: branch-local first
+ *  (they win name clashes), then admin (VAR_DIR/skills), then plugins. */
 export function skillsForChat(worktreePath?: string): PluginSkill[] {
   const branch = loadBranchSkills(worktreePath);
   const taken = new Set(branch.map((s) => s.name.toLowerCase()));
+  const admin = loadAdminSkills().filter((s) => !taken.has(s.name.toLowerCase()));
+  for (const s of admin) taken.add(s.name.toLowerCase());
   return [
     ...branch,
+    ...admin,
     ...loadPluginRegistry().skills.filter((s) => !taken.has(s.name.toLowerCase())),
   ];
 }
@@ -183,10 +201,15 @@ export function pluginPromptSection(worktreePath?: string): string {
       'Available skills — call use_skill with a name to load its full instructions ' +
         'when the task (or the user) calls for it:\n' +
         skills
-          .map(
-            (s) =>
-              `- ${s.name}${s.plugin === 'site repo' ? ' (from the site repo)' : ''}: ${s.description.slice(0, 300)}`,
-          )
+          .map((s) => {
+            const origin =
+              s.plugin === 'site repo'
+                ? ' (from the site repo)'
+                : s.plugin === 'admin'
+                  ? ' (admin-provided)'
+                  : '';
+            return `- ${s.name}${origin}: ${s.description.slice(0, 300)}`;
+          })
           .join('\n'),
     );
   }

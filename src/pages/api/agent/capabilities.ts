@@ -9,7 +9,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
 import { ensureWorktree } from '@/lib/git/engine';
-import { loadBranchSkills, loadPluginRegistry } from '@/lib/agent/plugins';
+import { loadAdminSkills, loadBranchSkills, loadPluginRegistry } from '@/lib/agent/plugins';
 import { attachCodebaseMemory } from '@/lib/agent/mcp/codebaseMemory';
 import { attachContext7 } from '@/lib/agent/mcp/context7';
 import { customMcpCapabilities } from '@/lib/agent/mcp/custom';
@@ -61,7 +61,13 @@ export const GET: APIRoute = async ({ url }) => {
 
   const reg = loadPluginRegistry();
   const branchSkills = worktreePath ? loadBranchSkills(worktreePath) : [];
+  const adminSkills = loadAdminSkills();
   const branchNames = new Set(branchSkills.map((s) => s.name.toLowerCase()));
+  // Shadowing order matches skillsForChat: branch > admin > plugin.
+  const upperNames = new Set([
+    ...branchNames,
+    ...adminSkills.map((s) => s.name.toLowerCase()),
+  ]);
   const skills = [
     ...branchSkills.map((s) => ({
       name: s.name,
@@ -70,12 +76,19 @@ export const GET: APIRoute = async ({ url }) => {
       source: 'branch' as const,
       shadowed: false,
     })),
+    ...adminSkills.map((s) => ({
+      name: s.name,
+      description: s.description,
+      plugin: s.plugin,
+      source: 'admin' as const,
+      shadowed: branchNames.has(s.name.toLowerCase()),
+    })),
     ...reg.skills.map((s) => ({
       name: s.name,
       description: s.description,
       plugin: s.plugin,
       source: 'plugin' as const,
-      shadowed: branchNames.has(s.name.toLowerCase()),
+      shadowed: upperNames.has(s.name.toLowerCase()),
     })),
   ];
 
