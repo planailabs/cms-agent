@@ -182,6 +182,9 @@ export const renderContextChip = (state: AppState): string => {
   if (chip.kind === 'selection' && chip.context.selection) {
     const exact = chip.context.selection.exact;
     label = `“${exact.length > 60 ? `${exact.slice(0, 60)}…` : exact}”`;
+  } else if (chip.kind === 'code' && chip.context.code) {
+    const c = chip.context.code;
+    label = `${c.path.split('/').pop()}:${c.startLine}${c.endLine > c.startLine ? `-${c.endLine}` : ''}`;
   } else if (chip.context.element) {
     const el = chip.context.element;
     label = `<${el.tag}${el.id ? `#${el.id}` : ''}>`;
@@ -191,7 +194,7 @@ export const renderContextChip = (state: AppState): string => {
 
   return `<div class="ws-chip-row">
       <span class="ws-chip" title="${escapeHtml(chip.context.route ?? chip.context.url)}">
-        <span class="ws-chip__kind">${chip.kind === 'selection' ? '❝' : '⌖'}</span>
+        <span class="ws-chip__kind">${chip.kind === 'selection' ? '❝' : chip.kind === 'code' ? '{}' : '⌖'}</span>
         <span class="ws-chip__label">${escapeHtml(label)}</span>
         <button type="button" class="ws-chip__remove" data-action="ws-chip-remove" aria-label="${escapeHtml(t(uiLocale(), 'chat.context.remove'))}">×</button>
       </span>

@@ -114,6 +114,8 @@ export const renderDiffViewer = (state: AppState): string => {
       <span class="ws-toolbar__spacer"></span>
       <button type="button" class="ws-mini-button" data-action="ws-bc-open"
         title="${escapeHtml(t(locale, 'workspace.preview.browsersTitle'))}">${escapeHtml(t(locale, 'workspace.preview.browsers'))}</button>
+      <button type="button" class="ws-mini-button ws-mono" data-action="ws-cb-modal-open"
+        title="${escapeHtml(t(locale, 'workspace.code.openTitle'))}">{ }</button>
       <button type="button" class="ws-mini-button ws-mini-button--primary" data-action="ws-publish"
         ${!hasSha || publishing ? 'disabled' : ''}>${escapeHtml(t(locale, publishing ? 'workspace.phase.publishing' : 'workspace.phase.publish'))}</button>
       <button type="button" class="ws-mini-button" data-action="ws-request-changes">${escapeHtml(t(locale, 'workspace.phase.requestChanges'))}</button>

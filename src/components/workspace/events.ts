@@ -46,6 +46,14 @@ import { openArchive, closeArchive, deleteArchivedChat, openArchivedChat } from 
 import { openGitModal, closeGitModal, loadGitCommits, selectGitCommit, backToGitList } from './gitModal';
 import { openCapsModal, closeCapsModal, loadCapabilities } from './capsModal';
 import { openPlanModal, closePlanModal } from './planModal';
+import {
+  addCodeContext,
+  closeCodeBrowser,
+  openCodeBrowser,
+  openFile,
+  selectLine,
+  toggleDir,
+} from './codeBrowser';
 import type { DiffViewMode, PageContextElement, PageContextSelection } from './state';
 
 const SIDEBAR_MIN_WIDTH = 300;
@@ -304,6 +312,19 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => openCapsModal());
   delegateEvent(app, 'click', '[data-action="ws-plan-open"]', () => openPlanModal());
   delegateEvent(app, 'click', '[data-action="ws-plan-close"]', () => closePlanModal());
+  delegateEvent(app, 'click', '[data-action="ws-cb-modal-open"]', () => openCodeBrowser());
+  delegateEvent(app, 'click', '[data-action="ws-cb-modal-close"]', () => closeCodeBrowser());
+  delegateEvent(app, 'click', '[data-action="ws-cb-dir"]', (_e, target) =>
+    toggleDir(target.dataset.path ?? '.'),
+  );
+  delegateEvent(app, 'click', '[data-action="ws-cb-file"]', (_e, target) => {
+    if (target.dataset.path) void openFile(target.dataset.path);
+  });
+  delegateEvent<MouseEvent>(app, 'click', '[data-action="ws-cb-line"]', (event, target) => {
+    const line = Number(target.dataset.line);
+    if (line > 0) selectLine(line, event.shiftKey);
+  });
+  delegateEvent(app, 'click', '[data-action="ws-cb-add"]', () => addCodeContext());
   delegateEvent(app, 'click', '[data-action="ws-compare-align"]', () => {
     const ws = store.state.workspace;
     ws.compareMode = ws.compareMode === 'content' ? 'height' : 'content';

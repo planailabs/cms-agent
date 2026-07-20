@@ -38,6 +38,13 @@ export interface PageContext {
     headingPath?: string[];
     outerHtmlExcerpt?: string;
   };
+  /** Code-browser selection (repo file + line range + snippet). */
+  code?: {
+    path: string;
+    startLine: number;
+    endLine: number;
+    snippet: string;
+  };
 }
 
 export type StoredMessage =

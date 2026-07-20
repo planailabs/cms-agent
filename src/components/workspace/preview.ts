@@ -84,6 +84,8 @@ export const renderPreviewToolbar = (state: AppState): string => {
         </button>
         <button type="button" class="ws-mini-button" data-action="ws-bc-open"
           title="${escapeHtml(t(locale, 'workspace.preview.browsersTitle'))}">${escapeHtml(t(locale, 'workspace.preview.browsers'))}</button>
+        <button type="button" class="ws-mini-button ws-mono" data-action="ws-cb-modal-open"
+          title="${escapeHtml(t(locale, 'workspace.code.openTitle'))}">{ }</button>
         <a class="ws-mini-button" href="${escapeHtml(branchPreviewUrl(branch, ws.previewRoute))}"
           target="_blank" rel="noopener" title="${escapeHtml(t(locale, 'workspace.preview.openNewTab'))}">↗</a>
       </div>`;

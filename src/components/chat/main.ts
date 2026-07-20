@@ -25,6 +25,7 @@ import { renderGitModal } from '../workspace/gitModal';
 import { renderCapsModal } from '../workspace/capsModal';
 import { renderPlanModal } from '../workspace/planModal';
 import { syncOnionAlignment } from '../workspace/onionAlign';
+import { renderCodeBrowser } from '../workspace/codeBrowser';
 import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
@@ -163,6 +164,7 @@ const initApp = () => {
         renderGitModal(state) +
         renderCapsModal(state) +
         renderPlanModal(state) +
+        renderCodeBrowser(state) +
         renderInputModal(state);
       if (overlayRegion.innerHTML !== overlayMarkup) {
         overlayRegion.innerHTML = overlayMarkup;

@@ -29,6 +29,14 @@ export function renderPageContext(ctx: PageContext): string {
     if (el.headingPath?.length) lines.push(`Element heading path: ${el.headingPath.join(' > ')}`);
     if (el.outerHtmlExcerpt) lines.push(`Element excerpt: ${el.outerHtmlExcerpt}`);
   }
+  if (ctx.code) {
+    lines.push(
+      `Code selection: ${ctx.code.path} lines ${ctx.code.startLine}-${ctx.code.endLine}:`,
+      '```',
+      ctx.code.snippet,
+      '```',
+    );
+  }
   return lines.join('\n');
 }
 

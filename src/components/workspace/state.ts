@@ -27,6 +27,13 @@ export interface PageContextElement {
   outerHtmlExcerpt?: string;
 }
 
+export interface PageContextCode {
+  path: string;
+  startLine: number;
+  endLine: number;
+  snippet: string;
+}
+
 /** Anchor payload sent as `pageContext` with the next chat message. */
 export interface PageContext {
   url: string;
@@ -34,11 +41,12 @@ export interface PageContext {
   branch?: string;
   selection?: PageContextSelection;
   element?: PageContextElement;
+  code?: PageContextCode;
 }
 
 /** A pending context chip shown above the composer. */
 export interface ContextChip {
-  kind: 'selection' | 'element';
+  kind: 'selection' | 'element' | 'code';
   context: PageContext;
 }
 
@@ -135,6 +143,37 @@ export interface ProposedPlan {
   questions?: string[];
 }
 
+/** Code browser modal — worktree tree + file view + line-range selection. */
+export interface CodeBrowserState {
+  open: boolean;
+  /** Loaded directory listings by relative path ('.' = root). */
+  dirs: Record<string, Array<{ name: string; dir: boolean }>>;
+  /** Expanded directory paths. */
+  expanded: string[];
+  /** Currently open file (relative path) and its content lines. */
+  filePath: string | null;
+  fileLines: string[];
+  fileTruncated: boolean;
+  /** 1-based inclusive selection range (0 = none). */
+  selStart: number;
+  selEnd: number;
+  loading: boolean;
+  error: string | null;
+}
+
+export const createInitialCodeBrowserState = (): CodeBrowserState => ({
+  open: false,
+  dirs: {},
+  expanded: [],
+  filePath: null,
+  fileLines: [],
+  fileTruncated: false,
+  selStart: 0,
+  selEnd: 0,
+  loading: false,
+  error: null,
+});
+
 export interface CapabilityMcpRow {
   name: string;
   attached: boolean;
@@ -215,6 +254,9 @@ export interface WorkspaceState {
    *  A viewer preference — survives chat switches. */
   compareMode: 'height' | 'content';
 
+  /** Code browser modal (read-only worktree view + line-range context). */
+  codeBrowser: CodeBrowserState;
+
   /** Sha to publish — from phase_changed.executionSha / execution_committed. */
   executionSha: string | null;
   /** Committed-execution cards shown in the chat. */
@@ -285,6 +327,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   plan: null,
   planModalOpen: false,
   compareMode: 'height',
+  codeBrowser: createInitialCodeBrowserState(),
   executionSha: null,
   executions: [],
   publish: null,
@@ -338,6 +381,7 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.activeTabIndex = 0;
   ws.plan = null;
   ws.planModalOpen = false;
+  ws.codeBrowser = createInitialCodeBrowserState();
   ws.executionSha = null;
   ws.executions = [];
   ws.publish = null;
