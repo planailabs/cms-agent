@@ -35,6 +35,8 @@ interface ManagerState {
   routesListeners: Set<(routesJson: string) => void>;
   /** Last failed start per branch, surfaced on the boot page. */
   startErrors: Map<string, { message: string; at: number }>;
+  /** Current phase of an in-flight start, streamed to the boot page. */
+  startPhases: Map<string, 'deps' | 'server'>;
 }
 
 // Survive Vite HMR module reloads in dev
@@ -47,12 +49,18 @@ const state: ManagerState =
     starting: new Map(),
     routesListeners: new Set(),
     startErrors: new Map(),
+    startPhases: new Map(),
   });
 state.routesListeners ??= new Set(); // fields added after older HMR state
 state.startErrors ??= new Map();
+state.startPhases ??= new Map();
 
 export function getStartError(branch: string): { message: string; at: number } | null {
   return state.startErrors.get(branch) ?? null;
+}
+
+export function getStartPhase(branch: string): 'deps' | 'server' | null {
+  return state.startPhases.get(branch) ?? null;
 }
 
 export function clearStartError(branch: string): void {
@@ -247,7 +255,9 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     const e = env();
     const sb = await ensureSandbox();
     const worktree = await ensureWorktree(branch);
+    state.startPhases.set(branch, 'deps');
     await ensureDeps(sb, worktree, branch, repair);
+    state.startPhases.set(branch, 'server');
     const port = await freePort();
 
     // REPO_DEV_COMMAND is split on whitespace (document: no shell quoting)
@@ -320,7 +330,10 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     startSweeper();
     console.log(`[preview] ${branch} ready on port ${port} (worktree ${worktree})`);
     return info;
-  })().finally(() => state.starting.delete(branch));
+  })().finally(() => {
+    state.starting.delete(branch);
+    state.startPhases.delete(branch);
+  });
 
   startPromise.catch((err: unknown) => {
     state.startErrors.set(branch, {

@@ -16,9 +16,11 @@ import { escapeHtml } from './html';
 
 export const BOOT_PATH_RE = /^\/__preview\/boot\/([a-z0-9][a-z0-9-]{0,62})\/?$/;
 
-/** Reload interval — also the spinner's rotation period, so one full turn
- * of the fading line lasts exactly until the next reload. */
-const REFRESH_SECONDS = 2;
+/** Spinner rotation period (one full turn of the fading line). */
+const SPIN_SECONDS = 2;
+/** Meta-refresh fallback — the SSE wait stream normally reloads the page
+ * the moment the preview is ready; this only covers no-JS/broken-SSE. */
+const FALLBACK_REFRESH_SECONDS = 15;
 
 /**
  * Redirect target after a retry: the visitor's original path+query (from the
@@ -90,12 +92,9 @@ export async function handlePreviewBoot(
   // stays HTML-safe.
   const safe = escapeHtml(branch);
   const strong = { branch: `<strong>${safe}</strong>` };
-  // Spinner: circular fading line whose rotation period equals the reload
-  // interval — one full turn per refresh. Info glyph sits in its center;
-  // failed/unknown states get error/warning badges instead.
-  const spinner =
-    `<span class="spin" aria-hidden="true"><span class="spin__ring"></span>` +
-    `<span class="spin__glyph">i</span></span>`;
+  // Spinner: circular fading line in the brand accent; failed/unknown
+  // states get error/warning badges instead.
+  const spinner = `<span class="spin" aria-hidden="true"></span>`;
   const body = startError
     ? `<div class="state"><span class="badge badge--error" aria-hidden="true">✕</span>` +
       `<p>${t(locale, 'pages.preview.failed', strong)}</p>` +
@@ -105,9 +104,33 @@ export async function handlePreviewBoot(
       `<p><a href="?retry=1">${t(locale, 'pages.preview.retry')}</a></p></div>`
     : bootable
       ? `<div class="state">${spinner}` +
-        `<p class="pulse">${t(locale, 'pages.preview.starting', strong)}</p></div>`
+        `<p class="pulse" id="boot-msg">${t(locale, 'pages.preview.starting', strong)}</p></div>`
       : `<div class="state"><span class="badge badge--warn" aria-hidden="true">!</span>` +
         `<p>${t(locale, 'pages.preview.unknownBranch', strong)}</p></div>`;
+
+  // Live wait: the SSE stream pushes install/start phases into #boot-msg and
+  // reloads the instant the route exists (or a failure is recorded — the
+  // reload then renders the error state). The tiny delay lets the sidecar
+  // apply the routes update that raced the ready event.
+  const phases = {
+    deps: t(locale, 'pages.preview.installing'),
+    server: t(locale, 'pages.preview.startingServer'),
+  };
+  const waitScript =
+    bootable && !startError
+      ? `<script>
+    (() => {
+      const phases = ${JSON.stringify(phases)};
+      const msg = document.getElementById('boot-msg');
+      const es = new EventSource(${JSON.stringify(`/__preview/wait/${branch}`)});
+      const reload = () => { es.close(); setTimeout(() => location.reload(), 150); };
+      es.addEventListener('ready', reload);
+      es.addEventListener('failed', reload);
+      es.addEventListener('timeout', () => es.close());
+      es.addEventListener('phase', (e) => { if (phases[e.data]) msg.textContent = phases[e.data]; });
+    })();
+  </script>`
+      : '';
 
   const mask =
     'radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px))';
@@ -115,7 +138,7 @@ export async function handlePreviewBoot(
 <html lang="${escapeHtml(locale)}">
   <head>
     <meta charset="utf-8" />
-    ${bootable && !startError ? `<meta http-equiv="refresh" content="${REFRESH_SECONDS}" />` : ''}
+    ${bootable && !startError ? `<meta http-equiv="refresh" content="${FALLBACK_REFRESH_SECONDS}" />` : ''}
     <title>${t(locale, startError ? 'pages.preview.failedTitle' : 'pages.preview.startingTitle')}</title>
     <style>
       body {
@@ -148,25 +171,16 @@ export async function handlePreviewBoot(
         text-align: left;
       }
       a { color: #7ab7ff; }
-      .spin { position: relative; width: 48px; height: 48px; }
-      .spin__ring {
-        position: absolute;
-        inset: 0;
+      .spin {
+        width: 48px;
+        height: 48px;
         border-radius: 50%;
-        background: conic-gradient(rgba(122, 183, 255, 0), #7ab7ff);
+        background: conic-gradient(rgba(168, 130, 255, 0), #a882ff);
         -webkit-mask: ${mask};
         mask: ${mask};
-        animation: spin ${REFRESH_SECONDS}s linear infinite;
+        animation: spin ${SPIN_SECONDS}s linear infinite;
       }
       @keyframes spin { to { transform: rotate(1turn); } }
-      .spin__glyph {
-        position: absolute;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        color: #7ab7ff;
-        font: italic 700 1.1rem/1 Georgia, serif;
-      }
       .badge {
         width: 48px;
         height: 48px;
@@ -180,7 +194,7 @@ export async function handlePreviewBoot(
       .badge--warn { background: #3a2f12; color: #ffd479; }
     </style>
   </head>
-  <body>${body}</body>
+  <body>${body}${waitScript}</body>
 </html>`;
 
   return new Response(html, {

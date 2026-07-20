@@ -13,6 +13,7 @@ import {
   PREVIEW_COOKIE_NAME,
 } from '@/lib/previewCookie';
 import { BOOT_PATH_RE, cleanBootOrigin, handlePreviewBoot } from '@/lib/preview/bootPage';
+import { WAIT_PATH_RE, handlePreviewWait } from '@/lib/preview/waitStream';
 import { initRoutesFile } from '@/lib/preview/manager';
 import { getInternalToken } from '@/lib/internalToken';
 import { env } from '@/lib/env';
@@ -82,6 +83,19 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // (/__preview/boot/<branch>) is a fixed contract. Auth: CMS session or the
   // sidecar's HMAC preview cookie (requests arrive from preview hosts where
   // the better-auth cookie doesn't exist).
+  // SSE wait stream for the boot page (same auth as the boot page itself).
+  const waitMatch = WAIT_PATH_RE.exec(pathname);
+  if (waitMatch) {
+    const waitCookie = context.cookies.get(PREVIEW_COOKIE_NAME)?.value;
+    if (!context.locals.user && !(waitCookie && verifyPreviewCookie(waitCookie))) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return handlePreviewWait(waitMatch[1], context.request);
+  }
+
   const bootMatch = BOOT_PATH_RE.exec(pathname);
   if (bootMatch) {
     const url = new URL(context.request.url);
