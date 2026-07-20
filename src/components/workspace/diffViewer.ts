@@ -71,19 +71,21 @@ const renderOnion = (state: AppState, route: string): string => {
   const chatId = state.activeChatId!;
   const pct = state.workspace.diff.onionPercent;
   return `<div class="ws-onion" data-onion>
-      ${renderShot(shotUrl(chatId, route, 'before'), t(locale, 'workspace.diff.beforeRoute', { route }), 'ws-onion__before')}
-      ${renderShot(
-        shotUrl(chatId, route, 'after'),
-        t(locale, 'workspace.diff.afterRoute', { route }),
-        'ws-onion__after',
-        // top layer visible RIGHT of the slider — matches the after label
-        `clip-path: inset(0 0 0 ${pct}%);`,
-      )}
-      <div class="ws-onion__slider" data-action="ws-onion-handle" style="left: ${pct}%;">
-        <span class="ws-onion__grip">⇔</span>
+      <div class="ws-onion__canvas">
+        ${renderShot(shotUrl(chatId, route, 'before'), t(locale, 'workspace.diff.beforeRoute', { route }), 'ws-onion__before')}
+        ${renderShot(
+          shotUrl(chatId, route, 'after'),
+          t(locale, 'workspace.diff.afterRoute', { route }),
+          'ws-onion__after',
+          // top layer visible RIGHT of the slider — matches the after label
+          `clip-path: inset(0 0 0 ${pct}%);`,
+        )}
+        <div class="ws-onion__slider" data-action="ws-onion-handle" style="left: ${pct}%;">
+          <span class="ws-onion__grip">⇔</span>
+        </div>
+        <span class="ws-onion__label ws-onion__label--left">${escapeHtml(t(locale, 'workspace.diff.before'))}</span>
+        <span class="ws-onion__label ws-onion__label--right">${escapeHtml(t(locale, 'workspace.diff.after'))}</span>
       </div>
-      <span class="ws-onion__label ws-onion__label--left">${escapeHtml(t(locale, 'workspace.diff.before'))}</span>
-      <span class="ws-onion__label ws-onion__label--right">${escapeHtml(t(locale, 'workspace.diff.after'))}</span>
     </div>`;
 };
 

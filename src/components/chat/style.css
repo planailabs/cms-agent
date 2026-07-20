@@ -2110,7 +2110,14 @@ html.is-first-visit #app {
     overflow: auto;
   }
 
-  .ws-onion__before,
+  /* In-flow wrapper sized by the before-shot: the slider/after-layer anchor
+     to it, so the separator spans the FULL screenshot height and scrolls
+     with the content (top/bottom on the scroll container itself only cover
+     the first viewport). */
+  .ws-onion__canvas {
+    position: relative;
+  }
+
   .ws-onion__after {
     position: absolute;
     top: 0;
@@ -2131,10 +2138,10 @@ html.is-first-visit #app {
   }
 
   .ws-onion__grip {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    /* Sticky inside the full-height slider: stays mid-viewport while scrolling */
+    position: sticky;
+    top: calc(50% - 14px);
+    margin-left: -12.5px;
     width: 28px;
     height: 28px;
     border-radius: 999px;

@@ -143,7 +143,10 @@ const registerOnionSlider = (app: HTMLElement): void => {
     if (!dragging) return;
     const container = document.querySelector<HTMLElement>('[data-onion]');
     if (!container) return;
-    const rect = container.getBoundingClientRect();
+    // Measure the canvas, not the scroll container — the slider's left% is
+    // relative to the canvas, which excludes the scrollbar width.
+    const canvas = container.querySelector<HTMLElement>('.ws-onion__canvas') ?? container;
+    const rect = canvas.getBoundingClientRect();
     if (rect.width <= 0) return;
     const pct = Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100));
 

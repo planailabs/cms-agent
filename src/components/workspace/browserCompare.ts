@@ -50,18 +50,20 @@ export const renderBrowserCompare = (state: AppState): string => {
   const body =
     bc.mode === 'onion'
       ? `<div class="ws-onion" data-onion data-onion-target="browserCompare">
-          ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'before'), bc.a, 'ws-onion__before')}
-          ${renderShot(
-            shotUrl(branch, route, bc.a, bc.b, 'after'),
-            bc.b,
-            'ws-onion__after',
-            `clip-path: inset(0 0 0 ${bc.onionPercent}%);`,
-          )}
-          <div class="ws-onion__slider" data-action="ws-bc-onion-handle" style="left: ${bc.onionPercent}%;">
-            <span class="ws-onion__grip">⇔</span>
+          <div class="ws-onion__canvas">
+            ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'before'), bc.a, 'ws-onion__before')}
+            ${renderShot(
+              shotUrl(branch, route, bc.a, bc.b, 'after'),
+              bc.b,
+              'ws-onion__after',
+              `clip-path: inset(0 0 0 ${bc.onionPercent}%);`,
+            )}
+            <div class="ws-onion__slider" data-action="ws-bc-onion-handle" style="left: ${bc.onionPercent}%;">
+              <span class="ws-onion__grip">⇔</span>
+            </div>
+            <span class="ws-onion__label ws-onion__label--left">${escapeHtml(bc.a)}</span>
+            <span class="ws-onion__label ws-onion__label--right">${escapeHtml(bc.b)}</span>
           </div>
-          <span class="ws-onion__label ws-onion__label--left">${escapeHtml(bc.a)}</span>
-          <span class="ws-onion__label ws-onion__label--right">${escapeHtml(bc.b)}</span>
         </div>`
       : `<div class="ws-diff-highlight__stack">
           ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'after'), bc.b)}
