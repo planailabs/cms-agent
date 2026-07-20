@@ -8,7 +8,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/db';
 import { acquireTurnLock, broadcast, releaseTurnLock, withBranchLock } from './bus';
-import { emitChatState } from './chatState';
+import { emitChatState, emitChatStatesForBranch } from './chatState';
 import { handleChatMessage } from './handler';
 import {
   branchSha,
@@ -280,8 +280,7 @@ export async function revertExecution(opts: {
     data: { revertedBySha: revertSha },
   });
 
-  // Notify every chat on the branch
-  const chats = await prisma.chat.findMany({ where: { branchId: opts.branchId }, select: { id: true } });
-  for (const c of chats) emitChatState(c.id);
+  // Notify every chat on the branch (the revert moved the target)
+  emitChatStatesForBranch(opts.branchId);
   return revertSha;
 }

@@ -162,6 +162,22 @@ export async function buildChatState(
 }
 
 /**
+ * Emit snapshots for EVERY live chat on a branch — for changes that affect
+ * them all at once (the target branch moved: publish merge, revert), where
+ * per-chat facts like `targetAhead` go stale without their own event.
+ */
+export function emitChatStatesForBranch(branchId: string): void {
+  void prisma.chat
+    .findMany({ where: { branchId, archivedAt: null }, select: { id: true } })
+    .then((chats) => {
+      for (const c of chats) emitChatState(c.id);
+    })
+    .catch((err) => {
+      console.warn(`[chatState] branch emit for ${branchId} failed:`, err);
+    });
+}
+
+/**
  * Snapshot at the CURRENT seq (no bump) — the SSE connect replay. A client
  * that already applied this seq skips it; a fresh client applies it.
  */

@@ -79,10 +79,17 @@ export const getChatStateSeq = (chatId: string): number =>
 export const applyChatState = (
   snapshot: ChatStateSnapshot,
   clientId?: string,
-  opts?: { staleGuard?: number },
+  opts?: { staleGuard?: number; allowIdleDowngrade?: boolean },
 ): void => {
   const st = store.state;
   const guard = stateSeqByChat.get(snapshot.chatId);
+
+  // Stale sequenced snapshots are dropped ENTIRELY (sidebar included — a
+  // late event must not revert a fresher title/phase there either).
+  if (snapshot.seq !== 0) {
+    if (guard && guard.epoch === snapshot.epoch && snapshot.seq <= guard.seq) return;
+    stateSeqByChat.set(snapshot.chatId, { epoch: snapshot.epoch, seq: snapshot.seq });
+  }
 
   // Sidebar effects apply for ANY chat on this SSE channel (rename/archive
   // reach non-active viewers of the same chat list).
@@ -103,10 +110,7 @@ export const applyChatState = (
   }
   // seq 0 = history snapshot (unsequenced): applied unless live events
   // overtook the fetch (staleGuard); never recorded in the guard map.
-  if (snapshot.seq !== 0) {
-    if (guard && guard.epoch === snapshot.epoch && snapshot.seq <= guard.seq) return;
-    stateSeqByChat.set(snapshot.chatId, { epoch: snapshot.epoch, seq: snapshot.seq });
-  } else if (opts?.staleGuard !== undefined && (guard?.seq ?? 0) > opts.staleGuard) {
+  if (snapshot.seq === 0 && opts?.staleGuard !== undefined && (guard?.seq ?? 0) > opts.staleGuard) {
     return;
   }
 
@@ -186,11 +190,17 @@ export const applyChatState = (
       if (snapshot.lastError) {
         mc.phase = 'error';
         mc.error = snapshot.lastError;
-      } else if (mc.phase === 'question' || mc.phase === 'error') {
-        // Resolved elsewhere (another session answered / retried)
+      } else if (
+        mc.phase === 'question' ||
+        mc.phase === 'error' ||
+        // Reconnect resync: a 'done' lost in the SSE gap must not leave the
+        // spinner running forever — the server-wins path may downgrade.
+        (opts?.allowIdleDowngrade && mc.phase === 'waiting')
+      ) {
         mc.phase = 'idle';
         mc.clientPrompt = undefined;
         mc.error = undefined;
+        mc.streamingText = undefined;
       }
       mc.canContinue = false;
     } else if (snapshot.turnPhase === 'tool_pending' && mc.phase === 'idle') {
@@ -326,7 +336,9 @@ const applyHistoryResult = (
     applyChatState(
       result.state,
       undefined,
-      serverWins ? undefined : { staleGuard: opts.stateSeqAtStart ?? 0 },
+      serverWins
+        ? { allowIdleDowngrade: true } // reconnect: events in the gap are gone
+        : { staleGuard: opts.stateSeqAtStart ?? 0 },
     );
   }
 

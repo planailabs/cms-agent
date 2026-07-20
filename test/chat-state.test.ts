@@ -193,6 +193,37 @@ describe('streamed chat state', () => {
     }
   });
 
+  it('emitChatStatesForBranch reaches every live chat, skipping archived', async () => {
+    const { emitChatStatesForBranch } = await import('@/lib/agent/chatState');
+    const branch = await prisma.branch.findUniqueOrThrow({ where: { name: 'state-test-target' } });
+    await prisma.chat.deleteMany({ where: { workBranch: { in: ['c-statebr1', 'c-statebr2'] } } });
+    const live = await prisma.chat.create({
+      data: { branchId: branch.id, workBranch: 'c-statebr1', title: 'live' },
+    });
+    const archived = await prisma.chat.create({
+      data: { branchId: branch.id, workBranch: 'c-statebr2', title: 'gone', archivedAt: new Date() },
+    });
+
+    const got: string[] = [];
+    const removers = [live.id, archived.id].map((id) =>
+      addConnection(id, {
+        write: (event) => {
+          if (event === 'state') got.push(id);
+        },
+        end: () => {},
+      }),
+    );
+    try {
+      emitChatStatesForBranch(branch.id);
+      await expect.poll(() => got.length, { timeout: 5000 }).toBeGreaterThan(0);
+      await flush();
+      expect(got).toContain(live.id);
+      expect(got).not.toContain(archived.id);
+    } finally {
+      removers.forEach((r) => r());
+    }
+  });
+
   it('history returns the same snapshot the stream uses', async () => {
     const res = await historyGet({
       url: new URL(`http://localhost/api/chat/history?chatId=${chatId}`),

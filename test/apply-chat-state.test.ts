@@ -162,10 +162,22 @@ describe('applyChatState', () => {
     applyChatState(snap({ epoch: 'turn-1', seq: 5, turnPhase: 'tool_pending' }));
     expect(mc.canContinue).toBe(true);
 
-    // optimistic waiting is never downgraded by an idle snapshot
+    // optimistic waiting is never downgraded by an idle snapshot…
     mc.phase = 'waiting' as typeof mc.phase;
     applyChatState(snap({ epoch: 'turn-1', seq: 6 }));
     expect(mc.phase).toBe('waiting');
+
+    // …EXCEPT on reconnect resync (a lost 'done' must not spin forever)
+    applyChatState(snap({ epoch: 'turn-1', seq: 7 }), undefined, {
+      allowIdleDowngrade: true,
+    });
+    expect(mc.phase).toBe('idle');
+  });
+
+  it('drops stale sequenced snapshots entirely (sidebar included)', () => {
+    applyChatState(snap({ epoch: 'stale-side', seq: 5, title: 'Fresh' }));
+    applyChatState(snap({ epoch: 'stale-side', seq: 3, title: 'Old' }));
+    expect(store.state.branches[0].chats[0].title).toBe('Fresh');
   });
 
   it('ignores snapshots for chats that are not active beyond sidebar sync', () => {

@@ -14,7 +14,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { dbNull, prisma } from '@/lib/db';
 import { env } from '@/lib/env';
 import { broadcast, withBranchLock } from '@/lib/agent/bus';
-import { emitChatState } from '@/lib/agent/chatState';
+import { emitChatState, emitChatStatesForBranch } from '@/lib/agent/chatState';
 import { WorkflowError } from '@/lib/agent/workflow';
 import {
   abortMerge,
@@ -437,6 +437,9 @@ const mergeStep: AutomatismStep = {
         }),
       );
       deployLog(data)(`Merged into ${data.targetName} (${targetSha.slice(0, 8)}).`);
+      // The target moved — every chat on this branch just went targetAhead
+      // (their Sync button must appear without a reload).
+      emitChatStatesForBranch(data.targetBranchId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (!isConflictError(err)) {
