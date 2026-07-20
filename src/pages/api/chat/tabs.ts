@@ -10,6 +10,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { broadcast } from '@/lib/agent/bus';
+import { emitChatState } from '@/lib/agent/chatState';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -55,5 +56,6 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     update: { tabs, activeIndex },
   });
   broadcast(chatId, 'tabs_updated', { userId: user.id, tabs, activeIndex, clientId });
+  emitChatState(chatId, { clientId, tabs: { tabs, activeIndex, byUserId: user.id } });
   return json({ ok: true });
 };

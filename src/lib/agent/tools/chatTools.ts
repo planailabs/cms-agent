@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { broadcast } from '../bus';
+import { emitChatState } from '../chatState';
 import { registerTool } from './registry';
 
 export function registerChatTools(): void {
@@ -27,6 +28,7 @@ export function registerChatTools(): void {
         chatId: ctx.chatId,
         title,
       });
+      emitChatState(ctx.chatId);
       return JSON.stringify({ ok: true, title });
     },
   });

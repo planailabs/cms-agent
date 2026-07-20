@@ -23,6 +23,131 @@ export interface HistoryExecution {
   createdAt?: string;
 }
 
+/** Server-computed full chat snapshot (streamed-state plan phase 1) —
+ *  mirror of ChatStateSnapshot in src/lib/agent/chatState.ts. */
+export interface ChatStateSnapshot {
+  seq: number;
+  epoch: string;
+  chatId: string;
+  title: string;
+  kind: string;
+  archived: boolean;
+  workflowPhase: string;
+  branchId: string;
+  workBranch: string;
+  planJson: unknown;
+  executionSha: string | null;
+  executions: HistoryExecution[];
+  publication: {
+    id: string;
+    sha: string;
+    status: string;
+    log: string;
+    externalUrl: string | null;
+  } | null;
+  automatism: {
+    chatId: string;
+    automatismType: string;
+    status: string;
+    step: number;
+    steps: string[];
+    lastError: string | null;
+  } | null;
+  targetAhead: boolean;
+  tabs: { tabs: string[]; activeIndex: number; byUserId: string } | null;
+}
+
+/** Per-chat stale-drop guard for `state` events (epoch resets on server restart). */
+const stateSeqByChat = new Map<string, { epoch: string; seq: number }>();
+
+/**
+ * Apply a full server snapshot by plain replacement — the server always
+ * wins. Transcript messages and local UI state are untouched by design.
+ */
+export const applyChatState = (snapshot: ChatStateSnapshot, clientId?: string): void => {
+  const st = store.state;
+  if (snapshot.chatId !== st.activeChatId) return;
+  const guard = stateSeqByChat.get(snapshot.chatId);
+  // seq 0 = history snapshot (unsequenced): always apply, never recorded.
+  if (snapshot.seq !== 0) {
+    if (guard && guard.epoch === snapshot.epoch && snapshot.seq <= guard.seq) return;
+    stateSeqByChat.set(snapshot.chatId, { epoch: snapshot.epoch, seq: snapshot.seq });
+  }
+
+  st.workflowPhase = snapshot.workflowPhase as typeof st.workflowPhase;
+  st.activeBranchId = snapshot.branchId;
+  st.activeChatTitle = snapshot.title;
+  st.activeChatArchived = snapshot.archived;
+  for (const branch of st.branches) {
+    const c = branch.chats.find((x) => x.id === snapshot.chatId);
+    if (c) c.title = snapshot.title;
+  }
+
+  const ws = st.workspace;
+  ws.plan = (snapshot.planJson as typeof ws.plan) ?? null;
+  ws.executions = snapshot.executions.map((e) => ({
+    sha: e.sha,
+    summary: e.summary,
+    ...(e.revertedBySha ? { reverted: { revertSha: e.revertedBySha, by: '' } } : {}),
+  }));
+  ws.executionSha = snapshot.executionSha;
+  ws.targetAhead = snapshot.targetAhead;
+
+  const pub = snapshot.publication;
+  const status =
+    pub && (pub.status === 'running' || pub.status === 'succeeded' || pub.status === 'failed')
+      ? (pub.status as 'running' | 'succeeded' | 'failed')
+      : null;
+  const card =
+    pub && status
+      ? {
+          sha: pub.sha,
+          publicationId: pub.id,
+          lines: pub.log ? pub.log.split('\n').filter(Boolean).slice(-MAX_PUBLISH_LOG_LINES) : [],
+          status,
+          externalUrl: pub.externalUrl ?? undefined,
+        }
+      : null;
+  // Mid-run, live publish_log lines outrun the persisted log — keep them.
+  if (
+    card &&
+    ws.publish &&
+    ws.publish.publicationId === card.publicationId &&
+    card.status === 'running' &&
+    ws.publish.lines.length > card.lines.length
+  ) {
+    card.lines = ws.publish.lines;
+  }
+  ws.publish = card;
+
+  ws.automatism = snapshot.automatism
+    ? {
+        forChatId: snapshot.chatId,
+        automatismType: snapshot.automatism.automatismType,
+        status: snapshot.automatism.status,
+        step: snapshot.automatism.step,
+        steps: snapshot.automatism.steps,
+        lastError: snapshot.automatism.lastError,
+      }
+    : ws.automatism?.forChatId === snapshot.chatId
+      ? null
+      : ws.automatism;
+
+  store.notify();
+
+  // Per-user tabs — user/echo filtering lives in onRemoteTabsUpdated.
+  if (snapshot.tabs) {
+    void import('../../../workspace/tabsSync').then(({ onRemoteTabsUpdated }) =>
+      onRemoteTabsUpdated({
+        userId: snapshot.tabs!.byUserId,
+        tabs: snapshot.tabs!.tabs,
+        activeIndex: snapshot.tabs!.activeIndex,
+        clientId,
+      }),
+    );
+  }
+};
+
 export interface ChatHistoryResult {
   messages: StoredMessage[];
   phase?: string;
@@ -45,6 +170,8 @@ export interface ChatHistoryResult {
   branchId?: string;
   /** Approved plan (chat.planJson) — feeds the fullscreen plan modal. */
   planJson?: unknown;
+  /** Full snapshot (streamed-state phase 1) — becomes the only source in phase 2. */
+  state?: ChatStateSnapshot;
   /** Latest publication (GET /api/chat/history) — rehydrates the publish card. */
   publication?: {
     id: string;

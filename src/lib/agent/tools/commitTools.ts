@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { broadcast, withBranchLock } from '../bus';
+import { emitChatState } from '../chatState';
 import { commitExecution, revertCommit } from '@/lib/git/engine';
 import { chatCommitTrailer, chatGitIdentity } from '@/lib/git/identity';
 import { hasErrors, validateWorktree } from '@/lib/validate';
@@ -46,6 +47,7 @@ const gitCommitTool: ToolDef = {
       sha,
       summary: input.message,
     });
+    emitChatState(ctx.chatId);
     return JSON.stringify({ success: true, sha });
   },
 };
@@ -90,6 +92,7 @@ const gitRevertTool: ToolDef = {
         revertSha,
         by: identity.name,
       });
+      emitChatState(ctx.chatId);
     }
     return JSON.stringify({ success: true, revertSha });
   },

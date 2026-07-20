@@ -8,6 +8,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/db';
 import { acquireTurnLock, broadcast, releaseTurnLock, withBranchLock } from './bus';
+import { emitChatState } from './chatState';
 import { handleChatMessage } from './handler';
 import {
   branchSha,
@@ -82,6 +83,7 @@ function resumeTurn(chatId: string, actor: TransitionOpts['actor'], text: string
 
 function emitPhase(chatId: string, workflowPhase: WorkflowPhase, extra: object = {}): void {
   broadcast(chatId, 'phase_changed', { type: 'phase_changed', workflowPhase, ...extra });
+  emitChatState(chatId); // streamed-state phase 1: full snapshot alongside
 }
 
 // ─── Transitions ─────────────────────────────────────────────────────────────
@@ -282,6 +284,7 @@ export async function revertExecution(opts: {
       revertSha,
       by: opts.actor.name,
     });
+    emitChatState(c.id);
   }
   return revertSha;
 }

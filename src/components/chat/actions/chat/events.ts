@@ -20,6 +20,20 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
   const ws = store.state.workspace;
 
   switch (type) {
+    case 'state': {
+      // Streamed-state phase 1: full server snapshot, applied by replacement
+      // (legacy events below still run — they set the same values).
+      if (data.state) {
+        void import('./session').then(({ applyChatState }) =>
+          applyChatState(
+            data.state as import('./session').ChatStateSnapshot,
+            data.clientId as string | undefined,
+          ),
+        );
+      }
+      return true;
+    }
+
     case 'execution_committed': {
       const sha = data.sha as string;
       const summary = (data.summary as string) ?? '';

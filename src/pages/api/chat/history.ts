@@ -6,6 +6,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { buildChatState } from '@/lib/agent/chatState';
 
 export const GET: APIRoute = async ({ url }) => {
   const chatId = url.searchParams.get('chatId');
@@ -15,11 +16,7 @@ export const GET: APIRoute = async ({ url }) => {
 
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
-    include: {
-      messages: { orderBy: { ordinal: 'asc' } },
-      executions: { orderBy: { createdAt: 'asc' } },
-      branch: { select: { name: true } },
-    },
+    include: { messages: { orderBy: { ordinal: 'asc' } } },
   });
   if (!chat) {
     return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
@@ -83,60 +80,33 @@ export const GET: APIRoute = async ({ url }) => {
     });
   }
 
-  // Automatism step bar (deployment chats): step names come from the
-  // registered defs, so make sure the publisher registered them.
-  await import('@/lib/publish/publisher');
-  const { automatismStateFor } = await import('@/lib/automatism');
-  const automatism = await automatismStateFor(chatId);
-
-  // Sync button visibility: target moved ahead of the work branch. Unknown
-  // refs (fresh chat, work branch not created yet) count as up to date.
-  let targetAhead = false;
-  if (chat.kind === 'workflow') {
-    const { branchAheadCount } = await import('@/lib/git/engine');
-    targetAhead = await branchAheadCount(chat.workBranch, chat.branch.name)
-      .then((n) => n > 0)
-      .catch(() => false);
+  // Workflow/side state comes from the SAME builder the SSE `state` events
+  // use (streamed-state plan phase 1) — snapshot and stream cannot drift.
+  const state = await buildChatState(chatId);
+  if (!state) {
+    return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
   }
-
-  // Latest publication — rehydrates the publish card after reload. Only in
-  // the published phase: a request-changes round after a publish must not
-  // resurrect the previous round's card.
-  const publication =
-    chat.workflowPhase === 'published'
-      ? await prisma.publication.findFirst({
-          where: { chatId },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, sha: true, status: true, log: true, externalUrl: true },
-        })
-      : null;
 
   return new Response(
     JSON.stringify({
+      state,
+      // Flat fields kept for the phase-1 client — removed in phase 2.
       phase: chat.turnPhase,
-      kind: chat.kind,
-      title: chat.title,
-      archived: Boolean(chat.archivedAt),
-      workflowPhase: chat.workflowPhase,
-      branchId: chat.branchId,
-      planJson: chat.planJson,
+      kind: state.kind,
+      title: state.title,
+      archived: state.archived,
+      workflowPhase: state.workflowPhase,
+      branchId: state.branchId,
+      planJson: state.planJson,
       lastError: chat.lastError,
       // The pending client tool (propose_plan / finish_execution /
       // ask_question) — the client re-renders its card after reload.
       pendingQuestion: chat.turnPhase === 'waiting_for_answer' ? chat.pendingQuestion : undefined,
-      publication,
-      automatism,
-      targetAhead,
+      publication: state.publication,
+      automatism: state.automatism,
+      targetAhead: state.targetAhead,
       messages,
-      // For rehydrating workspace state after reload/chat switch — without
-      // these the Publish button waits forever for an execution_committed
-      // event that already happened.
-      executions: chat.executions.map((e) => ({
-        sha: e.sha,
-        summary: e.summary,
-        revertedBySha: e.revertedBySha,
-        createdAt: e.createdAt,
-      })),
+      executions: state.executions,
     }),
     { headers: { 'Content-Type': 'application/json' } },
   );

@@ -14,6 +14,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { dbNull, prisma } from '@/lib/db';
 import { env } from '@/lib/env';
 import { broadcast, withBranchLock } from '@/lib/agent/bus';
+import { emitChatState } from '@/lib/agent/chatState';
 import { WorkflowError } from '@/lib/agent/workflow';
 import {
   abortMerge,
@@ -126,6 +127,7 @@ export async function publish(
     throw new WorkflowError('The chat changed while you were deciding — reload and retry.');
   }
   broadcast(chat.id, 'phase_changed', { type: 'phase_changed', workflowPhase: 'published' });
+  emitChatState(chat.id);
 
   // The deployment chat hosts the automatism: its events, and the agent when
   // a deploy step fails. Archived together with the workflow chat when done.
@@ -267,6 +269,7 @@ registerAutomatism({
               type: 'phase_changed',
               workflowPhase: 'execute',
             });
+            emitChatState(data.workflowChatId);
           }
           throw new AutomatismFailure(
             tmsg('pull.conflicts', {
@@ -311,6 +314,7 @@ registerAutomatism({
             type: 'phase_changed',
             workflowPhase: data.restorePhase,
           });
+          emitChatState(data.workflowChatId);
           data.restorePhase = undefined;
         }
         await post(tmsg('pull.done', { target: data.targetName }));
@@ -354,6 +358,7 @@ async function failDeploy(data: DeployData, err: unknown): Promise<never> {
     ok: false,
     error: message,
   });
+  emitChatState(data.workflowChatId);
   throw new AutomatismFailure(
     tmsg('deploy.failed', {
       sha: (data.mergedSha ?? '').slice(0, 8),
@@ -410,6 +415,7 @@ async function recordDeploySuccess(
     sha,
     externalUrl: data.result?.externalUrl,
   });
+  emitChatState(data.workflowChatId);
 }
 
 const mergeStep: AutomatismStep = {
@@ -623,6 +629,8 @@ const finalizeStep: AutomatismStep = {
       type: 'chat_archived',
       chatId: data.deployChatId,
     });
+    emitChatState(data.workflowChatId);
+    emitChatState(data.deployChatId);
   },
 };
 
