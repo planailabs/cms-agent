@@ -6,7 +6,7 @@
 # If SANDBOX_DIR is already set (baked into the docker image), it is used
 # as-is. Otherwise the combined sandbox squashfs is built on the fly with nix
 # (`nix build .#sandbox`) — nix is a hard requirement in dev/test. The node
-# major is selected at runtime via SANDBOX_NODE_MAJOR (default 22); one
+# major is selected at runtime via SANDBOX_NODE_MAJOR (default 26); one
 # squashfs holds all three.
 set -euo pipefail
 

@@ -73,7 +73,7 @@ const schema = z.object({
   // Sandbox (bubblewrap jail for ALL site shell calls — install, dev server,
   // build, run_command). Requires the container to run with the targeted
   // seccomp profile (deploy/seccomp/cms-agent.json).
-  SANDBOX_NODE_MAJOR: z.enum(['22', '24', '26']).default('22'),
+  SANDBOX_NODE_MAJOR: z.enum(['22', '24', '26']).default('26'),
   // Keep network in the jail (needed for `npm install`); set 0 to isolate.
   SANDBOX_ALLOW_NETWORK: z
     .enum(['0', '1'])

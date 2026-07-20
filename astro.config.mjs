@@ -33,7 +33,7 @@ const mcpBridge = () => ({
       write: false,
       platform: 'node',
       format: 'cjs',
-      target: 'node22',
+      target: 'node26',
       // Prefer ESM builds: UMD entries (jsonc-parser) hide requires from
       // esbuild's static analysis and break at runtime in the jail.
       mainFields: ['module', 'main'],

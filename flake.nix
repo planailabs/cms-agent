@@ -179,7 +179,7 @@
           # dev`) for branch previews.
           dockerEntrypoint = pkgs.writeShellApplication {
             name = "cms-agent-container";
-            runtimeInputs = [ cms-agent proxy pkgs.git pkgs.nodejs_22 pkgs.coreutils pkgs.openssh ];
+            runtimeInputs = [ cms-agent proxy pkgs.git pkgs.nodejs_26 pkgs.coreutils pkgs.openssh ];
             text = ''
               for required in DATABASE_URL BASE_DOMAIN; do
                 if [ -z "''${!required:-}" ]; then
@@ -241,7 +241,7 @@
               pkgs.git
               # ssh for git remotes (git-push/github-ci deploy flows)
               pkgs.openssh
-              pkgs.nodejs_22
+              pkgs.nodejs_26
               pkgs.cacert
               pkgs.dockerTools.fakeNss
               pkgs.dockerTools.binSh
@@ -279,9 +279,9 @@
                 # as a deploy key with write access). Override with -e as usual.
                 "GIT_SSH_COMMAND=ssh -i /data/var/ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/data/var/ssh/known_hosts"
                 # Sandbox: baked env dirs (no nix at runtime); pick with
-                # SANDBOX_NODE_MAJOR (default 22). SANDBOX_ALLOW_NETWORK=1 keeps
+                # SANDBOX_NODE_MAJOR (default 26). SANDBOX_ALLOW_NETWORK=1 keeps
                 # network in the jail so `npm install` works.
-                "SANDBOX_NODE_MAJOR=22"
+                "SANDBOX_NODE_MAJOR=26"
                 "SANDBOX_ALLOW_NETWORK=1"
                 "SANDBOX_DIR=${sandboxDir}"
                 # Diff screenshots: use the bundled playwright browsers.
@@ -331,7 +331,7 @@
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
           packages = with pkgs; [
-            nodejs_22
+            nodejs_26
             pnpm
             cargo
             cargo-watch

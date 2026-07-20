@@ -1,11 +1,11 @@
-# cms-agent — Astro 6 SSR app (pnpm 11, nodejs 22, Prisma 7).
+# cms-agent — Astro 6 SSR app (pnpm 11, nodejs 26, Prisma 7).
 # Modeled on chat/package.nix; adds Prisma client generation (the app imports
 # src/generated/prisma which is gitignored) and a prisma-CLI wrapper for
 # `prisma migrate deploy` at deploy time (used by module.nix).
 {
   lib,
   stdenv,
-  nodejs_22,
+  nodejs_26,
   pnpm,
   pnpmConfigHook,
   fetchPnpmDeps,
@@ -48,7 +48,7 @@ stdenv.mkDerivation (finalAttrs: {
   };
 
   nativeBuildInputs = [
-    nodejs_22
+    nodejs_26
     pnpm
     pnpmConfigHook
     makeWrapper
@@ -182,7 +182,7 @@ stdenv.mkDerivation (finalAttrs: {
 
     mkdir -p $out/bin
 
-    makeWrapper ${lib.getExe nodejs_22} $out/bin/cms-agent \
+    makeWrapper ${lib.getExe nodejs_26} $out/bin/cms-agent \
       --add-flags "$out/share/cms-agent/server.mjs" \
       --set-default PRISMA_SCHEMA_ENGINE_BINARY "${prisma-engines_7}/bin/schema-engine" \
       --set-default CMS_PLUGINS_ROOT "$out/share/cms-agent"
@@ -190,7 +190,7 @@ stdenv.mkDerivation (finalAttrs: {
     # Prisma CLI against the packaged schema/migrations, e.g.:
     #   cms-agent-prisma migrate deploy
     # (needs DATABASE_URL in the environment; module.nix uses this as ExecStartPre)
-    makeWrapper ${lib.getExe nodejs_22} $out/bin/cms-agent-prisma \
+    makeWrapper ${lib.getExe nodejs_26} $out/bin/cms-agent-prisma \
       --chdir "$out/share/cms-agent" \
       --add-flags "$out/share/cms-agent/node_modules/prisma/build/index.js" \
       --set-default PRISMA_SCHEMA_ENGINE_BINARY "${prisma-engines_7}/bin/schema-engine" \
