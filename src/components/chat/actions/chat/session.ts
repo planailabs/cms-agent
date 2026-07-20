@@ -57,6 +57,9 @@ export interface ChatStateSnapshot {
   } | null;
   targetAhead: boolean;
   tabs: { tabs: string[]; activeIndex: number; byUserId: string } | null;
+  turnPhase: string;
+  pendingQuestion: { toolName: string; input: Record<string, unknown> } | null;
+  lastError: string | null;
 }
 
 /** Per-chat stale-drop guard for `state` events (epoch resets on server restart). */
@@ -166,6 +169,36 @@ export const applyChatState = (
       ? null
       : ws.automatism;
 
+  // Remote turn state: derive the composer/card phase from the snapshot.
+  // Conservative rule: never downgrade an optimistic 'waiting' (a POSTed
+  // turn the server hasn't persisted yet) — the done/error stream events
+  // own that edge; snapshots own question/error/crash-recovery.
+  const mc = st.chat?.aiChat;
+  if (mc) {
+    if (snapshot.turnPhase === 'waiting_for_answer' && snapshot.pendingQuestion) {
+      mc.phase = 'question';
+      mc.clientPrompt = {
+        toolName: snapshot.pendingQuestion.toolName,
+        input: snapshot.pendingQuestion.input ?? {},
+      };
+      mc.canContinue = false;
+    } else if (snapshot.turnPhase === 'idle') {
+      if (snapshot.lastError) {
+        mc.phase = 'error';
+        mc.error = snapshot.lastError;
+      } else if (mc.phase === 'question' || mc.phase === 'error') {
+        // Resolved elsewhere (another session answered / retried)
+        mc.phase = 'idle';
+        mc.clientPrompt = undefined;
+        mc.error = undefined;
+      }
+      mc.canContinue = false;
+    } else if (snapshot.turnPhase === 'tool_pending' && mc.phase === 'idle') {
+      // Interrupted mid-turn (server crash/restart) — offer Continue live
+      mc.canContinue = true;
+    }
+  }
+
   store.notify();
 
   // Per-user tabs — user/echo filtering lives in onRemoteTabsUpdated.
@@ -183,12 +216,8 @@ export const applyChatState = (
 
 export interface ChatHistoryResult {
   messages: StoredMessage[];
-  /** Turn phase (idle / waiting_for_answer / tool_pending). */
-  phase?: string;
-  pendingQuestion?: Record<string, unknown>;
-  lastError?: string | null;
-  /** Full workflow/side-state snapshot — the ONLY state source (streamed-
-   *  state plan): applied via applyChatState, same shape as SSE `state`. */
+  /** Full snapshot — the ONLY state source (workflow AND turn state):
+   *  applied via applyChatState, same shape as the SSE `state` event. */
   state?: ChatStateSnapshot;
 }
 
@@ -225,13 +254,7 @@ export const fetchAIChatHistory = async (chatId?: string): Promise<ChatHistoryRe
     if (messages.length > 0) {
       cacheAIChatMessages(messages, id);
     }
-    return {
-      messages,
-      phase: data.phase,
-      pendingQuestion: data.pendingQuestion,
-      lastError: data.lastError ?? null,
-      state: data.state as ChatStateSnapshot | undefined,
-    };
+    return { messages, state: data.state as ChatStateSnapshot | undefined };
   } catch {
     // Network error — fall through
   }
@@ -332,29 +355,8 @@ const applyHistoryResult = (
         });
       }
       store.state.chat!.userPrompt = result.messages[0]?.content ?? '';
-
-      // Restore pending question if server is waiting for an answer
-      if (result.phase === 'waiting_for_answer' && result.pendingQuestion) {
-        mc.phase = 'question';
-        // Backwards compat: old format has { type, question, options }, new has { toolName, input }
-        const pq = result.pendingQuestion;
-        if (pq.toolName) {
-          mc.clientPrompt = { toolName: pq.toolName as string, input: (pq.input ?? {}) as Record<string, unknown> };
-        } else {
-          mc.clientPrompt = { toolName: 'ask_question', input: pq };
-        }
-      } else if (result.lastError) {
-        // A previous turn failed — show the stored error with Retry
-        mc.phase = 'error';
-        mc.error = result.lastError;
-      } else if (result.phase === 'tool_pending') {
-        // Interrupted mid-turn (e.g. server restart) — offer Continue
-        mc.phase = 'idle';
-        mc.canContinue = true;
-      } else {
-        mc.phase = 'idle';
-      }
-
+      // Turn phase (question/error/canContinue) was derived from the
+      // snapshot by applyChatState above — remote turn state.
       store.notify();
   } else if (opts.mode === 'restore') {
     // Server has no history — auto-send greeting if configured

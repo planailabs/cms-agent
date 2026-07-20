@@ -96,6 +96,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         .updateMany({ where: { id: body.chatId }, data: { lastError: message } })
         .catch(() => {});
       broadcast(body.chatId, 'error', { type: 'error', message });
+      const { emitChatState } = await import('@/lib/agent/chatState');
+      emitChatState(body.chatId);
     } finally {
       releaseTurnLock(body.chatId, lockId);
     }

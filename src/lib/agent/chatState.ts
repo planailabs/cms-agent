@@ -64,6 +64,13 @@ export interface ChatStateSnapshot {
   } | null;
   targetAhead: boolean;
   tabs: ChatStateTabs | null;
+  /** Remote turn state (phase 5): the client DERIVES its composer/card
+   *  phase from these; stream events (question/done/error) remain the
+   *  transcript-ordered fast path. */
+  turnPhase: string;
+  /** Only present while turnPhase === 'waiting_for_answer'. */
+  pendingQuestion: { toolName: string; input: Record<string, unknown> } | null;
+  lastError: string | null;
 }
 
 // globalThis-backed for the same HMR reason as bus.ts: a split instance
@@ -145,6 +152,12 @@ export async function buildChatState(
     automatism,
     targetAhead,
     tabs,
+    turnPhase: chat.turnPhase,
+    pendingQuestion:
+      chat.turnPhase === 'waiting_for_answer' && chat.pendingQuestion
+        ? (chat.pendingQuestion as { toolName: string; input: Record<string, unknown> })
+        : null,
+    lastError: chat.lastError,
   };
 }
 

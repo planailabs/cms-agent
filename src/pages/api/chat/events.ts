@@ -19,10 +19,7 @@ export const GET: APIRoute = async ({ request, url }) => {
     });
   }
 
-  const chat = await prisma.chat.findUnique({
-    where: { id: chatId },
-    select: { turnPhase: true, pendingQuestion: true },
-  });
+  const chat = await prisma.chat.findUnique({ where: { id: chatId }, select: { id: true } });
   if (!chat) {
     return new Response(JSON.stringify({ error: 'Chat not found' }), {
       status: 404,
@@ -53,15 +50,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 
       const unsubscribe = addConnection(chatId, writer);
 
-      // Connect replay: the full authoritative snapshot (a client that
-      // already applied this seq skips it; a reconnecting one catches up).
+      // Connect replay: the full authoritative snapshot — including the
+      // remote turn state (pending question, lastError), so no bespoke
+      // replays are needed. A client that already applied this seq skips it.
       void currentChatState(chatId).then((state) => {
         if (state) writer.write('state', { type: 'state', state });
       });
-      if (chat.turnPhase === 'waiting_for_answer' && chat.pendingQuestion) {
-        const q = chat.pendingQuestion as { toolName: string; input: Record<string, unknown> };
-        writer.write('question', { type: 'question', toolName: q.toolName, input: q.input });
-      }
 
       const pingInterval = setInterval(() => {
         try {

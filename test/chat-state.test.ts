@@ -50,6 +50,22 @@ describe('streamed chat state', () => {
     expect(state!.executions).toHaveLength(2);
     // reverted execution is not publishable
     expect(state!.executionSha).toBe('c'.repeat(40));
+    // remote turn state: pending question only while waiting_for_answer
+    expect(state!.turnPhase).toBe('idle');
+    expect(state!.pendingQuestion).toBeNull();
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: {
+        turnPhase: 'waiting_for_answer',
+        pendingQuestion: { toolName: 'ask_question', input: { question: 'Q?' } },
+      },
+    });
+    expect((await buildChatState(chatId))!.pendingQuestion?.toolName).toBe('ask_question');
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: { turnPhase: 'idle' },
+    });
+    expect((await buildChatState(chatId))!.pendingQuestion).toBeNull();
     // publication only surfaces in the published phase
     const chat = await prisma.chat.findUniqueOrThrow({ where: { id: chatId } });
     await prisma.publication.create({
@@ -181,9 +197,9 @@ describe('streamed chat state', () => {
     const res = await historyGet({
       url: new URL(`http://localhost/api/chat/history?chatId=${chatId}`),
     } as never);
-    const body = (await res.json()) as { state: Record<string, unknown>; phase: string };
+    const body = (await res.json()) as { state: Record<string, unknown> };
     const rebuilt = await buildChatState(chatId);
     expect({ ...body.state, seq: 0 }).toEqual(JSON.parse(JSON.stringify({ ...rebuilt, seq: 0 })));
-    expect(body.phase).toBeDefined(); // turn phase stays a flat field
+    expect(body.state.turnPhase).toBeDefined(); // turn state lives IN the snapshot
   });
 });

@@ -77,6 +77,11 @@ explicitly in the PR/commit and justify it. Rules:
   patching or merging. `/api/chat/history` and the SSE connect replay use
   the same builder, so snapshot and stream cannot drift
   (`test/chat-state.test.ts` pins that parity).
+- The snapshot also carries the REMOTE TURN STATE (`turnPhase`,
+  `pendingQuestion`, `lastError`): the client DERIVES its composer/card
+  phase from it. One conservative rule — a snapshot never downgrades an
+  optimistic client 'waiting'; the `done`/`error`/`question` stream events
+  own that edge as transcript-ordered fast paths.
 - Only the transcript stream (`text_delta`, `question`, `done`, …) and
   append-only events (`publish_log`, `automatism` messages,
   `execution_committed` as the transcript card anchor) bypass snapshots.

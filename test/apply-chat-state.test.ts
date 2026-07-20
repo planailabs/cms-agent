@@ -29,6 +29,9 @@ const snap = (over: Partial<ChatStateSnapshot> = {}): ChatStateSnapshot => ({
   automatism: null,
   targetAhead: true,
   tabs: null,
+  turnPhase: 'idle',
+  pendingQuestion: null,
+  lastError: null,
   ...over,
 });
 
@@ -124,6 +127,45 @@ describe('applyChatState', () => {
     expect(store.state.workspace.previewTabs).toEqual(['/c/', '/d/']);
     expect(store.state.workspace.activeTabIndex).toBe(1);
     expect(store.state.workspace.previewRoute).toBe('/d/');
+  });
+
+  it('derives the remote turn state without downgrading optimistic waiting', () => {
+    const mc = { phase: 'idle', messages: [] } as never as NonNullable<
+      NonNullable<typeof store.state.chat>['aiChat']
+    >;
+    store.state.chat = { aiChat: mc } as never;
+
+    // pending question → question card (prompt from the snapshot)
+    applyChatState(
+      snap({
+        epoch: 'turn-1',
+        seq: 1,
+        turnPhase: 'waiting_for_answer',
+        pendingQuestion: { toolName: 'propose_plan', input: { summary: 's' } },
+      }),
+    );
+    expect(mc.phase).toBe('question');
+    expect(mc.clientPrompt?.toolName).toBe('propose_plan');
+
+    // resolved elsewhere → back to idle, prompt cleared
+    applyChatState(snap({ epoch: 'turn-1', seq: 2 }));
+    expect(mc.phase).toBe('idle');
+    expect(mc.clientPrompt).toBeUndefined();
+
+    // persisted failure → error with message
+    applyChatState(snap({ epoch: 'turn-1', seq: 3, lastError: 'boom' }));
+    expect(mc.phase).toBe('error');
+    expect(mc.error).toBe('boom');
+
+    // crash recovery: tool_pending with no client turn in flight → Continue
+    applyChatState(snap({ epoch: 'turn-1', seq: 4 }));
+    applyChatState(snap({ epoch: 'turn-1', seq: 5, turnPhase: 'tool_pending' }));
+    expect(mc.canContinue).toBe(true);
+
+    // optimistic waiting is never downgraded by an idle snapshot
+    mc.phase = 'waiting' as typeof mc.phase;
+    applyChatState(snap({ epoch: 'turn-1', seq: 6 }));
+    expect(mc.phase).toBe('waiting');
   });
 
   it('ignores snapshots for chats that are not active beyond sidebar sync', () => {

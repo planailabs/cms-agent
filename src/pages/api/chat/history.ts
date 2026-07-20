@@ -87,16 +87,8 @@ export const GET: APIRoute = async ({ url }) => {
     return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
   }
 
-  return new Response(
-    JSON.stringify({
-      state,
-      phase: chat.turnPhase,
-      lastError: chat.lastError,
-      // The pending client tool (propose_plan / finish_execution /
-      // ask_question) — the client re-renders its card after reload.
-      pendingQuestion: chat.turnPhase === 'waiting_for_answer' ? chat.pendingQuestion : undefined,
-      messages,
-    }),
-    { headers: { 'Content-Type': 'application/json' } },
-  );
+  // Turn state (phase, pending question, lastError) lives IN the snapshot.
+  return new Response(JSON.stringify({ state, messages }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
 };

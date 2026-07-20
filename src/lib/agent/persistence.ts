@@ -103,6 +103,9 @@ export function createDbAdapter(
                 : (pendingQuestion as object),
         },
       });
+      // Remote turn state: every phase persist streams a fresh snapshot
+      const { emitChatState } = await import('./chatState');
+      emitChatState(chatId);
     },
     async appendMsg(msg) {
       messages.push(msg);
