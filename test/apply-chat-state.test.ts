@@ -95,6 +95,37 @@ describe('applyChatState', () => {
     expect(store.state.workspace.diff.loaded).toBe(false);
   });
 
+  it('routes tabs only to the owning user and never to own echoes', async () => {
+    const { TABS_CLIENT_ID } = await import('@/components/workspace/tabsSync');
+    store.state.user = { id: 'u1' } as never;
+    const settle = () => new Promise((r) => setTimeout(r, 10));
+
+    // another user's tabs — ignored
+    applyChatState(
+      snap({ epoch: 'tabs-1', tabs: { tabs: ['/a/'], activeIndex: 0, byUserId: 'u2' } }),
+    );
+    await settle();
+    expect(store.state.workspace.previewTabs).toEqual(['/']);
+
+    // own echo (same clientId) — ignored
+    applyChatState(
+      snap({ epoch: 'tabs-2', tabs: { tabs: ['/b/'], activeIndex: 0, byUserId: 'u1' } }),
+      TABS_CLIENT_ID,
+    );
+    await settle();
+    expect(store.state.workspace.previewTabs).toEqual(['/']);
+
+    // own user, other session — applied
+    applyChatState(
+      snap({ epoch: 'tabs-3', tabs: { tabs: ['/c/', '/d/'], activeIndex: 1, byUserId: 'u1' } }),
+      'another-session',
+    );
+    await settle();
+    expect(store.state.workspace.previewTabs).toEqual(['/c/', '/d/']);
+    expect(store.state.workspace.activeTabIndex).toBe(1);
+    expect(store.state.workspace.previewRoute).toBe('/d/');
+  });
+
   it('ignores snapshots for chats that are not active beyond sidebar sync', () => {
     store.state.activeChatId = 'other-chat';
     applyChatState(snap({ epoch: 'inactive-test', title: 'Renamed' }));

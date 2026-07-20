@@ -70,6 +70,16 @@ describe('git_commit', () => {
   });
 
   it('commits dirty changes, records an Execution row, leaves worktree clean', async () => {
+    const { addConnection } = await import('@/lib/agent/bus');
+    const { buildChatState } = await import('@/lib/agent/chatState');
+    const stateEvents: Array<Record<string, unknown>> = [];
+    const removeConn = addConnection(CHAT_ID, {
+      write: (event, data) => {
+        if (event === 'state') stateEvents.push(data as Record<string, unknown>);
+      },
+      end: () => {},
+    });
+
     fs.writeFileSync(path.join(repo, 'about.md'), '# About\n');
     expect(await dirStatus(repo)).toEqual(['about.md']);
 
@@ -84,6 +94,17 @@ describe('git_commit', () => {
     const log = await simpleGit(repo).log();
     expect(log.latest?.message).toBe('add about page');
     expect(log.latest?.author_email).toBe('committer@example.com');
+
+    // The commit is followed by a full state snapshot matching a fresh build
+    // (poll: the first emit lazily loads the publisher module chain)
+    await expect.poll(() => stateEvents.length, { timeout: 5000 }).toBeGreaterThan(0);
+    removeConn();
+    const snap = stateEvents[stateEvents.length - 1].state as Record<string, unknown>;
+    expect(snap.executionSha).toBe(res.sha);
+    const rebuilt = await buildChatState(CHAT_ID);
+    expect(JSON.parse(JSON.stringify({ ...snap, seq: 0 }))).toEqual(
+      JSON.parse(JSON.stringify({ ...rebuilt, seq: 0 })),
+    );
   });
 
   it('is EXECUTE-only', async () => {

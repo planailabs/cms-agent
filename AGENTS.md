@@ -64,7 +64,12 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
 
 Workflow/side state (phase, branch, plan, executions, publish card,
 automatism, targetAhead, title/archived, tabs) is ONE server-computed
-snapshot: `buildChatState()` in `src/lib/agent/chatState.ts`. Rules:
+snapshot: `buildChatState()` in `src/lib/agent/chatState.ts`.
+
+**Implement ALL new synced state this way — bespoke SSE events only when a
+snapshot genuinely cannot express it** (append-only streams like log lines
+or transcript entries). If you think you need an exception, say so
+explicitly in the PR/commit and justify it. Rules:
 
 - After ANY mutation of synced state, call `emitChatState(chatId)` — never
   invent a bespoke SSE state event. The snapshot is broadcast in full and

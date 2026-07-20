@@ -3,7 +3,11 @@
  * coalescing + seq, and snapshot/stream/history parity — the property the
  * whole design rests on.
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { simpleGit } from 'simple-git';
 import { prisma } from '@/lib/db';
 import { addConnection } from '@/lib/agent/bus';
 import { buildChatState, emitChatState } from '@/lib/agent/chatState';
@@ -94,6 +98,80 @@ describe('streamed chat state', () => {
       expect(JSON.parse(JSON.stringify({ ...second, seq: 0 }))).toEqual(
         JSON.parse(JSON.stringify({ ...rebuilt, seq: 0 })),
       );
+    } finally {
+      remove();
+    }
+  });
+
+  it('every workflow transition emits a snapshot equal to a fresh build', async () => {
+    // Real repo so approvePlan's git prep (ensureBranch/branchSha) works.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-statetrans-'));
+    const repo = path.join(tmp, 'site');
+    fs.mkdirSync(repo);
+    const git = simpleGit(repo);
+    await git.init(['-b', 'state-test-target']);
+    await git.addConfig('user.name', 'T');
+    await git.addConfig('user.email', 't@t');
+    fs.writeFileSync(path.join(repo, 'index.md'), '# Home\n');
+    await git.add(['-A']);
+    await git.commit('init');
+    process.env.REPO_PATH = repo;
+    const { resetEnvCache } = await import('@/lib/env');
+    resetEnvCache();
+
+    await prisma.user.upsert({
+      where: { id: 'state-trans-user' },
+      create: { id: 'state-trans-user', name: 'Transitioner', email: 'trans@example.com' },
+      update: {},
+    });
+    const branch = await prisma.branch.findUniqueOrThrow({
+      where: { name: 'state-test-target' },
+    });
+    await prisma.chat.deleteMany({ where: { workBranch: 'c-statetrans1' } });
+    const chat = await prisma.chat.create({
+      data: {
+        branchId: branch.id,
+        workBranch: 'c-statetrans1',
+        title: 'Transition test',
+        workflowPhase: 'plan',
+        turnPhase: 'idle',
+        planJson: { summary: 'Approve me' },
+      },
+    });
+
+    const events: Array<Record<string, unknown>> = [];
+    const remove = addConnection(chat.id, {
+      write: (event, data) => {
+        if (event === 'state') events.push(data as Record<string, unknown>);
+      },
+      end: () => {},
+    });
+    const actor = { id: 'state-trans-user', name: 'Transitioner', email: 'trans@example.com' };
+    const lastSnapshot = () =>
+      events[events.length - 1].state as Record<string, unknown>;
+    const expectParity = async () => {
+      const rebuilt = await buildChatState(chat.id);
+      expect(JSON.parse(JSON.stringify({ ...lastSnapshot(), seq: 0 }))).toEqual(
+        JSON.parse(JSON.stringify({ ...rebuilt, seq: 0 })),
+      );
+    };
+
+    try {
+      const { approvePlan, requestChanges } = await import('@/lib/agent/workflow');
+
+      await approvePlan({ chatId: chat.id, actor });
+      await expect.poll(() => events.length, { timeout: 5000 }).toBeGreaterThan(0);
+      expect(lastSnapshot().workflowPhase).toBe('execute');
+      await expectParity();
+
+      // requestChanges is only legal from plan/preview — move to preview
+      // the direct way (toPreview needs a dirty worktree; out of scope here).
+      await prisma.chat.update({ where: { id: chat.id }, data: { workflowPhase: 'preview' } });
+      const before = events.length;
+      await requestChanges({ chatId: chat.id, actor, feedback: 'tweak it' });
+      await expect.poll(() => events.length, { timeout: 5000 }).toBeGreaterThan(before);
+      expect(lastSnapshot().workflowPhase).toBe('plan');
+      await expectParity();
     } finally {
       remove();
     }
