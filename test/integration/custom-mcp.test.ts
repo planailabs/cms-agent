@@ -74,4 +74,11 @@ describe('custom MCP bridge (sandboxed)', () => {
     const second = await custom.attachCustomMcps();
     expect(second[0]).toBe(first[0]);
   });
+
+  it('reports per-server rows for the capabilities modal', async () => {
+    const rows = await custom.customMcpCapabilities();
+    expect(rows).toEqual([
+      { name: 'echo', attached: true, tools: ['mcp_echo_echo', 'mcp_echo_env'] },
+    ]);
+  });
 });

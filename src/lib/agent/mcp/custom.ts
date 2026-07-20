@@ -149,6 +149,29 @@ export async function attachCustomMcps(): Promise<ExternalMcp[]> {
   return attachment ? [attachment] : [];
 }
 
+/** Must match the bridge's tool-name prefixing (bridgeEntry.ts safe()). */
+const safeName = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 24);
+
+/**
+ * Per-server attachment status for the capabilities modal: one row per
+ * configured server, with the (prefixed) tools the bridge exposes for it.
+ * Reuses the shared bridge — attaching is exactly what a chat turn does.
+ */
+export async function customMcpCapabilities(): Promise<
+  Array<{ name: string; attached: boolean; reason?: string; tools: string[] }>
+> {
+  const names = serverNames();
+  if (names.length === 0) return [];
+  const attachments = await attachCustomMcps();
+  const tools = attachments[0] ? [...attachments[0].toolNames] : [];
+  return names.map((name) => {
+    const own = tools.filter((t) => t.startsWith(`mcp_${safeName(name)}_`)).sort();
+    return own.length > 0
+      ? { name, attached: true, tools: own }
+      : { name, attached: false, reason: 'unavailable', tools: [] };
+  });
+}
+
 async function closeState(state: CustomMcpState): Promise<void> {
   try {
     await state.attachment;

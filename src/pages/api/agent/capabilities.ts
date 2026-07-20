@@ -12,6 +12,7 @@ import { ensureWorktree } from '@/lib/git/engine';
 import { loadBranchSkills, loadPluginRegistry } from '@/lib/agent/plugins';
 import { attachCodebaseMemory } from '@/lib/agent/mcp/codebaseMemory';
 import { attachContext7 } from '@/lib/agent/mcp/context7';
+import { customMcpCapabilities } from '@/lib/agent/mcp/custom';
 import type { ExternalMcp } from '@/lib/agent/mcp/external';
 import type { ToolContext } from '@/lib/agent/tools/registry';
 
@@ -93,6 +94,10 @@ export const GET: APIRoute = async ({ url }) => {
           tools: [],
         },
   );
+
+  // Admin-configured custom servers (VAR_DIR/mcp.json) — one row each,
+  // via the shared sandboxed bridge. [] without a config.
+  mcps.push(...(await customMcpCapabilities()));
 
   const hasKey = Boolean(process.env.CONTEXT7_API_KEY);
   const c7 = hasKey ? await probe(await attachContext7()) : null;
