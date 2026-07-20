@@ -2881,6 +2881,27 @@ html.is-first-visit #app {
   gap: 0;
 }
 
+/* ── Browser-compare side-by-side scroll mode ── */
+/* One scroll container, two shot columns; the content-align enhancer can
+   stretch matched sections so both columns scroll in lockstep. Unlayered:
+   it must beat the layered .ws-onion__after absolute positioning. */
+.ws-bc-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  display: flex;
+  gap: 2px;
+}
+
+.ws-bc-scroll .ws-onion__before,
+.ws-bc-scroll .ws-onion__after {
+  position: static;
+  flex: 1 1 50%;
+  min-width: 0;
+  align-self: flex-start;
+}
+
 /* ── Code browser modal ── */
 /* UNLAYERED on purpose: it must override the (unlayered) .ws-archive__list
    column layout — layered rules always lose to it. Tree pane on the LEFT,

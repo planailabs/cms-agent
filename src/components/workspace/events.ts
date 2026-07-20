@@ -412,7 +412,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-bc-overlay-toggle"]', () => toggleBrowserCompareOverlay());
   delegateEvent(app, 'click', '[data-action="ws-bc-mode"]', (_e, target) => {
     const mode = target.getAttribute('data-mode');
-    if (mode === 'highlight' || mode === 'onion') setBrowserCompareMode(mode);
+    if (mode === 'highlight' || mode === 'onion' || mode === 'scroll') setBrowserCompareMode(mode);
   });
   delegateEvent<Event>(app, 'change', '[data-action="ws-bc-browser"]', (_e, target) => {
     const which = target.getAttribute('data-which');

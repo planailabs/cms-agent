@@ -63,24 +63,39 @@ const buildColumn = (
   const col = document.createElement('div');
   col.className = 'ws-onion__segments';
   for (const seg of segs) {
-    const div = document.createElement('div');
-    div.className = 'ws-onion__segment';
     const top = side === 'a' ? seg.topA : seg.topB;
     const own = side === 'a' ? seg.hA : seg.hB;
-    div.style.height = `${seg.h * scale}px`;
+
     if (own > 0) {
-      // STRETCH the slice to the common row height (fy = h/own): matched
-      // content is rendered similarly large on both sides, so side-by-side
-      // scrolling lines up without blank gaps. Whole-image vertical scale +
-      // matching offset keeps the slice exactly filling the row.
-      const fy = seg.h / own;
+      // The slice itself, at natural scale — content is never distorted.
+      const div = document.createElement('div');
+      div.className = 'ws-onion__segment';
+      div.style.height = `${own * scale}px`;
       div.style.backgroundImage = `url("${src}")`;
-      div.style.backgroundSize = `100% ${naturalH * scale * fy}px`;
-      div.style.backgroundPosition = `0px ${-top * scale * fy}px`;
+      div.style.backgroundSize = `100% ${naturalH * scale}px`;
+      div.style.backgroundPosition = `0px ${-top * scale}px`;
+      col.appendChild(div);
     }
-    // own === 0 (pure insertion on the other side): nothing to stretch —
-    // the row stays blank on this side.
-    col.appendChild(div);
+
+    const fill = seg.h - own;
+    if (fill > 0) {
+      // Filler element re-using the page BACKGROUND: a thin strip at the
+      // slice's bottom edge (or just above the anchor for pure insertions)
+      // stretched to the gap height — the padding reads as continued
+      // background instead of a blank block.
+      const strip = Math.max(1, Math.min(4, own > 0 ? own : top));
+      const stripTop = own > 0 ? top + own - strip : Math.max(0, top - strip);
+      const filler = document.createElement('div');
+      filler.className = 'ws-onion__segment ws-onion__filler';
+      filler.style.height = `${fill * scale}px`;
+      if (own > 0 || top > 0) {
+        const fy = fill / strip;
+        filler.style.backgroundImage = `url("${src}")`;
+        filler.style.backgroundSize = `100% ${naturalH * scale * fy}px`;
+        filler.style.backgroundPosition = `0px ${-stripTop * scale * fy}px`;
+      }
+      col.appendChild(filler);
+    }
   }
   return col;
 };
@@ -111,7 +126,9 @@ async function enhance(container: HTMLElement, mode: 'height' | 'content'): Prom
     return;
   }
 
-  const width = container.clientWidth;
+  // Scale from the COLUMN width (equals the container in the stacked onion
+  // layout, half of it in the browser-compare side-by-side scroll mode).
+  const width = beforeWrap.clientWidth;
   const sig = `${beforeImg.src}|${afterImg.src}|${width}`;
   if (container.dataset.alignSig === sig) return;
 
@@ -122,7 +139,7 @@ async function enhance(container: HTMLElement, mode: 'height' | 'content'): Prom
     imageSize(afterImg.src),
   ]);
   // Re-check: render passes may have replaced the DOM while we fetched
-  if (!container.isConnected || container.clientWidth !== width) return;
+  if (!container.isConnected || beforeWrap.clientWidth !== width) return;
   if (!a || !b || !sizeA || !sizeB || sizeA.w <= 0) {
     cleanup(container); // no markers → height mode for this pair
     return;

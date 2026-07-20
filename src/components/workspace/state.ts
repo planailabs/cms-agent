@@ -79,7 +79,7 @@ export interface BrowserCompareState {
   a: BrowserName;
   b: BrowserName;
   /** Reuses the diff widgets: highlight (overlay) or onion (slider). */
-  mode: 'highlight' | 'onion';
+  mode: 'highlight' | 'onion' | 'scroll';
   overlayVisible: boolean;
   onionPercent: number;
 }

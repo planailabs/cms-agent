@@ -388,7 +388,7 @@ export const setBrowserCompareBrowser = (which: 'a' | 'b', name: BrowserName): v
   store.state.workspace.browserCompare[which] = name;
   store.notify();
 };
-export const setBrowserCompareMode = (mode: 'highlight' | 'onion'): void => {
+export const setBrowserCompareMode = (mode: 'highlight' | 'onion' | 'scroll'): void => {
   store.state.workspace.browserCompare.mode = mode;
   store.notify();
 };

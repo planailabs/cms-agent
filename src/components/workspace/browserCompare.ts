@@ -65,7 +65,17 @@ export const renderBrowserCompare = (state: AppState): string => {
             <span class="ws-onion__label ws-onion__label--right">${escapeHtml(bc.b)}</span>
           </div>
         </div>`
-      : `<div class="ws-diff-highlight__stack">
+      : bc.mode === 'scroll'
+        ? // Side-by-side scroll: ONE scroll container, both shots as columns.
+          // The onion wrapper classes let the content-align enhancer stretch
+          // matched sections, so the columns scroll in lockstep.
+          `<div class="ws-bc-scroll" data-onion>
+            ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'before'), bc.a, 'ws-onion__before')}
+            ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'after'), bc.b, 'ws-onion__after')}
+            <span class="ws-onion__label ws-onion__label--left">${escapeHtml(bc.a)}</span>
+            <span class="ws-onion__label ws-onion__label--right">${escapeHtml(bc.b)}</span>
+          </div>`
+        : `<div class="ws-diff-highlight__stack">
           ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'after'), bc.b)}
           ${bc.overlayVisible ? renderShot(shotUrl(branch, route, bc.a, bc.b, 'diff'), t(locale, 'workspace.bc.differences'), 'ws-shot--overlay') : ''}
         </div>`;
@@ -80,6 +90,8 @@ export const renderBrowserCompare = (state: AppState): string => {
           data-action="ws-bc-mode" data-mode="highlight">${escapeHtml(t(locale, 'workspace.diff.mode.highlight'))}</button>
         <button type="button" class="ws-mini-button ${bc.mode === 'onion' ? 'is-active' : ''}"
           data-action="ws-bc-mode" data-mode="onion">${escapeHtml(t(locale, 'workspace.diff.mode.onion'))}</button>
+        <button type="button" class="ws-mini-button ${bc.mode === 'scroll' ? 'is-active' : ''}"
+          data-action="ws-bc-mode" data-mode="scroll">${escapeHtml(t(locale, 'workspace.diff.mode.sideBySide'))}</button>
         ${
           bc.mode === 'highlight'
             ? `<button type="button" class="ws-mini-button ${bc.overlayVisible ? 'is-active' : ''}"
