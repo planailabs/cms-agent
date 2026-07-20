@@ -66,8 +66,25 @@ export interface ChatStateSnapshot {
   tabs: ChatStateTabs | null;
 }
 
-const EPOCH = randomUUID();
-const seqs = new Map<string, number>();
+// globalThis-backed for the same HMR reason as bus.ts: a split instance
+// would fork the seq counters and epoch mid-session.
+interface ChatStateGlobals {
+  epoch: string;
+  seqs: Map<string, number>;
+  scheduled: Map<string, EmitOptsInternal>;
+}
+interface EmitOptsInternal {
+  clientId?: string;
+  tabs?: ChatStateTabs;
+}
+const g = globalThis as unknown as { __cmsChatState?: ChatStateGlobals };
+const globals: ChatStateGlobals = (g.__cmsChatState ??= {
+  epoch: randomUUID(),
+  seqs: new Map(),
+  scheduled: new Map(),
+});
+const EPOCH = globals.epoch;
+const seqs = globals.seqs;
 
 export async function buildChatState(
   chatId: string,
@@ -147,7 +164,7 @@ interface EmitOpts {
   tabs?: ChatStateTabs;
 }
 
-const scheduled = new Map<string, EmitOpts>();
+const scheduled = globals.scheduled;
 
 /**
  * Broadcast a fresh snapshot to the chat's SSE subscribers. Coalesces

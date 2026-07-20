@@ -102,6 +102,12 @@ explicitly in the PR/commit and justify it. Rules:
   as plain answers.
 - Sandbox env binaries are absolute `/nix/store` symlinks that only resolve
   inside the jail — host-side checks must `lstat` the link, not follow it.
+- Server-side in-process singletons (SSE registry, locks, seq counters,
+  preview instances) MUST live on `globalThis` (see `bus.ts`,
+  `chatState.ts`, `preview/manager.ts`): Vite HMR reloads server modules in
+  dev, and a plain module-level map splits into old/new instances — live
+  SSE connections stay in the old one and broadcasts silently go nowhere
+  until a restart ("transition needs a reboot" class of bug).
   Keep both modes in `applyHistoryResult` when adding rehydrated state.
 - Async UI loads (modals, tab saves, history fetches) must be guarded
   against chat/selection switches mid-flight: seq token or captured-id

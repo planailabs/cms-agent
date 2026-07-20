@@ -219,12 +219,20 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
   if (dirty.length > 0) {
     const { chatCommitTrailer } = await import('@/lib/git/identity');
     const trailer = await chatCommitTrailer(chat.id, chat.title);
-    await withBranchLock(chat.workBranch, () =>
+    const syncSha = await withBranchLock(chat.workBranch, () =>
       commitExecution(chat.workBranch, `Sync team knowledge\n\n${trailer}`, {
         name: opts.actor.name,
         email: opts.actor.email,
       }),
     );
+    // Record it as an Execution — the snapshot's executionSha derives from
+    // Execution rows, and publish binds that sha against the branch HEAD;
+    // without the row the sync commit would make them diverge.
+    if (syncSha) {
+      await prisma.execution.create({
+        data: { chatId: chat.id, sha: syncSha, summary: 'Sync team knowledge' },
+      });
+    }
   }
 
   // Preview/publish sha = work-branch HEAD when it has commits over the target
