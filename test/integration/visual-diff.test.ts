@@ -82,4 +82,17 @@ describe.skipIf(!available)('visual diff', () => {
     const again = await diffRoute('vdiff-branch', '/about/');
     expect(again.changedPixels).toBe(result.changedPixels);
   }, 240_000);
+
+  it('single-flights concurrent requests for the same uncached pair', async () => {
+    const { diffRoute } = await import('@/lib/diff/screenshot');
+    // '/' is uncached here — without single-flight, parallel runs interleave
+    // writes into the same PNGs and pngjs throws mid-read.
+    const results = await Promise.all([
+      diffRoute('vdiff-branch', '/'),
+      diffRoute('vdiff-branch', '/'),
+      diffRoute('vdiff-branch', '/'),
+    ]);
+    expect(results[1]).toBe(results[0]); // the SAME promise result object
+    expect(results[2].changedPixels).toBe(results[0].changedPixels);
+  }, 240_000);
 });

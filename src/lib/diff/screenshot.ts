@@ -107,6 +107,24 @@ function padTo(png: PNG, width: number, height: number): PNG {
 }
 
 /**
+ * Single-flight per cache key: the compare UI fetches before/after/diff (and
+ * markers) CONCURRENTLY — on a cache miss every request used to start its
+ * own screenshot run into the SAME files, interleaving writes with reads
+ * (pngjs: "unrecognised content at end of stream"). globalThis-backed so a
+ * dev HMR reload cannot split the map (see AGENTS.md singleton rule).
+ */
+const gsf = globalThis as unknown as { __cmsShotFlight?: Map<string, Promise<DiffResult>> };
+const inFlight = (gsf.__cmsShotFlight ??= new Map());
+
+function singleFlight(key: string, run: () => Promise<DiffResult>): Promise<DiffResult> {
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+  const p = run().finally(() => inFlight.delete(key));
+  inFlight.set(key, p);
+  return p;
+}
+
+/**
  * Produce before/after/diff PNGs for a route. Boots both preview instances
  * if needed. Cached per commit pair.
  */
@@ -124,25 +142,27 @@ export async function diffRoute(branch: string, route: string, base?: string): P
   };
   const metaFile = path.join(dir, `${key}-meta.json`);
 
-  if (fs.existsSync(metaFile)) {
-    const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8')) as DiffResult;
-    if (Object.values(files).every((f) => fs.existsSync(f))) return meta;
-  }
+  return singleFlight(key, async () => {
+    if (fs.existsSync(metaFile)) {
+      const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8')) as DiffResult;
+      if (Object.values(files).every((f) => fs.existsSync(f))) return meta;
+    }
 
-  const [mainInstance, branchInstance] = await Promise.all([
-    ensureInstance(main),
-    ensureInstance(branch),
-  ]);
+    const [mainInstance, branchInstance] = await Promise.all([
+      ensureInstance(main),
+      ensureInstance(branch),
+    ]);
 
-  await Promise.all([
-    screenshot(mainInstance.port, route, files.before),
-    screenshot(branchInstance.port, route, files.after),
-  ]);
+    await Promise.all([
+      screenshot(mainInstance.port, route, files.before),
+      screenshot(branchInstance.port, route, files.after),
+    ]);
 
-  const { changed, total } = pixelDiff(files.before, files.after, files.diff);
-  const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
-  fs.writeFileSync(metaFile, JSON.stringify(result));
-  return result;
+    const { changed, total } = pixelDiff(files.before, files.after, files.diff);
+    const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
+    fs.writeFileSync(metaFile, JSON.stringify(result));
+    return result;
+  });
 }
 
 /**
@@ -167,18 +187,21 @@ export async function diffBrowsers(
     diff: path.join(dir, `${key}-diff.png`),
   };
   const metaFile = path.join(dir, `${key}-meta.json`);
-  if (fs.existsSync(metaFile) && Object.values(files).every((f) => fs.existsSync(f))) {
-    return JSON.parse(fs.readFileSync(metaFile, 'utf8')) as DiffResult;
-  }
 
-  const instance = await ensureInstance(branch);
-  await Promise.all([
-    screenshot(instance.port, route, files.before, browserA),
-    screenshot(instance.port, route, files.after, browserB),
-  ]);
+  return singleFlight(key, async () => {
+    if (fs.existsSync(metaFile) && Object.values(files).every((f) => fs.existsSync(f))) {
+      return JSON.parse(fs.readFileSync(metaFile, 'utf8')) as DiffResult;
+    }
 
-  const { changed, total } = pixelDiff(files.before, files.after, files.diff);
-  const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
-  fs.writeFileSync(metaFile, JSON.stringify(result));
-  return result;
+    const instance = await ensureInstance(branch);
+    await Promise.all([
+      screenshot(instance.port, route, files.before, browserA),
+      screenshot(instance.port, route, files.after, browserB),
+    ]);
+
+    const { changed, total } = pixelDiff(files.before, files.after, files.diff);
+    const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
+    fs.writeFileSync(metaFile, JSON.stringify(result));
+    return result;
+  });
 }
