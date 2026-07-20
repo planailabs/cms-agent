@@ -7,6 +7,7 @@
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState, WorkflowPhase } from '../chat/app/state';
+import { currentPlan } from './planModal';
 
 // ── Branch switcher + chat list ──────────────────────────────────────────
 
@@ -185,12 +186,18 @@ export const renderPhaseBar = (state: AppState): string => {
           ${escapeHtml(t(locale, syncing ? 'workspace.phase.syncing' : 'workspace.phase.sync'))}
         </button>`
       : '';
-  let actions = `<div class="ws-phase-actions">${syncButton}</div>`;
+  // Plan button — visible in every phase (archived chats included) as soon
+  // as a plan exists; opens the fullscreen plan modal.
+  const planButton = currentPlan(state)
+    ? `<button type="button" class="ws-mini-button" data-action="ws-plan-open"
+        title="${escapeHtml(t(locale, 'chat.plan.view'))}">${escapeHtml(t(locale, 'chat.plan.viewButton'))}</button>`
+    : '';
+  let actions = `<div class="ws-phase-actions">${planButton}${syncButton}</div>`;
   if (current === 'preview') {
     const publishing = state.workspace.publish?.status === 'running';
     const hasSha = Boolean(state.workspace.executionSha);
     actions = `<div class="ws-phase-actions">
-        ${syncButton}
+        ${planButton}${syncButton}
         <button type="button" class="ws-mini-button ws-mini-button--primary" data-action="ws-publish"
           ${!hasSha || publishing ? 'disabled' : ''}
           title="${hasSha ? escapeHtml(t(locale, 'workspace.phase.publishSha', { sha: state.workspace.executionSha!.slice(0, 8) })) : escapeHtml(t(locale, 'workspace.phase.waitingForCommit'))}">

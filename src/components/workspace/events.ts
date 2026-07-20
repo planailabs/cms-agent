@@ -45,6 +45,7 @@ import {
 import { openArchive, closeArchive, deleteArchivedChat, openArchivedChat } from './archive';
 import { openGitModal, closeGitModal, loadGitCommits, selectGitCommit, backToGitList } from './gitModal';
 import { openCapsModal, closeCapsModal, loadCapabilities } from './capsModal';
+import { openPlanModal, closePlanModal } from './planModal';
 import type { DiffViewMode, PageContextElement, PageContextSelection } from './state';
 
 const SIDEBAR_MIN_WIDTH = 300;
@@ -301,6 +302,8 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
 
   // Capabilities modal (skills + MCP status)
   delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => openCapsModal());
+  delegateEvent(app, 'click', '[data-action="ws-plan-open"]', () => openPlanModal());
+  delegateEvent(app, 'click', '[data-action="ws-plan-close"]', () => closePlanModal());
   delegateEvent(app, 'click', '[data-action="ws-caps-close"]', () => closeCapsModal());
   delegateEvent<Event>(app, 'change', '[data-action="ws-caps-chat"]', (_e, target) => {
     void loadCapabilities((target as HTMLSelectElement).value || null);

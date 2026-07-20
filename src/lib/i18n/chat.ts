@@ -10,6 +10,9 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.toolRunning': 'running…',
     // Plan approval card
     'chat.plan.title': 'Proposed plan',
+    'chat.plan.view': 'View the plan in fullscreen',
+    'chat.plan.viewButton': 'Plan',
+    'chat.plan.none': 'No plan has been proposed in this chat yet.',
     'chat.plan.risk': 'risk: {risk}',
     'chat.plan.steps': 'Steps',
     'chat.plan.files': 'Files',
@@ -67,6 +70,9 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.toolRunning': 'läuft…',
     // Plan approval card
     'chat.plan.title': 'Vorgeschlagener Plan',
+    'chat.plan.view': 'Plan im Vollbild ansehen',
+    'chat.plan.viewButton': 'Plan',
+    'chat.plan.none': 'In diesem Chat wurde noch kein Plan vorgeschlagen.',
     'chat.plan.risk': 'Risiko: {risk}',
     'chat.plan.steps': 'Schritte',
     'chat.plan.files': 'Dateien',

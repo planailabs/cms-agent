@@ -43,6 +43,8 @@ export interface ChatHistoryResult {
   archived?: boolean;
   workflowPhase?: string;
   branchId?: string;
+  /** Approved plan (chat.planJson) — feeds the fullscreen plan modal. */
+  planJson?: unknown;
   /** Latest publication (GET /api/chat/history) — rehydrates the publish card. */
   publication?: {
     id: string;
@@ -174,6 +176,10 @@ const applyHistoryResult = (
       store.state.workflowPhase = result.workflowPhase as typeof store.state.workflowPhase;
     }
     if (result.branchId) store.state.activeBranchId = result.branchId;
+    // Server truth in both modes — the plan only changes via server-side
+    // transitions (approval persists it). Keeps it viewable in every phase.
+    store.state.workspace.plan =
+      (result.planJson as typeof store.state.workspace.plan) ?? null;
     store.notify();
   }
 

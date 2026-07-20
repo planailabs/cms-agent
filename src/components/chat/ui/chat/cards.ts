@@ -6,19 +6,11 @@
 import { escapeHtml } from '../../utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState, ChatState } from '../../app/state';
+import type { ProposedPlan } from '../../../workspace/state';
 
 type AiChat = NonNullable<ChatState['aiChat']>;
 
 // ── Plan approval card (question: propose_plan) ─────────────────────────
-
-interface ProposePlanInput {
-  summary?: string;
-  steps?: string[];
-  files?: Array<{ path: string; action: string; reason: string }>;
-  pages?: Array<{ url: string; expectedEffect: string }>;
-  risk?: string;
-  questions?: string[];
-}
 
 const RISK_CLASSES: Record<string, string> = {
   content: 'ws-badge--ok',
@@ -27,11 +19,15 @@ const RISK_CLASSES: Record<string, string> = {
   dependency: 'ws-badge--danger',
 };
 
-const renderPlanApprovalCard = (mc: AiChat): string => {
-  if (mc.phase !== 'question' || mc.clientPrompt?.toolName !== 'propose_plan') return '';
-  const locale = uiLocale();
-  const input = mc.clientPrompt.input as ProposePlanInput;
+/** Risk badge for a plan — shared with the fullscreen plan modal. */
+export const renderPlanRiskBadge = (input: ProposedPlan, locale: string): string => {
+  const risk = input.risk ?? 'content';
+  return `<span class="ws-badge ${RISK_CLASSES[risk] ?? ''}">${t(locale, 'chat.plan.risk', { risk: escapeHtml(risk) })}</span>`;
+};
 
+/** Plan body sections (summary/steps/files/pages/questions) — shared between
+ *  the approval card and the fullscreen plan modal. */
+export const renderPlanSections = (input: ProposedPlan, locale: string): string => {
   const steps = (input.steps ?? [])
     .map((s) => `<li>${escapeHtml(s)}</li>`)
     .join('');
@@ -50,19 +46,28 @@ const renderPlanApprovalCard = (mc: AiChat): string => {
   const questions = (input.questions ?? [])
     .map((q) => `<li>${escapeHtml(q)}</li>`)
     .join('');
-  const risk = input.risk ?? 'content';
 
-  return `<div class="ws-card" data-card="plan-approval">
-      <div class="ws-card__header">
-        <span class="ws-card__title">${escapeHtml(t(locale, 'chat.plan.title'))}</span>
-        <span class="ws-badge ${RISK_CLASSES[risk] ?? ''}">${t(locale, 'chat.plan.risk', { risk: escapeHtml(risk) })}</span>
-      </div>
-      ${input.summary ? `<p class="ws-card__summary">${escapeHtml(input.summary)}</p>` : ''}
+  return `${input.summary ? `<p class="ws-card__summary">${escapeHtml(input.summary)}</p>` : ''}
       ${steps ? `<div class="ws-card__section"><span class="ws-card__label">${escapeHtml(t(locale, 'chat.plan.steps'))}</span><ol class="ws-card__list ws-card__list--ordered">${steps}</ol></div>` : ''}
       ${files ? `<div class="ws-card__section"><span class="ws-card__label">${escapeHtml(t(locale, 'chat.plan.files'))}</span>
         <table class="ws-table"><thead><tr><th>${escapeHtml(t(locale, 'chat.plan.path'))}</th><th>${escapeHtml(t(locale, 'chat.plan.action'))}</th><th>${escapeHtml(t(locale, 'chat.plan.reason'))}</th></tr></thead><tbody>${files}</tbody></table></div>` : ''}
       ${pages ? `<div class="ws-card__section"><span class="ws-card__label">${escapeHtml(t(locale, 'chat.plan.pages'))}</span><ul class="ws-card__list">${pages}</ul></div>` : ''}
-      ${questions ? `<div class="ws-card__section"><span class="ws-card__label">${escapeHtml(t(locale, 'chat.plan.openQuestions'))}</span><ul class="ws-card__list">${questions}</ul></div>` : ''}
+      ${questions ? `<div class="ws-card__section"><span class="ws-card__label">${escapeHtml(t(locale, 'chat.plan.openQuestions'))}</span><ul class="ws-card__list">${questions}</ul></div>` : ''}`;
+};
+
+const renderPlanApprovalCard = (mc: AiChat): string => {
+  if (mc.phase !== 'question' || mc.clientPrompt?.toolName !== 'propose_plan') return '';
+  const locale = uiLocale();
+  const input = mc.clientPrompt.input as ProposedPlan;
+
+  return `<div class="ws-card" data-card="plan-approval">
+      <div class="ws-card__header">
+        <span class="ws-card__title">${escapeHtml(t(locale, 'chat.plan.title'))}</span>
+        ${renderPlanRiskBadge(input, locale)}
+        <button type="button" class="ws-mini-button" data-action="ws-plan-open"
+          title="${escapeHtml(t(locale, 'chat.plan.view'))}" aria-label="${escapeHtml(t(locale, 'chat.plan.view'))}">⛶</button>
+      </div>
+      ${renderPlanSections(input, locale)}
       <div class="ws-card__actions">
         <button type="button" class="chat-cta-button ws-cta--primary" data-action="ws-approve-plan">${escapeHtml(t(locale, 'chat.plan.approve'))}</button>
         <button type="button" class="chat-cta-button" data-action="ws-request-changes">${escapeHtml(t(locale, 'chat.plan.requestChanges'))}</button>

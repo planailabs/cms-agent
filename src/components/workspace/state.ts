@@ -125,6 +125,16 @@ export interface CapabilitySkillRow {
 }
 
 /** An MCP row in the capabilities modal. */
+/** propose_plan input / chat.planJson shape (structured plan). */
+export interface ProposedPlan {
+  summary?: string;
+  steps?: string[];
+  files?: Array<{ path: string; action: string; reason: string }>;
+  pages?: Array<{ url: string; expectedEffect: string }>;
+  risk?: string;
+  questions?: string[];
+}
+
 export interface CapabilityMcpRow {
   name: string;
   attached: boolean;
@@ -195,6 +205,11 @@ export interface WorkspaceState {
   /** Element picker armed (waiting for a click inside the preview). */
   pickerActive: boolean;
 
+  /** Approved plan (chat.planJson from history / captured on approval) —
+   *  viewable in every phase, archived chats included. */
+  plan: ProposedPlan | null;
+  planModalOpen: boolean;
+
   /** Sha to publish — from phase_changed.executionSha / execution_committed. */
   executionSha: string | null;
   /** Committed-execution cards shown in the chat. */
@@ -262,6 +277,8 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   previewTabIds: [crypto.randomUUID()],
   activeTabIndex: 0,
   pickerActive: false,
+  plan: null,
+  planModalOpen: false,
   executionSha: null,
   executions: [],
   publish: null,
@@ -313,6 +330,8 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.previewTabs = ['/'];
   ws.previewTabIds = [crypto.randomUUID()];
   ws.activeTabIndex = 0;
+  ws.plan = null;
+  ws.planModalOpen = false;
   ws.executionSha = null;
   ws.executions = [];
   ws.publish = null;

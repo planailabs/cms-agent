@@ -70,6 +70,12 @@ const enterWaiting = (): void => {
 export const approvePlanAction = async (): Promise<void> => {
   const chatId = store.state.activeChatId;
   if (!chatId) return;
+  // Keep the plan viewable after the card disappears (server persists it as
+  // chat.planJson on this transition; capture the same input client-side).
+  const mc = store.state.chat?.aiChat;
+  if (mc?.clientPrompt?.toolName === 'propose_plan') {
+    store.state.workspace.plan = mc.clientPrompt.input as typeof store.state.workspace.plan;
+  }
   const res = await postJson(`/api/chats/${encodeURIComponent(chatId)}/approve-plan`, {});
   if (res.ok) enterWaiting();
 };

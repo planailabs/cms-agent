@@ -23,6 +23,7 @@ import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
 import { renderArchiveModal } from '../workspace/archive';
 import { renderGitModal } from '../workspace/gitModal';
 import { renderCapsModal } from '../workspace/capsModal';
+import { renderPlanModal } from '../workspace/planModal';
 import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
@@ -157,6 +158,7 @@ const initApp = () => {
         renderArchiveModal(state) +
         renderGitModal(state) +
         renderCapsModal(state) +
+        renderPlanModal(state) +
         renderInputModal(state);
       if (overlayRegion.innerHTML !== overlayMarkup) {
         overlayRegion.innerHTML = overlayMarkup;
