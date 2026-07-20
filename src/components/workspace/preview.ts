@@ -89,8 +89,3 @@ export const renderPreviewToolbar = (state: AppState): string => {
       </div>`;
 };
 
-export const renderPreviewFrame = (state: AppState): string => {
-  const branch = previewBranchName(state);
-  const src = branchPreviewUrl(branch, '/');
-  return `<iframe id="preview-iframe" src="${escapeHtml(src)}" title="${escapeHtml(t(uiLocale(), 'workspace.preview.frameTitle', { branch }))}"></iframe>`;
-};

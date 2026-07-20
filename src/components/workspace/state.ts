@@ -186,6 +186,9 @@ export interface WorkspaceState {
   previewRoute: string;
   /** Open preview tabs (routes); the active one mirrors previewRoute. */
   previewTabs: string[];
+  /** Client-only stable ids parallel to previewTabs — they key the per-tab
+   *  iframes, so reorders/closes never remount (= reload) other tabs. */
+  previewTabIds: string[];
   activeTabIndex: number;
   /** Element picker armed (waiting for a click inside the preview). */
   pickerActive: boolean;
@@ -254,6 +257,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   branchListOpen: false,
   previewRoute: '/',
   previewTabs: ['/'],
+  previewTabIds: [crypto.randomUUID()],
   activeTabIndex: 0,
   pickerActive: false,
   executionSha: null,
@@ -305,6 +309,7 @@ export const createInitialBrowserCompareState = (): BrowserCompareState => ({
 export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.previewRoute = '/';
   ws.previewTabs = ['/'];
+  ws.previewTabIds = [crypto.randomUUID()];
   ws.activeTabIndex = 0;
   ws.executionSha = null;
   ws.executions = [];

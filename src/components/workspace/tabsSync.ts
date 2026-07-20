@@ -23,12 +23,12 @@ export const loadPreviewRoute = (route: string): void => {
 const applyTabs = (tabs: string[], activeIndex: number): void => {
   const ws = store.state.workspace;
   ws.previewTabs = tabs.slice(0, 50);
+  // Fresh ids: a wholesale tab replacement remounts all per-tab iframes
+  // (syncPreviewFrames), which also loads each tab's saved route.
+  ws.previewTabIds = ws.previewTabs.map(() => crypto.randomUUID());
   ws.activeTabIndex = Math.min(Math.max(0, activeIndex), ws.previewTabs.length - 1);
-  const route = ws.previewTabs[ws.activeTabIndex] ?? '/';
-  const changed = ws.previewRoute !== route;
-  ws.previewRoute = route;
+  ws.previewRoute = ws.previewTabs[ws.activeTabIndex] ?? '/';
   store.notify();
-  if (changed) loadPreviewRoute(route);
 };
 
 // ── Save (debounced) ─────────────────────────────────────────────────────────

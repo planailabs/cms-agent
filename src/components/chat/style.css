@@ -1503,16 +1503,26 @@ html.is-first-visit #app {
   }
 
   .ws-preview__frame {
+    position: relative;
     flex: 1;
     min-height: 0;
     background: #fff;
   }
 
+  /* Per-tab iframes are stacked; inactive ones are only VISUALLY hidden
+     (visibility, not display/remount) so their documents stay loaded. */
   .ws-preview__frame iframe {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     border: 0;
     display: block;
+  }
+
+  .ws-preview__frame iframe:not(.is-active) {
+    visibility: hidden;
+    pointer-events: none;
   }
 
   /* ── Branch switcher ── */

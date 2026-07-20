@@ -15,11 +15,8 @@ import { initTheme } from './actions/theme';
 import { registerAllEvents } from './events';
 
 // Workspace (preview pane, diff viewer, phase bar, sidebar)
-import {
-  renderPreviewSkeleton,
-  renderPreviewToolbar,
-  renderPreviewFrame,
-} from '../workspace/preview';
+import { renderPreviewSkeleton, renderPreviewToolbar } from '../workspace/preview';
+import { syncPreviewFrames } from '../workspace/previewFrames';
 import { renderDiffViewer } from '../workspace/diffViewer';
 import { renderBrowserCompare } from '../workspace/browserCompare';
 import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
@@ -105,7 +102,9 @@ const initApp = () => {
         const toolbarRegion = mainRegion.querySelector<HTMLElement>('#preview-toolbar-region');
         const frameRegion = mainRegion.querySelector<HTMLElement>('#preview-frame-region');
         if (toolbarRegion) setHtmlIfChanged(toolbarRegion, renderPreviewToolbar(state));
-        if (frameRegion) setHtmlIfChanged(frameRegion, renderPreviewFrame(state));
+        // Imperative reconcile — per-tab iframes must never be re-created
+        // by an innerHTML pass (that reloads every tab).
+        if (frameRegion) syncPreviewFrames(frameRegion, state);
       }
     }
 

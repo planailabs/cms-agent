@@ -15,11 +15,11 @@
 
 import type { AgentEnvelope } from '@/injected/protocol';
 import { t, uiLocale } from '@/lib/i18n';
+import { getPreviewIframe, getPreviewIframes } from './previewFrames';
+
+export { getPreviewIframe } from './previewFrames';
 
 const REQUEST_TIMEOUT_MS = 15_000;
-
-export const getPreviewIframe = (): HTMLIFrameElement | null =>
-  document.getElementById('preview-iframe') as HTMLIFrameElement | null;
 
 const previewOrigin = (iframe: HTMLIFrameElement): string | null => {
   try {
@@ -29,8 +29,11 @@ const previewOrigin = (iframe: HTMLIFrameElement): string | null => {
   }
 };
 
-const postToPreview = (msg: Record<string, unknown>): boolean => {
-  const iframe = getPreviewIframe();
+/** Post to a specific iframe (default: the active tab's). */
+const postToPreview = (
+  msg: Record<string, unknown>,
+  iframe: HTMLIFrameElement | null = getPreviewIframe(),
+): boolean => {
   const origin = iframe ? previewOrigin(iframe) : null;
   if (!iframe?.contentWindow || !origin) return false;
   iframe.contentWindow.postMessage(msg, origin);
@@ -48,10 +51,13 @@ interface Pending {
 const pending = new Map<string, Pending>();
 let seq = 0;
 
-const request = (msg: Record<string, unknown>): Promise<unknown> =>
+const request = (
+  msg: Record<string, unknown>,
+  iframe: HTMLIFrameElement | null = getPreviewIframe(),
+): Promise<unknown> =>
   new Promise((resolve, reject) => {
     const id = `req-${++seq}`;
-    if (!postToPreview({ ...msg, id })) {
+    if (!postToPreview({ ...msg, id }, iframe)) {
       reject(new Error('Preview iframe is not available'));
       return;
     }
@@ -96,9 +102,9 @@ const fetchModuleSource = (): Promise<string> => {
   return moduleSourcePromise;
 };
 
-const pushModule = (): void => {
+const pushModule = (iframe: HTMLIFrameElement): void => {
   void fetchModuleSource()
-    .then((source) => request({ type: 'cms:load-module', source }))
+    .then((source) => request({ type: 'cms:load-module', source }, iframe))
     .then(() => pushConfig())
     .catch((err) => {
       console.error('[preview-agent] module load failed:', err);
@@ -107,15 +113,17 @@ const pushModule = (): void => {
 
 // ── Theme/locale sync (main window → overlay) ───────────────────────────────
 
-/** Sends the workspace's effective theme + locale-resolved overlay labels. */
+/** Sends the workspace's effective theme + locale-resolved overlay labels
+ *  to EVERY loaded tab (hidden tabs must follow theme changes too). */
 const pushConfig = (): void => {
   const locale = uiLocale();
-  postToPreview({
+  const msg = {
     type: 'cms:config',
     theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
     locale,
     labels: { chatAboutThis: t(locale, 'workspace.injected.chatAboutThis') },
-  });
+  };
+  for (const iframe of getPreviewIframes()) postToPreview(msg, iframe);
 };
 
 // ── Fire-and-forget commands ─────────────────────────────────────────────────
@@ -147,9 +155,12 @@ export const registerPreviewAgent = (): void => {
   });
 
   window.addEventListener('message', (event: MessageEvent) => {
-    // Accept messages ONLY from the current preview iframe, at its own origin
-    const iframe = getPreviewIframe();
-    if (!iframe?.contentWindow || event.source !== iframe.contentWindow) return;
+    // Accept messages ONLY from one of the managed per-tab preview iframes,
+    // at that iframe's own origin.
+    const iframe = event.source
+      ? getPreviewIframes().find((f) => f.contentWindow === event.source)
+      : undefined;
+    if (!iframe) return;
     if (event.origin !== previewOrigin(iframe)) return;
 
     const data = event.data as AgentEnvelope | null;
@@ -157,7 +168,9 @@ export const registerPreviewAgent = (): void => {
 
     switch (data.type) {
       case 'cms:agent-ready':
-        pushModule();
+        // Reply to the SOURCE tab: hidden tabs (created by remote tab sync
+        // or a branch switch) need the overlay module too.
+        pushModule(iframe);
         break;
       case 'cms:module-loaded':
       case 'cms:eval-result':
@@ -171,6 +184,9 @@ export const registerPreviewAgent = (): void => {
         }
         break;
       default:
+        // Interaction events (navigation/selection/…) only from the VISIBLE
+        // tab — a hidden tab must not clobber the address bar or picker.
+        if (iframe !== getPreviewIframe()) return;
         for (const handler of eventHandlers.get(data.type) ?? []) handler(data);
     }
   });

@@ -320,36 +320,38 @@ export const navigatePreviewTo = (raw: string): void => {
   scheduleTabsSave();
 };
 
+// Tab switch/close/new never call loadPreviewRoute: the per-tab iframes stay
+// loaded and the render pass (syncPreviewFrames) only toggles visibility /
+// creates the one missing frame.
+
 export const switchPreviewTab = (index: number): void => {
   const ws = store.state.workspace;
   if (index === ws.activeTabIndex || index < 0 || index >= ws.previewTabs.length) return;
   ws.activeTabIndex = index;
   ws.previewRoute = ws.previewTabs[index];
   store.notify();
-  loadPreviewRoute(ws.previewRoute);
   scheduleTabsSave();
 };
 
 export const closePreviewTab = (index: number): void => {
   const ws = store.state.workspace;
   if (ws.previewTabs.length <= 1 || index < 0 || index >= ws.previewTabs.length) return;
-  const wasActive = index === ws.activeTabIndex;
   ws.previewTabs.splice(index, 1);
+  ws.previewTabIds.splice(index, 1);
   if (ws.activeTabIndex >= ws.previewTabs.length) ws.activeTabIndex = ws.previewTabs.length - 1;
   else if (index < ws.activeTabIndex) ws.activeTabIndex -= 1;
   ws.previewRoute = ws.previewTabs[ws.activeTabIndex];
   store.notify();
-  if (wasActive) loadPreviewRoute(ws.previewRoute);
   scheduleTabsSave();
 };
 
 export const newPreviewTab = (): void => {
   const ws = store.state.workspace;
   ws.previewTabs.push('/');
+  ws.previewTabIds.push(crypto.randomUUID());
   ws.activeTabIndex = ws.previewTabs.length - 1;
   ws.previewRoute = '/';
   store.notify();
-  loadPreviewRoute('/');
   scheduleTabsSave();
 };
 
