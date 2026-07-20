@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { executeTool, isClientSideTool, toolsForPhase, type ToolContext } from '../tools/registry';
 import { attachCodebaseMemory } from './codebaseMemory';
 import { attachContext7 } from './context7';
+import { attachCustomMcps } from './custom';
 import type { ExternalMcp } from './external';
 
 export interface McpBridge {
@@ -49,10 +50,13 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   const client = new Client({ name: 'cms-agent-loop', version: '1.0.0' });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
-  // External MCPs (sandboxed codebase graph, Context7 docs) — merged into the tool set
-  const externals = (await Promise.all([attachCodebaseMemory(ctx), attachContext7()])).filter(
-    (e): e is ExternalMcp => e !== null,
-  );
+  // External MCPs (sandboxed codebase graph, Context7 docs, admin-configured
+  // custom servers) — merged into the tool set
+  const externals = (
+    await Promise.all([attachCodebaseMemory(ctx), attachContext7(), attachCustomMcps()])
+  )
+    .flat()
+    .filter((e): e is ExternalMcp => e !== null);
 
   return {
     async asOpenAiTools() {

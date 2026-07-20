@@ -48,6 +48,11 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
   spawn with inherited `process.env` in the agent-writable worktree is RCE +
   secret exfiltration (the lint tools had exactly this). Never spread
   `process.env` into a child that runs site code.
+- Custom MCP servers (`src/lib/agent/mcp/custom.ts`) load from
+  `${VAR_DIR}/mcp.json` — the admin-controlled volume — because stdio entries
+  execute host commands. Never read MCP/tool configs from the managed site
+  repo, and keep the loader filtered to `source.kind === 'local'` (mcporter
+  otherwise layers in servers imported from `~/.claude.json` etc.).
 
 ## Client state: rehydrate + sync (pitfalls)
 
