@@ -195,18 +195,19 @@ const classSim = (a?: string, b?: string): number => {
  *    identical structure.
  */
 export const similarity = (a: Marker, b: Marker): number => {
-  if (a.id && a.id === b.id) return 1;
   if (a.k === b.k) return 1;
   const pa = parseKey(a.k);
   const pb = parseKey(b.k);
   if (pa.cont !== pb.cont) return 0;
   if (pa.cont) return pa.tag === pb.tag ? 0.8 : 0;
-  if (pa.tag !== pb.tag) return 0;
+  if (pa.tag !== pb.tag) return 0; // tag is part of identity
+  if (a.id && a.id === b.id) return 1; // same tag + same stable id
   const text = jaccard(pa.text, pb.text);
-  // Same scope (section) or shared classes lift a weak text match — but only
-  // partway, so two different blocks in the same section don't force-match.
-  const idBoost = a.sid && a.sid === b.sid ? 1 : classSim(a.c, b.c);
-  return Math.min(1, text + 0.25 * idBoost * (1 - text));
+  // Stable identity from scope (section) + classes (semantic role). Same tag +
+  // same section + same class ≈ the same element, so lift the score toward 1
+  // even if every word changed; short of that, text carries it.
+  const idBoost = (a.sid && a.sid === b.sid ? 0.5 : 0) + 0.5 * classSim(a.c, b.c);
+  return Math.min(1, text + idBoost * (1 - text));
 };
 
 /** A matched pair (indices into a/b) with its match degree. */

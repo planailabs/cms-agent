@@ -122,6 +122,16 @@ describe('buildLayout on a real complicated page (plan.ai)', () => {
     expect(kinds.row).toBeGreaterThan(0); // structural alignment, not one overlay leaf
   });
 
+  it('reads text edits as "changed" (via id/scope/class identity), not add+remove', () => {
+    const kinds = boxDiff(before.m, before.h, after.m, after.h).map((d) => d.kind);
+    const n = (k: string) => kinds.filter((x) => x === k).length;
+    // same page, heavy text edits → mostly changed, few add/remove
+    expect(n('changed')).toBeGreaterThan(n('added') + n('removed'));
+    expect(n('changed')).toBeGreaterThan(20);
+    // identical page → nothing
+    expect(boxDiff(before.m, before.h, before.m, before.h)).toHaveLength(0);
+  });
+
   it('aligns the page to itself: exact height and real 2-D structure', () => {
     const n = buildLayout(before.m, before.h, before.m, before.h)!;
     expect(Math.round(n.h)).toBe(before.h); // identical → perfect alignment

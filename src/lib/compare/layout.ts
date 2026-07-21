@@ -338,11 +338,17 @@ export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffB
   const changed: Marker[] = [];
   // Corresponding blocks: pair markers by text; a low score still means the
   // same element edited (the block already matched), so it's "changed".
+  // "changed" is a CONTENT question (did the text/tag change?), separate from
+  // "did they correspond?" — identity (id/scope/class) can make a heavily-edited
+  // element score ~1, so compare the content key, not the match score.
+  const baseKey = (k: string): string => k.replace(/#\d+$/, '');
   const leafDiff = (na: Part, nb: Part): void => {
     const ma = leavesOf(na).map((x) => x.m);
     const mb = leavesOf(nb).map((x) => x.m);
     const { matches, onlyA, onlyB } = alignMarkers(ma, mb);
-    for (const mm of matches) if (mm.score < 0.999) changed.push(mb[mm.bi]);
+    for (const mm of matches) {
+      if (baseKey(ma[mm.ai].k) !== baseKey(mb[mm.bi].k)) changed.push(mb[mm.bi]);
+    }
     for (const i of onlyB) added.push(mb[i]);
     for (const i of onlyA) removed.push(ma[i]);
   };
