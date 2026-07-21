@@ -15,6 +15,7 @@ import path from 'node:path';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import { env } from '@/lib/env';
+import { GIT_COMMIT } from '@/lib/buildInfo';
 import { COLLECT_MARKERS_JS } from '@/lib/compare/markers';
 import { branchSha, defaultBranch } from '@/lib/git/engine';
 import { ensureInstance } from '@/lib/preview/manager';
@@ -42,6 +43,22 @@ function cacheDir(branch: string): string {
 
 function cacheKey(...parts: string[]): string {
   return createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 16);
+}
+
+/**
+ * The before/after/diff/meta paths for a cache key, prefixed with the app
+ * commit: if a TMPDIR happens to survive a redeploy, a new build looks up
+ * `<commit>-<key>-*` and misses the previous build's shots/markers (which may
+ * use an older collector) instead of serving them stale.
+ */
+function shotFiles(dir: string, key: string): Record<ShotKind, string> & { meta: string } {
+  const base = path.join(dir, GIT_COMMIT ? `${GIT_COMMIT}-${key}` : key);
+  return {
+    before: `${base}-before.png`,
+    after: `${base}-after.png`,
+    diff: `${base}-diff.png`,
+    meta: `${base}-meta.json`,
+  };
 }
 
 async function screenshot(
@@ -142,12 +159,7 @@ export async function diffRoute(branch: string, route: string, base?: string): P
   const dir = cacheDir(branch);
   fs.mkdirSync(dir, { recursive: true });
 
-  const files: Record<ShotKind, string> = {
-    before: path.join(dir, `${key}-before.png`),
-    after: path.join(dir, `${key}-after.png`),
-    diff: path.join(dir, `${key}-diff.png`),
-  };
-  const metaFile = path.join(dir, `${key}-meta.json`);
+  const { meta: metaFile, ...files } = shotFiles(dir, key);
 
   return singleFlight(key, async () => {
     if (fs.existsSync(metaFile)) {
@@ -188,12 +200,7 @@ export async function diffBrowsers(
   const dir = cacheDir(branch);
   fs.mkdirSync(dir, { recursive: true });
 
-  const files: Record<ShotKind, string> = {
-    before: path.join(dir, `${key}-before.png`),
-    after: path.join(dir, `${key}-after.png`),
-    diff: path.join(dir, `${key}-diff.png`),
-  };
-  const metaFile = path.join(dir, `${key}-meta.json`);
+  const { meta: metaFile, ...files } = shotFiles(dir, key);
 
   return singleFlight(key, async () => {
     if (fs.existsSync(metaFile) && Object.values(files).every((f) => fs.existsSync(f))) {
