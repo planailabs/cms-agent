@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  alignMarkers,
   alignedSegments,
   bracketAnchors,
   computeAnchors,
@@ -12,8 +13,6 @@ import {
 } from '@/lib/compare/markers';
 
 const mk = (k: string, y: number): Marker => ({ k, y });
-/** Leaf marker with a structural role signature (nearest-container/tag). */
-const mkl = (k: string, y: number, s: string): Marker => ({ k, y, s });
 /** Container-layer marker: key is "#<structsig>", `s` is the structsig. */
 const mkc = (sig: string, y: number): Marker => ({ k: `#${sig}`, y, s: sig });
 
@@ -64,27 +63,25 @@ describe('computeAnchors', () => {
     expect(computeAnchors(a, b)).toEqual([{ a: 100, b: 300 }]);
   });
 
-  it('anchors translated content element-by-element via structural role', () => {
-    // EN (a) vs DE (b): every leaf's TEXT differs (no layer-1 match), but each
-    // element's role signature lines up 1:1 → dense per-element anchors, so the
-    // content does not drift within a section.
-    const a = [
-      mkl('H2:The turning point#1', 100, 'SECTION/H2'),
-      mkl('P:Three forces#1', 150, 'SECTION/P'),
-      mkl('H2:The silicon shift#1', 400, 'SECTION/H2'),
-      mkl('P:On-device compute#1', 450, 'SECTION/P'),
-    ];
-    const b = [
-      mkl('H2:Der Wendepunkt#1', 100, 'SECTION/H2'),
-      mkl('P:Drei Kraefte#1', 175, 'SECTION/P'),
-      mkl('H2:Silizium#1', 470, 'SECTION/H2'),
-      mkl('P:Auf dem Geraet#1', 520, 'SECTION/P'),
-    ];
+  it('matches reworded text by word overlap; unrelated text does not anchor', () => {
+    const a = [mk('P:The useful gains of AI are real#1', 100), mk('P:Unrelated content here#1', 300)];
+    const b = [mk('P:The useful gains of AI are real and solid#1', 120), mk('P:Totally different words entirely#1', 350)];
+    // first P: high word overlap → anchor; second P: no overlap → no anchor
+    expect(computeAnchors(a, b)).toEqual([{ a: 100, b: 120 }]);
+  });
+
+  it('skips a missing element (fill up) instead of mis-pairing the rest', () => {
+    const a = [mk('P:Alpha block#1', 100), mk('P:Beta block#1', 200), mk('P:Gamma block#1', 300)];
+    const b = [mk('P:Alpha block#1', 100), mk('P:Gamma block#1', 250)]; // Beta removed
+    const { matches, onlyA } = alignMarkers(a, b);
+    expect(matches.map((mm) => [mm.ai, mm.bi])).toEqual([
+      [0, 0],
+      [2, 1],
+    ]);
+    expect(onlyA).toEqual([1]); // Beta is the missing element
     expect(computeAnchors(a, b)).toEqual([
       { a: 100, b: 100 },
-      { a: 150, b: 175 },
-      { a: 400, b: 470 },
-      { a: 450, b: 520 },
+      { a: 300, b: 250 },
     ]);
   });
 

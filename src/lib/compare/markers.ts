@@ -115,34 +115,6 @@ export const COLLECT_MARKERS_JS = `(function () {
   return { h: Math.round(root.scrollHeight), m: out };
 })()`;
 
-/** LCS over a chosen marker key → raw matched (yA,yB) pairs in order. */
-function lcsPairs(a: Marker[], b: Marker[], key: (m: Marker) => string): Anchor[] {
-  const n = a.length;
-  const m = b.length;
-  if (n === 0 || m === 0) return [];
-  const ka = a.map(key);
-  const kb = b.map(key);
-  // DP table of LCS lengths (n·m is bounded by the collector's MAX cap)
-  const dp: Uint32Array[] = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      dp[i][j] = ka[i] === kb[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-    }
-  }
-  const pairs: Anchor[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < n && j < m) {
-    if (ka[i] === kb[j]) {
-      pairs.push({ a: a[i].y, b: b[j].y });
-      i++;
-      j++;
-    } else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
-    else j++;
-  }
-  return pairs;
-}
-
 /** Keep only anchors strictly increasing in y on BOTH sides (a moved block
  *  must not fold the mapping back on itself). */
 function strictlyIncreasing(pairs: Anchor[]): Anchor[] {
@@ -154,45 +126,114 @@ function strictlyIncreasing(pairs: Anchor[]): Anchor[] {
   return out;
 }
 
-/** Insert `extra` anchors into `base` only where they fall strictly between
- *  consecutive base anchors on BOTH axes — preserves strict monotonicity and
- *  keeps the higher-confidence base anchors authoritative. */
-function mergeAnchors(base: Anchor[], extra: Anchor[]): Anchor[] {
-  if (extra.length === 0) return base;
-  const result = base.slice();
-  for (const e of [...extra].sort((x, y) => x.a - y.a)) {
-    let i = 0;
-    while (i < result.length && result[i].a < e.a) i++;
-    const prev = result[i - 1];
-    const next = result[i];
-    if ((!prev || (e.a > prev.a && e.b > prev.b)) && (!next || (e.a < next.a && e.b < next.b))) {
-      result.splice(i, 0, e);
-    }
+const tokenize = (s: string): string[] => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+/** Word-set Jaccard similarity (0..1); 1 for identical text. */
+const jaccard = (a: string, b: string): number => {
+  if (a === b) return 1;
+  const ta = new Set(tokenize(a));
+  const tb = tokenize(b);
+  if (ta.size === 0 && tb.length === 0) return 0;
+  let inter = 0;
+  const seen = new Set<string>();
+  for (const t of tb) {
+    if (ta.has(t) && !seen.has(t)) inter++;
+    seen.add(t);
   }
-  return result;
-}
+  const uni = ta.size + seen.size - inter;
+  return uni ? inter / uni : 0;
+};
 
-/** Leaf markers key by text; container markers key by "#<structsig>". */
-const isLeaf = (m: Marker): boolean => m.k.charCodeAt(0) !== 35 /* '#' */;
+const parseKey = (k: string): { cont: boolean; tag: string; text: string } => {
+  if (k.charCodeAt(0) === 35) return { cont: true, tag: k.replace(/#\d+$/, ''), text: '' };
+  const c = k.indexOf(':');
+  const h = k.lastIndexOf('#');
+  return { cont: false, tag: c > 0 ? k.slice(0, c) : '', text: c >= 0 ? k.slice(c + 1, h > c ? h : k.length) : '' };
+};
 
 /**
- * Order-preserving content matches, in two layers:
- *  1. exact leaf text — high-confidence anchors;
- *  2. structural signatures (container structsig + each leaf's role) — merged
- *     into the gaps layer 1 left open, so reworded / translated content still
- *     anchors section-by-section AND element-by-element (same roles, same
- *     order, different words).
- * Both passes are LCS + strict-increasing filtered; layer 2 only fills space
- * layer 1 left open. Markers without `s` (old caches) skip layer 2 → identical
- * to the previous behaviour.
+ * Match degree between two markers, 0..1. Exact text = 1 (preferred); same tag
+ * with overlapping words scores by Jaccard; different element types (or a
+ * container vs a leaf) don't match. Containers match only on identical
+ * structure. This is what "locate by text, exact over inexact, else score by
+ * degree" reduces to.
  */
+export const similarity = (a: Marker, b: Marker): number => {
+  if (a.k === b.k) return 1;
+  const pa = parseKey(a.k);
+  const pb = parseKey(b.k);
+  if (pa.cont !== pb.cont) return 0;
+  if (pa.cont) return pa.tag === pb.tag ? 0.8 : 0;
+  if (pa.tag !== pb.tag) return 0;
+  return jaccard(pa.text, pb.text);
+};
+
+/** A matched pair (indices into a/b) with its match degree. */
+export interface Match {
+  ai: number;
+  bi: number;
+  score: number;
+}
+export interface Alignment {
+  matches: Match[];
+  onlyA: number[]; // present in a, missing from b (removed)
+  onlyB: number[]; // present in b, missing from a (added)
+}
+
+/**
+ * Order-preserving best-score alignment (Needleman–Wunsch): maximise the total
+ * match degree, letting unmatched markers fall through as gaps ("missing
+ * element, fill up") instead of forcing a positional pairing. Exact matches
+ * dominate; a genuinely different element scores ~0 and is skipped rather than
+ * mis-paired.
+ */
+export function alignMarkers(a: Marker[], b: Marker[]): Alignment {
+  const n = a.length;
+  const m = b.length;
+  const dp: Float64Array[] = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      const diag = dp[i - 1][j - 1] + similarity(a[i - 1], b[j - 1]);
+      dp[i][j] = Math.max(diag, dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  const matches: Match[] = [];
+  const onlyA: number[] = [];
+  const onlyB: number[] = [];
+  let i = n;
+  let j = m;
+  while (i > 0 && j > 0) {
+    const s = similarity(a[i - 1], b[j - 1]);
+    if (dp[i][j] === dp[i - 1][j - 1] + s) {
+      matches.push({ ai: i - 1, bi: j - 1, score: s });
+      i--;
+      j--;
+    } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+      onlyA.push(--i);
+    } else {
+      onlyB.push(--j);
+    }
+  }
+  while (i > 0) onlyA.push(--i);
+  while (j > 0) onlyB.push(--j);
+  matches.reverse();
+  onlyA.reverse();
+  onlyB.reverse();
+  return { matches, onlyA, onlyB };
+}
+
+/** Anchor score floor: below this a diagonal pairing is positional, not a
+ *  content match, so it isn't used as an alignment breakpoint. */
+export const ANCHOR_MIN = 0.5;
+
+/** Aligned (yA,yB) breakpoints from the scored alignment — matches at or above
+ *  ANCHOR_MIN, strictly increasing on both sides. */
 export function computeAnchors(a: Marker[], b: Marker[]): Anchor[] {
-  const base = strictlyIncreasing(lcsPairs(a.filter(isLeaf), b.filter(isLeaf), (m) => m.k));
-  const sa = a.filter((m) => m.s);
-  const sb = b.filter((m) => m.s);
-  if (sa.length === 0 || sb.length === 0) return base;
-  const structural = strictlyIncreasing(lcsPairs(sa, sb, (m) => m.s!));
-  return mergeAnchors(base, structural);
+  if (a.length === 0 || b.length === 0) return [];
+  const { matches } = alignMarkers(a, b);
+  const pairs = matches
+    .filter((mm) => mm.score >= ANCHOR_MIN)
+    .map((mm) => ({ a: a[mm.ai].y, b: b[mm.bi].y }));
+  return strictlyIncreasing(pairs);
 }
 
 /** Anchors bracketed with document start/end — the piecewise breakpoints. */

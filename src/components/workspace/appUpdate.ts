@@ -31,6 +31,22 @@ const agentBusy = (): boolean => {
   return phase === 'waiting' || phase === 'streaming' || phase === 'tool';
 };
 
+let ownCommit = '';
+let updated = false; // latched once a newer build is seen
+
+/** Check the deployed commit and reload (restoring the window) if it changed
+ *  and the agent is idle. Safe to call any time — e.g. on SSE reconnect, which
+ *  often means the server just restarted for a deploy. */
+export const checkAppVersion = async (): Promise<void> => {
+  if (!ownCommit) return;
+  const commit = updated ? ownCommit : await serverCommit();
+  if (commit && commit !== ownCommit) updated = true;
+  if (updated && !agentBusy()) {
+    flushWindowSessionSave();
+    location.reload();
+  }
+};
+
 let started = false;
 
 export const startUpdateWatcher = (): void => {
@@ -38,28 +54,16 @@ export const startUpdateWatcher = (): void => {
   started = true;
   // The commit this tab was served with (from the authed #app dataset).
   // Nothing to compare against on a dev build without a commit.
-  const ownCommit = getAppBuild().commit;
+  ownCommit = getAppBuild().commit;
   if (!ownCommit) return;
 
-  let updated = false; // latched once a newer build is seen
-
-  const check = async (): Promise<void> => {
-    const commit = updated ? ownCommit : await serverCommit();
-    if (commit && commit !== ownCommit) updated = true;
-    // Reload only when idle: a mid-turn reload would drop the live stream.
-    if (updated && !agentBusy()) {
-      flushWindowSessionSave();
-      location.reload();
-    }
-  };
-
-  setInterval(() => void check(), POLL_MS);
+  setInterval(() => void checkAppVersion(), POLL_MS);
   // Also re-check when the tab regains focus (returning after a deploy) and
   // when the agent goes idle after a latched update.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void check();
+    if (document.visibilityState === 'visible') void checkAppVersion();
   });
   store.subscribe(() => {
-    if (updated && !agentBusy()) void check();
+    if (updated && !agentBusy()) void checkAppVersion();
   });
 };

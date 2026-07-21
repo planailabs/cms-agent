@@ -156,6 +156,10 @@ export const connectEvents = (): Promise<void> => {
       if (wasReconnect && es.readyState === EventSource.OPEN) {
         const { resyncChatHistory } = await import('./session');
         void resyncChatHistory(chatId);
+        // A reconnect often means the server just restarted (deploy) — check
+        // the build version and reload+restore the window if it changed.
+        const { checkAppVersion } = await import('../../../workspace/appUpdate');
+        void checkAppVersion();
       }
     } catch (err) {
       console.error('[sse-client] Failed to connect:', err);
