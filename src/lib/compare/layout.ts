@@ -37,7 +37,7 @@ interface Box extends Bounds {
 
 type Part =
   | { kind: 'leaf'; boxes: Box[]; b: Bounds }
-  | { kind: 'split'; dir: 'h' | 'v'; children: [Part, Part]; b: Bounds };
+  | { kind: 'split'; dir: 'h' | 'v'; gap: number; children: [Part, Part]; b: Bounds };
 
 /** A node of the aligned render tree. `h` is the aligned height (identical on
  *  both sides); leaves carry per-side slice heights via AlignedSegment. */
@@ -52,9 +52,31 @@ export interface ANode {
 
 const MIN_GAP = 10; // px: a guillotine cut needs at least this clear gap
 
+const isContainer = (m: Marker): boolean => m.k.charCodeAt(0) === 35; // "#…" structsig
+const hasBox = (m: Marker): boolean => m.x !== undefined && m.w !== undefined && m.h !== undefined;
+
 const boxOf = (m: Marker): Box | null => {
   if (m.x === undefined || m.w === undefined || m.h === undefined) return null;
   return { x0: m.x, y0: m.y, x1: m.x + m.w, y1: m.y + m.h, m };
+};
+
+/** Partition both shots into rectangle trees over a shared width (the two
+ *  pages share a layout width; only heights differ). Null if either lacks
+ *  bounding boxes (old marker caches). */
+const partitionPair = (
+  a: Marker[],
+  ah: number,
+  b: Marker[],
+  bh: number,
+): { pa: Part; pb: Part } | null => {
+  const boxesA = a.filter((m) => !isContainer(m)).map(boxOf).filter((x): x is Box => x !== null);
+  const boxesB = b.filter((m) => !isContainer(m)).map(boxOf).filter((x): x is Box => x !== null);
+  if (boxesA.length === 0 || boxesB.length === 0) return null;
+  const w = Math.max(...boxesA.map((x) => x.x1), ...boxesB.map((x) => x.x1));
+  return {
+    pa: partition(boxesA, { x0: 0, y0: 0, x1: w, y1: ah }),
+    pb: partition(boxesB, { x0: 0, y0: 0, x1: w, y1: bh }),
+  };
 };
 
 /** Largest full-span gap between boxes in one axis; null if none ≥ MIN_GAP. */
@@ -83,7 +105,12 @@ const partition = (boxes: Box[], b: Bounds): Part => {
   const h = axisCut(boxes, (x) => x.y0, (x) => x.y1); // horizontal cut (stack)
   const v = axisCut(boxes, (x) => x.x0, (x) => x.x1); // vertical cut (columns)
   // Take the cleaner (wider) separation; recursion handles the rest.
-  const pick = v && (!h || v.gap >= h.gap) ? { dir: 'v' as const, pos: v.pos } : h ? { dir: 'h' as const, pos: h.pos } : null;
+  const pick =
+    v && (!h || v.gap >= h.gap)
+      ? { dir: 'v' as const, pos: v.pos, gap: v.gap }
+      : h
+        ? { dir: 'h' as const, pos: h.pos, gap: h.gap }
+        : null;
   if (!pick) return { kind: 'leaf', boxes, b };
 
   const isV = pick.dir === 'v';
@@ -95,7 +122,7 @@ const partition = (boxes: Box[], b: Bounds): Part => {
 
   const b1: Bounds = isV ? { ...b, x1: pick.pos } : { ...b, y1: pick.pos };
   const b2: Bounds = isV ? { ...b, x0: pick.pos } : { ...b, y0: pick.pos };
-  return { kind: 'split', dir: pick.dir, children: [partition(first, b1), partition(second, b2)], b };
+  return { kind: 'split', dir: pick.dir, gap: pick.gap, children: [partition(first, b1), partition(second, b2)], b };
 };
 
 /** All leaf markers of a part, in document order (for the 1-D fallback). */
@@ -149,10 +176,12 @@ const structSim = (pa: Part, pb: Part): number => {
 };
 
 /**
- * Content similarity between two child rectangles: half structure, half text.
- * Structure makes corresponding blocks match even when all their text changed
- * (same page, heavy edits); text disambiguates which of several same-shaped
- * blocks correspond, so an insertion is still detected rather than shifting.
+ * Content similarity between two child rectangles: text overlap, plus a
+ * structure bonus that only counts for RICH blocks. A rich structure matching
+ * (a whole section: heading + several paragraphs) is strong evidence the blocks
+ * correspond even when every word changed; two lone same-tag paragraphs look
+ * structurally identical but that's no evidence at all, so there text decides —
+ * keeping insertion detection alive.
  */
 const CHILD_MIN = 0.3;
 const childSim = (pa: Part, pb: Part): number => {
@@ -161,7 +190,8 @@ const childSim = (pa: Part, pb: Part): number => {
   if (ma.length === 0 || mb.length === 0) return 0;
   const good = alignMarkers(ma, mb).matches.filter((mm) => mm.score >= 0.5).length;
   const textSim = good / Math.max(ma.length, mb.length);
-  return 0.5 * structSim(pa, pb) + 0.5 * textSim;
+  const richness = Math.min(1, (Math.min(ma.length, mb.length) - 1) / 3); // 1 elem → 0
+  return Math.min(1, textSim + 0.5 * structSim(pa, pb) * richness);
 };
 
 /** Order-preserving alignment of two sibling lists by content similarity, with
@@ -213,20 +243,24 @@ const spanNode = (p: Part, side: 'a' | 'b'): ANode => {
   return { kind: 'leaf', x0: p.b.x0, w: p.b.x1 - p.b.x0, h: height, segs: [seg] };
 };
 
-/** Flatten a run of same-direction splits into one flat sibling list — the
- *  partition is binary, so a stack of N blocks nests as (1,(2,(3,…))); sibling
- *  alignment needs them at one level. */
+/** Flatten a run of same-direction splits at the SAME gap level into one flat
+ *  sibling list. The partition is binary, so N blocks at one level nest as
+ *  (1,(2,(3,…))) — but a smaller inner gap (within a block) must NOT flatten,
+ *  or blocks lose their grouping. Flatten only child splits whose gap is a
+ *  meaningful fraction of this level's gap. */
+const FLATTEN_RATIO = 0.5;
 const flattenChildren = (p: Part & { kind: 'split' }): Part[] => {
   const out: Part[] = [];
   const walk = (q: Part): void => {
-    if (q.kind === 'split' && q.dir === p.dir) {
+    if (q.kind === 'split' && q.dir === p.dir && q.gap >= FLATTEN_RATIO * p.gap) {
       walk(q.children[0]);
       walk(q.children[1]);
     } else {
       out.push(q);
     }
   };
-  walk(p);
+  walk(p.children[0]);
+  walk(p.children[1]);
   return out;
 };
 
@@ -269,13 +303,8 @@ export const buildLayout = (
   b: Marker[],
   bh: number,
 ): ANode | null => {
-  const boxesA = a.filter((m) => m.k.charCodeAt(0) !== 35).map(boxOf).filter((x): x is Box => x !== null);
-  const boxesB = b.filter((m) => m.k.charCodeAt(0) !== 35).map(boxOf).filter((x): x is Box => x !== null);
-  if (boxesA.length === 0 || boxesB.length === 0) return null;
-  const w = Math.max(...boxesA.map((x) => x.x1), ...boxesB.map((x) => x.x1));
-  const pa = partition(boxesA, { x0: 0, y0: 0, x1: w, y1: ah });
-  const pb = partition(boxesB, { x0: 0, y0: 0, x1: w, y1: bh });
-  return matchAlign(pa, pb);
+  const pair = partitionPair(a, ah, b, bh);
+  return pair ? matchAlign(pair.pa, pair.pb) : null;
 };
 
 // ── Box-diff highlights ────────────────────────────────────────────────────
@@ -288,44 +317,63 @@ export interface DiffBox {
   h: number;
 }
 
-const isContainer = (m: Marker): boolean => m.k.charCodeAt(0) === 35;
-const hasBox = (m: Marker): boolean => m.x !== undefined && m.w !== undefined && m.h !== undefined;
-
 /**
  * Content-box diff for rectangle highlights, in AFTER-shot coordinates:
- *  - added   → a leaf present only in b (green),
+ *  - added   → a leaf in a block present only in b (green),
  *  - changed → a matched leaf whose text/size differs (amber),
- *  - removed → a leaf present only in a, its y mapped into b-space (red).
- * Semantic, so anti-aliasing / font-rendering / cross-browser noise never
- * lights up — unlike a pixel diff. Returns [] without bounding boxes.
+ *  - removed → a leaf in a block present only in a, y mapped to b-space (red).
+ *
+ * Uses the SAME structure-aware block matching as the layout: blocks correspond
+ * by structure+text (so a heavily-edited block is "changed", not add+remove,
+ * and an inserted block is "added", not a shifted mis-match); only WITHIN a
+ * matched block are markers paired by text to flag the changed ones. Semantic,
+ * so anti-aliasing / cross-browser noise never lights up. [] without boxes.
  */
 export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffBox[] => {
-  const { matches, onlyA, onlyB } = alignMarkers(a, b);
-  const addB = [...onlyB];
-  const removeA = [...onlyA];
-  const out: DiffBox[] = [];
-  for (const mm of matches) {
-    if (mm.score >= 0.999) continue; // unchanged
-    if (mm.score >= 0.5) {
-      const m = b[mm.bi];
-      if (!isContainer(m) && hasBox(m)) out.push({ kind: 'changed', x: m.x!, y: m.y, w: m.w!, h: m.h! });
-    } else {
-      // Too weak to be "the same block changed" — it's an add + a remove.
-      addB.push(mm.bi);
-      removeA.push(mm.ai);
-    }
-  }
-  for (const i of addB) {
-    const m = b[i];
-    if (!isContainer(m) && hasBox(m)) out.push({ kind: 'added', x: m.x!, y: m.y, w: m.w!, h: m.h! });
-  }
-  if (removeA.some((i) => !isContainer(a[i]) && hasBox(a[i]))) {
-    const bracketed = bracketAnchors(computeAnchors(a, b), ah, bh);
-    for (const i of removeA) {
-      const m = a[i];
-      if (!isContainer(m) && hasBox(m)) {
-        out.push({ kind: 'removed', x: m.x!, y: mapPosition(m.y, bracketed), w: m.w!, h: m.h! });
+  const pair = partitionPair(a, ah, b, bh);
+  if (!pair) return [];
+
+  const added: Marker[] = [];
+  const removed: Marker[] = [];
+  const changed: Marker[] = [];
+  // Corresponding blocks: pair markers by text; a low score still means the
+  // same element edited (the block already matched), so it's "changed".
+  const leafDiff = (na: Part, nb: Part): void => {
+    const ma = leavesOf(na).map((x) => x.m);
+    const mb = leavesOf(nb).map((x) => x.m);
+    const { matches, onlyA, onlyB } = alignMarkers(ma, mb);
+    for (const mm of matches) if (mm.score < 0.999) changed.push(mb[mm.bi]);
+    for (const i of onlyB) added.push(mb[i]);
+    for (const i of onlyA) removed.push(ma[i]);
+  };
+  const walk = (na: Part, nb: Part): void => {
+    if (na.kind === 'split' && nb.kind === 'split' && na.dir === nb.dir) {
+      const fa = flattenChildren(na);
+      const fb = flattenChildren(nb);
+      const pairs = alignChildren(fa, fb);
+      const matched = pairs.filter(([x, y]) => x && y).length;
+      if (matched < 0.5 * Math.max(fa.length, fb.length)) {
+        leafDiff(na, nb);
+        return;
       }
+      for (const [ca, cb] of pairs) {
+        if (ca && cb) walk(ca, cb);
+        else if (ca) for (const bx of leavesOf(ca)) removed.push(bx.m);
+        else for (const bx of leavesOf(cb!)) added.push(bx.m);
+      }
+      return;
+    }
+    leafDiff(na, nb);
+  };
+  walk(pair.pa, pair.pb);
+
+  const out: DiffBox[] = [];
+  for (const m of added) if (hasBox(m)) out.push({ kind: 'added', x: m.x!, y: m.y, w: m.w!, h: m.h! });
+  for (const m of changed) if (hasBox(m)) out.push({ kind: 'changed', x: m.x!, y: m.y, w: m.w!, h: m.h! });
+  if (removed.length) {
+    const bracketed = bracketAnchors(computeAnchors(a, b), ah, bh);
+    for (const m of removed) {
+      if (hasBox(m)) out.push({ kind: 'removed', x: m.x!, y: mapPosition(m.y, bracketed), w: m.w!, h: m.h! });
     }
   }
   return out;
