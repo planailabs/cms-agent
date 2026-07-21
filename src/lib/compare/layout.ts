@@ -387,15 +387,19 @@ export interface DiffBox {
 
 /**
  * Content-box diff for rectangle highlights, in AFTER-shot coordinates:
- *  - added   → a leaf in a block present only in b (green),
- *  - changed → a matched leaf whose text/size differs (amber),
- *  - removed → a leaf in a block present only in a, y mapped to b-space (red).
+ *  - added   → a leaf present only in b (green),
+ *  - changed → a matched leaf whose text/tag differs (amber),
+ *  - removed → a leaf present only in a, y mapped to b-space (red).
  *
- * Uses the SAME structure-aware block matching as the layout: blocks correspond
- * by structure+text (so a heavily-edited block is "changed", not add+remove,
- * and an inserted block is "added", not a shifted mis-match); only WITHIN a
- * matched block are markers paired by text to flag the changed ones. Semantic,
- * so anti-aliasing / cross-browser noise never lights up. [] without boxes.
+ * A flat classifier over the shared `alignMarkers` match — NOT the guillotine
+ * partition (align and changed were entangled through it; decoupled so touching
+ * the aligner can't regress highlights). `alignMarkers` already scores identity
+ * (id / scope / class / grid-cell) on top of text, so a heavily-edited block
+ * still MATCHES its old self → "changed", not add+remove; an inserted block is
+ * unmatched → "added". "changed" is a CONTENT question (did the text/tag change?)
+ * separate from "did they correspond?" — identity can make an edited element
+ * score ~1, so compare the content key, not the match score. Semantic, so
+ * anti-aliasing / cross-browser noise never lights up. [] without boxes.
  */
 export const boxDiff = (
   a: Marker[],
@@ -403,49 +407,19 @@ export const boxDiff = (
   b: Marker[],
   bh: number,
 ): DiffBox[] => {
-  const pair = partitionPair(a, ah, b, bh);
-  if (!pair) return [];
+  const leafy = (m: Marker): boolean => !isContainer(m) && hasBox(m);
+  const la = a.filter(leafy);
+  const lb = b.filter(leafy);
+  if (la.length === 0 && lb.length === 0) return [];
 
-  const added: Marker[] = [];
-  const removed: Marker[] = [];
-  const changed: Marker[] = [];
-  // Corresponding blocks: pair markers by text; a low score still means the
-  // same element edited (the block already matched), so it's "changed".
-  // "changed" is a CONTENT question (did the text/tag change?), separate from
-  // "did they correspond?" — identity (id/scope/class) can make a heavily-edited
-  // element score ~1, so compare the content key, not the match score.
+  const { matches, onlyA, onlyB } = alignMarkers(la, lb);
   const baseKey = (k: string): string => k.replace(/#\d+$/, "");
-  const leafDiff = (na: Part, nb: Part): void => {
-    const ma = leavesOf(na).map((x) => x.m);
-    const mb = leavesOf(nb).map((x) => x.m);
-    const { matches, onlyA, onlyB } = alignMarkers(ma, mb);
-    for (const mm of matches) {
-      if (baseKey(ma[mm.ai].k) !== baseKey(mb[mm.bi].k))
-        changed.push(mb[mm.bi]);
-    }
-    for (const i of onlyB) added.push(mb[i]);
-    for (const i of onlyA) removed.push(ma[i]);
-  };
-  const walk = (na: Part, nb: Part): void => {
-    if (na.kind === "split" && nb.kind === "split" && na.dir === nb.dir) {
-      const fa = flattenChildren(na);
-      const fb = flattenChildren(nb);
-      const pairs = alignChildren(fa, fb);
-      const matched = pairs.filter(([x, y]) => x && y).length;
-      if (matched < 0.5 * Math.max(fa.length, fb.length)) {
-        leafDiff(na, nb);
-        return;
-      }
-      for (const [ca, cb] of pairs) {
-        if (ca && cb) walk(ca, cb);
-        else if (ca) for (const bx of leavesOf(ca)) removed.push(bx.m);
-        else for (const bx of leavesOf(cb!)) added.push(bx.m);
-      }
-      return;
-    }
-    leafDiff(na, nb);
-  };
-  walk(pair.pa, pair.pb);
+  const added: Marker[] = onlyB.map((i) => lb[i]);
+  const removed: Marker[] = onlyA.map((i) => la[i]);
+  const changed: Marker[] = [];
+  for (const mm of matches) {
+    if (baseKey(la[mm.ai].k) !== baseKey(lb[mm.bi].k)) changed.push(lb[mm.bi]);
+  }
 
   const out: DiffBox[] = [];
   for (const m of added)
