@@ -108,14 +108,18 @@ describe('buildLayout on a real complicated page (plan.ai)', () => {
     return c;
   };
 
-  it('does not double the height on a full rewrite (overlays, not stacks)', () => {
-    // before/after are two totally different marketing versions → few matches.
+  it('aligns the same page with heavy text edits structurally (no doubling)', () => {
+    // Same page, lots of text changed — same structure, so blocks correspond;
+    // text-only matching used to score them as unrelated and STACK before+after
+    // (~2x height, 25109). Structure-aware matching aligns them section-by-
+    // section instead, height near max.
     const n = buildLayout(before.m, before.h, after.m, after.h)!;
     expect(n).not.toBeNull();
     const maxH = Math.max(before.h, after.h);
-    // regression guard: stacking one-sided halves gave ~2x maxH (25109).
     expect(n.h).toBeLessThan(maxH * 1.3);
     expect(n.h).toBeGreaterThan(maxH * 0.7);
+    const kinds = countKinds(n);
+    expect(kinds.row).toBeGreaterThan(0); // structural alignment, not one overlay leaf
   });
 
   it('aligns the page to itself: exact height and real 2-D structure', () => {

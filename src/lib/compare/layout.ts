@@ -119,16 +119,49 @@ const alignLeaf = (pa: Part, pb: Part): ANode => {
   return { kind: 'leaf', x0: boundsA.x0, w: boundsA.x1 - boundsA.x0, h, segs };
 };
 
-/** Content similarity between two child rectangles: fraction of leaves that
- *  match well. Lets sibling alignment tell "same block, changed" from a wholly
- *  added/removed block. */
+const keyTag = (k: string): string => {
+  const c = k.indexOf(':');
+  return c > 0 ? k.slice(0, c) : k;
+};
+
+/** Structural similarity: multiset Jaccard of the two regions' element tags.
+ *  Corresponds even when all the text changed (same section, same shape). */
+const structSim = (pa: Part, pb: Part): number => {
+  const ca = new Map<string, number>();
+  const cb = new Map<string, number>();
+  let na = 0;
+  let nb = 0;
+  for (const x of leavesOf(pa)) {
+    const t = keyTag(x.m.k);
+    ca.set(t, (ca.get(t) ?? 0) + 1);
+    na++;
+  }
+  for (const x of leavesOf(pb)) {
+    const t = keyTag(x.m.k);
+    cb.set(t, (cb.get(t) ?? 0) + 1);
+    nb++;
+  }
+  if (na === 0 || nb === 0) return 0;
+  let inter = 0;
+  for (const [t, n] of ca) inter += Math.min(n, cb.get(t) ?? 0);
+  const uni = na + nb - inter;
+  return uni ? inter / uni : 0;
+};
+
+/**
+ * Content similarity between two child rectangles: half structure, half text.
+ * Structure makes corresponding blocks match even when all their text changed
+ * (same page, heavy edits); text disambiguates which of several same-shaped
+ * blocks correspond, so an insertion is still detected rather than shifting.
+ */
 const CHILD_MIN = 0.3;
 const childSim = (pa: Part, pb: Part): number => {
   const ma = leavesOf(pa).map((x) => x.m);
   const mb = leavesOf(pb).map((x) => x.m);
   if (ma.length === 0 || mb.length === 0) return 0;
   const good = alignMarkers(ma, mb).matches.filter((mm) => mm.score >= 0.5).length;
-  return good / Math.max(ma.length, mb.length);
+  const textSim = good / Math.max(ma.length, mb.length);
+  return 0.5 * structSim(pa, pb) + 0.5 * textSim;
 };
 
 /** Order-preserving alignment of two sibling lists by content similarity, with
