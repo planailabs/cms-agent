@@ -111,6 +111,9 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   marker returns to its prior geometry; deduplicate spacers that resolve to the
   same nearest owner. This fallback handles tables and unknown nested layout
   dependencies in both screenshot and live-iframe paths.
+- `row` and `scope` are probe intents only. They are never injected directly:
+  the graph must resolve them to measured `owner` actions (`row` or `inside`),
+  otherwise the correction is dropped rather than guessed.
 - Matching ≠ change-detection: identity can score a changed element ~1, so
   `boxDiff` decides "changed" by comparing the content key, not the match score.
 - A full rewrite (structures don't correspond) overlays as one rectangle rather

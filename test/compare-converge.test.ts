@@ -10,11 +10,8 @@ import {
   correctiveRows,
   correctiveScopeLeads,
   correctiveSectionFlows,
-  correctiveTrusted,
-  matchedYDelta,
   type SpacingPlan,
 } from "@/lib/compare/layout";
-import fullRewrite from "./fixtures/full-rewrite-markers.json" with { type: "json" };
 
 const doc = (y: number): MarkerDoc => ({
   h: 500,
@@ -301,45 +298,4 @@ describe("trusted correction", () => {
     });
   });
 
-  it("moves every grid item in a row but counts its downstream shift once", () => {
-    const marker = (k: string, y: number, i: number) => ({
-      k: `H3:${k}#1`,
-      y,
-      i,
-      fx: "DIV/3#1",
-    });
-    const a = [
-      marker("Command", 100, 1),
-      marker("Analysis", 100, 2),
-      marker("Growth", 200, 3),
-      marker("Build", 200, 4),
-    ];
-    const b = [
-      marker("Command", 0, 11),
-      marker("Analysis", 0, 12),
-      marker("Growth", 100, 13),
-      marker("Build", 100, 14),
-    ];
-
-    expect(correctiveTrusted(a, b)).toEqual({
-      a: [],
-      b: [
-        { i: 11, px: 70, mode: "item" },
-        { i: 12, px: 70, mode: "item" },
-        { i: 13, px: 21, mode: "item" },
-        { i: 14, px: 21, mode: "item" },
-      ],
-    });
-  });
-
-  it("keeps the production full-rewrite correction sparse and bounded", () => {
-    const a = fullRewrite.before as MarkerDoc;
-    const b = fullRewrite.after as MarkerDoc;
-    const plan = correctiveTrusted(a.m, b.m);
-    const spacers = [...plan.a, ...plan.b];
-
-    expect(spacers).toHaveLength(9);
-    expect(Math.max(...spacers.map((s) => s.px))).toBeLessThan(200);
-    expect(matchedYDelta(a.m, b.m, true).worst).toHaveLength(8);
-  });
 });

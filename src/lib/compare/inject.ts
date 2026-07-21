@@ -12,6 +12,7 @@ export const INJECT_SPACERS = (
     mode: string;
     sid?: string;
     owner?: string;
+    action?: "before" | "inside" | "row";
   }>,
 ) => {
   // An exact, inert gap of `px`. Every sizing + box-model property is locked with
@@ -105,6 +106,15 @@ export const INJECT_SPACERS = (
       "important",
     );
   };
+  const padRow = (el: Element, px: number): void => {
+    const parent = el.parentElement;
+    if (!parent) return;
+    const top = Math.round(el.getBoundingClientRect().top);
+    for (const sibling of Array.from(parent.children)) {
+      if (Math.abs(Math.round(sibling.getBoundingClientRect().top) - top) <= 2)
+        padItemTop(sibling, px);
+    }
+  };
   for (const s of spacers) {
     const el = document.querySelector('[data-cmsm="' + s.i + '"]');
     if (!el) continue;
@@ -112,35 +122,17 @@ export const INJECT_SPACERS = (
       growItem(el, s.px);
     } else if (s.mode === "cell") {
       insertCell(el, s.px);
-    } else if (s.mode === "item") {
-      pushBefore(columnOf(el).item, s.px);
-    } else if (s.mode === "row") {
-      const { item, par } = columnOf(el);
-      if (!par) continue;
-      const top = Math.round(item.getBoundingClientRect().top);
-      for (const sibling of Array.from(par.children)) {
-        if (Math.abs(Math.round(sibling.getBoundingClientRect().top) - top) <= 2)
-          padItemTop(sibling, s.px);
-      }
-    } else if (s.mode === "scope") {
-      const scope =
-        (s.sid ? document.getElementById(s.sid) : null) ?? el.closest("[id]");
-      if (!scope) continue;
-      const display = getComputedStyle(scope).display;
-      if (
-        display.indexOf("grid") >= 0 ||
-        (display.indexOf("flex") >= 0 &&
-          getComputedStyle(scope).flexDirection.indexOf("row") >= 0)
-      ) {
-        padItemTop(scope, s.px);
-      } else {
-        scope.insertBefore(mkFiller(s.px), scope.firstChild);
-      }
+    } else if (s.mode === "row" || s.mode === "scope") {
+      continue; // Probe intents are never applied without a measured owner.
     } else if (s.mode === "owner") {
       const owner = s.owner
         ? document.querySelector('[data-cmso="' + s.owner + '"]')
         : null;
-      if (owner) pushBefore(owner, s.px);
+      if (owner) {
+        if (s.action === "inside") padItemTop(owner, s.px);
+        else if (s.action === "row") padRow(owner, s.px);
+        else pushBefore(owner, s.px);
+      }
     } else if (s.mode === "grid") {
       let g: Element = el;
       for (
@@ -170,6 +162,7 @@ export const PROBE_SPACER_OWNERS = (
     mode: string;
     sid?: string;
     owner?: string;
+    action?: "before" | "inside" | "row";
   }>,
 ) => {
   const PROBE = 7;
@@ -177,7 +170,11 @@ export const PROBE_SPACER_OWNERS = (
   const markers = Array.from(
     document.querySelectorAll<HTMLElement>("[data-cmsm]"),
   );
-  const probe = (target: Element, candidate: Element): boolean => {
+  const probe = (
+    target: Element,
+    candidate: Element,
+    action: "before" | "inside" | "row",
+  ): boolean => {
     const before = new Map(
       markers.map((marker) => {
         const rect = marker.getBoundingClientRect();
@@ -188,33 +185,56 @@ export const PROBE_SPACER_OWNERS = (
     if (targetBefore === undefined) return false;
     const parent = candidate.parentElement;
     if (!parent) return false;
-    const display = getComputedStyle(parent).display;
     let filler: HTMLElement | undefined;
-    const oldMargin = (candidate as HTMLElement).style.getPropertyValue(
-      "margin-top",
-    );
-    const oldPriority = (candidate as HTMLElement).style.getPropertyPriority(
-      "margin-top",
-    );
-    if (display.indexOf("grid") >= 0 || display.indexOf("flex") >= 0) {
-      const current = parseFloat(getComputedStyle(candidate).marginTop) || 0;
-      (candidate as HTMLElement).style.setProperty(
-        "margin-top",
+    const changed: Array<{
+      element: HTMLElement;
+      property: string;
+      value: string;
+      priority: string;
+    }> = [];
+    const add = (element: Element, property: string, computed: string): void => {
+      const html = element as HTMLElement;
+      changed.push({
+        element: html,
+        property,
+        value: html.style.getPropertyValue(property),
+        priority: html.style.getPropertyPriority(property),
+      });
+      const current = parseFloat(computed) || 0;
+      html.style.setProperty(
+        property,
         current + PROBE + "px",
         "important",
       );
+    };
+    if (action === "inside") {
+      add(candidate, "padding-top", getComputedStyle(candidate).paddingTop);
+    } else if (action === "row") {
+      const top = Math.round(candidate.getBoundingClientRect().top);
+      const row = Array.from(parent.children).filter(
+        (sibling) =>
+          Math.abs(Math.round(sibling.getBoundingClientRect().top) - top) <= 2,
+      );
+      if (row.length < 2) return false;
+      for (const sibling of row)
+        add(sibling, "padding-top", getComputedStyle(sibling).paddingTop);
     } else {
-      filler = document.createElement("div");
-      filler.setAttribute("aria-hidden", "true");
-      filler.style.cssText =
-        "display:block!important;height:" +
-        PROBE +
-        "px!important;min-height:" +
-        PROBE +
-        "px!important;max-height:" +
-        PROBE +
-        "px!important;margin:0!important;padding:0!important;border:0!important;";
-      parent.insertBefore(filler, candidate);
+      const display = getComputedStyle(parent).display;
+      if (display.indexOf("grid") >= 0 || display.indexOf("flex") >= 0) {
+        add(candidate, "margin-top", getComputedStyle(candidate).marginTop);
+      } else {
+        filler = document.createElement("div");
+        filler.setAttribute("aria-hidden", "true");
+        filler.style.cssText =
+          "display:block!important;height:" +
+          PROBE +
+          "px!important;min-height:" +
+          PROBE +
+          "px!important;max-height:" +
+          PROBE +
+          "px!important;margin:0!important;padding:0!important;border:0!important;";
+        parent.insertBefore(filler, candidate);
+      }
     }
     const moved = target.getBoundingClientRect().top - targetBefore;
     const affected = markers.filter((marker) => {
@@ -226,14 +246,14 @@ export const PROBE_SPACER_OWNERS = (
       );
     });
     filler?.remove();
-    if (!filler) {
-      if (oldMargin)
-        (candidate as HTMLElement).style.setProperty(
-          "margin-top",
-          oldMargin,
-          oldPriority,
+    for (const change of changed) {
+      if (change.value)
+        change.element.style.setProperty(
+          change.property,
+          change.value,
+          change.priority,
         );
-      else (candidate as HTMLElement).style.removeProperty("margin-top");
+      else change.element.style.removeProperty(change.property);
     }
     const restored = affected.every((marker) => {
       const old = before.get(marker)!;
@@ -247,7 +267,15 @@ export const PROBE_SPACER_OWNERS = (
   };
 
   const refined = spacers.map((spacer) => {
-    if (spacer.mode !== "el") return spacer;
+    const action: "before" | "inside" | "row" | undefined =
+      spacer.mode === "scope"
+        ? "inside"
+        : spacer.mode === "row"
+          ? "row"
+          : spacer.mode === "el"
+            ? "before"
+            : undefined;
+    if (!action) return spacer;
     const target = document.querySelector('[data-cmsm="' + spacer.i + '"]');
     if (!target) return spacer;
     let measuredOwner: Element | null = null;
@@ -256,7 +284,8 @@ export const PROBE_SPACER_OWNERS = (
       candidate && candidate !== document.documentElement;
       candidate = candidate.parentElement
     ) {
-      if (probe(target, candidate) && !measuredOwner) measuredOwner = candidate;
+      if (probe(target, candidate, action) && !measuredOwner)
+        measuredOwner = candidate;
     }
     if (measuredOwner) {
       let owner = measuredOwner.getAttribute("data-cmso");
@@ -264,15 +293,19 @@ export const PROBE_SPACER_OWNERS = (
         owner = "o" + nextOwner++;
         measuredOwner.setAttribute("data-cmso", owner);
       }
-      return { ...spacer, mode: "owner", owner };
+      return { ...spacer, mode: "owner", owner, action };
     }
-    return spacer;
+    return action === "before" ? spacer : undefined;
   });
   const owners = new Set<string>();
-  return refined.filter((spacer) => {
+  const concrete = refined.filter(
+    (spacer): spacer is NonNullable<typeof spacer> => spacer !== undefined,
+  );
+  return concrete.filter((spacer) => {
     if (spacer.mode !== "owner" || !spacer.owner) return true;
-    if (owners.has(spacer.owner)) return false;
-    owners.add(spacer.owner);
+    const key = `${spacer.action}:${spacer.owner}`;
+    if (owners.has(key)) return false;
+    owners.add(key);
     return true;
   });
 };

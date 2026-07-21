@@ -463,12 +463,12 @@ export interface Spacer {
     | "grid"
     | "tail"
     | "cell"
-    | "item"
     | "row"
     | "scope"
     | "owner";
   sid?: string;
   owner?: string;
+  action?: "before" | "inside" | "row";
 }
 export interface SpacingPlan {
   a: Spacer[];
@@ -759,88 +759,6 @@ export const matchedYDelta = (
   }
   worst.sort((p, q) => Math.abs(q.dy) - Math.abs(p.dy));
   return { max: Math.round(max), worst: worst.slice(0, 8) };
-};
-
-/**
- * Conservative correction for a low-confidence page. Only unique unchanged
- * content or unique stable ids can move the DOM. Markers sharing a visual row
- * are corrected together, while their common shift contributes to downstream
- * flow once rather than once per column.
- */
-export const correctiveTrusted = (
-  a: Marker[],
-  b: Marker[],
-  gain = 0.7,
-): SpacingPlan => {
-  const fa = a.filter((m) => !isContainer(m));
-  const fb = b.filter((m) => !isContainer(m));
-  const base = (k: string): string => k.replace(/#\d+$/, "");
-  const count = (values: Array<string | undefined>): Map<string, number> => {
-    const result = new Map<string, number>();
-    for (const value of values)
-      if (value) result.set(value, (result.get(value) ?? 0) + 1);
-    return result;
-  };
-  const keysA = count(fa.map((m) => base(m.k)));
-  const keysB = count(fb.map((m) => base(m.k)));
-  const idsA = count(fa.map((m) => m.id));
-  const idsB = count(fb.map((m) => m.id));
-  const pairs = alignMarkers(fa, fb)
-    .matches.filter((m) => m.score >= ANCHOR_MIN)
-    .map((m) => ({ ea: fa[m.ai], eb: fb[m.bi] }))
-    .filter(({ ea, eb }) => {
-      const key = base(ea.k);
-      const sameUniqueKey =
-        key === base(eb.k) && keysA.get(key) === 1 && keysB.get(key) === 1;
-      const sameUniqueId =
-        !!ea.id &&
-        ea.id === eb.id &&
-        idsA.get(ea.id) === 1 &&
-        idsB.get(ea.id) === 1;
-      return sameUniqueKey || sameUniqueId;
-    })
-    .sort((p, q) => p.ea.y - q.ea.y || p.eb.y - q.eb.y);
-
-  const rows: (typeof pairs)[] = [];
-  for (const pair of pairs) {
-    const row = rows.at(-1);
-    const first = row?.[0];
-    if (
-      first &&
-      Math.abs(first.ea.y - pair.ea.y) <= 2 &&
-      Math.abs(first.eb.y - pair.eb.y) <= 2
-    ) {
-      row.push(pair);
-    } else {
-      rows.push([pair]);
-    }
-  }
-
-  const A: Spacer[] = [];
-  const B: Spacer[] = [];
-  let cumA = 0;
-  let cumB = 0;
-  for (const row of rows) {
-    const deltas = row.map(({ ea, eb }) => ea.y + cumA - (eb.y + cumB));
-    deltas.sort((x, y) => x - y);
-    const d = deltas[Math.floor(deltas.length / 2)];
-    if (Math.abs(d) <= 0.5) continue;
-    const px = Math.round(Math.abs(d) * gain);
-    if (px < 1) continue;
-    const target = d > 0 ? B : A;
-    for (const pair of row) {
-      const marker = d > 0 ? pair.eb : pair.ea;
-      if (marker.i === undefined) continue;
-      target.push({
-        i: marker.i,
-        px,
-        mode: marker.fx ? "item" : "el",
-      });
-    }
-    if (d > 0) cumB += px;
-    else cumA += px;
-  }
-  return { a: A, b: B };
 };
 
 type ResidualPair = { ea: Marker; eb: Marker; dy: number };

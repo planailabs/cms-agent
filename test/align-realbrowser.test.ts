@@ -712,6 +712,59 @@ describe("measured spacer owners", () => {
       await page.close();
     }
   }, 30_000);
+
+  it("measures inside-padding instead of trusting a scope id", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent(base);
+      const markers = await collect(page);
+      const target = markers.m.find((marker) =>
+        marker.k.startsWith("H3:One machine"),
+      )!;
+      const before = target.y;
+      const refined = await page.evaluate(PROBE_SPACER_OWNERS, [
+        { i: target.i!, px: 24, mode: "scope", sid: "wrong-id" },
+      ]);
+      expect(refined).toMatchObject([
+        { mode: "owner", action: "inside", px: 24 },
+      ]);
+      await page.evaluate(INJECT_SPACERS, refined);
+      const after = await collect(page);
+      expect(after.m.find((marker) => marker.i === target.i)!.y - before).toBe(
+        24,
+      );
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  it("measures and moves a complete visual row", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent(base);
+      const markers = await collect(page);
+      const row = ["Command", "Analysis", "Voice"].map(
+        (title) =>
+          markers.m.find((marker) =>
+            marker.k.startsWith(`H3:${title}`),
+          )!,
+      );
+      const refined = await page.evaluate(PROBE_SPACER_OWNERS, [
+        { i: row[0].i!, px: 24, mode: "row" },
+      ]);
+      expect(refined).toMatchObject([
+        { mode: "owner", action: "row", px: 24 },
+      ]);
+      await page.evaluate(INJECT_SPACERS, refined);
+      const after = await collect(page);
+      for (const marker of row)
+        expect(
+          after.m.find((candidate) => candidate.i === marker.i)!.y - marker.y,
+        ).toBe(24);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
 });
 
 // Stable data-cmsm: an element's handle survives re-collection after the DOM
