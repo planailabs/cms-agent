@@ -168,15 +168,19 @@ deleted rather than hoarded. Sequenced, in priority order:
    matched + text-differs → changed; unmatched → added/removed. Preserve the
    "heavily-edited block = changed, not add+remove" property (it's matching
    quality, portable). Then the guillotine has exactly one consumer.
-3. **Fix `correctiveFlat`'s large-residual stall + add a cheap warm-start.** It's
-   a proportional controller (gain 0.7, add-only) that undershoots and can stall
-   at big residuals (the cross-row 300px case) under the round cap. First round
-   should place matched elements AT their partner's y (gain ~1.0), then fine-tune
-   at 0.7; make the cap adaptive; cache the match by stable id across re-diffs.
-4. **Then measure and decide the guillotine's fate.** If the warm-start matches
-   its latency on real pages → delete `spacingPlan` + partition + tail/cell/grid.
-   If not → keep it as an OPTIONAL, measured seed, not the default. Do not delete
-   ~500 lines on 80 synthetic combos without the latency number.
+3. **DONE — no fix needed (measured).** The corrective loop logs its round count
+   (`[align] … in N round(s)`). Across the 80-seed chaos harness with the
+   guillotine seed: **77/80 converge in 0 corrective rounds**, 3/80 in 5, none
+   stall (< the 6 cap). So the warm-start is unnecessary (the guillotine IS the
+   warm-start) and there is no large-residual stall to fix. Adding gain-1.0 /
+   adaptive logic would solve a non-problem and risk overshoot (add-only margin).
+4. **DONE — keep the guillotine (measured).** The same data settles its fate: the
+   seed buys real latency (0 vs 5 rounds for 77/80), so it is the fast path, not
+   dead weight. The council's delete-condition ("only if the warm-start matches
+   its latency") fails — the guillotine IS that latency. Verdict: **keep the
+   current architecture** — `spacingPlan` structural seed (fast path) + model-free
+   `correctiveFlat` safety net for the residual few. Revisit only if real-page
+   round-count logs show many pages needing the corrective.
 
 ## This skill is SELF-IMPROVING
 

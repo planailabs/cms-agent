@@ -217,9 +217,11 @@ async function alignedShots(
           )
         : Promise.resolve();
     const start = matchedYDelta(ra.m, rb.m).max;
+    let rounds = 0;
     for (let round = 0; round < CORRECTIVE_ROUNDS; round++) {
       if (Math.abs(matchedYDelta(ra.m, rb.m).max) <= CORRECTIVE_THRESHOLD)
         break;
+      rounds = round + 1;
       const corr = correctiveFlat(ra.m, rb.m);
       if (!corr.a.length && !corr.b.length) break;
       await Promise.all([inject(A, corr.a), inject(B, corr.b)]);
@@ -229,9 +231,12 @@ async function alignedShots(
       ])) as [MarkerDoc, MarkerDoc];
     }
     const end = matchedYDelta(ra.m, rb.m);
+    // Round-count is the guillotine seed's value signal: the structural pass
+    // converges most pages in 0 corrective rounds; a page that needs many rounds
+    // (or hits the cap without converging) is where the aligner should improve.
     if (Math.abs(start) > CORRECTIVE_THRESHOLD) {
       console.warn(
-        `[align] ${route}: corrective ${start}px → ${end.max}px`,
+        `[align] ${route}: corrective ${start}px → ${end.max}px in ${rounds} round(s)`,
         Math.abs(end.max) > CORRECTIVE_THRESHOLD
           ? JSON.stringify(end.worst)
           : "",
