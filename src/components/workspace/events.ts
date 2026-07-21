@@ -48,7 +48,9 @@ import { openCapsModal, closeCapsModal, loadCapabilities } from './capsModal';
 import { openPlanModal, closePlanModal } from './planModal';
 import {
   adoptWindowSession,
+  closeWindowPicker,
   deleteWindowSession,
+  openWindowPicker,
   startFreshWindow,
 } from './windowSession';
 import {
@@ -346,6 +348,8 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     if (target.dataset.id) void deleteWindowSession(target.dataset.id);
   });
   delegateEvent(app, 'click', '[data-action="ws-wsn-fresh"]', () => startFreshWindow());
+  delegateEvent(app, 'click', '[data-action="ws-wsn-open"]', () => void openWindowPicker());
+  delegateEvent(app, 'click', '[data-action="ws-wsn-close"]', () => closeWindowPicker());
   delegateEvent(app, 'click', '[data-action="ws-compare-align"]', () => {
     const ws = store.state.workspace;
     ws.compareMode = ws.compareMode === 'content' ? 'height' : 'content';

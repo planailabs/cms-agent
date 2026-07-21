@@ -197,17 +197,46 @@ export const deleteWindowSession = async (id: string): Promise<void> => {
   const picker = store.state.workspace.windowPicker;
   if (picker) {
     store.state.workspace.windowPicker = picker.filter((s) => s.id !== id);
-    if (store.state.workspace.windowPicker.length === 0) startFreshWindow();
-    else store.notify();
+    // Only the BOOT offer must resolve to a choice; a manually-opened
+    // picker (window already has an id) simply closes when emptied.
+    if (store.state.workspace.windowPicker.length === 0) {
+      if (windowId) closeWindowPicker();
+      else startFreshWindow();
+    } else store.notify();
   }
 };
+
+/** Open the window list on demand (Windows button) — switching this window
+ *  to a saved session or managing the saved list from a running app. */
+export const openWindowPicker = async (): Promise<void> => {
+  try {
+    const res = await fetch('/api/window-sessions');
+    if (!res.ok) return;
+    const data = (await res.json()) as { sessions?: WindowSessionSummary[] };
+    store.state.workspace.windowPicker = data.sessions ?? [];
+    store.notify();
+  } catch {
+    /* best-effort */
+  }
+};
+
+export const closeWindowPicker = (): void => {
+  store.state.workspace.windowPicker = null;
+  store.notify();
+};
+
+/** True once this window has claimed an id (boot choice made). */
+export const hasWindowId = (): boolean => windowId !== null;
 
 // ── Picker modal ─────────────────────────────────────────────────────────
 
 export const renderWindowPicker = (state: AppState): string => {
   const sessions = state.workspace.windowPicker;
-  if (!sessions || sessions.length === 0) return '';
+  if (!sessions) return '';
   const locale = uiLocale();
+  // Manual open (window already chosen) gets a plain Close; the boot offer
+  // must resolve via restore or start-fresh.
+  const manual = hasWindowId();
 
   const rows = sessions
     .map((s) => {
@@ -225,13 +254,17 @@ export const renderWindowPicker = (state: AppState): string => {
     })
     .join('');
 
-  return `<div class="ws-archive ws-git" role="dialog" aria-modal="true" aria-label="${escapeHtml(t(locale, 'workspace.window.heading'))}">
+  const heading = manual ? 'workspace.window.headingManual' : 'workspace.window.heading';
+  return `<div class="ws-archive ws-git" role="dialog" aria-modal="true" aria-label="${escapeHtml(t(locale, heading))}">
       <div class="ws-archive__panel">
         <div class="ws-archive__head ws-git__head">
-          <h2 class="ws-archive__heading">${escapeHtml(t(locale, 'workspace.window.heading'))}</h2>
-          <button type="button" class="ws-mini-button" data-action="ws-wsn-fresh">${escapeHtml(t(locale, 'workspace.window.fresh'))}</button>
+          <h2 class="ws-archive__heading">${escapeHtml(t(locale, heading))}</h2>
+          <div class="ws-git__head-left">
+            <button type="button" class="ws-mini-button" data-action="ws-wsn-fresh">${escapeHtml(t(locale, 'workspace.window.fresh'))}</button>
+            ${manual ? `<button type="button" class="ws-mini-button" data-action="ws-wsn-close">${escapeHtml(t(locale, 'workspace.git.close'))}</button>` : ''}
+          </div>
         </div>
-        <div class="ws-archive__list ws-git__body">${rows}</div>
+        <div class="ws-archive__list ws-git__body">${rows || `<span class="ws-empty-note">${escapeHtml(t(locale, 'workspace.window.none'))}</span>`}</div>
       </div>
     </div>`;
 };
