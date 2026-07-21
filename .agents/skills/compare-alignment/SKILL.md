@@ -24,8 +24,17 @@ diff pipeline screenshots both raw, computes a spacing plan, injects filler
   alignment, grid/table cells never cross-match); `spacingPlan()` turns that into
   per-element `Spacer[]` for each side; `boxDiff()` = the highlight rectangles;
   **`verifyAlignment()`** = the quality harness.
-- `src/lib/diff/screenshot.ts` — `INJECT_SPACERS` + `alignedShots()`: inject and
-  re-screenshot; falls back to the raw shots on failure.
+- `src/lib/compare/inject.ts` — `INJECT_SPACERS`: applies the plan in the browser.
+  Filler modes: `el` (flow div / margin-top on a flex-grid item), `grid` (push a
+  whole flex/grid down), `tail` (grow the *column box* that holds an element so
+  its whole ROW gets taller — equalises a grid/flex/inline-block row height),
+  `cell` (insert an empty column so an add/remove doesn't reflow the cells after
+  it). `columnOf()` finds the column box for any row layout: a grid child, a
+  flex-ROW child, or an inline-block element (NOT a flex-column card's internals).
+  All fillers lock height/min/max + box-model with `!important` so no page CSS can
+  distort a spacer.
+- `src/lib/diff/screenshot.ts` — `alignedShots()`: inject and re-screenshot;
+  falls back to the raw shots on failure.
 - Client: `diffViewer.ts` / `browserCompare.ts` request the `-aligned` kinds in
   content mode.
 
@@ -40,11 +49,15 @@ When a compare looks wrong:
 
 1. **Reproduce it as a scaffold.** Prefer a REAL-BROWSER case in
    `test/align-realbrowser.test.ts`: add a one-edit DOM mutation to
-   `test/fixtures/align/base.html` (structure/classes/ids borrowed from plan.ai)
-   — it runs the actual pipeline (collect → spacingPlan → inject → re-collect in
-   Playwright) and asserts matched content lands at the same `y`. For a
-   pure-logic case use a marker set in `test/compare-align-verify.test.ts`
-   (assert `maxPairDelta <= 2`). Or pull real markers from a live diff (below).
+   `test/fixtures/align/base.html` (structure/classes/ids borrowed from plan.ai —
+   incl. a 2-row grid `#departments`, an inline-block column row `#legacy`, and a
+   table) — it runs the actual pipeline (collect → spacingPlan → inject →
+   re-collect in Playwright) and asserts matched content lands at the same `y`.
+   The same file has a **seeded chaos generator** (`buildOps`/`applyOps`): random
+   combinations of edits, and on failure it logs the seed + ops for a one-line
+   repro — widen the seed range to hunt for new failure modes. For a pure-logic
+   case use a marker set in `test/compare-align-verify.test.ts` (assert
+   `maxPairDelta <= 2`). Or pull real markers from a live diff (below).
 2. **Watch it fail**, read `misaligned[]` to see which elements drift and by how much.
 3. **Tighten the aligner** in `compare/layout.ts` / `markers.ts` (matching,
    sibling alignment, spacing walk) until the scaffold passes.
@@ -68,6 +81,29 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   `boxDiff` decides "changed" by comparing the content key, not the match score.
 - A full rewrite (structures don't correspond) overlays as one rectangle rather
   than stacking (which doubled the height).
+- **Grids partition ROW-first.** A grid has full-span gaps both ways; `partition`
+  breaks the h/v tie toward the horizontal (row) cut so the aligner sees rows
+  (matching the row-major flow + `align-items: stretch`), not independent columns.
+- **A row's height change moves the row below as one unit.** A card that grows
+  taller lifts its whole row (stretch); the `v`-branch of `spacingPlan` equalises
+  by growing ONE card on the shorter side (`tail`), and the reflow carries the
+  rows below — it does NOT push each column independently (that desyncs the row —
+  the original "Command card misaligned" bug).
+- **This applies to any row layout, not just `display:grid`** — flex-row and
+  inline-block column rows couple the same way; `columnOf()` handles all three.
+- An added/removed card reflows the cells after it; a `cell` filler on the side
+  missing the card keeps the survivors in place.
+
+## Known limitation
+
+Removing/adding a card in an *early* row of a multi-row grid is a true 2-D
+row-major reflow: a later card pulls up into the previous row (e.g. remove a
+row-1 card → the first row-2 card jumps to row 1). A height-based aligner can't
+undo a cross-row move, so that one card stays a row off. Editing card *text* (the
+common case) and add/remove in the *last* row are handled. The chaos test
+deliberately restricts grid removal to row 2 for this reason. Fixing it properly
+needs grid-flatten (align all cards as one row-major sequence, then re-group into
+rows) — do that if cross-row grid edits become common.
 
 ## This skill is SELF-IMPROVING
 

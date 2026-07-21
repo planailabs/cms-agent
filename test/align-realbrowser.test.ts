@@ -34,14 +34,18 @@ afterAll(async () => browser?.close());
 
 const collect = (p: Page) => p.evaluate(COLLECT_MARKERS_JS) as Promise<MarkerDoc>;
 
-/** Run the full pipeline for base vs base+mutate; return residual y drift. */
-const residual = async (mutate: () => void): Promise<{ max: number; worst: unknown }> => {
+/** Run the full pipeline for base vs base+mutate; return residual y drift.
+ *  `mutate` runs in the browser; `arg` (JSON-serialisable) is passed to it. */
+const residual = async (
+  mutate: (arg?: unknown) => void,
+  arg?: unknown,
+): Promise<{ max: number; worst: unknown }> => {
   const before = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const after = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   try {
     await before.setContent(base);
     await after.setContent(base);
-    await after.evaluate(mutate);
+    await after.evaluate(mutate, arg);
     const [mb, ma] = await Promise.all([collect(before), collect(after)]);
     const plan = spacingPlan(mb.m, mb.h, ma.m, ma.h);
     await before.evaluate(INJECT_SPACERS, plan.a as never);
@@ -88,6 +92,25 @@ const cases: Array<{ name: string; mutate: () => void; max: number }> = [
   { name: 'change a table cell', max: 4, mutate: () => {
     (document.querySelectorAll('td')[1] as HTMLElement).textContent = '9,999';
   } },
+  { name: 'grow a department card (grid row height)', max: 6, mutate: () => {
+    // Lengthen ONE row-1 card's body → its whole grid row grows taller, pushing
+    // row 2 (Growth/Build/Process) down together. Command must stay aligned with
+    // its row and row 2 must move as a unit, not per-column.
+    (document.querySelectorAll('.dept .swiss-body')[1] as HTMLElement).textContent =
+      'Monitors markets, digests research, scans competitors, benchmarks pricing, tracks sentiment, and produces briefed intelligence rather than raw data dumps that nobody has time to read.';
+  } },
+  { name: 'remove a department card (row 2, filler cell)', max: 6, mutate: () => {
+    // Remove a row-2 card: later cards in that row shift left; a filler grid cell
+    // keeps them in place. No card crosses a row boundary.
+    document.querySelectorAll('.dept')[4].remove();
+  } },
+  { name: 'grow an inline-block column (no flex/grid)', max: 6, mutate: () => {
+    // A plain inline-block column row: no stretch coupling, so growing one column
+    // only pushes the content BELOW the row down by the new tallest height. The
+    // filler must land as a flow div (not margin-top / not a grid tail).
+    (document.querySelectorAll('.col .swiss-body')[0] as HTMLElement).textContent =
+      'A short inline-block column that has now been expanded with a good deal more text so that it wraps onto several lines and becomes the tallest column in this row by a clear margin.';
+  } },
   { name: 'multiple simultaneous edits', max: 6, mutate: () => {
     document.querySelector('.posts')!.insertAdjacentHTML('afterbegin',
       '<li class="post"><p class="date">Jul 19, 2026</p><h3 class="swiss-heading-md">What Squirrels Know</h3><p class="swiss-body">Collect the small promising things.</p></li>');
@@ -103,6 +126,81 @@ describe('real-browser alignment', () => {
       const r = await residual(c.mutate);
       if (r.max > c.max) console.warn(`[align:${c.name}] residual ${r.max}px`, JSON.stringify(r.worst));
       expect(r.max).toBeLessThanOrEqual(c.max);
+    }, 30_000);
+  }
+});
+
+// ── Chaos: random combinations of edits, seeded for reproducibility ──────────
+// A seeded PRNG builds an op list per seed; on failure the seed + ops are logged
+// so any regression is a one-line repro. Ops are data (interpreted in-browser),
+// never closures. Deliberately excludes removing a row-1 grid card — that is a
+// genuine 2-D row-major reflow (a later card pulls up a whole row), the one
+// documented limitation of a height-based aligner (see SKILL.md).
+
+/** mulberry32 — tiny deterministic PRNG so a failing seed reproduces exactly. */
+const rng = (seed: number) => () => {
+  seed |= 0;
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+interface Op { kind: string; n?: number; text?: string }
+const LOREM =
+  'the small promising things collect momentum clarity and care across every function and channel over time';
+const words = (r: () => number, min: number, max: number): string => {
+  const parts = LOREM.split(' ');
+  const count = min + Math.floor(r() * (max - min));
+  let s = '';
+  for (let i = 0; i < count; i++) s += parts[Math.floor(r() * parts.length)] + ' ';
+  return s.trim() + '.';
+};
+
+const OP_KINDS = [
+  'rewordPost', 'insertPost', 'removePost', 'growHero', 'rewordDept',
+  'removeDeptRow2', 'growCol', 'addTableRow', 'changeCell',
+];
+
+/** Build a random op list for a seed. */
+const buildOps = (seed: number): Op[] => {
+  const r = rng(seed);
+  const n = 2 + Math.floor(r() * 4); // 2..5 simultaneous edits
+  const ops: Op[] = [];
+  for (let i = 0; i < n; i++) {
+    const kind = OP_KINDS[Math.floor(r() * OP_KINDS.length)];
+    ops.push({ kind, n: Math.floor(r() * 3), text: words(r, 6, 24) });
+  }
+  return ops;
+};
+
+/** Apply an op list in the browser. Defensive: skips ops whose target is gone. */
+const applyOps = (ops: Array<{ kind: string; n?: number; text?: string }>): void => {
+  const at = (sel: string, i: number) => document.querySelectorAll(sel)[i] as HTMLElement | undefined;
+  for (const op of ops) {
+    const i = op.n ?? 0;
+    const t = op.text ?? 'Changed.';
+    if (op.kind === 'rewordPost') { const e = at('.post .swiss-body', i); if (e) e.textContent = t; }
+    else if (op.kind === 'insertPost') document.querySelector('.posts')?.insertAdjacentHTML('afterbegin',
+      `<li class="post"><p class="date">Jul 19, 2026</p><h3 class="swiss-heading-md">New Note</h3><p class="swiss-body">${t}</p></li>`);
+    else if (op.kind === 'removePost') at('.post', i)?.remove();
+    else if (op.kind === 'growHero') { const e = document.querySelector('#hero .swiss-body-lg') as HTMLElement | null; if (e) e.textContent = t + ' ' + t; }
+    else if (op.kind === 'rewordDept') { const e = at('.dept .swiss-body', i); if (e) e.textContent = t + ' ' + t; }
+    else if (op.kind === 'removeDeptRow2') at('.dept', 3 + i)?.remove(); // rows 2 only (indices 3..5)
+    else if (op.kind === 'growCol') { const e = at('.col .swiss-body', i); if (e) e.textContent = t + ' ' + t + ' ' + t; }
+    else if (op.kind === 'addTableRow') document.querySelector('table')?.insertAdjacentHTML('beforeend',
+      `<tr><td>Row</td><td>${i}</td><td>${t.slice(0, 8)}</td></tr>`);
+    else if (op.kind === 'changeCell') { const e = at('td', i); if (e) e.textContent = t.slice(0, 6); }
+  }
+};
+
+describe('real-browser alignment — chaos', () => {
+  for (let seed = 1; seed <= 16; seed++) {
+    it(`seed ${seed} → matched content aligns`, async () => {
+      const ops = buildOps(seed);
+      const r = await residual(applyOps as never, ops);
+      if (r.max > 8) console.warn(`[chaos:${seed}] residual ${r.max}px ops=${JSON.stringify(ops)} worst=${JSON.stringify(r.worst)}`);
+      expect(r.max).toBeLessThanOrEqual(8);
     }, 30_000);
   }
 });

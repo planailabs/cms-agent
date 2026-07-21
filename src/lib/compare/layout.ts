@@ -105,12 +105,16 @@ const partition = (boxes: Box[], b: Bounds): Part => {
   if (boxes.length <= 1) return { kind: 'leaf', boxes, b };
   const h = axisCut(boxes, (x) => x.y0, (x) => x.y1); // horizontal cut (stack)
   const v = axisCut(boxes, (x) => x.x0, (x) => x.x1); // vertical cut (columns)
-  // Take the cleaner (wider) separation; recursion handles the rest.
+  // Take the cleaner (wider) separation; recursion handles the rest. On a TIE,
+  // prefer the horizontal (row) cut: a grid has full-span gaps both ways, and it
+  // flows row-major (align-items: stretch → a row's cards share top & height).
+  // Cutting rows first means a row-height change or an add/remove propagates down
+  // as one unit, instead of desyncing columns aligned independently.
   const pick =
-    v && (!h || v.gap >= h.gap)
-      ? { dir: 'v' as const, pos: v.pos, gap: v.gap }
-      : h
-        ? { dir: 'h' as const, pos: h.pos, gap: h.gap }
+    h && (!v || h.gap >= v.gap)
+      ? { dir: 'h' as const, pos: h.pos, gap: h.gap }
+      : v
+        ? { dir: 'v' as const, pos: v.pos, gap: v.gap }
         : null;
   if (!pick) return { kind: 'leaf', boxes, b };
 
@@ -394,7 +398,7 @@ export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffB
 export interface Spacer {
   i: number;
   px: number;
-  mode: 'el' | 'grid';
+  mode: 'el' | 'grid' | 'tail' | 'cell';
 }
 export interface SpacingPlan {
   a: Spacer[];
@@ -414,7 +418,7 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
   const B: Spacer[] = [];
   if (!pair) return { a: A, b: B };
 
-  const push = (list: Spacer[], i: number | undefined, px: number, mode: 'el' | 'grid'): void => {
+  const push = (list: Spacer[], i: number | undefined, px: number, mode: 'el' | 'grid' | 'tail' | 'cell'): void => {
     if (i !== undefined && px > 0.5) list.push({ i, px: Math.round(px), mode });
   };
   const firstLeaf = (p: Part): Box | undefined =>
@@ -461,13 +465,40 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
         return leafRegion(na, nb, pendA, pendB);
       }
       if (na.dir === 'v') {
-        // Columns: push the whole grid down once, then each column is its own
-        // vertical flow (fresh pending, no cross-column carry).
+        // Columns / a grid row: push the whole grid down once, then each column
+        // is its own vertical flow (fresh pending, no cross-column carry).
         const fla = firstLeaf(na);
         const flb = firstLeaf(nb);
         if (fla) push(A, fla.m.i, pendA, 'grid');
         if (flb) push(B, flb.m.i, pendB, 'grid');
         for (const [ca, cb] of pairs) if (ca && cb) walk(ca, cb, 0, 0);
+        // One-sided cards: an added/removed card reflows every later card into the
+        // next/previous cell (row-major). Insert a filler CELL on the side missing
+        // the card, before the next surviving card, so the cells stay put.
+        for (let k = 0; k < pairs.length; k++) {
+          const [ca, cb] = pairs[k];
+          if (ca && cb) continue;
+          const nextOn = (side: 0 | 1): Part | undefined => {
+            for (let j = k + 1; j < pairs.length; j++) if (pairs[j][side]) return pairs[j][side]!;
+            return undefined;
+          };
+          if (ca && !cb) {
+            const anchor = firstLeaf(nextOn(1) ?? ca);
+            if (nextOn(1)) push(B, anchor?.m.i, heightOf(ca), 'cell');
+          } else if (cb && !ca) {
+            const anchor = firstLeaf(nextOn(0) ?? cb);
+            if (nextOn(0)) push(A, anchor?.m.i, heightOf(cb), 'cell');
+          }
+        }
+        // With align-items: stretch a grid row's height is its tallest column, so
+        // a card that grew taller makes the whole row taller. Equalize by growing
+        // ONE card on the shorter side (stretch lifts the rest of the row); the
+        // grid then reflows the rows below, so nothing extra propagates upward.
+        const ha = heightOf(na);
+        const hb = heightOf(nb);
+        const d = Math.max(ha, hb);
+        if (fla) push(A, fla.m.i, d - ha, 'tail');
+        if (flb) push(B, flb.m.i, d - hb, 'tail');
         return [0, 0];
       }
       // Stacked column of blocks.
