@@ -8,29 +8,42 @@
  * the data volume (deploy ENOSPC) and stranded stale shots across deploys; a
  * tmpdir clears on restart so every run regenerates fresh.
  */
-import { createHash } from 'node:crypto';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { PNG } from 'pngjs';
-import pixelmatch from 'pixelmatch';
-import { env } from '@/lib/env';
-import { GIT_COMMIT } from '@/lib/buildInfo';
-import { COLLECT_MARKERS_JS, type MarkerDoc } from '@/lib/compare/markers';
-import { matchedYDelta, spacingPlan, type Spacer } from '@/lib/compare/layout';
-import { INJECT_SPACERS } from '@/lib/compare/inject';
-import { branchSha, defaultBranch } from '@/lib/git/engine';
-import { ensureInstance } from '@/lib/preview/manager';
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { PNG } from "pngjs";
+import pixelmatch from "pixelmatch";
+import { env } from "@/lib/env";
+import { GIT_COMMIT } from "@/lib/buildInfo";
+import { COLLECT_MARKERS_JS, type MarkerDoc } from "@/lib/compare/markers";
+import {
+  correctiveSpacers,
+  matchedYDelta,
+  spacingPlan,
+  type Spacer,
+} from "@/lib/compare/layout";
+import { INJECT_SPACERS } from "@/lib/compare/inject";
+import { branchSha, defaultBranch } from "@/lib/git/engine";
+import { ensureInstance } from "@/lib/preview/manager";
 
 // Content-aligned shots: the same page re-rendered with filler <div>s injected
 // (a real reflow — no canvas slicing) so before/after content sits at the same
 // y. The onion "content" mode overlays these directly.
-export type ShotKind = 'before' | 'after' | 'diff' | 'before-aligned' | 'after-aligned';
-export type BrowserName = 'chromium' | 'firefox' | 'webkit';
-export const BROWSERS: readonly BrowserName[] = ['chromium', 'firefox', 'webkit'];
-const isBrowser = (v: string): v is BrowserName => (BROWSERS as readonly string[]).includes(v);
-export const asBrowser = (v: string | null | undefined, fallback: BrowserName): BrowserName =>
-  v && isBrowser(v) ? v : fallback;
+export type ShotKind =
+  "before" | "after" | "diff" | "before-aligned" | "after-aligned";
+export type BrowserName = "chromium" | "firefox" | "webkit";
+export const BROWSERS: readonly BrowserName[] = [
+  "chromium",
+  "firefox",
+  "webkit",
+];
+const isBrowser = (v: string): v is BrowserName =>
+  (BROWSERS as readonly string[]).includes(v);
+export const asBrowser = (
+  v: string | null | undefined,
+  fallback: BrowserName,
+): BrowserName => (v && isBrowser(v) ? v : fallback);
 
 export interface DiffResult {
   route: string;
@@ -43,11 +56,14 @@ const VIEWPORT = { width: 1280, height: 900 };
 
 function cacheDir(branch: string): string {
   // TMPDIR, not VAR_DIR — ephemeral by design (see file header).
-  return path.join(os.tmpdir(), 'cms-agent-diffs', branch);
+  return path.join(os.tmpdir(), "cms-agent-diffs", branch);
 }
 
 function cacheKey(...parts: string[]): string {
-  return createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 16);
+  return createHash("sha256")
+    .update(parts.join("|"))
+    .digest("hex")
+    .slice(0, 16);
 }
 
 /**
@@ -56,31 +72,33 @@ function cacheKey(...parts: string[]): string {
  * `<commit>-<key>-*` and misses the previous build's shots/markers (which may
  * use an older collector) instead of serving them stale.
  */
-function shotFiles(dir: string, key: string): Record<ShotKind, string> & { meta: string } {
+function shotFiles(
+  dir: string,
+  key: string,
+): Record<ShotKind, string> & { meta: string } {
   const base = path.join(dir, GIT_COMMIT ? `${GIT_COMMIT}-${key}` : key);
   return {
     before: `${base}-before.png`,
     after: `${base}-after.png`,
     diff: `${base}-diff.png`,
-     'before-aligned': `${base}-before-aligned.png`,
-    'after-aligned': `${base}-after-aligned.png`,
+    "before-aligned": `${base}-before-aligned.png`,
+    "after-aligned": `${base}-after-aligned.png`,
     meta: `${base}-meta.json`,
   };
 }
 
-
+/** Raw shot: render the route, capture content markers next to it, screenshot. */
 async function screenshot(
   port: number,
   route: string,
   outFile: string,
-  browser: BrowserName = 'chromium',
-  spacers?: Spacer[],
+  browser: BrowserName = "chromium",
 ): Promise<MarkerDoc | null> {
-  const playwright = await import('playwright');
+  const playwright = await import("playwright");
   // chromiumSandbox: false — chromium's own SUID/namespace sandbox is
   // unreliable inside the container; the content is our own site preview.
   const launched = await playwright[browser].launch(
-    browser === 'chromium' ? { chromiumSandbox: false } : {},
+    browser === "chromium" ? { chromiumSandbox: false } : {},
   );
   let markers: MarkerDoc | null = null;
   try {
@@ -88,25 +106,18 @@ async function screenshot(
     // Connect on the host the dev server actually binds (HOST — ::1 in dev,
     // 127.0.0.1 in prod); v6 needs brackets.
     const host = env().HOST;
-    const h = host.includes(':') ? `[${host}]` : host;
-    await page.goto(`http://${h}:${port}${route}`, { waitUntil: 'networkidle', timeout: 30_000 });
+    const h = host.includes(":") ? `[${host}]` : host;
+    await page.goto(`http://${h}:${port}${route}`, {
+      waitUntil: "networkidle",
+      timeout: 30_000,
+    });
     // Content markers next to the shot — also tags each element (data-cmsm) so
     // the aligned pass can re-select it. Captured BEFORE the shot: same layout.
     try {
       markers = (await page.evaluate(COLLECT_MARKERS_JS)) as MarkerDoc;
-      if (!spacers) fs.writeFileSync(`${outFile}.markers.json`, JSON.stringify(markers));
+      fs.writeFileSync(`${outFile}.markers.json`, JSON.stringify(markers));
     } catch (err) {
       console.warn(`[diff] marker collection failed for ${route}:`, err);
-    }
-    // Aligned pass: inject filler divs, then shoot the reflowed page — and
-    // re-collect markers so the caller can measure real post-reflow alignment.
-    if (spacers && spacers.length) {
-      try {
-        await page.evaluate(INJECT_SPACERS, spacers as Array<{ i: number; px: number; mode: string }>);
-        markers = (await page.evaluate(COLLECT_MARKERS_JS)) as MarkerDoc;
-      } catch (err) {
-        console.warn(`[diff] spacer injection failed for ${route}:`, err);
-      }
     }
     await page.screenshot({ path: outFile, fullPage: true });
   } finally {
@@ -127,11 +138,53 @@ function padPair(fileA: string, fileB: string): void {
     if (ap !== a) fs.writeFileSync(fileA, PNG.sync.write(ap));
     if (bp !== b) fs.writeFileSync(fileB, PNG.sync.write(bp));
   } catch (err) {
-    console.warn('[diff] aligned pad failed:', err);
+    console.warn("[diff] aligned pad failed:", err);
   }
 }
 
-/** Render both aligned shots (best-effort) from a computed spacing plan. */
+// A route+browser page held open after the structural reflow so a second
+// (corrective) injection can be applied before the shot.
+interface AlignedPage {
+  launched: import("playwright").Browser;
+  page: import("playwright").Page;
+  markers: MarkerDoc;
+}
+
+/** Open a page, reflow it with the structural spacers, and re-collect markers —
+ *  leaving it OPEN so a corrective pass can inject into the same DOM. */
+async function openAligned(
+  port: number,
+  route: string,
+  browser: BrowserName,
+  spacers: Spacer[],
+): Promise<AlignedPage> {
+  const playwright = await import("playwright");
+  const launched = await playwright[browser].launch(
+    browser === "chromium" ? { chromiumSandbox: false } : {},
+  );
+  const page = await launched.newPage({ viewport: VIEWPORT });
+  const host = env().HOST;
+  const h = host.includes(":") ? `[${host}]` : host;
+  await page.goto(`http://${h}:${port}${route}`, {
+    waitUntil: "networkidle",
+    timeout: 30_000,
+  });
+  await page.evaluate(COLLECT_MARKERS_JS); // assign data-cmsm the plan indexes by
+  if (spacers.length) {
+    await page.evaluate(
+      INJECT_SPACERS,
+      spacers as Array<{ i: number; px: number; mode: string }>,
+    );
+  }
+  const markers = (await page.evaluate(COLLECT_MARKERS_JS)) as MarkerDoc;
+  return { launched, page, markers };
+}
+
+const CORRECTIVE_THRESHOLD = 8; // px residual that trips the last-resort patch
+
+/** Render both aligned shots (best-effort) from a computed spacing plan. If the
+ *  structural reflow leaves residual drift, a last-resort corrective pass patches
+ *  it geometrically before the shot. */
 async function alignedShots(
   aPort: number,
   bPort: number,
@@ -139,32 +192,58 @@ async function alignedShots(
   files: Record<ShotKind, string>,
   markersA: MarkerDoc,
   markersB: MarkerDoc,
-  browserA: BrowserName = 'chromium',
-  browserB: BrowserName = 'chromium',
+  browserA: BrowserName = "chromium",
+  browserB: BrowserName = "chromium",
 ): Promise<void> {
+  const plan = spacingPlan(markersA.m, markersA.h, markersB.m, markersB.h);
+  let A: AlignedPage | undefined;
+  let B: AlignedPage | undefined;
   try {
-    const plan = spacingPlan(markersA.m, markersA.h, markersB.m, markersB.h);
-    const [ra, rb] = await Promise.all([
-      screenshot(aPort, route, files['before-aligned'], browserA, plan.a),
-      screenshot(bPort, route, files['after-aligned'], browserB, plan.b),
+    [A, B] = await Promise.all([
+      openAligned(aPort, route, browserA, plan.a),
+      openAligned(bPort, route, browserB, plan.b),
     ]);
-    padPair(files['before-aligned'], files['after-aligned']);
-    // Self-check: matched content should now share a y in the reflowed shots.
-    if (ra && rb) {
-      const { max, worst } = matchedYDelta(ra.m, rb.m);
-      if (Math.abs(max) > 8) {
-        console.warn(`[align] ${route}: residual ${max}px misalignment`, JSON.stringify(worst));
-      }
+    let ra = A.markers;
+    let rb = B.markers;
+    // Last resort: the structural pass left residual → patch the leftover drift
+    // with corrective fillers on the higher side, then re-collect.
+    const before = matchedYDelta(ra.m, rb.m);
+    if (Math.abs(before.max) > CORRECTIVE_THRESHOLD) {
+      const corr = correctiveSpacers(ra.m, rb.m);
+      const inject = (p: AlignedPage, s: Spacer[]) =>
+        s.length
+          ? p.page.evaluate(
+              INJECT_SPACERS,
+              s as Array<{ i: number; px: number; mode: string }>,
+            )
+          : Promise.resolve();
+      await Promise.all([inject(A, corr.a), inject(B, corr.b)]);
+      [ra, rb] = (await Promise.all([
+        A.page.evaluate(COLLECT_MARKERS_JS),
+        B.page.evaluate(COLLECT_MARKERS_JS),
+      ])) as [MarkerDoc, MarkerDoc];
+      const after = matchedYDelta(ra.m, rb.m);
+      console.warn(
+        `[align] ${route}: corrective pass ${before.max}px → ${after.max}px`,
+        JSON.stringify(after.worst),
+      );
     }
+    await Promise.all([
+      A.page.screenshot({ path: files["before-aligned"], fullPage: true }),
+      B.page.screenshot({ path: files["after-aligned"], fullPage: true }),
+    ]);
+    padPair(files["before-aligned"], files["after-aligned"]);
   } catch (err) {
-    console.warn('[diff] aligned shots failed:', err);
+    console.warn("[diff] aligned shots failed:", err);
     // Fall back to the raw shots so the content mode still has something.
     try {
-      fs.copyFileSync(files.before, files['before-aligned']);
-      fs.copyFileSync(files.after, files['after-aligned']);
+      fs.copyFileSync(files.before, files["before-aligned"]);
+      fs.copyFileSync(files.after, files["after-aligned"]);
     } catch {
       /* raw shots also missing — the mode just 404s */
     }
+  } finally {
+    await Promise.all([A?.launched.close(), B?.launched.close()]);
   }
 }
 
@@ -174,7 +253,11 @@ async function alignedShots(
  * three PNGs are normalized to the same (max) dimensions — the before/after
  * files are rewritten padded, so the onion/highlight overlays line up.
  */
-function pixelDiff(fileA: string, fileB: string, diffOut: string): { changed: number; total: number } {
+function pixelDiff(
+  fileA: string,
+  fileB: string,
+  diffOut: string,
+): { changed: number; total: number } {
   const a = PNG.sync.read(fs.readFileSync(fileA));
   const b = PNG.sync.read(fs.readFileSync(fileB));
   const width = Math.max(a.width, b.width);
@@ -210,10 +293,15 @@ function padTo(png: PNG, width: number, height: number): PNG {
  * (pngjs: "unrecognised content at end of stream"). globalThis-backed so a
  * dev HMR reload cannot split the map (see AGENTS.md singleton rule).
  */
-const gsf = globalThis as unknown as { __cmsShotFlight?: Map<string, Promise<DiffResult>> };
+const gsf = globalThis as unknown as {
+  __cmsShotFlight?: Map<string, Promise<DiffResult>>;
+};
 const inFlight = (gsf.__cmsShotFlight ??= new Map());
 
-function singleFlight(key: string, run: () => Promise<DiffResult>): Promise<DiffResult> {
+function singleFlight(
+  key: string,
+  run: () => Promise<DiffResult>,
+): Promise<DiffResult> {
   const existing = inFlight.get(key);
   if (existing) return existing;
   const p = run().finally(() => inFlight.delete(key));
@@ -225,9 +313,16 @@ function singleFlight(key: string, run: () => Promise<DiffResult>): Promise<Diff
  * Produce before/after/diff PNGs for a route. Boots both preview instances
  * if needed. Cached per commit pair.
  */
-export async function diffRoute(branch: string, route: string, base?: string): Promise<DiffResult> {
+export async function diffRoute(
+  branch: string,
+  route: string,
+  base?: string,
+): Promise<DiffResult> {
   const main = base ?? (await defaultBranch());
-  const [mainRef, branchRef] = await Promise.all([branchSha(main), branchSha(branch)]);
+  const [mainRef, branchRef] = await Promise.all([
+    branchSha(main),
+    branchSha(branch),
+  ]);
   const key = cacheKey(route, mainRef, branchRef);
   const dir = cacheDir(branch);
   fs.mkdirSync(dir, { recursive: true });
@@ -236,7 +331,7 @@ export async function diffRoute(branch: string, route: string, base?: string): P
 
   return singleFlight(key, async () => {
     if (fs.existsSync(metaFile)) {
-      const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8')) as DiffResult;
+      const meta = JSON.parse(fs.readFileSync(metaFile, "utf8")) as DiffResult;
       if (Object.values(files).every((f) => fs.existsSync(f))) return meta;
     }
 
@@ -253,9 +348,21 @@ export async function diffRoute(branch: string, route: string, base?: string): P
     const { changed, total } = pixelDiff(files.before, files.after, files.diff);
     // Aligned shots for the onion "content" mode — real reflow, not canvas.
     if (ma && mb) {
-      await alignedShots(mainInstance.port, branchInstance.port, route, files, ma, mb);
+      await alignedShots(
+        mainInstance.port,
+        branchInstance.port,
+        route,
+        files,
+        ma,
+        mb,
+      );
     }
-    const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
+    const result: DiffResult = {
+      route,
+      changedPixels: changed,
+      totalPixels: total,
+      files,
+    };
     fs.writeFileSync(metaFile, JSON.stringify(result));
     return result;
   });
@@ -273,15 +380,18 @@ export async function diffBrowsers(
   browserB: BrowserName,
 ): Promise<DiffResult> {
   const ref = await branchSha(branch);
-  const key = cacheKey('browsers', route, ref, browserA, browserB);
+  const key = cacheKey("browsers", route, ref, browserA, browserB);
   const dir = cacheDir(branch);
   fs.mkdirSync(dir, { recursive: true });
 
   const { meta: metaFile, ...files } = shotFiles(dir, key);
 
   return singleFlight(key, async () => {
-    if (fs.existsSync(metaFile) && Object.values(files).every((f) => fs.existsSync(f))) {
-      return JSON.parse(fs.readFileSync(metaFile, 'utf8')) as DiffResult;
+    if (
+      fs.existsSync(metaFile) &&
+      Object.values(files).every((f) => fs.existsSync(f))
+    ) {
+      return JSON.parse(fs.readFileSync(metaFile, "utf8")) as DiffResult;
     }
 
     const instance = await ensureInstance(branch);
@@ -292,9 +402,23 @@ export async function diffBrowsers(
 
     const { changed, total } = pixelDiff(files.before, files.after, files.diff);
     if (ma && mb) {
-      await alignedShots(instance.port, instance.port, route, files, ma, mb, browserA, browserB);
+      await alignedShots(
+        instance.port,
+        instance.port,
+        route,
+        files,
+        ma,
+        mb,
+        browserA,
+        browserB,
+      );
     }
-    const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
+    const result: DiffResult = {
+      route,
+      changedPixels: changed,
+      totalPixels: total,
+      files,
+    };
     fs.writeFileSync(metaFile, JSON.stringify(result));
     return result;
   });

@@ -23,7 +23,7 @@ import {
   mapPosition,
   type AlignedSegment,
   type Marker,
-} from './markers';
+} from "./markers";
 
 interface Bounds {
   x0: number;
@@ -37,8 +37,14 @@ interface Box extends Bounds {
 }
 
 type Part =
-  | { kind: 'leaf'; boxes: Box[]; b: Bounds }
-  | { kind: 'split'; dir: 'h' | 'v'; gap: number; children: [Part, Part]; b: Bounds };
+  | { kind: "leaf"; boxes: Box[]; b: Bounds }
+  | {
+      kind: "split";
+      dir: "h" | "v";
+      gap: number;
+      children: [Part, Part];
+      b: Bounds;
+    };
 
 /** A node of the aligned render tree. `h` is the aligned height (identical on
  *  both sides); leaves carry per-side slice heights via AlignedSegment. */
@@ -46,7 +52,7 @@ export interface ANode {
   x0: number;
   w: number;
   h: number;
-  kind: 'leaf' | 'row' | 'col';
+  kind: "leaf" | "row" | "col";
   segs?: AlignedSegment[]; // leaf: 1-D slices within [x0, x0+w]
   children?: ANode[]; // row = side-by-side, col = stacked
 }
@@ -54,7 +60,8 @@ export interface ANode {
 const MIN_GAP = 10; // px: a guillotine cut needs at least this clear gap
 
 const isContainer = (m: Marker): boolean => m.k.charCodeAt(0) === 35; // "#…" structsig
-const hasBox = (m: Marker): boolean => m.x !== undefined && m.w !== undefined && m.h !== undefined;
+const hasBox = (m: Marker): boolean =>
+  m.x !== undefined && m.w !== undefined && m.h !== undefined;
 
 const boxOf = (m: Marker): Box | null => {
   if (m.x === undefined || m.w === undefined || m.h === undefined) return null;
@@ -70,8 +77,14 @@ const partitionPair = (
   b: Marker[],
   bh: number,
 ): { pa: Part; pb: Part } | null => {
-  const boxesA = a.filter((m) => !isContainer(m)).map(boxOf).filter((x): x is Box => x !== null);
-  const boxesB = b.filter((m) => !isContainer(m)).map(boxOf).filter((x): x is Box => x !== null);
+  const boxesA = a
+    .filter((m) => !isContainer(m))
+    .map(boxOf)
+    .filter((x): x is Box => x !== null);
+  const boxesB = b
+    .filter((m) => !isContainer(m))
+    .map(boxOf)
+    .filter((x): x is Box => x !== null);
   if (boxesA.length === 0 || boxesB.length === 0) return null;
   const w = Math.max(...boxesA.map((x) => x.x1), ...boxesB.map((x) => x.x1));
   return {
@@ -102,9 +115,17 @@ const axisCut = (
 };
 
 const partition = (boxes: Box[], b: Bounds): Part => {
-  if (boxes.length <= 1) return { kind: 'leaf', boxes, b };
-  const h = axisCut(boxes, (x) => x.y0, (x) => x.y1); // horizontal cut (stack)
-  const v = axisCut(boxes, (x) => x.x0, (x) => x.x1); // vertical cut (columns)
+  if (boxes.length <= 1) return { kind: "leaf", boxes, b };
+  const h = axisCut(
+    boxes,
+    (x) => x.y0,
+    (x) => x.y1,
+  ); // horizontal cut (stack)
+  const v = axisCut(
+    boxes,
+    (x) => x.x0,
+    (x) => x.x1,
+  ); // vertical cut (columns)
   // Take the cleaner (wider) separation; recursion handles the rest. On a TIE,
   // prefer the horizontal (row) cut: a grid has full-span gaps both ways, and it
   // flows row-major (align-items: stretch → a row's cards share top & height).
@@ -112,27 +133,36 @@ const partition = (boxes: Box[], b: Bounds): Part => {
   // as one unit, instead of desyncing columns aligned independently.
   const pick =
     h && (!v || h.gap >= v.gap)
-      ? { dir: 'h' as const, pos: h.pos, gap: h.gap }
+      ? { dir: "h" as const, pos: h.pos, gap: h.gap }
       : v
-        ? { dir: 'v' as const, pos: v.pos, gap: v.gap }
+        ? { dir: "v" as const, pos: v.pos, gap: v.gap }
         : null;
-  if (!pick) return { kind: 'leaf', boxes, b };
+  if (!pick) return { kind: "leaf", boxes, b };
 
-  const isV = pick.dir === 'v';
+  const isV = pick.dir === "v";
   const key = (bx: Box) => (isV ? bx.x1 : bx.y1);
   const first: Box[] = [];
   const second: Box[] = [];
   for (const bx of boxes) (key(bx) <= pick.pos ? first : second).push(bx);
-  if (first.length === 0 || second.length === 0) return { kind: 'leaf', boxes, b };
+  if (first.length === 0 || second.length === 0)
+    return { kind: "leaf", boxes, b };
 
   const b1: Bounds = isV ? { ...b, x1: pick.pos } : { ...b, y1: pick.pos };
   const b2: Bounds = isV ? { ...b, x0: pick.pos } : { ...b, y0: pick.pos };
-  return { kind: 'split', dir: pick.dir, gap: pick.gap, children: [partition(first, b1), partition(second, b2)], b };
+  return {
+    kind: "split",
+    dir: pick.dir,
+    gap: pick.gap,
+    children: [partition(first, b1), partition(second, b2)],
+    b,
+  };
 };
 
 /** All leaf markers of a part, in document order (for the 1-D fallback). */
 const leavesOf = (p: Part): Box[] =>
-  p.kind === 'leaf' ? p.boxes : [...leavesOf(p.children[0]), ...leavesOf(p.children[1])];
+  p.kind === "leaf"
+    ? p.boxes
+    : [...leavesOf(p.children[0]), ...leavesOf(p.children[1])];
 
 /** Align one leaf rectangle: 1-D over its boxes' markers, within its y-band. */
 const alignLeaf = (pa: Part, pb: Part): ANode => {
@@ -141,18 +171,21 @@ const alignLeaf = (pa: Part, pb: Part): ANode => {
   const boundsA = pa.b;
   const boundsB = pb.b;
   const segs = alignedSegmentsIn(
-    computeAnchors(ba.map((x) => x.m), bb.map((x) => x.m)),
+    computeAnchors(
+      ba.map((x) => x.m),
+      bb.map((x) => x.m),
+    ),
     boundsA.y0,
     boundsA.y1,
     boundsB.y0,
     boundsB.y1,
   );
   const h = segs.reduce((s, x) => s + x.h, 0);
-  return { kind: 'leaf', x0: boundsA.x0, w: boundsA.x1 - boundsA.x0, h, segs };
+  return { kind: "leaf", x0: boundsA.x0, w: boundsA.x1 - boundsA.x0, h, segs };
 };
 
 const keyTag = (k: string): string => {
-  const c = k.indexOf(':');
+  const c = k.indexOf(":");
   return c > 0 ? k.slice(0, c) : k;
 };
 
@@ -193,7 +226,9 @@ const childSim = (pa: Part, pb: Part): number => {
   const ma = leavesOf(pa).map((x) => x.m);
   const mb = leavesOf(pb).map((x) => x.m);
   if (ma.length === 0 || mb.length === 0) return 0;
-  const good = alignMarkers(ma, mb).matches.filter((mm) => mm.score >= 0.5).length;
+  const good = alignMarkers(ma, mb).matches.filter(
+    (mm) => mm.score >= 0.5,
+  ).length;
   const textSim = good / Math.max(ma.length, mb.length);
   const richness = Math.min(1, (Math.min(ma.length, mb.length) - 1) / 3); // 1 elem → 0
   return Math.min(1, textSim + 0.5 * structSim(pa, pb) * richness);
@@ -202,17 +237,27 @@ const childSim = (pa: Part, pb: Part): number => {
 /** Order-preserving alignment of two sibling lists by content similarity, with
  *  gaps for added/removed children (a sub-CHILD_MIN pairing is a gap, not a
  *  forced match). */
-const alignChildren = (as: Part[], bs: Part[]): Array<[Part | null, Part | null]> => {
+const alignChildren = (
+  as: Part[],
+  bs: Part[],
+): Array<[Part | null, Part | null]> => {
   const n = as.length;
   const m = bs.length;
   const eff = (i: number, j: number): number => {
     const s = childSim(as[i], bs[j]);
     return s >= CHILD_MIN ? s : -1; // sub-threshold → gaps beat a forced pairing
   };
-  const dp: Float64Array[] = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
+  const dp: Float64Array[] = Array.from(
+    { length: n + 1 },
+    () => new Float64Array(m + 1),
+  );
   for (let i = 1; i <= n; i++) {
     for (let j = 1; j <= m; j++) {
-      dp[i][j] = Math.max(dp[i - 1][j - 1] + eff(i - 1, j - 1), dp[i - 1][j], dp[i][j - 1]);
+      dp[i][j] = Math.max(
+        dp[i - 1][j - 1] + eff(i - 1, j - 1),
+        dp[i - 1][j],
+        dp[i][j - 1],
+      );
     }
   }
   const out: Array<[Part | null, Part | null]> = [];
@@ -238,14 +283,20 @@ const alignChildren = (as: Part[], bs: Part[]): Array<[Part | null, Part | null]
 /** A child present on only one side: its content on that side, a filler of the
  *  same height on the other — a hierarchy-correct filler exactly where the
  *  insertion/removal is, not tacked onto the end. */
-const spanNode = (p: Part, side: 'a' | 'b'): ANode => {
+const spanNode = (p: Part, side: "a" | "b"): ANode => {
   const top = p.b.y0;
   const height = p.b.y1 - p.b.y0;
   const seg: AlignedSegment =
-    side === 'a'
+    side === "a"
       ? { topA: top, topB: 0, hA: height, hB: 0, h: height }
       : { topA: 0, topB: top, hA: 0, hB: height, h: height };
-  return { kind: 'leaf', x0: p.b.x0, w: p.b.x1 - p.b.x0, h: height, segs: [seg] };
+  return {
+    kind: "leaf",
+    x0: p.b.x0,
+    w: p.b.x1 - p.b.x0,
+    h: height,
+    segs: [seg],
+  };
 };
 
 /** Flatten a run of same-direction splits at the SAME gap level into one flat
@@ -254,10 +305,14 @@ const spanNode = (p: Part, side: 'a' | 'b'): ANode => {
  *  or blocks lose their grouping. Flatten only child splits whose gap is a
  *  meaningful fraction of this level's gap. */
 const FLATTEN_RATIO = 0.5;
-const flattenChildren = (p: Part & { kind: 'split' }): Part[] => {
+const flattenChildren = (p: Part & { kind: "split" }): Part[] => {
   const out: Part[] = [];
   const walk = (q: Part): void => {
-    if (q.kind === 'split' && q.dir === p.dir && q.gap >= FLATTEN_RATIO * p.gap) {
+    if (
+      q.kind === "split" &&
+      q.dir === p.dir &&
+      q.gap >= FLATTEN_RATIO * p.gap
+    ) {
       walk(q.children[0]);
       walk(q.children[1]);
     } else {
@@ -271,7 +326,7 @@ const flattenChildren = (p: Part & { kind: 'split' }): Part[] => {
 
 /** Match two partition trees into an aligned render tree. */
 const matchAlign = (pa: Part, pb: Part): ANode => {
-  if (pa.kind === 'split' && pb.kind === 'split' && pa.dir === pb.dir) {
+  if (pa.kind === "split" && pb.kind === "split" && pa.dir === pb.dir) {
     // Align siblings by content (not index) so an inserted/removed block gets a
     // filler in the right place instead of shifting everything after it.
     const fa = flattenChildren(pa);
@@ -281,18 +336,23 @@ const matchAlign = (pa: Part, pb: Part): ANode => {
     // overlaying it as one rectangle (height = max) is right; stacking one-sided
     // halves would double the height into a mess.
     const matched = pairs.filter(([x, y]) => x && y).length;
-    if (matched < 0.5 * Math.max(fa.length, fb.length)) return alignLeaf(pa, pb);
+    if (matched < 0.5 * Math.max(fa.length, fb.length))
+      return alignLeaf(pa, pb);
     const children = pairs.map(([ca, cb]) =>
-      ca && cb ? matchAlign(ca, cb) : ca ? spanNode(ca, 'a') : spanNode(cb!, 'b'),
+      ca && cb
+        ? matchAlign(ca, cb)
+        : ca
+          ? spanNode(ca, "a")
+          : spanNode(cb!, "b"),
     );
     const x0 = pa.b.x0;
     const w = pa.b.x1 - pa.b.x0;
-    if (pa.dir === 'v') {
+    if (pa.dir === "v") {
       const h = Math.max(...children.map((c) => c.h)); // columns: pad to tallest
-      return { kind: 'row', x0, w, h, children };
+      return { kind: "row", x0, w, h, children };
     }
     const h = children.reduce((s, c) => s + c.h, 0); // stacked: heights add up
-    return { kind: 'col', x0, w, h, children };
+    return { kind: "col", x0, w, h, children };
   }
   return alignLeaf(pa, pb);
 };
@@ -315,7 +375,7 @@ export const buildLayout = (
 // ── Box-diff highlights ────────────────────────────────────────────────────
 
 export interface DiffBox {
-  kind: 'added' | 'removed' | 'changed';
+  kind: "added" | "removed" | "changed";
   x: number;
   y: number;
   w: number;
@@ -334,7 +394,12 @@ export interface DiffBox {
  * matched block are markers paired by text to flag the changed ones. Semantic,
  * so anti-aliasing / cross-browser noise never lights up. [] without boxes.
  */
-export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffBox[] => {
+export const boxDiff = (
+  a: Marker[],
+  ah: number,
+  b: Marker[],
+  bh: number,
+): DiffBox[] => {
   const pair = partitionPair(a, ah, b, bh);
   if (!pair) return [];
 
@@ -346,19 +411,20 @@ export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffB
   // "changed" is a CONTENT question (did the text/tag change?), separate from
   // "did they correspond?" — identity (id/scope/class) can make a heavily-edited
   // element score ~1, so compare the content key, not the match score.
-  const baseKey = (k: string): string => k.replace(/#\d+$/, '');
+  const baseKey = (k: string): string => k.replace(/#\d+$/, "");
   const leafDiff = (na: Part, nb: Part): void => {
     const ma = leavesOf(na).map((x) => x.m);
     const mb = leavesOf(nb).map((x) => x.m);
     const { matches, onlyA, onlyB } = alignMarkers(ma, mb);
     for (const mm of matches) {
-      if (baseKey(ma[mm.ai].k) !== baseKey(mb[mm.bi].k)) changed.push(mb[mm.bi]);
+      if (baseKey(ma[mm.ai].k) !== baseKey(mb[mm.bi].k))
+        changed.push(mb[mm.bi]);
     }
     for (const i of onlyB) added.push(mb[i]);
     for (const i of onlyA) removed.push(ma[i]);
   };
   const walk = (na: Part, nb: Part): void => {
-    if (na.kind === 'split' && nb.kind === 'split' && na.dir === nb.dir) {
+    if (na.kind === "split" && nb.kind === "split" && na.dir === nb.dir) {
       const fa = flattenChildren(na);
       const fb = flattenChildren(nb);
       const pairs = alignChildren(fa, fb);
@@ -379,12 +445,23 @@ export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffB
   walk(pair.pa, pair.pb);
 
   const out: DiffBox[] = [];
-  for (const m of added) if (hasBox(m)) out.push({ kind: 'added', x: m.x!, y: m.y, w: m.w!, h: m.h! });
-  for (const m of changed) if (hasBox(m)) out.push({ kind: 'changed', x: m.x!, y: m.y, w: m.w!, h: m.h! });
+  for (const m of added)
+    if (hasBox(m))
+      out.push({ kind: "added", x: m.x!, y: m.y, w: m.w!, h: m.h! });
+  for (const m of changed)
+    if (hasBox(m))
+      out.push({ kind: "changed", x: m.x!, y: m.y, w: m.w!, h: m.h! });
   if (removed.length) {
     const bracketed = bracketAnchors(computeAnchors(a, b), ah, bh);
     for (const m of removed) {
-      if (hasBox(m)) out.push({ kind: 'removed', x: m.x!, y: mapPosition(m.y, bracketed), w: m.w!, h: m.h! });
+      if (hasBox(m))
+        out.push({
+          kind: "removed",
+          x: m.x!,
+          y: mapPosition(m.y, bracketed),
+          w: m.w!,
+          h: m.h!,
+        });
     }
   }
   return out;
@@ -398,7 +475,7 @@ export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffB
 export interface Spacer {
   i: number;
   px: number;
-  mode: 'el' | 'grid' | 'tail' | 'cell';
+  mode: "el" | "grid" | "tail" | "cell";
 }
 export interface SpacingPlan {
   a: Spacer[];
@@ -412,29 +489,51 @@ export interface SpacingPlan {
  * matched leaf region the anchors give inline gaps, one-sided blocks push the
  * OTHER side (pending), and a grid row's incoming gap pushes the whole grid.
  */
-export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): SpacingPlan => {
+export const spacingPlan = (
+  a: Marker[],
+  ah: number,
+  b: Marker[],
+  bh: number,
+): SpacingPlan => {
   const pair = partitionPair(a, ah, b, bh);
   const A: Spacer[] = [];
   const B: Spacer[] = [];
   if (!pair) return { a: A, b: B };
 
-  const push = (list: Spacer[], i: number | undefined, px: number, mode: 'el' | 'grid' | 'tail' | 'cell'): void => {
+  const push = (
+    list: Spacer[],
+    i: number | undefined,
+    px: number,
+    mode: "el" | "grid" | "tail" | "cell",
+  ): void => {
     if (i !== undefined && px > 0.5) list.push({ i, px: Math.round(px), mode });
   };
   const firstLeaf = (p: Part): Box | undefined =>
-    leavesOf(p).slice().sort((x, y) => x.y0 - y.y0)[0];
+    leavesOf(p)
+      .slice()
+      .sort((x, y) => x.y0 - y.y0)[0];
   const heightOf = (p: Part): number => p.b.y1 - p.b.y0;
 
   // Returns leftover trailing pending [A,B] (the gap after the last anchor down
   // to the region bottom, e.g. content appended at the end) to carry forward.
-  const leafRegion = (na: Part, nb: Part, pendA: number, pendB: number): [number, number] => {
-    const ba = leavesOf(na).slice().sort((x, y) => x.y0 - y.y0);
-    const bb = leavesOf(nb).slice().sort((x, y) => x.y0 - y.y0);
-    if (ba[0]) push(A, ba[0].m.i, pendA, 'el'); // flow push of this region
-    if (bb[0]) push(B, bb[0].m.i, pendB, 'el');
-    const anchors = alignMarkers(ba.map((x) => x.m), bb.map((x) => x.m)).matches.filter(
-      (m) => m.score >= ANCHOR_MIN,
-    );
+  const leafRegion = (
+    na: Part,
+    nb: Part,
+    pendA: number,
+    pendB: number,
+  ): [number, number] => {
+    const ba = leavesOf(na)
+      .slice()
+      .sort((x, y) => x.y0 - y.y0);
+    const bb = leavesOf(nb)
+      .slice()
+      .sort((x, y) => x.y0 - y.y0);
+    if (ba[0]) push(A, ba[0].m.i, pendA, "el"); // flow push of this region
+    if (bb[0]) push(B, bb[0].m.i, pendB, "el");
+    const anchors = alignMarkers(
+      ba.map((x) => x.m),
+      bb.map((x) => x.m),
+    ).matches.filter((m) => m.score >= ANCHOR_MIN);
     let pYA = na.b.y0;
     let pYB = nb.b.y0;
     for (const an of anchors) {
@@ -443,8 +542,8 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
       const gapA = eA.y0 - pYA;
       const gapB = eB.y0 - pYB;
       const h = Math.max(gapA, gapB);
-      push(A, eA.m.i, h - gapA, 'el'); // inline gap before this anchor
-      push(B, eB.m.i, h - gapB, 'el');
+      push(A, eA.m.i, h - gapA, "el"); // inline gap before this anchor
+      push(B, eB.m.i, h - gapB, "el");
       pYA = eA.y0;
       pYB = eB.y0;
     }
@@ -455,8 +554,13 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
   };
 
   // Stacked flow: pending threads through siblings. Returns leftover pending.
-  const walk = (na: Part, nb: Part, pendA: number, pendB: number): [number, number] => {
-    if (na.kind === 'split' && nb.kind === 'split' && na.dir === nb.dir) {
+  const walk = (
+    na: Part,
+    nb: Part,
+    pendA: number,
+    pendB: number,
+  ): [number, number] => {
+    if (na.kind === "split" && nb.kind === "split" && na.dir === nb.dir) {
       const fa = flattenChildren(na);
       const fb = flattenChildren(nb);
       const pairs = alignChildren(fa, fb);
@@ -464,14 +568,30 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
       if (matched < 0.5 * Math.max(fa.length, fb.length)) {
         return leafRegion(na, nb, pendA, pendB);
       }
-      if (na.dir === 'v') {
+      if (na.dir === "v") {
         // Columns / a grid row: push the whole grid down once, then each column
         // is its own vertical flow (fresh pending, no cross-column carry).
         const fla = firstLeaf(na);
         const flb = firstLeaf(nb);
-        if (fla) push(A, fla.m.i, pendA, 'grid');
-        if (flb) push(B, flb.m.i, pendB, 'grid');
-        for (const [ca, cb] of pairs) if (ca && cb) walk(ca, cb, 0, 0);
+        if (fla) push(A, fla.m.i, pendA, "grid");
+        if (flb) push(B, flb.m.i, pendB, "grid");
+        // Each matched column aligns internally (inline gaps between its anchors);
+        // capture the leftover trailing deficit [ra, rb] — the pad each side needs
+        // at the column BOTTOM to reach the column's aligned height `e` (the taller
+        // side). matchAlign gives `e` (equalizes both sides, so headings that wrap
+        // to different line counts are handled).
+        const cols: Array<{
+          ca: Part;
+          cb: Part;
+          e: number;
+          ra: number;
+          rb: number;
+        }> = [];
+        for (const [ca, cb] of pairs) {
+          if (!(ca && cb)) continue;
+          const [ra, rb] = walk(ca, cb, 0, 0);
+          cols.push({ ca, cb, e: matchAlign(ca, cb).h, ra, rb });
+        }
         // One-sided cards: an added/removed card reflows every later card into the
         // next/previous cell (row-major). Insert a filler CELL on the side missing
         // the card, before the next surviving card, so the cells stay put.
@@ -479,26 +599,29 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
           const [ca, cb] = pairs[k];
           if (ca && cb) continue;
           const nextOn = (side: 0 | 1): Part | undefined => {
-            for (let j = k + 1; j < pairs.length; j++) if (pairs[j][side]) return pairs[j][side]!;
+            for (let j = k + 1; j < pairs.length; j++)
+              if (pairs[j][side]) return pairs[j][side]!;
             return undefined;
           };
           if (ca && !cb) {
             const anchor = firstLeaf(nextOn(1) ?? ca);
-            if (nextOn(1)) push(B, anchor?.m.i, heightOf(ca), 'cell');
+            if (nextOn(1)) push(B, anchor?.m.i, heightOf(ca), "cell");
           } else if (cb && !ca) {
             const anchor = firstLeaf(nextOn(0) ?? cb);
-            if (nextOn(0)) push(A, anchor?.m.i, heightOf(cb), 'cell');
+            if (nextOn(0)) push(A, anchor?.m.i, heightOf(cb), "cell");
           }
         }
-        // With align-items: stretch a grid row's height is its tallest column, so
-        // a card that grew taller makes the whole row taller. Equalize by growing
-        // ONE card on the shorter side (stretch lifts the rest of the row); the
-        // grid then reflows the rows below, so nothing extra propagates upward.
-        const ha = heightOf(na);
-        const hb = heightOf(nb);
-        const d = Math.max(ha, hb);
-        if (fla) push(A, fla.m.i, d - ha, 'tail');
-        if (flb) push(B, flb.m.i, d - hb, 'tail');
+        // Equalize the row height so the row bottom — and everything below it —
+        // lines up. With align-items: stretch the row is its tallest column, so
+        // grow EACH column's shorter side up to the tallest column's height. Per
+        // column: pad its own bottom (ra/rb → reach `e`) plus (rowH − e) to reach
+        // the row. Growing just one card fails when it isn't the tallest — the row
+        // stays defined by another card and never grows (the "silicon shift" bug).
+        const rowH = cols.reduce((mx, c) => Math.max(mx, c.e), 0);
+        for (const c of cols) {
+          push(A, firstLeaf(c.ca)?.m.i, c.ra + (rowH - c.e), "tail");
+          push(B, firstLeaf(c.cb)?.m.i, c.rb + (rowH - c.e), "tail");
+        }
         return [0, 0];
       }
       // Stacked column of blocks.
@@ -506,7 +629,8 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
       let pB = pendB;
       for (const [ca, cb] of pairs) {
         if (ca && cb) [pA, pB] = walk(ca, cb, pA, pB);
-        else if (ca) pB += heightOf(ca); // removed block → gap on B
+        else if (ca)
+          pB += heightOf(ca); // removed block → gap on B
         else pA += heightOf(cb!); // added block → gap on A
       }
       return [pA, pB];
@@ -539,7 +663,12 @@ export interface AlignReport {
  * simulation) and compares matched pairs, plus the total heights. Absolute
  * (x is unchanged by fillers; y is what the fillers move).
  */
-export const verifyAlignment = (a: Marker[], ah: number, b: Marker[], bh: number): AlignReport => {
+export const verifyAlignment = (
+  a: Marker[],
+  ah: number,
+  b: Marker[],
+  bh: number,
+): AlignReport => {
   const plan = spacingPlan(a, ah, b, bh);
   const sum = (s: Spacer[]): number => s.reduce((t, x) => t + x.px, 0);
   const alignedA = ah + sum(plan.a);
@@ -567,7 +696,7 @@ export const verifyAlignment = (a: Marker[], ah: number, b: Marker[], bh: number
   const la = a.filter((m) => m.k.charCodeAt(0) !== 35);
   const lb = b.filter((m) => m.k.charCodeAt(0) !== 35);
   const { matches } = alignMarkers(la, lb);
-  const misaligned: AlignReport['misaligned'] = [];
+  const misaligned: AlignReport["misaligned"] = [];
   let maxPairDelta = 0;
   for (const mm of matches) {
     if (mm.score < ANCHOR_MIN) continue;
@@ -593,7 +722,10 @@ export const verifyAlignment = (a: Marker[], ah: number, b: Marker[], bh: number
  * log real absolute-y drift so the aligner can be improved. `max` is the worst
  * signed dy; `worst` lists the largest offenders.
  */
-export const matchedYDelta = (a: Marker[], b: Marker[]): { max: number; worst: Array<{ ia?: number; ib?: number; dy: number }> } => {
+export const matchedYDelta = (
+  a: Marker[],
+  b: Marker[],
+): { max: number; worst: Array<{ ia?: number; ib?: number; dy: number }> } => {
   const la = a.filter((m) => !isContainer(m));
   const lb = b.filter((m) => !isContainer(m));
   const { matches } = alignMarkers(la, lb);
@@ -603,8 +735,50 @@ export const matchedYDelta = (a: Marker[], b: Marker[]): { max: number; worst: A
     if (mm.score < ANCHOR_MIN) continue;
     const dy = la[mm.ai].y - lb[mm.bi].y;
     if (Math.abs(dy) > Math.abs(max)) max = dy;
-    if (Math.abs(dy) > 8) worst.push({ ia: la[mm.ai].i, ib: lb[mm.bi].i, dy: Math.round(dy) });
+    if (Math.abs(dy) > 8)
+      worst.push({ ia: la[mm.ai].i, ib: lb[mm.bi].i, dy: Math.round(dy) });
   }
   worst.sort((p, q) => Math.abs(q.dy) - Math.abs(p.dy));
   return { max: Math.round(max), worst: worst.slice(0, 8) };
+};
+
+/**
+ * LAST-RESORT corrective plan, computed from the ALREADY-reflowed markers (after
+ * the structural spacing plan was injected and re-collected). Whatever residual
+ * drift the structural aligner couldn't remove, this patches purely
+ * geometrically: walk matched anchors top-to-bottom and, wherever a pair still
+ * doesn't share a y, push the higher (smaller-y) side down by the gap. Cumulative
+ * so each patch accounts for the ones above it — it never over-corrects a lower
+ * pair. Fillers are plain `el` flow spacers keyed by the re-collected indices, so
+ * this must run on the same open page it was measured from. Not a substitute for
+ * the structural aligner — a safety net for the cases it misses.
+ *
+ * Restricted to FLOW content: grid/flex cells (`fx`) are skipped, because a flow
+ * filler / margin-top on a coupled cell only pushes that one cell and desyncs its
+ * row — grid alignment is the structural pass's job. So this never makes a grid
+ * case worse; it just patches leftover drift in normal stacked content.
+ */
+export const correctiveSpacers = (a: Marker[], b: Marker[]): SpacingPlan => {
+  const fa = a.filter((m) => !isContainer(m));
+  const fb = b.filter((m) => !isContainer(m));
+  const pairs = alignMarkers(fa, fb)
+    .matches.filter((m) => m.score >= ANCHOR_MIN)
+    .map((m) => ({ ea: fa[m.ai], eb: fb[m.bi] }))
+    .filter(({ ea, eb }) => !ea.fx && !eb.fx)
+    .sort((p, q) => p.ea.y - q.ea.y);
+  const A: Spacer[] = [];
+  const B: Spacer[] = [];
+  let cumA = 0;
+  let cumB = 0;
+  for (const { ea, eb } of pairs) {
+    const d = ea.y + cumA - (eb.y + cumB);
+    if (d > 0.5 && eb.i !== undefined) {
+      B.push({ i: eb.i, px: Math.round(d), mode: "el" });
+      cumB += d;
+    } else if (d < -0.5 && ea.i !== undefined) {
+      A.push({ i: ea.i, px: Math.round(-d), mode: "el" });
+      cumA += -d;
+    }
+  }
+  return { a: A, b: B };
 };

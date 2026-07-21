@@ -5,28 +5,31 @@
  * filler <div>, or margin-top for flex/grid items (which don't margin-collapse
  * and mustn't gain an extra grid cell). mode 'grid' pushes the whole flex/grid.
  */
-export const INJECT_SPACERS = (spacers: Array<{ i: number; px: number; mode: string }>) => {
+export const INJECT_SPACERS = (
+  spacers: Array<{ i: number; px: number; mode: string }>,
+) => {
   // An exact, inert gap of `px`. Every sizing + box-model property is locked with
   // !important so no page rule (resets, inherited line-height, flex stretch,
   // `* { min-height }`, etc.) can distort a filler; `flex:0 0 auto` keeps a flex
   // parent from growing/shrinking it. When px is null the height is left to the
   // layout (a stretched grid cell), but the box model is still neutralised.
   const mkFiller = (px: number | null): HTMLElement => {
-    const sp = document.createElement('div');
-    const lock = (k: string, v: string): void => sp.style.setProperty(k, v, 'important');
-    lock('box-sizing', 'border-box');
-    lock('margin', '0');
-    lock('padding', '0');
-    lock('border', '0');
-    lock('line-height', '0');
-    lock('font-size', '0');
-    lock('flex', '0 0 auto');
-    lock('width', '100%');
+    const sp = document.createElement("div");
+    const lock = (k: string, v: string): void =>
+      sp.style.setProperty(k, v, "important");
+    lock("box-sizing", "border-box");
+    lock("margin", "0");
+    lock("padding", "0");
+    lock("border", "0");
+    lock("line-height", "0");
+    lock("font-size", "0");
+    lock("flex", "0 0 auto");
+    lock("width", "100%");
     if (px !== null) {
-      const h = px + 'px';
-      lock('height', h);
-      lock('min-height', h);
-      lock('max-height', h);
+      const h = px + "px";
+      lock("height", h);
+      lock("min-height", h);
+      lock("max-height", h);
     }
     return sp;
   };
@@ -40,10 +43,11 @@ export const INJECT_SPACERS = (spacers: Array<{ i: number; px: number; mode: str
     for (let d = 0; par && d < 8; d++) {
       const pd = getComputedStyle(par);
       const parentIsRow =
-        pd.display.indexOf('grid') >= 0 ||
-        (pd.display.indexOf('flex') >= 0 && pd.flexDirection.indexOf('row') >= 0);
+        pd.display.indexOf("grid") >= 0 ||
+        (pd.display.indexOf("flex") >= 0 &&
+          pd.flexDirection.indexOf("row") >= 0);
       if (parentIsRow) break;
-      if (getComputedStyle(item).display.indexOf('inline') >= 0) break;
+      if (getComputedStyle(item).display.indexOf("inline") >= 0) break;
       item = par;
       par = par.parentElement;
     }
@@ -72,9 +76,13 @@ export const INJECT_SPACERS = (spacers: Array<{ i: number; px: number; mode: str
     const parent = el.parentElement;
     if (!parent) return;
     const disp = getComputedStyle(parent).display;
-    if (disp.indexOf('flex') >= 0 || disp.indexOf('grid') >= 0) {
+    if (disp.indexOf("flex") >= 0 || disp.indexOf("grid") >= 0) {
       const cur = parseFloat(getComputedStyle(el).marginTop) || 0;
-      (el as HTMLElement).style.setProperty('margin-top', cur + px + 'px', 'important');
+      (el as HTMLElement).style.setProperty(
+        "margin-top",
+        cur + px + "px",
+        "important",
+      );
     } else {
       parent.insertBefore(mkFiller(px), el);
     }
@@ -82,15 +90,19 @@ export const INJECT_SPACERS = (spacers: Array<{ i: number; px: number; mode: str
   for (const s of spacers) {
     const el = document.querySelector('[data-cmsm="' + s.i + '"]');
     if (!el) continue;
-    if (s.mode === 'tail') {
+    if (s.mode === "tail") {
       growItem(el, s.px);
-    } else if (s.mode === 'cell') {
+    } else if (s.mode === "cell") {
       insertCell(el, s.px);
-    } else if (s.mode === 'grid') {
+    } else if (s.mode === "grid") {
       let g: Element = el;
-      for (let p = el.parentElement, d = 0; p && d < 8; p = p.parentElement, d++) {
+      for (
+        let p = el.parentElement, d = 0;
+        p && d < 8;
+        p = p.parentElement, d++
+      ) {
         const dp = getComputedStyle(p).display;
-        if (dp.indexOf('flex') >= 0 || dp.indexOf('grid') >= 0) {
+        if (dp.indexOf("flex") >= 0 || dp.indexOf("grid") >= 0) {
           g = p;
           break;
         }

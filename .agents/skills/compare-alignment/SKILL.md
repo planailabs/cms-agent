@@ -93,6 +93,24 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   inline-block column rows couple the same way; `columnOf()` handles all three.
 - An added/removed card reflows the cells after it; a `cell` filler on the side
   missing the card keeps the survivors in place.
+- **Grow the row by its TALLEST column, not the first.** Equalise a grid row from
+  the *aligned* column heights (`matchAlign(ca,cb).h`, which accounts for headings
+  that wrap to different line counts) + each column's trailing deficit — growing
+  only the first card fails when it isn't the tallest, so the row never grows and
+  everything below drifts (the "silicon shift" cascade, ~50px per card section).
+
+## Last-resort corrective pass
+
+`correctiveSpacers(a, b)` (layout.ts) + `alignedShots` (screenshot.ts) run a
+SECOND injection when the structural reflow still leaves > 8px residual: walk
+matched anchors top-to-bottom on the re-collected markers and push the higher
+side down by the leftover gap (cumulative, `el` fillers). It is restricted to
+FLOW content — grid/flex cells (`fx`) are skipped, since a margin-top on a coupled
+cell only desyncs its row. So it never worsens a grid case; it patches leftover
+drift in normal stacked content. It is a net, not a substitute — fix the
+structural aligner first; the corrective is what catches the long tail. `verifyAlignment`'s
+linear sim does NOT model `tail`/`grid`/`cell`/corrective fillers — trust the
+real-browser `matchedYDelta`, not the sim, for grid work.
 
 ## Known limitation
 

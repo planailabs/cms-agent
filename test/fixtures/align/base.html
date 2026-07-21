@@ -4,98 +4,388 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: Georgia, serif; color: #1a1a1a; background: #f5f3ee; padding: 32px 48px; }
-      .wrap { max-width: 1180px; margin: 0 auto; }
-      header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 24px; border-bottom: 1px solid #ddd; }
-      nav { display: flex; gap: 20px; }
-      .swiss-caption { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #b45; }
-      .swiss-heading-xl { font-size: 72px; line-height: 1.05; margin: 16px 0; }
-      .swiss-heading-lg { font-size: 40px; margin: 8px 0; }
-      .swiss-heading-md { font-size: 26px; margin: 6px 0; }
-      .swiss-body-lg { font-size: 20px; line-height: 1.5; color: #444; max-width: 40ch; }
-      .swiss-body { font-size: 16px; line-height: 1.6; color: #555; }
-      section { padding: 56px 0; border-bottom: 1px solid #e3e0d8; }
-      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 40px; }
-      .card { padding: 24px; background: #fbfaf6; border: 1px solid #e3e0d8; border-radius: 4px; }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: Georgia, serif;
+        color: #1a1a1a;
+        background: #f5f3ee;
+        padding: 32px 48px;
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 24px;
+        border-bottom: 1px solid #ddd;
+      }
+      nav {
+        display: flex;
+        gap: 20px;
+      }
+      .swiss-caption {
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #b45;
+      }
+      .swiss-heading-xl {
+        font-size: 72px;
+        line-height: 1.05;
+        margin: 16px 0;
+      }
+      .swiss-heading-lg {
+        font-size: 40px;
+        margin: 8px 0;
+      }
+      .swiss-heading-md {
+        font-size: 26px;
+        margin: 6px 0;
+      }
+      .swiss-body-lg {
+        font-size: 20px;
+        line-height: 1.5;
+        color: #444;
+        max-width: 40ch;
+      }
+      .swiss-body {
+        font-size: 16px;
+        line-height: 1.6;
+        color: #555;
+      }
+      section {
+        padding: 56px 0;
+        border-bottom: 1px solid #e3e0d8;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+        margin-top: 40px;
+      }
+      .card {
+        padding: 24px;
+        background: #fbfaf6;
+        border: 1px solid #e3e0d8;
+        border-radius: 4px;
+      }
       /* Departments: 2 rows × 3 cols, cards stretched to row height (h-full). */
-      .depts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 40px; align-items: stretch; }
-      .dept { display: flex; flex-direction: column; padding: 48px; border: 1px solid #e3e0d8; background: #fbfaf6; }
-      .dept .ico { width: 40px; height: 40px; margin-bottom: 32px; border: 1.5px solid #1a1a1a; border-radius: 50%; }
-      .dept h3 { margin-bottom: 16px; }
-      .dept .swiss-body { flex: 1; margin: 0; }
+      .depts {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        margin-top: 40px;
+        align-items: stretch;
+      }
+      .dept {
+        display: flex;
+        flex-direction: column;
+        padding: 48px;
+        border: 1px solid #e3e0d8;
+        background: #fbfaf6;
+      }
+      .dept .ico {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 32px;
+        border: 1.5px solid #1a1a1a;
+        border-radius: 50%;
+      }
+      .dept h3 {
+        margin-bottom: 16px;
+      }
+      .dept .swiss-body {
+        flex: 1;
+        margin: 0;
+      }
+      /* Inflection: 3 narrow cards; headings can wrap to 1 or 2 lines. */
+      .forces {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        margin-top: 40px;
+        align-items: stretch;
+      }
+      .force {
+        display: flex;
+        flex-direction: column;
+        padding: 24px;
+        border: 1px solid #e3e0d8;
+        background: #fbfaf6;
+      }
+      .force h4 {
+        font-size: 20px;
+        margin-bottom: 16px;
+      }
+      .force .swiss-body {
+        flex: 1;
+        margin: 0;
+      }
       /* Legacy columns: inline-block, NO flex/grid — no stretch coupling. */
-      .cols { margin-top: 40px; font-size: 0; }
-      .col { display: inline-block; vertical-align: top; width: 32%; margin-right: 1%; padding: 24px; border: 1px solid #e3e0d8; background: #fbfaf6; }
-      .col h3 { margin-bottom: 12px; }
-      .col .swiss-body { margin: 0; }
-      .posts { list-style: none; }
-      .post { padding: 32px 0; border-top: 1px solid #e3e0d8; }
-      .post .date { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #999; }
-      table { width: 100%; border-collapse: collapse; margin-top: 32px; }
-      td, th { padding: 12px 16px; border: 1px solid #e3e0d8; text-align: left; font-size: 15px; }
-      footer { padding-top: 32px; color: #888; font-size: 14px; }
+      .cols {
+        margin-top: 40px;
+        font-size: 0;
+      }
+      .col {
+        display: inline-block;
+        vertical-align: top;
+        width: 32%;
+        margin-right: 1%;
+        padding: 24px;
+        border: 1px solid #e3e0d8;
+        background: #fbfaf6;
+      }
+      .col h3 {
+        margin-bottom: 12px;
+      }
+      .col .swiss-body {
+        margin: 0;
+      }
+      .posts {
+        list-style: none;
+      }
+      .post {
+        padding: 32px 0;
+        border-top: 1px solid #e3e0d8;
+      }
+      .post .date {
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #999;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 32px;
+      }
+      td,
+      th {
+        padding: 12px 16px;
+        border: 1px solid #e3e0d8;
+        text-align: left;
+        font-size: 15px;
+      }
+      footer {
+        padding-top: 32px;
+        color: #888;
+        font-size: 14px;
+      }
     </style>
   </head>
   <body>
     <div class="wrap">
       <header id="masthead">
         <strong>plan.ai</strong>
-        <nav><a href="#hero">Home</a><a href="#features">System</a><a href="#journal">Journal</a></nav>
+        <nav>
+          <a href="#hero">Home</a><a href="#features">System</a
+          ><a href="#journal">Journal</a>
+        </nav>
       </header>
 
       <section id="hero">
         <p class="swiss-caption">The plan.ai journal</p>
         <h1 class="swiss-heading-xl">Ideas worth reading.</h1>
-        <p class="swiss-body-lg">A small collection of notes on building with more clarity, care, and momentum.</p>
+        <p class="swiss-body-lg">
+          A small collection of notes on building with more clarity, care, and
+          momentum.
+        </p>
       </section>
 
       <section id="features">
         <h2 class="swiss-heading-lg">What the system does</h2>
         <div class="grid">
-          <div class="card"><h3 class="swiss-heading-md">Command</h3><p class="swiss-body">Synthesizes priorities, surfaces what matters, and drafts decision briefs for the day.</p></div>
-          <div class="card"><h3 class="swiss-heading-md">Analysis</h3><p class="swiss-body">Collects approved sources, compares evidence, and produces market intelligence.</p></div>
-          <div class="card"><h3 class="swiss-heading-md">Voice</h3><p class="swiss-body">Drafts and edits communication against your tone, terminology and review standards.</p></div>
+          <div class="card">
+            <h3 class="swiss-heading-md">Command</h3>
+            <p class="swiss-body">
+              Synthesizes priorities, surfaces what matters, and drafts decision
+              briefs for the day.
+            </p>
+          </div>
+          <div class="card">
+            <h3 class="swiss-heading-md">Analysis</h3>
+            <p class="swiss-body">
+              Collects approved sources, compares evidence, and produces market
+              intelligence.
+            </p>
+          </div>
+          <div class="card">
+            <h3 class="swiss-heading-md">Voice</h3>
+            <p class="swiss-body">
+              Drafts and edits communication against your tone, terminology and
+              review standards.
+            </p>
+          </div>
         </div>
       </section>
 
       <section id="journal">
         <h2 class="swiss-heading-lg">Latest notes</h2>
         <ul class="posts">
-          <li class="post"><p class="date">Jul 18, 2026</p><h3 class="swiss-heading-md">Challenges in the AI Age</h3><p class="swiss-body">The useful gains of AI are real, but so are the choices we need to make around reliability, work, privacy, power, access, and resources.</p></li>
-          <li class="post"><p class="date">Mar 2, 2026</p><h3 class="swiss-heading-md">Shipping Faster with Small Batches</h3><p class="swiss-body">Why smaller pull requests get reviewed sooner and break less.</p></li>
-          <li class="post"><p class="date">Jan 10, 2026</p><h3 class="swiss-heading-md">Hello World</h3><p class="swiss-body">Our very first post on the new blog.</p></li>
+          <li class="post">
+            <p class="date">Jul 18, 2026</p>
+            <h3 class="swiss-heading-md">Challenges in the AI Age</h3>
+            <p class="swiss-body">
+              The useful gains of AI are real, but so are the choices we need to
+              make around reliability, work, privacy, power, access, and
+              resources.
+            </p>
+          </li>
+          <li class="post">
+            <p class="date">Mar 2, 2026</p>
+            <h3 class="swiss-heading-md">Shipping Faster with Small Batches</h3>
+            <p class="swiss-body">
+              Why smaller pull requests get reviewed sooner and break less.
+            </p>
+          </li>
+          <li class="post">
+            <p class="date">Jan 10, 2026</p>
+            <h3 class="swiss-heading-md">Hello World</h3>
+            <p class="swiss-body">Our very first post on the new blog.</p>
+          </li>
         </ul>
+      </section>
+
+      <section id="inflection">
+        <h3 class="swiss-heading-lg">Why this moment</h3>
+        <div class="forces">
+          <div class="force">
+            <h4>The silicon shift.</h4>
+            <p class="swiss-body">
+              Modern on-device compute, especially unified-memory systems, makes
+              it practical to run large open-weight models locally for many real
+              business workflows.
+            </p>
+          </div>
+          <div class="force">
+            <h4>The regulatory wave.</h4>
+            <p class="swiss-body">
+              The EU AI Act enters broad application in August 2026 with staged
+              obligations. Documented workflows increase, and proprietary
+              context matters.
+            </p>
+          </div>
+          <div class="force">
+            <h4>The subscription ceiling.</h4>
+            <p class="swiss-body">
+              Per-seat SaaS economics break when work becomes autonomous. Agents
+              reduce seat counts and vendor exposure over time.
+            </p>
+          </div>
+        </div>
       </section>
 
       <section id="departments">
         <h2 class="swiss-heading-lg">Departments, not tools</h2>
         <div class="depts">
-          <div class="dept"><span class="ico"></span><h3 class="swiss-heading-md">Command</h3><p class="swiss-body">Synthesizes priorities, surfaces what matters, drafts decision briefs. Your operational nerve center.</p></div>
-          <div class="dept"><span class="ico"></span><h3 class="swiss-heading-md">Analysis</h3><p class="swiss-body">Monitors markets, digests research, scans competitors. Produces intelligence, not data dumps.</p></div>
-          <div class="dept"><span class="ico"></span><h3 class="swiss-heading-md">Voice</h3><p class="swiss-body">Maintains tone consistency across every channel. Drafts, edits, and aligns communications at brand-level quality.</p></div>
-          <div class="dept"><span class="ico"></span><h3 class="swiss-heading-md">Growth</h3><p class="swiss-body">Builds campaign architectures, generates content systems, maps distribution. Strategy and execution in one loop.</p></div>
-          <div class="dept"><span class="ico"></span><h3 class="swiss-heading-md">Build</h3><p class="swiss-body">Structures web pages, iterates UX, proposes design improvements. Designed to ship, not just suggest.</p></div>
-          <div class="dept"><span class="ico"></span><h3 class="swiss-heading-md">Process</h3><p class="swiss-body">Captures procedures, maintains documentation, handles interdepartmental handoffs. Institutional memory that stays usable.</p></div>
+          <div class="dept">
+            <span class="ico"></span>
+            <h3 class="swiss-heading-md">Command</h3>
+            <p class="swiss-body">
+              Synthesizes priorities, surfaces what matters, drafts decision
+              briefs. Your operational nerve center.
+            </p>
+          </div>
+          <div class="dept">
+            <span class="ico"></span>
+            <h3 class="swiss-heading-md">Analysis</h3>
+            <p class="swiss-body">
+              Monitors markets, digests research, scans competitors. Produces
+              intelligence, not data dumps.
+            </p>
+          </div>
+          <div class="dept">
+            <span class="ico"></span>
+            <h3 class="swiss-heading-md">Voice</h3>
+            <p class="swiss-body">
+              Maintains tone consistency across every channel. Drafts, edits,
+              and aligns communications at brand-level quality.
+            </p>
+          </div>
+          <div class="dept">
+            <span class="ico"></span>
+            <h3 class="swiss-heading-md">Growth</h3>
+            <p class="swiss-body">
+              Builds campaign architectures, generates content systems, maps
+              distribution. Strategy and execution in one loop.
+            </p>
+          </div>
+          <div class="dept">
+            <span class="ico"></span>
+            <h3 class="swiss-heading-md">Build</h3>
+            <p class="swiss-body">
+              Structures web pages, iterates UX, proposes design improvements.
+              Designed to ship, not just suggest.
+            </p>
+          </div>
+          <div class="dept">
+            <span class="ico"></span>
+            <h3 class="swiss-heading-md">Process</h3>
+            <p class="swiss-body">
+              Captures procedures, maintains documentation, handles
+              interdepartmental handoffs. Institutional memory that stays
+              usable.
+            </p>
+          </div>
         </div>
       </section>
 
       <section id="legacy">
         <h2 class="swiss-heading-lg">Old-school columns</h2>
         <div class="cols">
-          <div class="col"><h3 class="swiss-heading-md">Alpha</h3><p class="swiss-body">A short inline-block column with a little text inside it.</p></div>
-          <div class="col"><h3 class="swiss-heading-md">Beta</h3><p class="swiss-body">Another inline-block column sitting beside the others without any flexbox.</p></div>
-          <div class="col"><h3 class="swiss-heading-md">Gamma</h3><p class="swiss-body">A third column, again laid out purely with inline-block and vertical-align.</p></div>
+          <div class="col">
+            <h3 class="swiss-heading-md">Alpha</h3>
+            <p class="swiss-body">
+              A short inline-block column with a little text inside it.
+            </p>
+          </div>
+          <div class="col">
+            <h3 class="swiss-heading-md">Beta</h3>
+            <p class="swiss-body">
+              Another inline-block column sitting beside the others without any
+              flexbox.
+            </p>
+          </div>
+          <div class="col">
+            <h3 class="swiss-heading-md">Gamma</h3>
+            <p class="swiss-body">
+              A third column, again laid out purely with inline-block and
+              vertical-align.
+            </p>
+          </div>
         </div>
       </section>
 
       <section id="data">
         <h2 class="swiss-heading-lg">By the numbers</h2>
         <table>
-          <tr><th>Metric</th><th>2025</th><th>2026</th></tr>
-          <tr><td>Posts published</td><td>12</td><td>34</td></tr>
-          <tr><td>Readers</td><td>1,200</td><td>4,800</td></tr>
-          <tr><td>Avg. read time</td><td>3m</td><td>5m</td></tr>
+          <tr>
+            <th>Metric</th>
+            <th>2025</th>
+            <th>2026</th>
+          </tr>
+          <tr>
+            <td>Posts published</td>
+            <td>12</td>
+            <td>34</td>
+          </tr>
+          <tr>
+            <td>Readers</td>
+            <td>1,200</td>
+            <td>4,800</td>
+          </tr>
+          <tr>
+            <td>Avg. read time</td>
+            <td>3m</td>
+            <td>5m</td>
+          </tr>
         </table>
       </section>
 

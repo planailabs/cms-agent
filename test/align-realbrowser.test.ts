@@ -8,31 +8,39 @@
  * residual delta, then tighten compare/layout until it's ~0. Structure/classes/
  * ids are borrowed from the plan.ai site (test/fixtures/align/base.html).
  */
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 // Headless chromium in the nix/container env — skip host-lib validation.
-process.env.PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = '1';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Browser, Page } from 'playwright';
-import { COLLECT_MARKERS_JS, type MarkerDoc } from '@/lib/compare/markers';
-import { spacingPlan, matchedYDelta } from '@/lib/compare/layout';
-import { INJECT_SPACERS } from '@/lib/compare/inject';
+process.env.PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "1";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Browser, Page } from "playwright";
+import { COLLECT_MARKERS_JS, type MarkerDoc } from "@/lib/compare/markers";
+import {
+  spacingPlan,
+  matchedYDelta,
+  correctiveSpacers,
+} from "@/lib/compare/layout";
+import { INJECT_SPACERS } from "@/lib/compare/inject";
 
 const base = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/align/base.html'),
-  'utf8',
+  path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "fixtures/align/base.html",
+  ),
+  "utf8",
 );
 
 let browser: Browser;
 beforeAll(async () => {
-  const pw = await import('playwright');
+  const pw = await import("playwright");
   browser = await pw.chromium.launch({ chromiumSandbox: false });
 });
 afterAll(async () => browser?.close());
 
-const collect = (p: Page) => p.evaluate(COLLECT_MARKERS_JS) as Promise<MarkerDoc>;
+const collect = (p: Page) =>
+  p.evaluate(COLLECT_MARKERS_JS) as Promise<MarkerDoc>;
 
 /** Run the full pipeline for base vs base+mutate; return residual y drift.
  *  `mutate` runs in the browser; `arg` (JSON-serialisable) is passed to it. */
@@ -40,8 +48,12 @@ const residual = async (
   mutate: (arg?: unknown) => void,
   arg?: unknown,
 ): Promise<{ max: number; worst: unknown }> => {
-  const before = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-  const after = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const before = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+  });
+  const after = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+  });
   try {
     await before.setContent(base);
     await after.setContent(base);
@@ -58,73 +70,209 @@ const residual = async (
   }
 };
 
+/** Structural plan + the LAST-RESORT corrective pass, as the real pipeline runs
+ *  it: inject → re-collect → corrective-inject → re-collect. Returns final drift. */
+const residualCorrected = async (
+  mutate: (arg?: unknown) => void,
+  arg?: unknown,
+): Promise<number> => {
+  const before = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+  });
+  const after = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+  });
+  try {
+    await before.setContent(base);
+    await after.setContent(base);
+    await after.evaluate(mutate, arg);
+    const [mb, ma] = await Promise.all([collect(before), collect(after)]);
+    const plan = spacingPlan(mb.m, mb.h, ma.m, ma.h);
+    await before.evaluate(INJECT_SPACERS, plan.a as never);
+    await after.evaluate(INJECT_SPACERS, plan.b as never);
+    let [ab, aa] = await Promise.all([collect(before), collect(after)]);
+    const corr = correctiveSpacers(ab.m, aa.m);
+    await before.evaluate(INJECT_SPACERS, corr.a as never);
+    await after.evaluate(INJECT_SPACERS, corr.b as never);
+    [ab, aa] = await Promise.all([collect(before), collect(after)]);
+    return Math.abs(matchedYDelta(ab.m, aa.m).max);
+  } finally {
+    await Promise.all([before.close(), after.close()]);
+  }
+};
+
 // Each mutation runs IN THE BROWSER (no closures over Node scope).
 const cases: Array<{ name: string; mutate: () => void; max: number }> = [
-  { name: 'reword a post body', max: 4, mutate: () => {
-    (document.querySelectorAll('.post .swiss-body')[0] as HTMLElement).textContent =
-      'A completely rewritten body for this first post, a little longer than before.';
-  } },
-  { name: 'insert a post at the top', max: 4, mutate: () => {
-    document.querySelector('.posts')!.insertAdjacentHTML('afterbegin',
-      '<li class="post"><p class="date">Jul 19, 2026</p><h3 class="swiss-heading-md">What Squirrels Know</h3><p class="swiss-body">Good ideas rarely arrive fully formed; collect the small promising things.</p></li>');
-  } },
-  { name: 'remove a middle post', max: 4, mutate: () => {
-    document.querySelectorAll('.post')[1].remove();
-  } },
-  { name: 'grow the hero paragraph', max: 4, mutate: () => {
-    (document.querySelector('#hero .swiss-body-lg') as HTMLElement).textContent =
-      'A much longer hero paragraph that now wraps across several lines and pushes everything below it down by a meaningful amount, testing full-page vertical realignment end to end.';
-  } },
-  { name: 'insert a whole new section', max: 4, mutate: () => {
-    document.querySelector('#journal')!.insertAdjacentHTML('beforebegin',
-      '<section id="quotes"><h2 class="swiss-heading-lg">In their words</h2><p class="swiss-body">A brand new section inserted between features and journal.</p></section>');
-  } },
-  { name: 'remove a grid card', max: 6, mutate: () => {
-    document.querySelectorAll('.card')[1].remove();
-  } },
-  { name: 'change nested card heading', max: 4, mutate: () => {
-    (document.querySelectorAll('.card h3')[1] as HTMLElement).textContent = 'Insight';
-  } },
-  { name: 'add a table row', max: 4, mutate: () => {
-    document.querySelector('table')!.insertAdjacentHTML('beforeend',
-      '<tr><td>Comments</td><td>50</td><td>210</td></tr>');
-  } },
-  { name: 'change a table cell', max: 4, mutate: () => {
-    (document.querySelectorAll('td')[1] as HTMLElement).textContent = '9,999';
-  } },
-  { name: 'grow a department card (grid row height)', max: 6, mutate: () => {
-    // Lengthen ONE row-1 card's body → its whole grid row grows taller, pushing
-    // row 2 (Growth/Build/Process) down together. Command must stay aligned with
-    // its row and row 2 must move as a unit, not per-column.
-    (document.querySelectorAll('.dept .swiss-body')[1] as HTMLElement).textContent =
-      'Monitors markets, digests research, scans competitors, benchmarks pricing, tracks sentiment, and produces briefed intelligence rather than raw data dumps that nobody has time to read.';
-  } },
-  { name: 'remove a department card (row 2, filler cell)', max: 6, mutate: () => {
-    // Remove a row-2 card: later cards in that row shift left; a filler grid cell
-    // keeps them in place. No card crosses a row boundary.
-    document.querySelectorAll('.dept')[4].remove();
-  } },
-  { name: 'grow an inline-block column (no flex/grid)', max: 6, mutate: () => {
-    // A plain inline-block column row: no stretch coupling, so growing one column
-    // only pushes the content BELOW the row down by the new tallest height. The
-    // filler must land as a flow div (not margin-top / not a grid tail).
-    (document.querySelectorAll('.col .swiss-body')[0] as HTMLElement).textContent =
-      'A short inline-block column that has now been expanded with a good deal more text so that it wraps onto several lines and becomes the tallest column in this row by a clear margin.';
-  } },
-  { name: 'multiple simultaneous edits', max: 6, mutate: () => {
-    document.querySelector('.posts')!.insertAdjacentHTML('afterbegin',
-      '<li class="post"><p class="date">Jul 19, 2026</p><h3 class="swiss-heading-md">What Squirrels Know</h3><p class="swiss-body">Collect the small promising things.</p></li>');
-    (document.querySelectorAll('td')[3] as HTMLElement).textContent = '42';
-    (document.querySelector('#hero .swiss-body-lg') as HTMLElement).textContent =
-      'A longer hero paragraph that wraps to a second line here.';
-  } },
+  {
+    name: "reword a post body",
+    max: 4,
+    mutate: () => {
+      (
+        document.querySelectorAll(".post .swiss-body")[0] as HTMLElement
+      ).textContent =
+        "A completely rewritten body for this first post, a little longer than before.";
+    },
+  },
+  {
+    name: "insert a post at the top",
+    max: 4,
+    mutate: () => {
+      document
+        .querySelector(".posts")!
+        .insertAdjacentHTML(
+          "afterbegin",
+          '<li class="post"><p class="date">Jul 19, 2026</p><h3 class="swiss-heading-md">What Squirrels Know</h3><p class="swiss-body">Good ideas rarely arrive fully formed; collect the small promising things.</p></li>',
+        );
+    },
+  },
+  {
+    name: "remove a middle post",
+    max: 4,
+    mutate: () => {
+      document.querySelectorAll(".post")[1].remove();
+    },
+  },
+  {
+    name: "grow the hero paragraph",
+    max: 4,
+    mutate: () => {
+      (
+        document.querySelector("#hero .swiss-body-lg") as HTMLElement
+      ).textContent =
+        "A much longer hero paragraph that now wraps across several lines and pushes everything below it down by a meaningful amount, testing full-page vertical realignment end to end.";
+    },
+  },
+  {
+    name: "insert a whole new section",
+    max: 4,
+    mutate: () => {
+      document
+        .querySelector("#journal")!
+        .insertAdjacentHTML(
+          "beforebegin",
+          '<section id="quotes"><h2 class="swiss-heading-lg">In their words</h2><p class="swiss-body">A brand new section inserted between features and journal.</p></section>',
+        );
+    },
+  },
+  {
+    name: "remove a grid card",
+    max: 6,
+    mutate: () => {
+      document.querySelectorAll(".card")[1].remove();
+    },
+  },
+  {
+    name: "change nested card heading",
+    max: 4,
+    mutate: () => {
+      (document.querySelectorAll(".card h3")[1] as HTMLElement).textContent =
+        "Insight";
+    },
+  },
+  {
+    name: "add a table row",
+    max: 4,
+    mutate: () => {
+      document
+        .querySelector("table")!
+        .insertAdjacentHTML(
+          "beforeend",
+          "<tr><td>Comments</td><td>50</td><td>210</td></tr>",
+        );
+    },
+  },
+  {
+    name: "change a table cell",
+    max: 4,
+    mutate: () => {
+      (document.querySelectorAll("td")[1] as HTMLElement).textContent = "9,999";
+    },
+  },
+  {
+    name: "grow a department card (grid row height)",
+    max: 6,
+    mutate: () => {
+      // Lengthen ONE row-1 card's body → its whole grid row grows taller, pushing
+      // row 2 (Growth/Build/Process) down together. Command must stay aligned with
+      // its row and row 2 must move as a unit, not per-column.
+      (
+        document.querySelectorAll(".dept .swiss-body")[1] as HTMLElement
+      ).textContent =
+        "Monitors markets, digests research, scans competitors, benchmarks pricing, tracks sentiment, and produces briefed intelligence rather than raw data dumps that nobody has time to read.";
+    },
+  },
+  {
+    name: "remove a department card (row 2, filler cell)",
+    max: 6,
+    mutate: () => {
+      // Remove a row-2 card: later cards in that row shift left; a filler grid cell
+      // keeps them in place. No card crosses a row boundary.
+      document.querySelectorAll(".dept")[4].remove();
+    },
+  },
+  {
+    name: "card headings wrap to different line counts (silicon shift)",
+    max: 6,
+    mutate: () => {
+      // The real cms-server regression: two of the three cards' headings become
+      // 2-line, and every body changes height. The tallest card is NOT the first,
+      // so growing only the first card leaves the row (and all content below) off.
+      const f = document.querySelectorAll(".force");
+      (f[0].querySelector("h4") as HTMLElement).textContent =
+        "Local compute is ready.";
+      (f[0].querySelector(".swiss-body") as HTMLElement).textContent =
+        "Current desktop-class systems can run capable models on-device with low latency.";
+      (f[1].querySelector("h4") as HTMLElement).textContent =
+        "Governance is becoming operational and mandatory.";
+      (f[1].querySelector(".swiss-body") as HTMLElement).textContent =
+        "As AI enters everyday workflows, documented oversight and provenance become table stakes for regulated teams everywhere.";
+      (f[2].querySelector("h4") as HTMLElement).textContent =
+        "The seat is no longer the unit of value.";
+      (f[2].querySelector(".swiss-body") as HTMLElement).textContent =
+        "AI agents work across tools and functions, so the durable advantage comes from owning the workflows.";
+    },
+  },
+  {
+    name: "grow an inline-block column (no flex/grid)",
+    max: 6,
+    mutate: () => {
+      // A plain inline-block column row: no stretch coupling, so growing one column
+      // only pushes the content BELOW the row down by the new tallest height. The
+      // filler must land as a flow div (not margin-top / not a grid tail).
+      (
+        document.querySelectorAll(".col .swiss-body")[0] as HTMLElement
+      ).textContent =
+        "A short inline-block column that has now been expanded with a good deal more text so that it wraps onto several lines and becomes the tallest column in this row by a clear margin.";
+    },
+  },
+  {
+    name: "multiple simultaneous edits",
+    max: 6,
+    mutate: () => {
+      document
+        .querySelector(".posts")!
+        .insertAdjacentHTML(
+          "afterbegin",
+          '<li class="post"><p class="date">Jul 19, 2026</p><h3 class="swiss-heading-md">What Squirrels Know</h3><p class="swiss-body">Collect the small promising things.</p></li>',
+        );
+      (document.querySelectorAll("td")[3] as HTMLElement).textContent = "42";
+      (
+        document.querySelector("#hero .swiss-body-lg") as HTMLElement
+      ).textContent =
+        "A longer hero paragraph that wraps to a second line here.";
+    },
+  },
 ];
 
-describe('real-browser alignment', () => {
+describe("real-browser alignment", () => {
   for (const c of cases) {
     it(`${c.name} → matched content aligns`, async () => {
       const r = await residual(c.mutate);
-      if (r.max > c.max) console.warn(`[align:${c.name}] residual ${r.max}px`, JSON.stringify(r.worst));
+      if (r.max > c.max)
+        console.warn(
+          `[align:${c.name}] residual ${r.max}px`,
+          JSON.stringify(r.worst),
+        );
       expect(r.max).toBeLessThanOrEqual(c.max);
     }, 30_000);
   }
@@ -146,20 +294,32 @@ const rng = (seed: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-interface Op { kind: string; n?: number; text?: string }
+interface Op {
+  kind: string;
+  n?: number;
+  text?: string;
+}
 const LOREM =
-  'the small promising things collect momentum clarity and care across every function and channel over time';
+  "the small promising things collect momentum clarity and care across every function and channel over time";
 const words = (r: () => number, min: number, max: number): string => {
-  const parts = LOREM.split(' ');
+  const parts = LOREM.split(" ");
   const count = min + Math.floor(r() * (max - min));
-  let s = '';
-  for (let i = 0; i < count; i++) s += parts[Math.floor(r() * parts.length)] + ' ';
-  return s.trim() + '.';
+  let s = "";
+  for (let i = 0; i < count; i++)
+    s += parts[Math.floor(r() * parts.length)] + " ";
+  return s.trim() + ".";
 };
 
 const OP_KINDS = [
-  'rewordPost', 'insertPost', 'removePost', 'growHero', 'rewordDept',
-  'removeDeptRow2', 'growCol', 'addTableRow', 'changeCell',
+  "rewordPost",
+  "insertPost",
+  "removePost",
+  "growHero",
+  "rewordDept",
+  "removeDeptRow2",
+  "growCol",
+  "addTableRow",
+  "changeCell",
 ];
 
 /** Build a random op list for a seed. */
@@ -175,31 +335,91 @@ const buildOps = (seed: number): Op[] => {
 };
 
 /** Apply an op list in the browser. Defensive: skips ops whose target is gone. */
-const applyOps = (ops: Array<{ kind: string; n?: number; text?: string }>): void => {
-  const at = (sel: string, i: number) => document.querySelectorAll(sel)[i] as HTMLElement | undefined;
+const applyOps = (
+  ops: Array<{ kind: string; n?: number; text?: string }>,
+): void => {
+  const at = (sel: string, i: number) =>
+    document.querySelectorAll(sel)[i] as HTMLElement | undefined;
   for (const op of ops) {
     const i = op.n ?? 0;
-    const t = op.text ?? 'Changed.';
-    if (op.kind === 'rewordPost') { const e = at('.post .swiss-body', i); if (e) e.textContent = t; }
-    else if (op.kind === 'insertPost') document.querySelector('.posts')?.insertAdjacentHTML('afterbegin',
-      `<li class="post"><p class="date">Jul 19, 2026</p><h3 class="swiss-heading-md">New Note</h3><p class="swiss-body">${t}</p></li>`);
-    else if (op.kind === 'removePost') at('.post', i)?.remove();
-    else if (op.kind === 'growHero') { const e = document.querySelector('#hero .swiss-body-lg') as HTMLElement | null; if (e) e.textContent = t + ' ' + t; }
-    else if (op.kind === 'rewordDept') { const e = at('.dept .swiss-body', i); if (e) e.textContent = t + ' ' + t; }
-    else if (op.kind === 'removeDeptRow2') at('.dept', 3 + i)?.remove(); // rows 2 only (indices 3..5)
-    else if (op.kind === 'growCol') { const e = at('.col .swiss-body', i); if (e) e.textContent = t + ' ' + t + ' ' + t; }
-    else if (op.kind === 'addTableRow') document.querySelector('table')?.insertAdjacentHTML('beforeend',
-      `<tr><td>Row</td><td>${i}</td><td>${t.slice(0, 8)}</td></tr>`);
-    else if (op.kind === 'changeCell') { const e = at('td', i); if (e) e.textContent = t.slice(0, 6); }
+    const t = op.text ?? "Changed.";
+    if (op.kind === "rewordPost") {
+      const e = at(".post .swiss-body", i);
+      if (e) e.textContent = t;
+    } else if (op.kind === "insertPost")
+      document
+        .querySelector(".posts")
+        ?.insertAdjacentHTML(
+          "afterbegin",
+          `<li class="post"><p class="date">Jul 19, 2026</p><h3 class="swiss-heading-md">New Note</h3><p class="swiss-body">${t}</p></li>`,
+        );
+    else if (op.kind === "removePost") at(".post", i)?.remove();
+    else if (op.kind === "growHero") {
+      const e = document.querySelector(
+        "#hero .swiss-body-lg",
+      ) as HTMLElement | null;
+      if (e) e.textContent = t + " " + t;
+    } else if (op.kind === "rewordDept") {
+      const e = at(".dept .swiss-body", i);
+      if (e) e.textContent = t + " " + t;
+    } else if (op.kind === "removeDeptRow2")
+      at(".dept", 3 + i)?.remove(); // rows 2 only (indices 3..5)
+    else if (op.kind === "growCol") {
+      const e = at(".col .swiss-body", i);
+      if (e) e.textContent = t + " " + t + " " + t;
+    } else if (op.kind === "addTableRow")
+      document
+        .querySelector("table")
+        ?.insertAdjacentHTML(
+          "beforeend",
+          `<tr><td>Row</td><td>${i}</td><td>${t.slice(0, 8)}</td></tr>`,
+        );
+    else if (op.kind === "changeCell") {
+      const e = at("td", i);
+      if (e) e.textContent = t.slice(0, 6);
+    }
   }
 };
 
-describe('real-browser alignment — chaos', () => {
+// The last-resort corrective pass patches leftover FLOW drift and must never
+// make a case worse (grid/flex cells are left to the structural pass).
+describe("real-browser alignment — last-resort corrective", () => {
+  it("keeps already-aligned content aligned (idempotent, safe)", async () => {
+    // A mix that the structural pass already handles: the corrective must not
+    // disturb it.
+    const mutate = () => {
+      (
+        document.querySelector("#hero .swiss-body-lg") as HTMLElement
+      ).textContent =
+        "A longer hero paragraph that wraps to a couple of lines here for good measure.";
+      (
+        document.querySelectorAll(".post .swiss-body")[0] as HTMLElement
+      ).textContent = "Rewritten.";
+    };
+    const r = await residualCorrected(mutate as never);
+    expect(r).toBeLessThanOrEqual(8);
+  }, 30_000);
+
+  it("never worsens a case the structural pass cannot fully solve", async () => {
+    // Cross-row grid removal: a row-2 card pulls up into row 1 (the documented
+    // 2-D limitation). The corrective skips the coupled grid cell, so the result
+    // is no worse than structural-only — and any flow drift below is patched.
+    const mutate = () => document.querySelectorAll(".dept")[1].remove();
+    const structural = (await residual(mutate as never)).max;
+    const corrected = await residualCorrected(mutate as never);
+    expect(corrected).toBeLessThanOrEqual(structural + 2);
+  }, 30_000);
+});
+
+describe("real-browser alignment — chaos", () => {
   for (let seed = 1; seed <= 16; seed++) {
     it(`seed ${seed} → matched content aligns`, async () => {
       const ops = buildOps(seed);
       const r = await residual(applyOps as never, ops);
-      if (r.max > 8) console.warn(`[chaos:${seed}] residual ${r.max}px ops=${JSON.stringify(ops)} worst=${JSON.stringify(r.worst)}`);
+      if (r.max > 8)
+        console.warn(
+          `[chaos:${seed}] residual ${r.max}px ops=${JSON.stringify(ops)} worst=${JSON.stringify(r.worst)}`,
+        );
       expect(r.max).toBeLessThanOrEqual(8);
     }, 30_000);
   }
