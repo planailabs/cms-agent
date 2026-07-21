@@ -10,7 +10,7 @@ import { store } from '../chat/app/store';
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState } from '../chat/app/state';
-import { switchChat } from '../chat/actions/chat';
+import { ensureActiveChat, loadBranches, switchChat } from '../chat/actions/chat';
 import { openFile } from './codeBrowser';
 
 const KEY = 'cms-window-id';
@@ -130,20 +130,34 @@ const fetchSession = async (id: string): Promise<WindowViewState | null> => {
   }
 };
 
-/** Call once at app init (after ensureActiveChat). */
-export const initWindowSession = async (): Promise<void> => {
+/** Boot the workspace INTO a saved window (or the default chat): branches
+ *  first, then the saved chat if it still exists, else the default flow. */
+const bootInto = async (blob: WindowViewState | null): Promise<void> => {
+  await loadBranches();
+  const known =
+    blob?.chatId && store.state.branches.some((b) => b.chats.some((c) => c.id === blob.chatId));
+  if (!known) await ensureActiveChat();
+  if (blob) applyViewState(blob);
+};
+
+/**
+ * App boot entry — replaces the plain ensureActiveChat: the "continue where
+ * you left off?" offer is the FIRST thing a fresh window shows; the
+ * workspace only boots after the choice (restore → straight into the saved
+ * window, no default-chat flash). A same-tab reload restores silently.
+ */
+export const bootWindowSession = async (): Promise<void> => {
   store.subscribe(scheduleSave);
 
   const existing = sessionStorage.getItem(KEY);
   if (existing) {
-    // Same-tab reload: this window IS that session — restore silently.
+    // Same-tab reload: this window IS that session — boot straight into it.
     windowId = existing;
-    const blob = await fetchSession(existing);
-    if (blob) applyViewState(blob);
+    await bootInto(await fetchSession(existing));
     return;
   }
 
-  // Fresh window: offer the saved windows, if any.
+  // Fresh window: offer the saved windows BEFORE booting anything.
   try {
     const res = await fetch('/api/window-sessions');
     if (res.ok) {
@@ -151,7 +165,7 @@ export const initWindowSession = async (): Promise<void> => {
       if (data.sessions && data.sessions.length > 0) {
         store.state.workspace.windowPicker = data.sessions;
         store.notify();
-        return; // window id assigned when the user chooses
+        return; // boot continues when the user chooses
       }
     }
   } catch {
@@ -165,6 +179,7 @@ export const startFreshWindow = (): void => {
   sessionStorage.setItem(KEY, windowId);
   store.state.workspace.windowPicker = null;
   store.notify();
+  void bootInto(null);
 };
 
 export const adoptWindowSession = async (id: string): Promise<void> => {
@@ -172,8 +187,7 @@ export const adoptWindowSession = async (id: string): Promise<void> => {
   sessionStorage.setItem(KEY, id);
   store.state.workspace.windowPicker = null;
   store.notify();
-  const blob = await fetchSession(id);
-  if (blob) applyViewState(blob);
+  await bootInto(await fetchSession(id));
 };
 
 export const deleteWindowSession = async (id: string): Promise<void> => {

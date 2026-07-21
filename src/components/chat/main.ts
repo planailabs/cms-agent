@@ -8,7 +8,6 @@ import { store } from './app/store';
 import { streamingController } from './chat/streaming';
 
 // Actions
-import { ensureActiveChat } from './actions/chat';
 import { loadProfile } from './actions/profile';
 import { initTheme } from './actions/theme';
 
@@ -26,7 +25,7 @@ import { renderCapsModal } from '../workspace/capsModal';
 import { renderPlanModal } from '../workspace/planModal';
 import { syncOnionAlignment } from '../workspace/onionAlign';
 import { renderCodeBrowser } from '../workspace/codeBrowser';
-import { initWindowSession, renderWindowPicker } from '../workspace/windowSession';
+import { bootWindowSession, renderWindowPicker } from '../workspace/windowSession';
 import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
@@ -188,8 +187,9 @@ const initApp = () => {
   // so load the profile and open the active chat straight away.
   initTheme();
   void loadProfile();
-  // Window session AFTER the default chat is up — restoring may switch it.
-  void ensureActiveChat().then(() => initWindowSession());
+  // Window-session boot: a fresh window sees the "continue where you left
+  // off?" offer FIRST; the workspace loads only after the choice.
+  void bootWindowSession();
 
   store.notify(); // Initial render via subscription (since render is subscribed)
   render();
