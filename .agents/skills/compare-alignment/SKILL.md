@@ -145,6 +145,37 @@ deliberately restricts grid removal to row 2 for this reason. Fixing it properly
 needs grid-flatten (align all cards as one row-major sequence, then re-group into
 rows) — do that if cross-row grid edits become common.
 
+## Planned refactor direction (council verdict, not yet executed)
+
+The insight that should drive the next refactor: **matching is the product; align
+and `boxDiff` are two thin consumers of it.** Everything structural (the guillotine
+`spacingPlan`, the WIP `treeAlign`) is scaffolding around the one real primitive —
+a robust before↔after element matching (`alignMarkers`, now tree-aware via
+`pi`/`d`). Sequenced, in priority order:
+
+1. **Build a regression oracle FIRST.** There is no ground truth for overlay /
+   highlight quality beyond the chaos test, so every "improvement" is currently
+   unfalsifiable. Make a labeled corpus of real before/after pairs (pull
+   cms-server markers) with expected residuals + highlight boxes, and instrument
+   the live loop with p95/p99 round-count + wall-clock. Do this before touching
+   either algorithm.
+2. **Decouple `boxDiff` from the guillotine.** align and changed are entangled
+   through the shared partition — ripping the guillotine out for align silently
+   regresses highlights. Reframe "changed" as a CLASSIFIER over the shared match:
+   matched + text-differs → changed; unmatched → added/removed. Preserve the
+   "heavily-edited block = changed, not add+remove" property (it's matching
+   quality, portable). Then the guillotine has exactly one consumer.
+3. **Fix `correctiveFlat`'s large-residual stall + add a cheap warm-start.** It's
+   a proportional controller (gain 0.7, add-only) that undershoots and can stall
+   at big residuals (the cross-row 300px case) under the round cap. First round
+   should place matched elements AT their partner's y (gain ~1.0), then fine-tune
+   at 0.7; make the cap adaptive; cache the match by stable id across re-diffs.
+4. **Then measure and decide the guillotine's fate.** If the warm-start matches
+   its latency on real pages → delete `spacingPlan` + partition + tail/cell/grid/
+   push + the WIP `treeAlign`. If not → keep it as an OPTIONAL, measured seed, not
+   the default. Do not delete ~500 lines on 80 synthetic combos without the
+   latency number.
+
 ## This skill is SELF-IMPROVING
 
 Treat it as living. Whenever you fix a new alignment failure mode: (a) add the
