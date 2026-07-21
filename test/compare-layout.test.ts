@@ -50,19 +50,36 @@ describe('buildLayout', () => {
   it('classifies added / removed / changed content boxes', () => {
     const a = [
       bx('P:kept intact#1', 0, 0, 100, 40),
-      bx('P:oldonly#1', 60, 0, 100, 40),
-      bx('P:changes here now#1', 120, 0, 100, 40),
+      bx('P:oldonly removed line#1', 60, 0, 100, 40),
+      bx('P:the useful gains of AI are real#1', 120, 0, 100, 40),
     ];
     const b = [
       bx('P:kept intact#1', 0, 0, 100, 40),
-      bx('P:changes here totally different#1', 80, 0, 100, 60),
-      bx('P:brandnew#1', 160, 0, 100, 40),
+      bx('P:the useful gains of AI are solid#1', 80, 0, 100, 60), // reworded (>0.5 overlap)
+      bx('P:a totally brand new sentence#1', 160, 0, 100, 40),
     ];
     const kinds = boxDiff(a, 200, b, 220).map((d) => d.kind);
     expect(kinds).toContain('added'); // brandnew
     expect(kinds).toContain('removed'); // oldonly
     expect(kinds).toContain('changed'); // reworded paragraph
     expect(kinds).not.toContain(undefined);
+  });
+
+  it('inserts a hierarchy-correct filler for a block added at the top (no index shift)', () => {
+    const card = (title: string, y: number) => bx(`P:${title}#1`, y, 0, 300, 40);
+    const a = [card('alpha post', 0), card('beta post', 60), card('gamma post', 120)];
+    // same three, plus a brand-new card inserted at the TOP
+    const b = [card('brand new post', 0), card('alpha post', 60), card('beta post', 120), card('gamma post', 180)];
+    const n = buildLayout(a, 160, b, 220)!;
+    expect(n.kind).toBe('col');
+    expect(n.children).toHaveLength(4);
+    // first child is added: zero height on side A (a filler), content on side B
+    const first = n.children![0];
+    expect(first.kind).toBe('leaf');
+    expect(first.segs![0].hA).toBe(0);
+    expect(first.segs![0].hB).toBeGreaterThan(0);
+    // and the rest align 1:1 (both sides have real content)
+    expect(n.children![1].segs?.some((s) => s.hA > 0 && s.hB > 0) ?? true).toBe(true);
   });
 
   it('falls back to a single leaf when the two structures do not match', () => {

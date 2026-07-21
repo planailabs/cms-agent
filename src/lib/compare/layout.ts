@@ -119,27 +119,101 @@ const alignLeaf = (pa: Part, pb: Part): ANode => {
   return { kind: 'leaf', x0: boundsA.x0, w: boundsA.x1 - boundsA.x0, h, segs };
 };
 
+/** Content similarity between two child rectangles: fraction of leaves that
+ *  match well. Lets sibling alignment tell "same block, changed" from a wholly
+ *  added/removed block. */
+const CHILD_MIN = 0.3;
+const childSim = (pa: Part, pb: Part): number => {
+  const ma = leavesOf(pa).map((x) => x.m);
+  const mb = leavesOf(pb).map((x) => x.m);
+  if (ma.length === 0 || mb.length === 0) return 0;
+  const good = alignMarkers(ma, mb).matches.filter((mm) => mm.score >= 0.5).length;
+  return good / Math.max(ma.length, mb.length);
+};
+
+/** Order-preserving alignment of two sibling lists by content similarity, with
+ *  gaps for added/removed children (a sub-CHILD_MIN pairing is a gap, not a
+ *  forced match). */
+const alignChildren = (as: Part[], bs: Part[]): Array<[Part | null, Part | null]> => {
+  const n = as.length;
+  const m = bs.length;
+  const eff = (i: number, j: number): number => {
+    const s = childSim(as[i], bs[j]);
+    return s >= CHILD_MIN ? s : -1; // sub-threshold → gaps beat a forced pairing
+  };
+  const dp: Float64Array[] = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      dp[i][j] = Math.max(dp[i - 1][j - 1] + eff(i - 1, j - 1), dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  const out: Array<[Part | null, Part | null]> = [];
+  let i = n;
+  let j = m;
+  while (i > 0 && j > 0) {
+    if (dp[i][j] === dp[i - 1][j - 1] + eff(i - 1, j - 1)) {
+      out.push([as[i - 1], bs[j - 1]]);
+      i--;
+      j--;
+    } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+      out.push([as[--i], null]);
+    } else {
+      out.push([null, bs[--j]]);
+    }
+  }
+  while (i > 0) out.push([as[--i], null]);
+  while (j > 0) out.push([null, bs[--j]]);
+  out.reverse();
+  return out;
+};
+
+/** A child present on only one side: its content on that side, a filler of the
+ *  same height on the other — a hierarchy-correct filler exactly where the
+ *  insertion/removal is, not tacked onto the end. */
+const spanNode = (p: Part, side: 'a' | 'b'): ANode => {
+  const top = p.b.y0;
+  const height = p.b.y1 - p.b.y0;
+  const seg: AlignedSegment =
+    side === 'a'
+      ? { topA: top, topB: 0, hA: height, hB: 0, h: height }
+      : { topA: 0, topB: top, hA: 0, hB: height, h: height };
+  return { kind: 'leaf', x0: p.b.x0, w: p.b.x1 - p.b.x0, h: height, segs: [seg] };
+};
+
+/** Flatten a run of same-direction splits into one flat sibling list — the
+ *  partition is binary, so a stack of N blocks nests as (1,(2,(3,…))); sibling
+ *  alignment needs them at one level. */
+const flattenChildren = (p: Part & { kind: 'split' }): Part[] => {
+  const out: Part[] = [];
+  const walk = (q: Part): void => {
+    if (q.kind === 'split' && q.dir === p.dir) {
+      walk(q.children[0]);
+      walk(q.children[1]);
+    } else {
+      out.push(q);
+    }
+  };
+  walk(p);
+  return out;
+};
+
 /** Match two partition trees into an aligned render tree. */
 const matchAlign = (pa: Part, pb: Part): ANode => {
-  if (
-    pa.kind === 'split' &&
-    pb.kind === 'split' &&
-    pa.dir === pb.dir &&
-    pa.children.length === pb.children.length
-  ) {
-    const children = pa.children.map((c, i) => matchAlign(c, pb.children[i]));
+  if (pa.kind === 'split' && pb.kind === 'split' && pa.dir === pb.dir) {
+    // Align siblings by content (not index) so an inserted/removed block gets a
+    // filler in the right place instead of shifting everything after it.
+    const children = alignChildren(flattenChildren(pa), flattenChildren(pb)).map(([ca, cb]) =>
+      ca && cb ? matchAlign(ca, cb) : ca ? spanNode(ca, 'a') : spanNode(cb!, 'b'),
+    );
     const x0 = pa.b.x0;
     const w = pa.b.x1 - pa.b.x0;
     if (pa.dir === 'v') {
-      // side-by-side: pad each column to the tallest
-      const h = Math.max(...children.map((c) => c.h));
+      const h = Math.max(...children.map((c) => c.h)); // columns: pad to tallest
       return { kind: 'row', x0, w, h, children };
     }
-    // stacked: heights add up
-    const h = children.reduce((s, c) => s + c.h, 0);
+    const h = children.reduce((s, c) => s + c.h, 0); // stacked: heights add up
     return { kind: 'col', x0, w, h, children };
   }
-  // shape mismatch (or both leaves) → align as one 1-D rectangle
   return alignLeaf(pa, pb);
 };
 
@@ -186,20 +260,27 @@ const hasBox = (m: Marker): boolean => m.x !== undefined && m.w !== undefined &&
  */
 export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffBox[] => {
   const { matches, onlyA, onlyB } = alignMarkers(a, b);
+  const addB = [...onlyB];
+  const removeA = [...onlyA];
   const out: DiffBox[] = [];
-  for (const i of onlyB) {
+  for (const mm of matches) {
+    if (mm.score >= 0.999) continue; // unchanged
+    if (mm.score >= 0.5) {
+      const m = b[mm.bi];
+      if (!isContainer(m) && hasBox(m)) out.push({ kind: 'changed', x: m.x!, y: m.y, w: m.w!, h: m.h! });
+    } else {
+      // Too weak to be "the same block changed" — it's an add + a remove.
+      addB.push(mm.bi);
+      removeA.push(mm.ai);
+    }
+  }
+  for (const i of addB) {
     const m = b[i];
     if (!isContainer(m) && hasBox(m)) out.push({ kind: 'added', x: m.x!, y: m.y, w: m.w!, h: m.h! });
   }
-  for (const mm of matches) {
-    const m = b[mm.bi];
-    if (mm.score < 0.999 && !isContainer(m) && hasBox(m)) {
-      out.push({ kind: 'changed', x: m.x!, y: m.y, w: m.w!, h: m.h! });
-    }
-  }
-  if (onlyA.some((i) => !isContainer(a[i]) && hasBox(a[i]))) {
+  if (removeA.some((i) => !isContainer(a[i]) && hasBox(a[i]))) {
     const bracketed = bracketAnchors(computeAnchors(a, b), ah, bh);
-    for (const i of onlyA) {
+    for (const i of removeA) {
       const m = a[i];
       if (!isContainer(m) && hasBox(m)) {
         out.push({ kind: 'removed', x: m.x!, y: mapPosition(m.y, bracketed), w: m.w!, h: m.h! });
