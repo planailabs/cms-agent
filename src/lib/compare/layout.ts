@@ -746,33 +746,27 @@ export const matchedYDelta = (
 };
 
 /**
- * LAST-RESORT corrective plan, computed from the ALREADY-reflowed markers (after
- * the structural spacing plan was injected and re-collected). Whatever residual
- * drift the structural aligner couldn't remove, this patches purely
- * geometrically: walk matched anchors top-to-bottom and, wherever a pair still
- * doesn't share a y, push the higher (smaller-y) side down by the gap. Cumulative
- * so each patch accounts for the ones above it — it never over-corrects a lower
- * pair. Fillers are plain `el` flow spacers keyed by the re-collected indices, so
- * this must run on the same open page it was measured from. Not a substitute for
- * the structural aligner — a safety net that catches its long tail, and, iterated
- * (inject → re-collect → correct → repeat), converges both sides until they fit.
+ * LAST-RESORT corrective, computed from the ALREADY-reflowed markers (after the
+ * structural spacing plan was injected and re-collected). Whatever residual drift
+ * the structural aligner couldn't remove, this measures and patches — no layout
+ * model at all: walk matched pairs top-to-bottom and pad each element still too
+ * high by its OWN residual (a `margin-top` flow filler keyed by the re-collected
+ * id), then re-collect and repeat. Because it only ever moves measured content to
+ * where its match sits, it is layout-agnostic — grids, flex, tables, nesting all
+ * converge the same way, including cases the structural pass leaves off (a grid
+ * row whose cells drifted by different amounts).
  *
- * DOM-aware: a matched element carries its grid/flex container + cell (`fx`), so a
- * grid cell that's off is corrected by pushing its WHOLE ROW (every cell sharing
- * that container at the same y) down together — moving one cell would desync the
- * row. But only when the row's cells AGREE on the shift; a lone dissenting cell
- * (e.g. a card that reflowed up a row) is left alone so the row isn't desynced.
- * Flow elements just take a single filler.
+ * The one hazard is OVERSHOOT: margin can be added but not removed, and a pad in a
+ * grid does NOT cascade to the rows below like a flow pad does, so the cumulative
+ * (which assumes it does) can over-estimate. The `gain` (< 1) makes every step
+ * UNDERSHOOT, so it approaches the target from below over a couple of rounds and
+ * never overshoots. Runs on the same open page it was measured from.
  */
-const fxContainer = (m: Marker): string | null => {
-  if (m.fx === undefined) return null;
-  const hash = m.fx.indexOf("#");
-  return hash >= 0 ? m.fx.slice(0, hash) : m.fx;
-};
-
-const CONSENSUS = 8; // px spread within a grid row to treat its shift as uniform
-
-export const correctiveSpacers = (a: Marker[], b: Marker[]): SpacingPlan => {
+export const correctiveFlat = (
+  a: Marker[],
+  b: Marker[],
+  gain = 0.7,
+): SpacingPlan => {
   const fa = a.filter((m) => !isContainer(m));
   const fb = b.filter((m) => !isContainer(m));
   const pairs = alignMarkers(fa, fb)
@@ -783,62 +777,16 @@ export const correctiveSpacers = (a: Marker[], b: Marker[]): SpacingPlan => {
   const B: Spacer[] = [];
   let cumA = 0;
   let cumB = 0;
-  const bucket = (y: number) => Math.round(y / 8);
-  const rowKey = (m: Marker) => fxContainer(m) + ":" + bucket(m.y);
-
-  // Per grid ROW, the raw drifts of its matched cells; a row is "coherent" (safe
-  // to shift as a unit) only if those drifts agree within CONSENSUS.
-  const drifts = new Map<string, { spread: [number, number]; onA: boolean }>();
-  const note = (m: Marker, dy: number, onA: boolean) => {
-    if (fxContainer(m) === null) return;
-    const k = (onA ? "A" : "B") + rowKey(m);
-    const e = drifts.get(k);
-    if (!e) drifts.set(k, { spread: [dy, dy], onA });
-    else e.spread = [Math.min(e.spread[0], dy), Math.max(e.spread[1], dy)];
-  };
-  for (const { ea, eb } of pairs) {
-    const dy = ea.y - eb.y;
-    note(ea, dy, true);
-    note(eb, dy, false);
-  }
-  const coherent = (m: Marker, onA: boolean): boolean => {
-    const e = drifts.get((onA ? "A" : "B") + rowKey(m));
-    return !!e && e.spread[1] - e.spread[0] <= CONSENSUS;
-  };
-
-  // Push `el` down by px: a grid cell pushes its whole row (all same-container
-  // cells at the same y); flow → just itself. A grid cell whose row disagrees is
-  // skipped, so the corrective never desyncs a row to chase one stray cell.
-  const pushDown = (
-    list: Spacer[],
-    all: Marker[],
-    el: Marker,
-    px: number,
-    onA: boolean,
-  ): boolean => {
-    const g = fxContainer(el);
-    if (g !== null) {
-      if (!coherent(el, onA)) return false;
-      const yb = bucket(el.y);
-      for (const m of all) {
-        if (m.i !== undefined && fxContainer(m) === g && bucket(m.y) === yb) {
-          list.push({ i: m.i, px, mode: "el" });
-        }
-      }
-      return true;
-    }
-    if (el.i !== undefined) {
-      list.push({ i: el.i, px, mode: "el" });
-      return true;
-    }
-    return false;
-  };
   for (const { ea, eb } of pairs) {
     const d = ea.y + cumA - (eb.y + cumB);
-    if (d > 0.5) {
-      if (pushDown(B, fb, eb, Math.round(d), false)) cumB += d;
-    } else if (d < -0.5) {
-      if (pushDown(A, fa, ea, Math.round(-d), true)) cumA += -d;
+    if (d > 0.5 && eb.i !== undefined) {
+      const px = d * gain;
+      B.push({ i: eb.i, px: Math.round(px), mode: "el" });
+      cumB += px;
+    } else if (d < -0.5 && ea.i !== undefined) {
+      const px = -d * gain;
+      A.push({ i: ea.i, px: Math.round(px), mode: "el" });
+      cumA += px;
     }
   }
   return { a: A, b: B };

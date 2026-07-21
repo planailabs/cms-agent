@@ -18,7 +18,7 @@ import { env } from "@/lib/env";
 import { GIT_COMMIT } from "@/lib/buildInfo";
 import { COLLECT_MARKERS_JS, type MarkerDoc } from "@/lib/compare/markers";
 import {
-  correctiveSpacers,
+  correctiveFlat,
   matchedYDelta,
   spacingPlan,
   type Spacer,
@@ -181,7 +181,7 @@ async function openAligned(
 }
 
 const CORRECTIVE_THRESHOLD = 8; // px residual that trips the last-resort patch
-const CORRECTIVE_ROUNDS = 4; // max iterations to converge both sides
+const CORRECTIVE_ROUNDS = 6; // max iterations to converge both sides
 
 /** Render both aligned shots (best-effort) from a computed spacing plan. If the
  *  structural reflow leaves residual drift, a last-resort corrective pass patches
@@ -220,7 +220,7 @@ async function alignedShots(
     for (let round = 0; round < CORRECTIVE_ROUNDS; round++) {
       if (Math.abs(matchedYDelta(ra.m, rb.m).max) <= CORRECTIVE_THRESHOLD)
         break;
-      const corr = correctiveSpacers(ra.m, rb.m);
+      const corr = correctiveFlat(ra.m, rb.m);
       if (!corr.a.length && !corr.b.length) break;
       await Promise.all([inject(A, corr.a), inject(B, corr.b)]);
       [ra, rb] = (await Promise.all([

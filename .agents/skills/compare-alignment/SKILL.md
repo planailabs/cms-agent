@@ -102,28 +102,27 @@ them into a fixture under `test/fixtures/` and add a scaffold.
 
 ## Iterative corrective pass (the convergence loop)
 
-`correctiveSpacers(a, b)` (layout.ts) + the loop in `alignedShots` (screenshot.ts):
-after the structural reflow, while residual > 8px, re-measure the reflowed
-markers and push the higher side down by the leftover gap, re-collect, and repeat
-(≤4 rounds) so BOTH sides converge until they fit. It measures real geometry each
-round, so it self-corrects rather than needing a perfect one-shot plan.
+`correctiveFlat(a, b, gain)` (layout.ts) + the loop in `alignedShots`
+(screenshot.ts): after the structural reflow, while residual > 8px, re-measure the
+reflowed markers, pad each element still too high by its OWN residual, re-collect,
+and repeat (≤6 rounds) so BOTH sides converge. It measures real geometry each
+round, so it self-corrects rather than trusting a model.
 
-- **DOM-aware, not geometric.** A matched element carries its grid/flex container
-  - cell in `fx`; a grid cell that's off is corrected by pushing its WHOLE ROW
-    (all same-container cells at the same y) so the row stays internally aligned —
-    moving one cell would desync it. Flow elements take a single `el` filler.
-- **Consensus gate.** A grid row is shifted as a unit only when its cells AGREE on
-  the drift (spread ≤ 8px). A lone dissenting cell — e.g. a card that reflowed up
-  a row on a grid card removal — is left alone, so the corrective never desyncs a
-  row chasing one stray cell. This is why it converges the asymmetric-gap grid
-  list (`gap: 12px 32px`, cut column-first by the geometric partition) yet never
-  worsens the cross-row removal.
+- **Model-free.** No grid/row/consensus logic — it just moves measured content to
+  where its match sits (a `margin-top` flow filler keyed by the re-collected id).
+  Grids, flex, tables, nesting converge the same way, including cases the
+  structural pass leaves off (a grid row whose cells drifted by different amounts,
+  or the asymmetric-gap grid-list) — it aligns positions, not structure.
+- **Undershoot to avoid overshoot.** Margin can be added but not removed, and a
+  pad inside a grid does NOT cascade to the rows below like a flow pad does, so the
+  cumulative can over-estimate. `gain` (0.7) makes every step approach the target
+  from below — never overshoots; a couple more rounds instead.
 
-It is a net, not a substitute — fix the structural aligner first; the loop catches
-the long tail (and the cases the geometric guillotine mis-partitions, like a grid
-whose column gap is wider than its row gap). `verifyAlignment`'s linear sim does
-NOT model `tail`/`grid`/`cell`/corrective fillers — trust the real-browser
-`matchedYDelta`, not the sim, for grid work.
+This replaced a DOM-aware corrective (push whole grid rows via `fx`, gated by a
+consensus check) that couldn't fix a row whose cells drifted unevenly — the flat
+loop is simpler AND strictly better there. The structural `spacingPlan` still runs
+first as a fast seed so the loop finishes in 1–2 rounds. Trust the real-browser
+`matchedYDelta`, not `verifyAlignment`'s linear sim, for grid work.
 
 ## Fixture coverage (imported plan.ai patterns)
 

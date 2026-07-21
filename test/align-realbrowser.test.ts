@@ -20,7 +20,7 @@ import { COLLECT_MARKERS_JS, type MarkerDoc } from "@/lib/compare/markers";
 import {
   spacingPlan,
   matchedYDelta,
-  correctiveSpacers,
+  correctiveFlat,
 } from "@/lib/compare/layout";
 import { INJECT_SPACERS } from "@/lib/compare/inject";
 
@@ -91,10 +91,10 @@ const residualCorrected = async (
     await before.evaluate(INJECT_SPACERS, plan.a as never);
     await after.evaluate(INJECT_SPACERS, plan.b as never);
     let [ab, aa] = await Promise.all([collect(before), collect(after)]);
-    // Iterate the corrective: adjust both sides until they fit (or give up).
-    for (let round = 0; round < 4; round++) {
+    // Structural seed + FLAT corrective tail.
+    for (let round = 0; round < 6; round++) {
       if (Math.abs(matchedYDelta(ab.m, aa.m).max) <= 8) break;
-      const corr = correctiveSpacers(ab.m, aa.m);
+      const corr = correctiveFlat(ab.m, aa.m);
       if (!corr.a.length && !corr.b.length) break;
       await before.evaluate(INJECT_SPACERS, corr.a as never);
       await after.evaluate(INJECT_SPACERS, corr.b as never);
