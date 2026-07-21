@@ -15,8 +15,11 @@
  * the "before" shot — the two pages share a layout width; only heights differ.
  */
 import {
+  alignMarkers,
   alignedSegmentsIn,
+  bracketAnchors,
   computeAnchors,
+  mapPosition,
   type AlignedSegment,
   type Marker,
 } from './markers';
@@ -158,4 +161,50 @@ export const buildLayout = (
   const pa = partition(boxesA, { x0: 0, y0: 0, x1: w, y1: ah });
   const pb = partition(boxesB, { x0: 0, y0: 0, x1: w, y1: bh });
   return matchAlign(pa, pb);
+};
+
+// ── Box-diff highlights ────────────────────────────────────────────────────
+
+export interface DiffBox {
+  kind: 'added' | 'removed' | 'changed';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const isContainer = (m: Marker): boolean => m.k.charCodeAt(0) === 35;
+const hasBox = (m: Marker): boolean => m.x !== undefined && m.w !== undefined && m.h !== undefined;
+
+/**
+ * Content-box diff for rectangle highlights, in AFTER-shot coordinates:
+ *  - added   → a leaf present only in b (green),
+ *  - changed → a matched leaf whose text/size differs (amber),
+ *  - removed → a leaf present only in a, its y mapped into b-space (red).
+ * Semantic, so anti-aliasing / font-rendering / cross-browser noise never
+ * lights up — unlike a pixel diff. Returns [] without bounding boxes.
+ */
+export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffBox[] => {
+  const { matches, onlyA, onlyB } = alignMarkers(a, b);
+  const out: DiffBox[] = [];
+  for (const i of onlyB) {
+    const m = b[i];
+    if (!isContainer(m) && hasBox(m)) out.push({ kind: 'added', x: m.x!, y: m.y, w: m.w!, h: m.h! });
+  }
+  for (const mm of matches) {
+    const m = b[mm.bi];
+    if (mm.score < 0.999 && !isContainer(m) && hasBox(m)) {
+      out.push({ kind: 'changed', x: m.x!, y: m.y, w: m.w!, h: m.h! });
+    }
+  }
+  if (onlyA.some((i) => !isContainer(a[i]) && hasBox(a[i]))) {
+    const bracketed = bracketAnchors(computeAnchors(a, b), ah, bh);
+    for (const i of onlyA) {
+      const m = a[i];
+      if (!isContainer(m) && hasBox(m)) {
+        out.push({ kind: 'removed', x: m.x!, y: mapPosition(m.y, bracketed), w: m.w!, h: m.h! });
+      }
+    }
+  }
+  return out;
 };

@@ -22,7 +22,7 @@ import type { AppState } from '../chat/app/state';
 const markerCache = new Map<string, Promise<MarkerDoc | null>>();
 const sizeCache = new Map<string, Promise<{ w: number; h: number } | null>>();
 
-const fetchMarkers = (shotSrc: string): Promise<MarkerDoc | null> => {
+export const fetchMarkers = (shotSrc: string): Promise<MarkerDoc | null> => {
   const url = `${shotSrc}&markers=1`;
   let p = markerCache.get(url);
   if (!p) {
@@ -37,7 +37,7 @@ const fetchMarkers = (shotSrc: string): Promise<MarkerDoc | null> => {
   return p;
 };
 
-const imageSize = (src: string): Promise<{ w: number; h: number } | null> => {
+export const imageSize = (src: string): Promise<{ w: number; h: number } | null> => {
   let p = sizeCache.get(src);
   if (!p) {
     p = new Promise((resolve) => {

@@ -28,8 +28,8 @@ const shotUrl = (
   `/api/preview/browsers-shot?branch=${encodeURIComponent(branch)}` +
   `&route=${encodeURIComponent(route)}&a=${a}&b=${b}&kind=${kind}`;
 
-const renderShot = (src: string, alt: string, extraClass = '', extraStyle = ''): string =>
-  `<div class="ws-shot ${extraClass}" ${extraStyle ? `style="${extraStyle}"` : ''}>
+const renderShot = (src: string, alt: string, extraClass = '', extraStyle = '', attrs = ''): string =>
+  `<div class="ws-shot ${extraClass}" ${extraStyle ? `style="${extraStyle}"` : ''} ${attrs}>
     <span class="ws-shot__spinner"><span class="ws-spinner"></span> ${escapeHtml(t(uiLocale(), 'workspace.bc.renderingShot', { name: alt }))}</span>
     <img data-shot src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" draggable="false" />
   </div>`;
@@ -76,8 +76,15 @@ export const renderBrowserCompare = (state: AppState): string => {
             <span class="ws-onion__label ws-onion__label--right">${escapeHtml(bc.b)}</span>
           </div>`
         : `<div class="ws-diff-highlight__stack">
-          ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'after'), bc.b)}
-          ${bc.overlayVisible ? renderShot(shotUrl(branch, route, bc.a, bc.b, 'diff'), t(locale, 'workspace.bc.differences'), 'ws-shot--overlay') : ''}
+          ${renderShot(
+            shotUrl(branch, route, bc.a, bc.b, 'after'),
+            bc.b,
+            '',
+            '',
+            bc.overlayVisible
+              ? `data-boxhl data-before="${escapeHtml(shotUrl(branch, route, bc.a, bc.b, 'before'))}" data-after="${escapeHtml(shotUrl(branch, route, bc.a, bc.b, 'after'))}"`
+              : '',
+          )}
         </div>`;
 
   return `<div class="ws-diff">

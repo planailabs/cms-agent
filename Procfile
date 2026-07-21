@@ -19,7 +19,7 @@
 #   expands to the repo root when overmind parses the line, so the value is
 #   absolute and survives sudo/cargo-watch working-directory changes.
 # - PREVIEW_REQUIRE_AUTH=false because domain cookies don't work on localhost.
-cms: rm -f var/proxy-routes.json; SKIP_AUTH=true HOST=::1 bash scripts/launch-with-sandbox.sh pnpm dev -- --host '::1' | cat
+cms: rm -rf var/proxy-routes.json $TMPDIR/cms-agent-diffs; SKIP_AUTH=true HOST=::1 bash scripts/launch-with-sandbox.sh pnpm dev -- --host '::1' | cat
 # cargo-watch needs the crate as its workdir (-C proxy); $PWD still expands
 # to the repo root when the shell parses the line, keeping VAR_DIR absolute.
 # - The bash trap: overmind (unprivileged) cannot signal the root-owned

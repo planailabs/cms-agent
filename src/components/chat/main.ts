@@ -24,6 +24,7 @@ import { renderGitModal } from '../workspace/gitModal';
 import { renderCapsModal } from '../workspace/capsModal';
 import { renderPlanModal } from '../workspace/planModal';
 import { syncOnionAlignment } from '../workspace/onionAlign';
+import { syncBoxHighlights } from '../workspace/highlightAlign';
 import { renderCodeBrowser } from '../workspace/codeBrowser';
 import { bootWindowSession, renderWindowPicker } from '../workspace/windowSession';
 import { startUpdateWatcher } from '../workspace/appUpdate';
@@ -113,6 +114,7 @@ const initApp = () => {
       // Content-aligned onion columns (compare mode 'content') — imperative
       // enhancement over the rendered onion markup.
       syncOnionAlignment(state);
+      syncBoxHighlights(state);
     }
 
     // 3. Right sidebar: branch switcher, phase bar, chat.

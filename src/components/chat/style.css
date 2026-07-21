@@ -2212,6 +2212,29 @@ html.is-first-visit #app {
     flex: 0 0 auto;
   }
 
+  /* Box-diff highlight rectangles over the after shot (added/changed/removed). */
+  .ws-hl-rect {
+    position: absolute;
+    pointer-events: none;
+    box-sizing: border-box;
+    border-radius: 2px;
+  }
+
+  .ws-hl-rect--added {
+    background: rgba(52, 199, 89, 0.18);
+    outline: 1.5px solid rgba(52, 199, 89, 0.85);
+  }
+
+  .ws-hl-rect--changed {
+    background: rgba(255, 189, 0, 0.16);
+    outline: 1.5px solid rgba(255, 189, 0, 0.85);
+  }
+
+  .ws-hl-rect--removed {
+    background: rgba(255, 59, 48, 0.12);
+    outline: 1.5px dashed rgba(255, 59, 48, 0.85);
+  }
+
 }
 
 .icon-size {

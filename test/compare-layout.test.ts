@@ -3,7 +3,7 @@
  * match the two trees, and align each rectangle on its own.
  */
 import { describe, expect, it } from 'vitest';
-import { buildLayout } from '@/lib/compare/layout';
+import { boxDiff, buildLayout } from '@/lib/compare/layout';
 import type { Marker } from '@/lib/compare/markers';
 
 const bx = (k: string, y: number, x: number, w: number, h: number): Marker => ({ k, y, x, w, h, s: '' });
@@ -45,6 +45,24 @@ describe('buildLayout', () => {
     expect(n.h).toBe(n.children![0].h);
     // each column itself split its heading from its paragraph
     expect(n.children![0].kind).toBe('col');
+  });
+
+  it('classifies added / removed / changed content boxes', () => {
+    const a = [
+      bx('P:kept intact#1', 0, 0, 100, 40),
+      bx('P:oldonly#1', 60, 0, 100, 40),
+      bx('P:changes here now#1', 120, 0, 100, 40),
+    ];
+    const b = [
+      bx('P:kept intact#1', 0, 0, 100, 40),
+      bx('P:changes here totally different#1', 80, 0, 100, 60),
+      bx('P:brandnew#1', 160, 0, 100, 40),
+    ];
+    const kinds = boxDiff(a, 200, b, 220).map((d) => d.kind);
+    expect(kinds).toContain('added'); // brandnew
+    expect(kinds).toContain('removed'); // oldonly
+    expect(kinds).toContain('changed'); // reworded paragraph
+    expect(kinds).not.toContain(undefined);
   });
 
   it('falls back to a single leaf when the two structures do not match', () => {

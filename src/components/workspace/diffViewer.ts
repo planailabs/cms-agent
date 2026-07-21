@@ -24,8 +24,8 @@ const shotUrl = (chatId: string, route: string, kind: 'before' | 'after' | 'diff
   `/api/diff/${encodeURIComponent(chatId)}/shot?route=${encodeURIComponent(route)}&kind=${kind}`;
 
 /** Screenshot <img> wrapped with a per-image loading spinner. */
-const renderShot = (src: string, alt: string, extraClass = '', extraStyle = ''): string =>
-  `<div class="ws-shot ${extraClass}" ${extraStyle ? `style="${extraStyle}"` : ''}>
+const renderShot = (src: string, alt: string, extraClass = '', extraStyle = '', attrs = ''): string =>
+  `<div class="ws-shot ${extraClass}" ${extraStyle ? `style="${extraStyle}"` : ''} ${attrs}>
     <span class="ws-shot__spinner"><span class="ws-spinner"></span> ${escapeHtml(t(uiLocale(), 'workspace.diff.renderingShot'))}</span>
     <img data-shot src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" draggable="false" />
   </div>`;
@@ -53,6 +53,13 @@ const renderHighlight = (state: AppState, route: string): string => {
   const locale = uiLocale();
   const chatId = state.activeChatId!;
   const overlayVisible = state.workspace.diff.overlayVisible;
+  const before = shotUrl(chatId, route, 'before');
+  const after = shotUrl(chatId, route, 'after');
+  // Box-diff rectangles over the after shot (added/changed/removed), not a
+  // pixel-diff PNG — driven by markers, so rendering noise never lights up.
+  const hlAttrs = overlayVisible
+    ? `data-boxhl data-before="${escapeHtml(before)}" data-after="${escapeHtml(after)}"`
+    : '';
   return `<div class="ws-diff-highlight">
       <div class="ws-diff-highlight__bar">
         <button type="button" class="ws-mini-button ${overlayVisible ? 'is-active' : ''}"
@@ -61,8 +68,7 @@ const renderHighlight = (state: AppState, route: string): string => {
         </button>
       </div>
       <div class="ws-diff-highlight__stack">
-        ${renderShot(shotUrl(chatId, route, 'after'), t(locale, 'workspace.diff.afterRoute', { route }))}
-        ${overlayVisible ? renderShot(shotUrl(chatId, route, 'diff'), t(locale, 'workspace.diff.diffRoute', { route }), 'ws-shot--overlay') : ''}
+        ${renderShot(after, t(locale, 'workspace.diff.afterRoute', { route }), '', '', hlAttrs)}
       </div>
     </div>`;
 };
