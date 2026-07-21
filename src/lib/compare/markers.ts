@@ -31,6 +31,15 @@ export interface Marker {
    *  shape, text-independent). Empty/absent for leaf blocks. Lets a section
    *  anchor by structure even when its text was reworded. */
   s?: string;
+  /** Element id — a STABLE identifier: same id ⇒ same element, however much
+   *  its text changed. Strongest match signal. Absent when the element has none. */
+  id?: string;
+  /** Nearest ancestor id (the leaf's "scope", e.g. its section) — leaves rarely
+   *  have their own id but usually sit under one. Same scope + same tag boosts
+   *  the match. Absent when no ancestor has an id. */
+  sid?: string;
+  /** Space-separated class list (mild identity signal). Absent when empty. */
+  c?: string;
 }
 
 export interface MarkerDoc {
@@ -109,7 +118,16 @@ export const COLLECT_MARKERS_JS = `(function () {
       continue;
     }
     var n = counts[key] = (counts[key] || 0) + 1;
-    out.push({ k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig });
+    var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig };
+    if (el.id) mk.id = el.id;
+    var cls = typeof el.className === 'string' ? el.className : '';
+    if (cls) mk.c = cls.slice(0, 100);
+    var scopeId = '';
+    for (var pp = el.parentElement; pp; pp = pp.parentElement) {
+      if (pp.id) { scopeId = pp.id; break; }
+    }
+    if (scopeId) mk.sid = scopeId;
+    out.push(mk);
   }
   var root = document.scrollingElement || document.documentElement;
   return { h: Math.round(root.scrollHeight), m: out };
@@ -150,21 +168,45 @@ const parseKey = (k: string): { cont: boolean; tag: string; text: string } => {
   return { cont: false, tag: c > 0 ? k.slice(0, c) : '', text: c >= 0 ? k.slice(c + 1, h > c ? h : k.length) : '' };
 };
 
+/** Jaccard over the two class lists (mild identity signal). */
+const classSim = (a?: string, b?: string): number => {
+  if (!a || !b) return 0;
+  const ta = new Set(a.split(/\s+/).filter(Boolean));
+  const seen = new Set<string>();
+  let inter = 0;
+  for (const t of b.split(/\s+/).filter(Boolean)) {
+    if (!seen.has(t)) {
+      if (ta.has(t)) inter++;
+      seen.add(t);
+    }
+  }
+  const uni = ta.size + seen.size - inter;
+  return uni ? inter / uni : 0;
+};
+
 /**
- * Match degree between two markers, 0..1. Exact text = 1 (preferred); same tag
- * with overlapping words scores by Jaccard; different element types (or a
- * container vs a leaf) don't match. Containers match only on identical
- * structure. This is what "locate by text, exact over inexact, else score by
- * degree" reduces to.
+ * Match degree between two markers, 0..1:
+ *  - a shared, non-empty element id ⇒ 1 (STABLE identity — same element even if
+ *    every word changed);
+ *  - exact text ⇒ 1;
+ *  - same tag ⇒ word-overlap (Jaccard), lifted a little when the class lists
+ *    also overlap;
+ *  - different element types (or container vs leaf) ⇒ 0; containers match on
+ *    identical structure.
  */
 export const similarity = (a: Marker, b: Marker): number => {
+  if (a.id && a.id === b.id) return 1;
   if (a.k === b.k) return 1;
   const pa = parseKey(a.k);
   const pb = parseKey(b.k);
   if (pa.cont !== pb.cont) return 0;
   if (pa.cont) return pa.tag === pb.tag ? 0.8 : 0;
   if (pa.tag !== pb.tag) return 0;
-  return jaccard(pa.text, pb.text);
+  const text = jaccard(pa.text, pb.text);
+  // Same scope (section) or shared classes lift a weak text match — but only
+  // partway, so two different blocks in the same section don't force-match.
+  const idBoost = a.sid && a.sid === b.sid ? 1 : classSim(a.c, b.c);
+  return Math.min(1, text + 0.25 * idBoost * (1 - text));
 };
 
 /** A matched pair (indices into a/b) with its match degree. */

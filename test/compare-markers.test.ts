@@ -70,6 +70,13 @@ describe('computeAnchors', () => {
     expect(computeAnchors(a, b)).toEqual([{ a: 100, b: 120 }]);
   });
 
+  it('matches by stable id even when all the text changed', () => {
+    const a = [{ k: 'H1:Old headline entirely#1', y: 0, id: 'hero' }];
+    const b = [{ k: 'H1:Completely different words#1', y: 40, id: 'hero' }];
+    // no word overlap, but same id ⇒ same element ⇒ anchored
+    expect(computeAnchors(a, b)).toEqual([{ a: 0, b: 40 }]);
+  });
+
   it('skips a missing element (fill up) instead of mis-pairing the rest', () => {
     const a = [mk('P:Alpha block#1', 100), mk('P:Beta block#1', 200), mk('P:Gamma block#1', 300)];
     const b = [mk('P:Alpha block#1', 100), mk('P:Gamma block#1', 250)]; // Beta removed
