@@ -25,7 +25,6 @@ import { renderCapsModal } from '../workspace/capsModal';
 import { renderPlanModal } from '../workspace/planModal';
 import { syncBoxHighlights } from '../workspace/highlightAlign';
 import { syncDiffContentAlignment } from '../workspace/diffScroll';
-import { syncOnionAlignment } from '../workspace/onionAlign';
 import { renderCodeBrowser } from '../workspace/codeBrowser';
 import { bootWindowSession, renderWindowPicker } from '../workspace/windowSession';
 import { startUpdateWatcher } from '../workspace/appUpdate';
@@ -112,10 +111,7 @@ const initApp = () => {
         // by an innerHTML pass (that reloads every tab).
         if (frameRegion) syncPreviewFrames(frameRegion, state);
       }
-      // Content-aligned onion columns (compare mode 'content') — imperative
-      // enhancement over the rendered onion markup.
       void syncDiffContentAlignment(state);
-      syncOnionAlignment(state);
       syncBoxHighlights(state);
     }
 

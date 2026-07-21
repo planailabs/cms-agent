@@ -41,35 +41,45 @@ describe('diff compare renderers', () => {
     expect(html).not.toContain('kind=after');
   });
 
-  it('renders raw diff shots for onion mode and marks the container for content alignment', () => {
+  it('renders insertion-aligned diff shots for onion content mode', () => {
     const state = mkState();
     state.workspace.compareMode = 'content';
     state.workspace.diff.mode = 'onion';
 
     const html = renderDiffViewer(state);
-    expect(html).toContain('class="ws-onion" data-onion');
-    expect(html).toContain('/api/diff/chat-1/shot?route=%2F&amp;kind=before');
-    expect(html).toContain('/api/diff/chat-1/shot?route=%2F&amp;kind=after');
-    expect(html).not.toContain('kind=before-aligned');
-    expect(html).not.toContain('kind=after-aligned');
+    expect(html).toContain('class="ws-onion"');
+    expect(html).not.toContain('data-onion');
+    expect(html).toContain('kind=before-aligned');
+    expect(html).toContain('kind=after-aligned');
   });
 
-  it('renders raw browser-compare shots for onion mode and keeps scroll aligned-shot based', () => {
+  it('renders insertion-aligned browser-compare shots for onion and scroll content modes', () => {
     const state = mkState();
     state.workspace.compareMode = 'content';
     state.workspace.browserCompare.open = true;
     state.workspace.browserCompare.mode = 'onion';
     let html = renderBrowserCompare(state);
-    expect(html).toContain('class="ws-onion" data-onion');
-    expect(html).toContain('kind=before');
-    expect(html).toContain('kind=after');
-    expect(html).not.toContain('kind=before-aligned');
-    expect(html).not.toContain('kind=after-aligned');
+    expect(html).toContain('class="ws-onion"');
+    expect(html).not.toContain('data-onion');
+    expect(html).toContain('kind=before-aligned');
+    expect(html).toContain('kind=after-aligned');
 
     state.workspace.browserCompare.mode = 'scroll';
     html = renderBrowserCompare(state);
     expect(html).toContain('kind=before-aligned');
     expect(html).toContain('kind=after-aligned');
+  });
+
+  it('keeps onion height mode on raw shots', () => {
+    const state = mkState();
+    state.workspace.compareMode = 'height';
+    state.workspace.diff.mode = 'onion';
+
+    const html = renderDiffViewer(state);
+    expect(html).toContain('kind=before');
+    expect(html).toContain('kind=after');
+    expect(html).not.toContain('kind=before-aligned');
+    expect(html).not.toContain('kind=after-aligned');
   });
 
   it('keeps highlight mode on raw before/after shots for box overlays', () => {
