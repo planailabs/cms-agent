@@ -40,6 +40,10 @@ export interface Marker {
   sid?: string;
   /** Space-separated class list (mild identity signal). Absent when empty. */
   c?: string;
+  /** Flex/grid cell key: "<container>/<childCount>#<cellIndex>" of the nearest
+   *  flex/grid ancestor. Leaves in the same cell (card) share it; different
+   *  columns of one grid differ — so a grid's columns never cross-match. */
+  fx?: string;
 }
 
 export interface MarkerDoc {
@@ -127,6 +131,22 @@ export const COLLECT_MARKERS_JS = `(function () {
       if (pp.id) { scopeId = pp.id; break; }
     }
     if (scopeId) mk.sid = scopeId;
+    // Nearest flex/grid ancestor (bounded) + the leaf's cell index within it —
+    // so a grid's columns are distinct identities and never cross-match.
+    var child = el;
+    for (var q = el.parentElement, depth = 0; q && depth < 8; q = q.parentElement, depth++) {
+      var disp = '';
+      try { disp = getComputedStyle(q).display; } catch (e) { disp = ''; }
+      if (disp === 'flex' || disp === 'grid' || disp === 'inline-flex' || disp === 'inline-grid') {
+        if (q.children.length > 1) {
+          var ci = 0;
+          for (var ki = 0; ki < q.children.length; ki++) { if (q.children[ki] === child) { ci = ki; break; } }
+          mk.fx = (q.id || q.tagName) + '/' + q.children.length + '#' + ci;
+        }
+        break;
+      }
+      child = q;
+    }
     out.push(mk);
   }
   var root = document.scrollingElement || document.documentElement;
@@ -201,8 +221,16 @@ export const similarity = (a: Marker, b: Marker): number => {
   if (pa.cont !== pb.cont) return 0;
   if (pa.cont) return pa.tag === pb.tag ? 0.8 : 0;
   if (pa.tag !== pb.tag) return 0; // tag is part of identity
-  if (a.id && a.id === b.id) return 1; // same tag + same stable id
   const text = jaccard(pa.text, pb.text);
+  // Different columns of the SAME flex/grid are distinct — never let a section's
+  // scope-id fold two columns together (that overlays a grid's cells).
+  if (a.fx && b.fx && a.fx !== b.fx) {
+    const ga = a.fx.slice(0, a.fx.indexOf('#'));
+    const gb = b.fx.slice(0, b.fx.indexOf('#'));
+    if (ga === gb) return Math.min(text, 0.3); // same grid, other cell → not it
+  }
+  if (a.id && a.id === b.id) return 1; // same tag + same stable id
+  if (a.fx && a.fx === b.fx && a.sid === b.sid) return Math.min(1, 0.6 + 0.4 * text); // same cell
   // Stable identity from scope (section) + classes (semantic role). Same tag +
   // same section + same class ≈ the same element, so lift the score toward 1
   // even if every word changed; short of that, text carries it.

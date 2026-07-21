@@ -77,6 +77,19 @@ describe('computeAnchors', () => {
     expect(computeAnchors(a, b)).toEqual([{ a: 0, b: 40 }]);
   });
 
+  it('never cross-matches different columns of the same flex/grid', () => {
+    // two cards in one 3-col grid: same section + class, but different cells.
+    const a = [{ k: 'H4:The regulatory wave#1', y: 0, sid: 'grid', c: 'card', fx: 'G/3#1' }];
+    const b = [{ k: 'H4:The subscription ceiling#1', y: 0, sid: 'grid', c: 'card', fx: 'G/3#2' }];
+    expect(computeAnchors(a, b)).toEqual([]); // other cell → no anchor → no overlay
+  });
+
+  it('matches the same grid cell even when its text changed', () => {
+    const a = [{ k: 'H4:The regulatory wave#1', y: 0, sid: 'grid', c: 'card', fx: 'G/3#1' }];
+    const b = [{ k: 'H4:Governance is becoming#1', y: 40, sid: 'grid', c: 'card', fx: 'G/3#1' }];
+    expect(computeAnchors(a, b)).toEqual([{ a: 0, b: 40 }]); // same cell → corresponds
+  });
+
   it('skips a missing element (fill up) instead of mis-pairing the rest', () => {
     const a = [mk('P:Alpha block#1', 100), mk('P:Beta block#1', 200), mk('P:Gamma block#1', 300)];
     const b = [mk('P:Alpha block#1', 100), mk('P:Gamma block#1', 250)]; // Beta removed
