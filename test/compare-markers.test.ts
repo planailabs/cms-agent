@@ -12,8 +12,10 @@ import {
 } from '@/lib/compare/markers';
 
 const mk = (k: string, y: number): Marker => ({ k, y });
-/** Container-layer marker: carries a structural signature `s`. */
-const mkc = (k: string, y: number, s: string): Marker => ({ k, y, s });
+/** Leaf marker with a structural role signature (nearest-container/tag). */
+const mkl = (k: string, y: number, s: string): Marker => ({ k, y, s });
+/** Container-layer marker: key is "#<structsig>", `s` is the structsig. */
+const mkc = (sig: string, y: number): Marker => ({ k: `#${sig}`, y, s: sig });
 
 describe('computeAnchors', () => {
   it('matches identical content in order', () => {
@@ -57,25 +59,38 @@ describe('computeAnchors', () => {
     // Section wraps a heading + paragraph whose text was fully reworded, so
     // no leaf keys match — but the container's structural signature does, so
     // the section boundary still anchors.
-    const sig = 'SECTION/2/H1Pp#1';
-    const a = [mkc(sig, 100, 'SECTION/2/H1Pp'), mk('H1:Old heading#1', 110), mk('P:Old body#1', 160)];
-    const b = [mkc(sig, 300, 'SECTION/2/H1Pp'), mk('H1:New heading#1', 310), mk('P:New body#1', 360)];
+    const a = [mkc('SECTION/2/H1Pp', 100), mk('H1:Old heading#1', 110), mk('P:Old body#1', 160)];
+    const b = [mkc('SECTION/2/H1Pp', 300), mk('H1:New heading#1', 310), mk('P:New body#1', 360)];
     expect(computeAnchors(a, b)).toEqual([{ a: 100, b: 300 }]);
   });
 
-  it('adds container breakpoints on top of the leaf anchors (layers)', () => {
+  it('anchors translated content element-by-element via structural role', () => {
+    // EN (a) vs DE (b): every leaf's TEXT differs (no layer-1 match), but each
+    // element's role signature lines up 1:1 → dense per-element anchors, so the
+    // content does not drift within a section.
     const a = [
-      mkc('#SECTION/1/H1#1', 0, 'SECTION/1/H1'),
-      mk('H1:Title#1', 10),
-      mkc('#UL/2/LiLi#1', 200, 'UL/2/LiLi'),
-      mk('LI:One#1', 210),
+      mkl('H2:The turning point#1', 100, 'SECTION/H2'),
+      mkl('P:Three forces#1', 150, 'SECTION/P'),
+      mkl('H2:The silicon shift#1', 400, 'SECTION/H2'),
+      mkl('P:On-device compute#1', 450, 'SECTION/P'),
     ];
     const b = [
-      mkc('#SECTION/1/H1#1', 0, 'SECTION/1/H1'),
-      mk('H1:Title#1', 10),
-      mkc('#UL/2/LiLi#1', 400, 'UL/2/LiLi'),
-      mk('LI:One#1', 410),
+      mkl('H2:Der Wendepunkt#1', 100, 'SECTION/H2'),
+      mkl('P:Drei Kraefte#1', 175, 'SECTION/P'),
+      mkl('H2:Silizium#1', 470, 'SECTION/H2'),
+      mkl('P:Auf dem Geraet#1', 520, 'SECTION/P'),
     ];
+    expect(computeAnchors(a, b)).toEqual([
+      { a: 100, b: 100 },
+      { a: 150, b: 175 },
+      { a: 400, b: 470 },
+      { a: 450, b: 520 },
+    ]);
+  });
+
+  it('adds container breakpoints on top of the leaf anchors (layers)', () => {
+    const a = [mkc('SECTION/1/H1', 0), mk('H1:Title#1', 10), mkc('UL/2/LiLi', 200), mk('LI:One#1', 210)];
+    const b = [mkc('SECTION/1/H1', 0), mk('H1:Title#1', 10), mkc('UL/2/LiLi', 400), mk('LI:One#1', 410)];
     // Leaf anchors (H1, LI) plus both container anchors → denser breakpoints.
     expect(computeAnchors(a, b)).toEqual([
       { a: 0, b: 0 },
@@ -86,10 +101,10 @@ describe('computeAnchors', () => {
   });
 
   it('never lets a structural anchor break monotonicity of the leaf anchors', () => {
-    const a = [mk('P:Kept#1', 100), mkc('#DIV/1/P#1', 150, 'X'), mk('P:Tail#1', 200)];
+    const a = [mk('P:Kept#1', 100), mkc('X', 150), mk('P:Tail#1', 200)];
     // The structural marker in B sits BEFORE the kept leaf → inserting it would
     // fold the mapping back; it must be dropped.
-    const b = [mkc('#DIV/1/P#1', 20, 'X'), mk('P:Kept#1', 100), mk('P:Tail#1', 260)];
+    const b = [mkc('X', 20), mk('P:Kept#1', 100), mk('P:Tail#1', 260)];
     const anchors = computeAnchors(a, b);
     for (let i = 1; i < anchors.length; i++) {
       expect(anchors[i].a).toBeGreaterThan(anchors[i - 1].a);

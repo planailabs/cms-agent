@@ -44,19 +44,27 @@ export interface Anchor {
  * Self-contained expression — evaluates to a MarkerDoc. ES5, no deps: runs
  * via playwright page.evaluate AND the injected bootstrap's eval channel.
  *
- * Captures two layers in document order:
- *  - leaf blocks (headings, paragraphs, list items, …) keyed by text — exact
- *    content identity, as before.
- *  - semantic containers (section/article/ul/…) carrying a text-independent
- *    structural signature `s` (tag + the shape of their descendant blocks).
- * The container layer gives the matcher deeper breakpoints and lets a section
- * still anchor when its inner text was reworded. Total markers are capped so
- * the O(n·m) match stays bounded on huge pages.
+ * Every marker in document order carries a content key `k` and a
+ * text-independent structural signature `s`:
+ *  - leaf blocks (headings, paragraphs, …) → k = text (exact identity); s =
+ *    "<nearest-container-tag>/<tag>" (its structural role).
+ *  - semantic containers (section/article/ul/…) → k = "#<structsig>"; s =
+ *    the same structsig (tag + descendant-block shape).
+ * The matcher uses k for exact content and s for structure, so a section AND
+ * each element inside it still anchor 1:1 when the text was reworded or
+ * translated (different words, same roles in the same order). Markers are
+ * capped so the O(n·m) match stays bounded on huge pages.
  */
 export const COLLECT_MARKERS_JS = `(function () {
   var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,table,figure,img';
   var CONT = 'section,article,header,footer,main,nav,aside,ul,ol,figure,table,form,blockquote';
   var MAX = 800;
+  var contTagOf = function (el) {
+    for (var p = el.parentElement; p; p = p.parentElement) {
+      if (p.matches(CONT)) return p.tagName;
+    }
+    return 'ROOT';
+  };
   var counts = {};
   var out = [];
   var scrollY = window.scrollY || window.pageYOffset || 0;
@@ -67,9 +75,10 @@ export const COLLECT_MARKERS_JS = `(function () {
     if (r.height <= 0) continue;
     var y = Math.round(r.top + scrollY);
     var kids = el.querySelectorAll(LEAF);
-    var key, sig = '';
+    var key, sig;
     if (el.matches(CONT) && kids.length >= 1) {
       // Container layer: signature from the descendant block shape only.
+      sig = '';
       for (var j = 0; j < kids.length && j < 24; j++) {
         var kt = kids[j].tagName;
         sig += kt.charAt(0) + (kt.length > 1 ? kt.charAt(kt.length - 1) : '');
@@ -77,13 +86,15 @@ export const COLLECT_MARKERS_JS = `(function () {
       sig = el.tagName + '/' + kids.length + '/' + sig;
       key = '#' + sig;
     } else if (el.matches(LEAF)) {
-      // Leaf block: exact content identity from its text (src for images).
+      // Leaf block: exact content identity from its text (src for images);
+      // structural role = its nearest semantic container + its own tag.
       var txt = el.tagName === 'IMG'
         ? (el.getAttribute('src') || '')
         : (el.textContent || '');
       txt = txt.replace(/\\s+/g, ' ').trim().slice(0, 80);
       if (!txt) continue;
       key = el.tagName + ':' + txt;
+      sig = contTagOf(el) + '/' + el.tagName;
     } else {
       continue;
     }
@@ -151,21 +162,22 @@ function mergeAnchors(base: Anchor[], extra: Anchor[]): Anchor[] {
   return result;
 }
 
+/** Leaf markers key by text; container markers key by "#<structsig>". */
+const isLeaf = (m: Marker): boolean => m.k.charCodeAt(0) !== 35 /* '#' */;
+
 /**
  * Order-preserving content matches, in two layers:
- *  1. exact content keys (leaf text) — high-confidence anchors, as before;
- *  2. structural signatures of container layers — added into the gaps, so a
- *     reworded section still anchors at its boundaries and nested containers
- *     contribute extra breakpoints.
+ *  1. exact leaf text — high-confidence anchors;
+ *  2. structural signatures (container structsig + each leaf's role) — merged
+ *     into the gaps layer 1 left open, so reworded / translated content still
+ *     anchors section-by-section AND element-by-element (same roles, same
+ *     order, different words).
  * Both passes are LCS + strict-increasing filtered; layer 2 only fills space
  * layer 1 left open. Markers without `s` (old caches) skip layer 2 → identical
  * to the previous behaviour.
  */
 export function computeAnchors(a: Marker[], b: Marker[]): Anchor[] {
-  // Layer 1: leaf blocks by exact text (containers carry `s`; old caches have
-  // no `s`, so everything is a leaf → identical to the previous behaviour).
-  const base = strictlyIncreasing(lcsPairs(a.filter((m) => !m.s), b.filter((m) => !m.s), (m) => m.k));
-  // Layer 2: container structure, merged into the gaps layer 1 left open.
+  const base = strictlyIncreasing(lcsPairs(a.filter(isLeaf), b.filter(isLeaf), (m) => m.k));
   const sa = a.filter((m) => m.s);
   const sb = b.filter((m) => m.s);
   if (sa.length === 0 || sb.length === 0) return base;
