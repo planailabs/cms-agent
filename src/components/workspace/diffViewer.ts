@@ -15,6 +15,7 @@ import { activeBranchName, previewBranchName } from './preview';
 /** Catalog keys only — labels resolve at render time. */
 const MODES: Array<{ key: DiffViewMode; labelKey: string }> = [
   { key: 'side-by-side', labelKey: 'workspace.diff.mode.sideBySide' },
+  { key: 'scroll', labelKey: 'workspace.diff.mode.scroll' },
   { key: 'highlight', labelKey: 'workspace.diff.mode.highlight' },
   { key: 'onion', labelKey: 'workspace.diff.mode.onion' },
 ];
@@ -63,6 +64,21 @@ const renderHighlight = (state: AppState, route: string): string => {
         ${renderShot(shotUrl(chatId, route, 'after'), t(locale, 'workspace.diff.afterRoute', { route }))}
         ${overlayVisible ? renderShot(shotUrl(chatId, route, 'diff'), t(locale, 'workspace.diff.diffRoute', { route }), 'ws-shot--overlay') : ''}
       </div>
+    </div>`;
+};
+
+/** Shot-based side-by-side in ONE scroll container: both columns scroll in
+ *  lockstep, and the content-align enhancer (compare mode 'content') pads
+ *  matched sections so identical content sits at the same y. Shares the
+ *  browser-compare scroll markup + CSS. */
+const renderScroll = (state: AppState, route: string): string => {
+  const locale = uiLocale();
+  const chatId = state.activeChatId!;
+  return `<div class="ws-bc-scroll" data-onion>
+      ${renderShot(shotUrl(chatId, route, 'before'), t(locale, 'workspace.diff.beforeRoute', { route }), 'ws-onion__before')}
+      ${renderShot(shotUrl(chatId, route, 'after'), t(locale, 'workspace.diff.afterRoute', { route }), 'ws-onion__after')}
+      <span class="ws-onion__label ws-onion__label--left">${escapeHtml(t(locale, 'workspace.diff.before'))}</span>
+      <span class="ws-onion__label ws-onion__label--right">${escapeHtml(t(locale, 'workspace.diff.after'))}</span>
     </div>`;
 };
 
@@ -154,6 +170,7 @@ export const renderDiffViewer = (state: AppState): string => {
   const route = diff.selectedRoute ?? diff.pages[0]!.route;
   let body = '';
   if (diff.mode === 'side-by-side') body = renderSideBySide(state, route);
+  else if (diff.mode === 'scroll') body = renderScroll(state, route);
   else if (diff.mode === 'highlight') body = renderHighlight(state, route);
   else body = renderOnion(state, route);
 
