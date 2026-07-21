@@ -18,7 +18,7 @@ import {
 } from "./layout";
 
 export const ALIGN_CORRECTIVE_THRESHOLD = 8;
-export const ALIGN_CORRECTIVE_ROUNDS = 6;
+export const ALIGN_CORRECTIVE_ROUNDS = 12;
 export const ALIGN_CONFIDENCE_MIN = 0.35;
 
 export interface CorrectiveAlignmentOptions {
