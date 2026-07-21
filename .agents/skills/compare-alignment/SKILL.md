@@ -68,6 +68,35 @@ When a compare looks wrong:
 4. **Keep the scaffold** — it's now a regression guard. Never delete one to make
    a change pass.
 
+### Image overlay verification
+
+Do not accept leaf-marker parity as proof that the rendered pages align. Blend
+the generated full-page aligned screenshots at 25%, 50%, and 75%; a correctly
+aligned painted edge remains one line, while drift produces two parallel lines:
+
+```bash
+for p in 25 50 75; do
+  magick before-aligned.png after-aligned.png \
+    -define compose:args=$p -compose blend -composite "blend-$p.png"
+done
+```
+
+For a suspected rectangular block, quantify horizontal-edge positions by
+cropping its x/y region, running an edge filter, and averaging each row. Compare
+the strongest row coordinates on both sides instead of estimating from a scaled
+screenshot:
+
+```bash
+magick before-aligned.png -background black -alpha remove \
+  -crop WIDTHxHEIGHT+X+Y -colorspace gray -edge 1 -resize 1xHEIGHT\! \
+  -depth 8 txt:-
+```
+
+Parse the `0,Y: (VALUE)` rows and compare the strongest peaks with the same
+command on `after-aligned.png`. Record every discovered mismatch as a browser
+regression. Text differences are expected to ghost in an overlay; persistent
+duplicate frame, divider, image, or background edges are alignment failures.
+
 ### Pulling real markers from a live diff
 
 Markers + shots live in `os.tmpdir()/cms-agent-diffs/<branch>/<commit>-<key>-*`
@@ -118,6 +147,11 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   otherwise the correction is dropped rather than guessed.
 - Matching ≠ change-detection: identity can score a changed element ~1, so
   `boxDiff` decides "changed" by comparing the content key, not the match score.
+- Substantial painted `div`/SVG/canvas/video blocks are visual anchors even when
+  they contain no marker text. Only uniquely identified painted roles authorize
+  correction; repeated card frames remain excluded to avoid ambiguous pairing.
+  Painted anchors do not enter text highlights, match confidence, or the
+  guillotine seed.
 - A full rewrite (structures don't correspond) overlays as one rectangle rather
   than stacking (which doubled the height).
 - **Grids partition ROW-first.** A grid has full-span gaps both ways; `partition`

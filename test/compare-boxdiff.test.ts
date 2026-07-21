@@ -87,4 +87,17 @@ describe("boxDiff (flat classifier)", () => {
   it("identical input → no highlights", () => {
     expect(boxDiff(before.m, before.h, before.m, before.h)).toHaveLength(0);
   });
+
+  it("never exposes painted alignment anchors as change highlights", () => {
+    const visual: Marker = {
+      k: "V:DIV/diagram-frame#1",
+      y: 20,
+      x: 10,
+      w: 400,
+      h: 300,
+      v: true,
+    };
+    expect(boxDiff([], 400, [visual], 400)).toHaveLength(0);
+    expect(boxDiff([visual], 400, [], 400)).toHaveLength(0);
+  });
 });

@@ -62,6 +62,9 @@ export interface Marker {
   /** Top of the nearest stable-id scope, used to separate section-local inset
    *  from whole-page flow drift. */
   sy?: number;
+  /** Substantial CSS/SVG-painted block. These anchors align visual frames and
+   *  illustrations but are not content changes or guillotine input boxes. */
+  v?: boolean;
 }
 
 export interface MarkerDoc {
@@ -100,6 +103,7 @@ export interface Anchor {
 export const COLLECT_MARKERS_JS = `(function () {
   var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,table,figure,img,td,th';
   var CONT = 'section,article,header,footer,main,nav,aside,ul,ol,figure,table,form,blockquote';
+  var VISUAL = 'div,svg,canvas,video';
   var MAX = 800;      // markers kept (bounds the O(n·m) matcher)
   var HARD = 3000;    // candidates gathered before area-ranking (bounds collect cost)
   var contTagOf = function (el) {
@@ -120,7 +124,7 @@ export const COLLECT_MARKERS_JS = `(function () {
     var tv = parseInt(tagged[ti].getAttribute('data-cmsm'), 10);
     if (!isNaN(tv) && tv >= nextId) nextId = tv + 1;
   }
-  var els = document.querySelectorAll(LEAF + ',' + CONT);
+  var els = document.querySelectorAll(LEAF + ',' + CONT + ',' + VISUAL);
   for (var i = 0; i < els.length && out.length < HARD; i++) {
     var el = els[i];
     // Closed <details> descendants can retain non-zero geometry in Chromium
@@ -134,7 +138,7 @@ export const COLLECT_MARKERS_JS = `(function () {
     var w = Math.round(r.width);
     var hgt = Math.round(r.height);
     var kids = el.querySelectorAll(LEAF);
-    var key, sig;
+    var key, sig, visual = false;
     if (el.matches(CONT) && kids.length >= 1) {
       // Container layer: signature from the descendant block shape only.
       sig = '';
@@ -158,6 +162,25 @@ export const COLLECT_MARKERS_JS = `(function () {
       if (!txt) continue;
       key = el.tagName + ':' + txt;
       sig = contTagOf(el) + '/' + el.tagName;
+    } else if (el.matches(VISUAL)) {
+      var vs = null;
+      try { vs = getComputedStyle(el); } catch (e) { vs = null; }
+      var border = vs && (
+        (vs.borderTopStyle !== 'none' && parseFloat(vs.borderTopWidth) > 0) ||
+        (vs.borderRightStyle !== 'none' && parseFloat(vs.borderRightWidth) > 0) ||
+        (vs.borderBottomStyle !== 'none' && parseFloat(vs.borderBottomWidth) > 0) ||
+        (vs.borderLeftStyle !== 'none' && parseFloat(vs.borderLeftWidth) > 0)
+      );
+      var bg = vs ? vs.backgroundColor : 'transparent';
+      var painted = el.tagName !== 'DIV' || border ||
+        (vs && vs.backgroundImage !== 'none') ||
+        (bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)');
+      if (!painted || r.width < 16 || r.height < 16) continue;
+      var visualClass = typeof el.className === 'string' ? el.className : '';
+      var visualIdentity = el.id || visualClass.slice(0, 100) || el.tagName;
+      key = 'V:' + el.tagName + '/' + visualIdentity;
+      sig = 'VISUAL/' + el.tagName;
+      visual = true;
     } else {
       continue;
     }
@@ -171,6 +194,7 @@ export const COLLECT_MARKERS_JS = `(function () {
       if (dp.matches && dp.matches(CONT)) semanticDepth++;
     }
     var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig, i: id, d: semanticDepth };
+    if (visual) mk.v = true;
     // Tag the element so the aligner can re-select it to inject spacers before
     // re-screenshotting (invisible; set before the shot). Stable across rounds.
     try { el.setAttribute('data-cmsm', String(id)); } catch (e) {}
@@ -463,7 +487,7 @@ export const matchConfidence = (
   a: MarkerDoc,
   b: MarkerDoc,
 ): MatchConfidence => {
-  const leaf = (m: Marker): boolean => m.k.charCodeAt(0) !== 35;
+  const leaf = (m: Marker): boolean => m.k.charCodeAt(0) !== 35 && !m.v;
   const la = a.m.filter(leaf);
   const lb = b.m.filter(leaf);
   const truncated = (a.trunc ?? 0) > 0 || (b.trunc ?? 0) > 0;

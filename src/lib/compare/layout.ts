@@ -78,11 +78,11 @@ const partitionPair = (
   bh: number,
 ): { pa: Part; pb: Part } | null => {
   const boxesA = a
-    .filter((m) => !isContainer(m))
+    .filter((m) => !isContainer(m) && !m.v)
     .map(boxOf)
     .filter((x): x is Box => x !== null);
   const boxesB = b
-    .filter((m) => !isContainer(m))
+    .filter((m) => !isContainer(m) && !m.v)
     .map(boxOf)
     .filter((x): x is Box => x !== null);
   if (boxesA.length === 0 || boxesB.length === 0) return null;
@@ -412,7 +412,7 @@ export const boxDiff = (
   b: Marker[],
   bh: number,
 ): DiffBox[] => {
-  const leafy = (m: Marker): boolean => !isContainer(m) && hasBox(m);
+  const leafy = (m: Marker): boolean => !isContainer(m) && !m.v && hasBox(m);
   const la = a.filter(leafy);
   const lb = b.filter(leafy);
   if (la.length === 0 && lb.length === 0) return [];
@@ -751,6 +751,17 @@ export const matchedYDelta = (
   const worst: Array<{ ia?: number; ib?: number; dy: number }> = [];
   for (const mm of matches) {
     if (mm.score < ANCHOR_MIN) continue;
+    if (la[mm.ai].v || lb[mm.bi].v) {
+      const left = la[mm.ai];
+      const right = lb[mm.bi];
+      if (
+        !left.v ||
+        !right.v ||
+        keysA.get(base(left.k)) !== 1 ||
+        keysB.get(base(right.k)) !== 1
+      )
+        continue;
+    }
     if (trustedOnly && !trusted(la[mm.ai], lb[mm.bi])) continue;
     const dy = la[mm.ai].y - lb[mm.bi].y;
     if (Math.abs(dy) > Math.abs(max)) max = dy;
@@ -768,8 +779,29 @@ const cssPx = (value: number): number => Math.round(value / CSS_PX) * CSS_PX;
 const strongLeafPairs = (a: Marker[], b: Marker[]): ResidualPair[] => {
   const fa = a.filter((m) => !isContainer(m));
   const fb = b.filter((m) => !isContainer(m));
+  const base = (m: Marker): string => m.k.replace(/#\d+$/, "");
+  const visualCounts = (markers: Marker[]): Map<string, number> => {
+    const counts = new Map<string, number>();
+    for (const marker of markers)
+      if (marker.v)
+        counts.set(base(marker), (counts.get(base(marker)) ?? 0) + 1);
+    return counts;
+  };
+  const va = visualCounts(fa);
+  const vb = visualCounts(fb);
   return alignMarkers(fa, fb)
-    .matches.filter((m) => m.score >= ANCHOR_MIN)
+    .matches.filter((m) => {
+      if (m.score < ANCHOR_MIN) return false;
+      const left = fa[m.ai];
+      const right = fb[m.bi];
+      if (!left.v && !right.v) return true;
+      return (
+        left.v === true &&
+        right.v === true &&
+        va.get(base(left)) === 1 &&
+        vb.get(base(right)) === 1
+      );
+    })
     .map((m) => ({
       ea: fa[m.ai],
       eb: fb[m.bi],

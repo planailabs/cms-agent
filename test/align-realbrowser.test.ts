@@ -801,6 +801,89 @@ describe("measured spacer owners", () => {
 });
 
 describe("visual marker collection", () => {
+  it("collects substantial painted blocks but not plain layout wrappers", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent(`
+        <main>
+          <div class="plain"><p>Ordinary content</p></div>
+          <div class="diagram-frame" style="width:400px;height:300px;border:1px solid #333;background:#111">
+            <svg width="200" height="100"><rect width="200" height="100" fill="#555" /></svg>
+          </div>
+        </main>
+      `);
+      const markers = await collect(page);
+      expect(markers.m.some((marker) => marker.v && marker.c === "plain")).toBe(
+        false,
+      );
+      expect(
+        markers.m.some(
+          (marker) => marker.v && marker.c === "diagram-frame",
+        ),
+      ).toBe(true);
+      expect(
+        markers.m.some(
+          (marker) => marker.v && marker.k.toUpperCase().startsWith("V:SVG"),
+        ),
+      ).toBe(true);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("aligns a painted frame and its dependent illustration edges", async () => {
+    const before = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const after = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const html = `
+      <main style="display:flex;flex-direction:column">
+        <p>Already aligned content</p>
+        <div class="diagram-frame" style="width:400px;height:300px;border:1px solid #333;background:#111">
+          <svg width="200" height="100"><rect width="200" height="100" fill="#555" /></svg>
+        </div>
+      </main>
+    `;
+    try {
+      await Promise.all([before.setContent(html), after.setContent(html)]);
+      await after.locator(".diagram-frame").evaluate(
+        (element) => ((element as HTMLElement).style.marginTop = "30px"),
+      );
+      const [a, b] = await Promise.all([collect(before), collect(after)]);
+      const frame = (doc: MarkerDoc) =>
+        doc.m.find((marker) => marker.v && marker.c === "diagram-frame")!;
+      expect(frame(b).y - frame(a).y).toBe(30);
+
+      const aligned = await runCorrectiveAlignment(
+        a,
+        b,
+        async (plan) => {
+          await Promise.all([
+            before.evaluate(INJECT_SPACERS, plan.a as never),
+            after.evaluate(INJECT_SPACERS, plan.b as never),
+          ]);
+          return await Promise.all([collect(before), collect(after)]);
+        },
+        {
+          refinePlan: async (candidate) => {
+            const [left, right] = await Promise.all([
+              before.evaluate(PROBE_SPACER_OWNERS, candidate.a),
+              after.evaluate(PROBE_SPACER_OWNERS, candidate.b),
+            ]);
+            return { a: left as never, b: right as never };
+          },
+        },
+      );
+
+      expect(Math.abs(frame(aligned.a).y - frame(aligned.b).y)).toBeLessThanOrEqual(
+        ALIGN_CORRECTIVE_THRESHOLD,
+      );
+      expect(Math.abs(aligned.end.max)).toBeLessThanOrEqual(
+        ALIGN_CORRECTIVE_THRESHOLD,
+      );
+    } finally {
+      await Promise.all([before.close(), after.close()]);
+    }
+  }, 30_000);
+
   it("ignores content hidden inside closed details", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     try {
