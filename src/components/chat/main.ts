@@ -24,6 +24,7 @@ import { renderGitModal } from '../workspace/gitModal';
 import { renderCapsModal } from '../workspace/capsModal';
 import { renderPlanModal } from '../workspace/planModal';
 import { syncBoxHighlights } from '../workspace/highlightAlign';
+import { syncOnionAlignment } from '../workspace/onionAlign';
 import { renderCodeBrowser } from '../workspace/codeBrowser';
 import { bootWindowSession, renderWindowPicker } from '../workspace/windowSession';
 import { startUpdateWatcher } from '../workspace/appUpdate';
@@ -112,6 +113,7 @@ const initApp = () => {
       }
       // Content-aligned onion columns (compare mode 'content') — imperative
       // enhancement over the rendered onion markup.
+      syncOnionAlignment(state);
       syncBoxHighlights(state);
     }
 

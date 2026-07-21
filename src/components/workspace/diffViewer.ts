@@ -97,14 +97,11 @@ const renderOnion = (state: AppState, route: string): string => {
   const locale = uiLocale();
   const chatId = state.activeChatId!;
   const pct = state.workspace.diff.onionPercent;
-  const content = state.workspace.compareMode === 'content';
-  const bk = content ? 'before-aligned' : 'before';
-  const ak = content ? 'after-aligned' : 'after';
-  return `<div class="ws-onion">
+  return `<div class="ws-onion" data-onion>
       <div class="ws-onion__canvas">
-        ${renderShot(shotUrl(chatId, route, bk), t(locale, 'workspace.diff.beforeRoute', { route }), 'ws-onion__before')}
+        ${renderShot(shotUrl(chatId, route, 'before'), t(locale, 'workspace.diff.beforeRoute', { route }), 'ws-onion__before')}
         ${renderShot(
-          shotUrl(chatId, route, ak),
+          shotUrl(chatId, route, 'after'),
           t(locale, 'workspace.diff.afterRoute', { route }),
           'ws-onion__after',
           // top layer visible RIGHT of the slider — matches the after label

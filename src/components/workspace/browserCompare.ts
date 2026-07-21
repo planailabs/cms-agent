@@ -48,17 +48,17 @@ export const renderBrowserCompare = (state: AppState): string => {
   const route = state.workspace.previewRoute;
 
   // Content mode overlays the server-aligned shots (real reflow); height mode
-  // the raw shots. No client canvas.
+  // the raw shots. No client canvas for scroll mode.
   const content = state.workspace.compareMode === 'content';
   const bk = content ? 'before-aligned' : 'before';
   const ak = content ? 'after-aligned' : 'after';
   const body =
     bc.mode === 'onion'
-      ? `<div class="ws-onion">
+      ? `<div class="ws-onion" data-onion>
           <div class="ws-onion__canvas">
-            ${renderShot(shotUrl(branch, route, bc.a, bc.b, bk), bc.a, 'ws-onion__before')}
+            ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'before'), bc.a, 'ws-onion__before')}
             ${renderShot(
-              shotUrl(branch, route, bc.a, bc.b, ak),
+              shotUrl(branch, route, bc.a, bc.b, 'after'),
               bc.b,
               'ws-onion__after',
               `clip-path: inset(0 0 0 ${bc.onionPercent}%);`,
