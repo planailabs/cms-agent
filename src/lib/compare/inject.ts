@@ -170,11 +170,16 @@ export const PROBE_SPACER_OWNERS = (
   const markers = Array.from(
     document.querySelectorAll<HTMLElement>("[data-cmsm]"),
   );
+  const targets = new Map<number, Element>();
+  for (const spacer of spacers) {
+    const target = document.querySelector('[data-cmsm="' + spacer.i + '"]');
+    if (target) targets.set(spacer.i, target);
+  }
   const probe = (
     target: Element,
     candidate: Element,
     action: "before" | "inside" | "row",
-  ): boolean => {
+  ): { valid: boolean; effects: Map<number, number> } => {
     const before = new Map(
       markers.map((marker) => {
         const rect = marker.getBoundingClientRect();
@@ -182,9 +187,9 @@ export const PROBE_SPACER_OWNERS = (
       }),
     );
     const targetBefore = before.get(target as HTMLElement)?.top;
-    if (targetBefore === undefined) return false;
+    if (targetBefore === undefined) return { valid: false, effects: new Map() };
     const parent = candidate.parentElement;
-    if (!parent) return false;
+    if (!parent) return { valid: false, effects: new Map() };
     let filler: HTMLElement | undefined;
     const changed: Array<{
       element: HTMLElement;
@@ -215,7 +220,7 @@ export const PROBE_SPACER_OWNERS = (
         (sibling) =>
           Math.abs(Math.round(sibling.getBoundingClientRect().top) - top) <= 2,
       );
-      if (row.length < 2) return false;
+      if (row.length < 2) return { valid: false, effects: new Map() };
       for (const sibling of row)
         add(sibling, "padding-top", getComputedStyle(sibling).paddingTop);
     } else {
@@ -237,6 +242,16 @@ export const PROBE_SPACER_OWNERS = (
       }
     }
     const moved = target.getBoundingClientRect().top - targetBefore;
+    const effects = new Map<number, number>();
+    for (const [id, element] of targets) {
+      const old = before.get(element as HTMLElement);
+      if (!old) continue;
+      const delta = element.getBoundingClientRect().top - old.top;
+      if (Math.abs(delta) > 0.5) {
+        const ratio = delta / PROBE;
+        effects.set(id, Math.abs(ratio - 1) <= 0.2 ? 1 : ratio);
+      }
+    }
     const affected = markers.filter((marker) => {
       const old = before.get(marker)!;
       const rect = marker.getBoundingClientRect();
@@ -263,7 +278,10 @@ export const PROBE_SPACER_OWNERS = (
         Math.abs(rect.height - old.height) <= 0.5
       );
     });
-    return Math.abs(moved - PROBE) <= 1 && restored;
+    return {
+      valid: Math.abs(moved - PROBE) <= 1 && restored,
+      effects,
+    };
   };
 
   const refined = spacers.map((spacer) => {
@@ -275,17 +293,21 @@ export const PROBE_SPACER_OWNERS = (
           : spacer.mode === "el"
             ? "before"
             : undefined;
-    if (!action) return spacer;
+    if (!action) return { spacer, effects: new Map<number, number>() };
     const target = document.querySelector('[data-cmsm="' + spacer.i + '"]');
-    if (!target) return spacer;
+    if (!target) return { spacer, effects: new Map<number, number>() };
     let measuredOwner: Element | null = null;
+    let measuredEffects = new Map<number, number>();
     for (
       let candidate: Element | null = target;
       candidate && candidate !== document.documentElement;
       candidate = candidate.parentElement
     ) {
-      if (probe(target, candidate, action) && !measuredOwner)
+      const result = probe(target, candidate, action);
+      if (result.valid && !measuredOwner) {
         measuredOwner = candidate;
+        measuredEffects = result.effects;
+      }
     }
     if (measuredOwner) {
       let owner = measuredOwner.getAttribute("data-cmso");
@@ -293,19 +315,59 @@ export const PROBE_SPACER_OWNERS = (
         owner = "o" + nextOwner++;
         measuredOwner.setAttribute("data-cmso", owner);
       }
-      return { ...spacer, mode: "owner", owner, action };
+      return {
+        spacer: { ...spacer, mode: "owner", owner, action },
+        effects: measuredEffects,
+      };
     }
-    return action === "before" ? spacer : undefined;
+    return action === "before"
+      ? { spacer, effects: new Map<number, number>() }
+      : undefined;
   });
-  const owners = new Set<string>();
   const concrete = refined.filter(
     (spacer): spacer is NonNullable<typeof spacer> => spacer !== undefined,
   );
-  return concrete.filter((spacer) => {
-    if (spacer.mode !== "owner" || !spacer.owner) return true;
+  const groups = new Map<
+    string,
+    {
+      spacer: (typeof concrete)[number]["spacer"];
+      effects: Map<number, number>;
+      requirements: Array<{ target: number; px: number }>;
+    }
+  >();
+  const direct: Array<(typeof concrete)[number]["spacer"]> = [];
+  for (const entry of concrete) {
+    const spacer = entry.spacer;
+    if (spacer.mode !== "owner" || !spacer.owner) {
+      direct.push(spacer);
+      continue;
+    }
     const key = `${spacer.action}:${spacer.owner}`;
-    if (owners.has(key)) return false;
-    owners.add(key);
-    return true;
+    const group = groups.get(key) ?? {
+      spacer,
+      effects: entry.effects,
+      requirements: [],
+    };
+    group.requirements.push({ target: spacer.i, px: spacer.px });
+    groups.set(key, group);
+  }
+
+  // Solve the measured forward dependency graph. Earlier owner mutations may
+  // already move later targets; only commit the remaining required distance.
+  const predicted = new Map<number, number>();
+  const solved = [...groups.values()].flatMap((group) => {
+    const needed = group.requirements
+      .map(({ target, px }) => {
+        const effect = group.effects.get(target) ?? 0;
+        return effect > 0.05 ? (px - (predicted.get(target) ?? 0)) / effect : 0;
+      })
+      .filter((px) => px > 0.5)
+      .sort((a, b) => a - b);
+    const amount = needed[Math.floor(needed.length / 2)] ?? 0;
+    if (amount < 0.5) return [];
+    for (const [target, effect] of group.effects)
+      predicted.set(target, (predicted.get(target) ?? 0) + amount * effect);
+    return [{ ...group.spacer, px: Math.round(amount) }];
   });
+  return [...solved, ...direct];
 };

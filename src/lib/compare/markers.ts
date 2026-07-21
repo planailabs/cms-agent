@@ -123,6 +123,10 @@ export const COLLECT_MARKERS_JS = `(function () {
   var els = document.querySelectorAll(LEAF + ',' + CONT);
   for (var i = 0; i < els.length && out.length < HARD; i++) {
     var el = els[i];
+    // Closed <details> descendants can retain non-zero geometry in Chromium
+    // even though the browser does not paint them. They are not visual anchors.
+    var closedDetails = el.closest && el.closest('details:not([open])');
+    if (closedDetails && !(el.closest('summary') && el.closest('summary').parentElement === closedDetails)) continue;
     var r = el.getBoundingClientRect();
     if (r.height <= 0) continue;
     var y = Math.round(r.top + scrollY);
@@ -431,9 +435,12 @@ export interface MatchConfidence {
   /** Fraction of the smaller side that found a strong (≥ ANCHOR_MIN) match. */
   matchRate: number;
   /** Fraction backed by unchanged content or an explicit stable element id.
-   *  Structural role matches can seed layout, but are unsafe evidence for the
-   *  additive corrective loop because a full rewrite can make every role match. */
+   *  This remains the safest evidence on small or structurally sparse pages. */
   trustedRate: number;
+  /** Fraction with the same stable scope, semantic role, class, and layout cell. */
+  structuralRate: number;
+  /** Distinct stable scopes represented by structurally corroborated matches. */
+  scopeCount: number;
   /** Fraction of markers whose text key repeats — boilerplate/clones make the
    *  order-preserving match ambiguous (a paragraph could pair several ways). */
   dupPressure: number;
@@ -462,7 +469,15 @@ export const matchConfidence = (
   const truncated = (a.trunc ?? 0) > 0 || (b.trunc ?? 0) > 0;
   const n = Math.min(la.length, lb.length);
   if (n === 0)
-    return { score: 0, matchRate: 0, trustedRate: 0, dupPressure: 0, truncated };
+    return {
+      score: 0,
+      matchRate: 0,
+      trustedRate: 0,
+      structuralRate: 0,
+      scopeCount: 0,
+      dupPressure: 0,
+      truncated,
+    };
 
   const matches = alignMarkers(la, lb).matches;
   const strong = matches.filter(
@@ -476,6 +491,21 @@ export const matchConfidence = (
     return base(a.k) === base(b.k) || (!!a.id && a.id === b.id);
   }).length;
   const trustedRate = trusted / n;
+  const scopes = new Set<string>();
+  const structural = strong.filter((match) => {
+    const left = la[match.ai];
+    const right = lb[match.bi];
+    const same =
+      !!left.sid &&
+      left.sid === right.sid &&
+      left.s === right.s &&
+      left.c === right.c &&
+      (!left.fx || !right.fx || left.fx === right.fx);
+    if (same) scopes.add(left.sid!);
+    return same;
+  }).length;
+  const structuralRate = structural / n;
+  const scopeCount = scopes.size;
 
   const dupOf = (ms: Marker[]): number => {
     const c = new Map<string, number>();
@@ -486,15 +516,25 @@ export const matchConfidence = (
   };
   const dupPressure = (dupOf(la) + dupOf(lb)) / 2;
 
-  // Corrective spacers are irreversible within an open page. Authorize them
-  // from trusted correspondences, not merely same-role/class matches: the
-  // latter made a 76%-rewritten production page look 100% trustworthy.
-  let score = trustedRate * (1 - 0.5 * dupPressure);
+  // One repeated role inside one section is weak evidence. A near-complete,
+  // unambiguous match corroborated across several stable page scopes is strong
+  // evidence that a text rewrite retained the same layout graph.
+  const structuralConfidence =
+    n >= 12 &&
+    scopeCount >= 3 &&
+    matchRate >= 0.9 &&
+    structuralRate >= 0.75
+      ? structuralRate * matchRate
+      : 0;
+  let score =
+    Math.max(trustedRate, structuralConfidence) * (1 - 0.5 * dupPressure);
   if (truncated) score = Math.min(score, 0.6);
   return {
     score: Math.max(0, Math.min(1, score)),
     matchRate,
     trustedRate,
+    structuralRate,
+    scopeCount,
     dupPressure,
     truncated,
   };

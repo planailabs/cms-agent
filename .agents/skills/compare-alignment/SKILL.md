@@ -108,9 +108,11 @@ them into a fixture under `test/fixtures/` and add a scaffold.
 - Ordinary residual spacers probe the target and every ancestor with a temporary
   7px mutation, recording every marker whose position or size changes. Accept an
   owner only after the complete candidate graph is measured and every affected
-  marker returns to its prior geometry; deduplicate spacers that resolve to the
-  same nearest owner. This fallback handles tables and unknown nested layout
-  dependencies in both screenshot and live-iframe paths.
+  marker returns to its prior geometry. The solver retains each owner's influence
+  vector over all requested targets, deduplicates equal owners, and subtracts
+  upstream measured movement before committing downstream spacer heights. This
+  handles tables and unknown nested layout dependencies without guessed cascade
+  arithmetic in both screenshot and live-iframe paths.
 - `row` and `scope` are probe intents only. They are never injected directly:
   the graph must resolve them to measured `owner` actions (`row` or `inside`),
   otherwise the correction is dropped rather than guessed.
@@ -145,21 +147,21 @@ additive mutation; a round that materially worsens its selected metric marks the
 pair regressed so callers recapture the structural seed.
 
 - **Model-free.** No grid/row/consensus logic — it just moves measured content to
-  where its match sits (a `margin-top` flow filler keyed by the re-collected id).
+  where its match sits, with a probed influence graph resolving flow dependencies.
   Grids, flex, tables, nesting converge the same way, including cases the
   structural pass leaves off (a grid row whose cells drifted by different amounts,
   or the asymmetric-gap grid-list) — it aligns positions, not structure.
-- **Undershoot to avoid overshoot.** Margin can be added but not removed, and a
-  pad inside a grid does NOT cascade to the rows below like a flow pad does, so the
-  cumulative can over-estimate. `gain` (0.7) makes every step approach the target
-  from below — never overshoots; a couple more rounds instead.
+- **Undershoot to avoid overshoot.** Margin can be added but not removed. The
+  influence graph removes guessed cumulative carry; `gain` (0.7) still makes each
+  measured round approach the target from below rather than overshooting.
 
 The structural `spacingPlan` still runs first as the fast seed. Trust
 real-browser matched-leaf deltas, not container bounds or `verifyAlignment`'s
 linear simulation, for grid work: differently rewritten list containers can
 have different outer heights while every visible child is aligned. The plan.ai
-full-rewrite production regression converges all 136 matched leaves to ≤8px
-(p90 4px) through this staged path.
+full-rewrite production regression excludes six hidden closed-details paragraphs
+and converges all 130 painted matched leaves to ≤8px (p90 7px) through the probed
+flat path.
 
 ## Fixture coverage (imported plan.ai patterns)
 
@@ -235,12 +237,13 @@ councils under-weighted. In priority order:
   (count dropped) on `MarkerDoc`. Test: a big element at the page BOTTOM survives
   the cap where document-order truncation would drop it.
 - **DONE (align side) — confidence signal + graceful degradation.**
-  `matchConfidence(a, b)` scores the shared match (match rate × (1 − ½·dup
-  pressure), clamped when truncated). `alignedShots` skips the corrective loop
-  below `CONFIDENCE_MIN` (0.35) — seed only, don't spend round-trips polishing a
-  wrong correspondence — and logs it. STILL OPEN: the CHANGED side (coarse region
-  boxes) and the onion raw-overlay fallback are not wired yet; `matchConfidence`
-  is the hook when they are.
+  `matchConfidence(a, b)` combines unique unchanged/stable-id trust with structural
+  corroboration across at least three stable scopes, then penalizes duplicate
+  pressure and truncation. A one-scope same-role rewrite stays conservative; a
+  near-complete multi-section rewrite can use the probed flat path. `alignedShots`
+  keeps the staged trusted-anchor fallback below `CONFIDENCE_MIN` (0.35). STILL
+  OPEN: the CHANGED side (coarse region boxes) and the onion raw-overlay fallback
+  are not wired yet; `matchConfidence` is the hook when they are.
 - **Shared-matcher tension (unresolved).** 2 of 3 GPT voices argued ALIGN and
   CHANGED optimize different truths (ALIGN wants stable anchors ACROSS rewrites;
   CHANGED wants to EXPOSE rewrites) and shouldn't fully share one global matcher —

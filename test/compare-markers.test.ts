@@ -312,6 +312,7 @@ describe("matchConfidence", () => {
 
     expect(confidence.matchRate).toBe(1);
     expect(confidence.trustedRate).toBe(0);
+    expect(confidence.scopeCount).toBe(1);
     expect(confidence.score).toBeLessThan(0.35);
   });
 
@@ -328,7 +329,7 @@ describe("matchConfidence", () => {
     expect(matchConfidence(a, b).score).toBe(1);
   });
 
-  it("keeps the production full-page rewrite out of corrective alignment", () => {
+  it("recognizes a full-page rewrite with a corroborated layout graph", () => {
     const confidence = matchConfidence(
       fullRewrite.before as MarkerDoc,
       fullRewrite.after as MarkerDoc,
@@ -336,7 +337,9 @@ describe("matchConfidence", () => {
 
     expect(confidence.matchRate).toBe(1);
     expect(confidence.trustedRate).toBeCloseTo(9 / 136, 5);
-    expect(confidence.score).toBeLessThan(0.35);
+    expect(confidence.structuralRate).toBeGreaterThan(0.75);
+    expect(confidence.scopeCount).toBeGreaterThanOrEqual(3);
+    expect(confidence.score).toBeGreaterThanOrEqual(0.35);
   });
 
   it("truncation clamps confidence even on a good match", () => {

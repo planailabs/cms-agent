@@ -1182,37 +1182,28 @@ export const footerFlowYDelta = (a: Marker[], b: Marker[]) =>
  * converge the same way, including cases the structural pass leaves off (a grid
  * row whose cells drifted by different amounts).
  *
- * The one hazard is OVERSHOOT: margin can be added but not removed, and a pad in a
- * grid does NOT cascade to the rows below like a flow pad does, so the cumulative
- * (which assumes it does) can over-estimate. The `gain` (< 1) makes every step
- * UNDERSHOOT, so it approaches the target from below over a couple of rounds and
- * never overshoots. Runs on the same open page it was measured from.
+ * The browser probe resolves each target to a real owner and measures its effects
+ * on every other requested target. The graph solver accounts for those measured
+ * dependencies; this generator therefore emits independent residuals rather than
+ * guessing which margins cascade. `gain` (< 1) still undershoots each round so an
+ * additive correction approaches its target safely.
  */
 export const correctiveFlat = (
   a: Marker[],
   b: Marker[],
   gain = 0.7,
 ): SpacingPlan => {
-  const fa = a.filter((m) => !isContainer(m));
-  const fb = b.filter((m) => !isContainer(m));
-  const pairs = alignMarkers(fa, fb)
-    .matches.filter((m) => m.score >= ANCHOR_MIN)
-    .map((m) => ({ ea: fa[m.ai], eb: fb[m.bi] }))
-    .sort((p, q) => p.ea.y - q.ea.y);
+  const pairs = strongLeafPairs(a, b).sort((p, q) => p.ea.y - q.ea.y);
   const A: Spacer[] = [];
   const B: Spacer[] = [];
-  let cumA = 0;
-  let cumB = 0;
   for (const { ea, eb } of pairs) {
-    const d = ea.y + cumA - (eb.y + cumB);
+    const d = ea.y - eb.y;
     if (d > 0.5 && eb.i !== undefined) {
       const px = d * gain;
       B.push({ i: eb.i, px: Math.round(px), mode: "el" });
-      cumB += px;
     } else if (d < -0.5 && ea.i !== undefined) {
       const px = -d * gain;
       A.push({ i: ea.i, px: Math.round(px), mode: "el" });
-      cumA += px;
     }
   }
   return { a: A, b: B };

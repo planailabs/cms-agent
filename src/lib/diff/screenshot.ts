@@ -252,6 +252,7 @@ async function alignedShots(
       console.warn(
         `[align] ${route}: low match confidence ${conf.score.toFixed(2)}` +
           ` (rate ${conf.matchRate.toFixed(2)}, trusted ${conf.trustedRate.toFixed(2)},` +
+          ` structural ${conf.structuralRate.toFixed(2)}/${conf.scopeCount},` +
           ` dup ${conf.dupPressure.toFixed(2)}` +
           `${conf.truncated ? ", TRUNCATED" : ""}) — correcting trusted anchors only`,
       );

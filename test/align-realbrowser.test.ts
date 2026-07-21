@@ -674,6 +674,37 @@ describe("real-browser alignment — computed-style chaos", () => {
 });
 
 describe("measured spacer owners", () => {
+  it("solves measured forward dependencies without double-counting", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent(`
+        <main style="display:flex; flex-direction:column">
+          <p>First target</p>
+          <p>Second target</p>
+        </main>
+      `);
+      const markers = await collect(page);
+      const first = markers.m.find((marker) => marker.k.startsWith("P:First"))!;
+      const second = markers.m.find((marker) => marker.k.startsWith("P:Second"))!;
+      const refined = await page.evaluate(PROBE_SPACER_OWNERS, [
+        { i: first.i!, px: 20, mode: "el" },
+        { i: second.i!, px: 30, mode: "el" },
+      ]);
+
+      expect(refined.map((spacer) => spacer.px)).toEqual([20, 10]);
+      await page.evaluate(INJECT_SPACERS, refined);
+      const after = await collect(page);
+      expect(
+        after.m.find((marker) => marker.i === first.i)!.y - first.y,
+      ).toBe(20);
+      expect(
+        after.m.find((marker) => marker.i === second.i)!.y - second.y,
+      ).toBe(30);
+    } finally {
+      await page.close();
+    }
+  });
+
   it("probes ancestors and collapses one table row to one owner", async () => {
     const page = await browser.newPage({
       viewport: { width: 1280, height: 900 },
@@ -765,6 +796,29 @@ describe("measured spacer owners", () => {
       await page.close();
     }
   }, 30_000);
+});
+
+describe("visual marker collection", () => {
+  it("ignores content hidden inside closed details", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent(`
+        <main>
+          <details><summary>Closed question</summary><p>Hidden answer</p></details>
+          <details open><summary>Open question</summary><p>Visible answer</p></details>
+        </main>
+      `);
+      const markers = await collect(page);
+      expect(
+        markers.m.some((marker) => marker.k.includes("Hidden answer")),
+      ).toBe(false);
+      expect(
+        markers.m.some((marker) => marker.k.includes("Visible answer")),
+      ).toBe(true);
+    } finally {
+      await page.close();
+    }
+  });
 });
 
 // Stable data-cmsm: an element's handle survives re-collection after the DOM
