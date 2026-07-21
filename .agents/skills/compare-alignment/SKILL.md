@@ -87,6 +87,10 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   irreversible correction of a full-page rewrite. Every round is monotonic: if
   absolute drift worsens, discard that browser pair and recapture from the
   structural seed (the production 13,099px → 44,701px regression).
+- Low-confidence pages still use unique unchanged-content/stable-ID anchors for
+  a conservative pass. Grid/flex anchors move their containing row item, anchors
+  sharing a visual row move together, and that row's downstream shift is counted
+  once. This removes sparse residual drift without authorizing structural matches.
 - Matching ≠ change-detection: identity can score a changed element ~1, so
   `boxDiff` decides "changed" by comparing the content key, not the match score.
 - A full rewrite (structures don't correspond) overlays as one rectangle rather

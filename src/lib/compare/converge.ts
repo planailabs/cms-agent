@@ -1,5 +1,10 @@
 import type { MarkerDoc } from "./markers";
-import { correctiveFlat, matchedYDelta, type SpacingPlan } from "./layout";
+import {
+  correctiveFlat,
+  correctiveTrusted,
+  matchedYDelta,
+  type SpacingPlan,
+} from "./layout";
 
 export const ALIGN_CORRECTIVE_THRESHOLD = 8;
 export const ALIGN_CORRECTIVE_ROUNDS = 6;
@@ -9,6 +14,9 @@ export interface CorrectiveAlignmentOptions {
   enabled?: boolean;
   threshold?: number;
   maxRounds?: number;
+  /** Restrict corrections and convergence metrics to unique unchanged content
+   *  or stable ids. Safe fallback when structural correspondence is weak. */
+  trustedOnly?: boolean;
   /** Stops a stale live run before it mutates a replaced iframe pair. */
   isCurrent?: () => boolean;
 }
@@ -41,7 +49,9 @@ export const runCorrectiveAlignment = async (
   const isCurrent = options.isCurrent ?? (() => true);
   let a = initialA;
   let b = initialB;
-  const start = matchedYDelta(a.m, b.m).max;
+  const metric = (left: MarkerDoc, right: MarkerDoc) =>
+    matchedYDelta(left.m, right.m, options.trustedOnly);
+  const start = metric(a, b).max;
   let rounds = 0;
   let aborted = !isCurrent();
   let regressed = false;
@@ -51,9 +61,11 @@ export const runCorrectiveAlignment = async (
     !aborted &&
     options.enabled !== false &&
     rounds < maxRounds &&
-    Math.abs(matchedYDelta(a.m, b.m).max) > threshold
+    Math.abs(metric(a, b).max) > threshold
   ) {
-    const plan = correctiveFlat(a.m, b.m);
+    const plan = options.trustedOnly
+      ? correctiveTrusted(a.m, b.m)
+      : correctiveFlat(a.m, b.m);
     if (!plan.a.length && !plan.b.length) break;
     if (!isCurrent()) {
       aborted = true;
@@ -62,7 +74,7 @@ export const runCorrectiveAlignment = async (
     [a, b] = await apply(plan);
     rounds++;
     aborted = !isCurrent();
-    const current = Math.abs(matchedYDelta(a.m, b.m).max);
+    const current = Math.abs(metric(a, b).max);
     if (!aborted && current > previous + threshold) {
       regressed = true;
       break;
@@ -74,7 +86,7 @@ export const runCorrectiveAlignment = async (
     a,
     b,
     start,
-    end: matchedYDelta(a.m, b.m),
+    end: metric(a, b),
     rounds,
     aborted,
     regressed,

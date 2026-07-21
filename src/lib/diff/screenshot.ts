@@ -21,10 +21,7 @@ import {
   matchConfidence,
   type MarkerDoc,
 } from "@/lib/compare/markers";
-import {
-  spacingPlan,
-  type Spacer,
-} from "@/lib/compare/layout";
+import { spacingPlan, type Spacer } from "@/lib/compare/layout";
 import {
   ALIGN_CONFIDENCE_MIN,
   ALIGN_CORRECTIVE_THRESHOLD,
@@ -236,14 +233,17 @@ async function alignedShots(
           openedB.page.evaluate(COLLECT_MARKERS_JS),
         ])) as [MarkerDoc, MarkerDoc];
       },
-      { enabled: conf.score >= ALIGN_CONFIDENCE_MIN },
+      {
+        enabled: conf.score >= ALIGN_CONFIDENCE_MIN || conf.trustedRate > 0,
+        trustedOnly: conf.score < ALIGN_CONFIDENCE_MIN,
+      },
     );
     if (conf.score < ALIGN_CONFIDENCE_MIN || conf.truncated) {
       console.warn(
         `[align] ${route}: low match confidence ${conf.score.toFixed(2)}` +
           ` (rate ${conf.matchRate.toFixed(2)}, trusted ${conf.trustedRate.toFixed(2)},` +
           ` dup ${conf.dupPressure.toFixed(2)}` +
-          `${conf.truncated ? ", TRUNCATED" : ""}) — seed only, corrective skipped`,
+          `${conf.truncated ? ", TRUNCATED" : ""}) — correcting trusted anchors only`,
       );
     }
     if (aligned.regressed) {
@@ -276,7 +276,10 @@ async function alignedShots(
       );
     }
     await Promise.all([
-      openedA.page.screenshot({ path: files["before-aligned"], fullPage: true }),
+      openedA.page.screenshot({
+        path: files["before-aligned"],
+        fullPage: true,
+      }),
       openedB.page.screenshot({ path: files["after-aligned"], fullPage: true }),
     ]);
     padPair(files["before-aligned"], files["after-aligned"]);

@@ -454,12 +454,11 @@ export const boxDiff = (
 // ── Spacing plan (DOM filler injection) ────────────────────────────────────
 
 /** One spacer to inject before re-screenshotting. `px` is the gap height.
- *  mode 'el' inserts before the element (flow / inside a cell); mode 'grid'
- *  inserts before the element's flex/grid container (pushes a whole grid). */
+ *  `item` moves the column/card containing a marker as one box. */
 export interface Spacer {
   i: number;
   px: number;
-  mode: "el" | "grid" | "tail" | "cell";
+  mode: "el" | "grid" | "tail" | "cell" | "item";
 }
 export interface SpacingPlan {
   a: Spacer[];
@@ -709,14 +708,40 @@ export const verifyAlignment = (
 export const matchedYDelta = (
   a: Marker[],
   b: Marker[],
+  trustedOnly = false,
 ): { max: number; worst: Array<{ ia?: number; ib?: number; dy: number }> } => {
   const la = a.filter((m) => !isContainer(m));
   const lb = b.filter((m) => !isContainer(m));
   const { matches } = alignMarkers(la, lb);
+  const base = (k: string): string => k.replace(/#\d+$/, "");
+  const counts = (ms: Marker[], field: "k" | "id"): Map<string, number> => {
+    const result = new Map<string, number>();
+    for (const m of ms) {
+      const value = field === "k" ? base(m.k) : m.id;
+      if (value) result.set(value, (result.get(value) ?? 0) + 1);
+    }
+    return result;
+  };
+  const keysA = counts(la, "k");
+  const keysB = counts(lb, "k");
+  const idsA = counts(la, "id");
+  const idsB = counts(lb, "id");
+  const trusted = (ea: Marker, eb: Marker): boolean => {
+    const sameId =
+      !!ea.id &&
+      ea.id === eb.id &&
+      idsA.get(ea.id) === 1 &&
+      idsB.get(ea.id) === 1;
+    const key = base(ea.k);
+    const sameUniqueKey =
+      key === base(eb.k) && keysA.get(key) === 1 && keysB.get(key) === 1;
+    return sameId || sameUniqueKey;
+  };
   let max = 0;
   const worst: Array<{ ia?: number; ib?: number; dy: number }> = [];
   for (const mm of matches) {
     if (mm.score < ANCHOR_MIN) continue;
+    if (trustedOnly && !trusted(la[mm.ai], lb[mm.bi])) continue;
     const dy = la[mm.ai].y - lb[mm.bi].y;
     if (Math.abs(dy) > Math.abs(max)) max = dy;
     if (Math.abs(dy) > 8)
@@ -724,6 +749,88 @@ export const matchedYDelta = (
   }
   worst.sort((p, q) => Math.abs(q.dy) - Math.abs(p.dy));
   return { max: Math.round(max), worst: worst.slice(0, 8) };
+};
+
+/**
+ * Conservative correction for a low-confidence page. Only unique unchanged
+ * content or unique stable ids can move the DOM. Markers sharing a visual row
+ * are corrected together, while their common shift contributes to downstream
+ * flow once rather than once per column.
+ */
+export const correctiveTrusted = (
+  a: Marker[],
+  b: Marker[],
+  gain = 0.7,
+): SpacingPlan => {
+  const fa = a.filter((m) => !isContainer(m));
+  const fb = b.filter((m) => !isContainer(m));
+  const base = (k: string): string => k.replace(/#\d+$/, "");
+  const count = (values: Array<string | undefined>): Map<string, number> => {
+    const result = new Map<string, number>();
+    for (const value of values)
+      if (value) result.set(value, (result.get(value) ?? 0) + 1);
+    return result;
+  };
+  const keysA = count(fa.map((m) => base(m.k)));
+  const keysB = count(fb.map((m) => base(m.k)));
+  const idsA = count(fa.map((m) => m.id));
+  const idsB = count(fb.map((m) => m.id));
+  const pairs = alignMarkers(fa, fb)
+    .matches.filter((m) => m.score >= ANCHOR_MIN)
+    .map((m) => ({ ea: fa[m.ai], eb: fb[m.bi] }))
+    .filter(({ ea, eb }) => {
+      const key = base(ea.k);
+      const sameUniqueKey =
+        key === base(eb.k) && keysA.get(key) === 1 && keysB.get(key) === 1;
+      const sameUniqueId =
+        !!ea.id &&
+        ea.id === eb.id &&
+        idsA.get(ea.id) === 1 &&
+        idsB.get(ea.id) === 1;
+      return sameUniqueKey || sameUniqueId;
+    })
+    .sort((p, q) => p.ea.y - q.ea.y || p.eb.y - q.eb.y);
+
+  const rows: (typeof pairs)[] = [];
+  for (const pair of pairs) {
+    const row = rows.at(-1);
+    const first = row?.[0];
+    if (
+      first &&
+      Math.abs(first.ea.y - pair.ea.y) <= 2 &&
+      Math.abs(first.eb.y - pair.eb.y) <= 2
+    ) {
+      row.push(pair);
+    } else {
+      rows.push([pair]);
+    }
+  }
+
+  const A: Spacer[] = [];
+  const B: Spacer[] = [];
+  let cumA = 0;
+  let cumB = 0;
+  for (const row of rows) {
+    const deltas = row.map(({ ea, eb }) => ea.y + cumA - (eb.y + cumB));
+    deltas.sort((x, y) => x - y);
+    const d = deltas[Math.floor(deltas.length / 2)];
+    if (Math.abs(d) <= 0.5) continue;
+    const px = Math.round(Math.abs(d) * gain);
+    if (px < 1) continue;
+    const target = d > 0 ? B : A;
+    for (const pair of row) {
+      const marker = d > 0 ? pair.eb : pair.ea;
+      if (marker.i === undefined) continue;
+      target.push({
+        i: marker.i,
+        px,
+        mode: marker.fx ? "item" : "el",
+      });
+    }
+    if (d > 0) cumB += px;
+    else cumA += px;
+  }
+  return { a: A, b: B };
 };
 
 /**

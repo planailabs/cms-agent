@@ -9,7 +9,7 @@
  * line up structurally, not just by scroll fraction.
  */
 
-const IFRAME_IDS = ['ws-diff-before', 'ws-diff-after'] as const;
+const IFRAME_IDS = ["ws-diff-before", "ws-diff-after"] as const;
 
 import {
   bracketAnchors,
@@ -19,15 +19,15 @@ import {
   matchConfidence,
   type Anchor,
   type MarkerDoc,
-} from '@/lib/compare/markers';
-import { spacingPlan, type Spacer } from '@/lib/compare/layout';
+} from "@/lib/compare/markers";
+import { spacingPlan, type Spacer } from "@/lib/compare/layout";
 import {
   ALIGN_CONFIDENCE_MIN,
   runCorrectiveAlignment,
-} from '@/lib/compare/converge';
-import { INJECT_SPACERS } from '@/lib/compare/inject';
-import { store } from '../chat/app/store';
-import type { AppState } from '../chat/app/state';
+} from "@/lib/compare/converge";
+import { INJECT_SPACERS } from "@/lib/compare/inject";
+import { store } from "../chat/app/store";
+import type { AppState } from "../chat/app/state";
 
 /** Marker docs per iframe id (repopulated on every document load). */
 const markerDocs = new Map<string, MarkerDoc>();
@@ -45,7 +45,7 @@ const pending = new Map<
 const REQUEST_TIMEOUT_MS = 15_000;
 let appliedSig: string | null = null;
 let aligningSig: string | null = null;
-let lastMode: 'height' | 'content' = 'content';
+let lastMode: "height" | "content" = "content";
 let correctiveSkipSig: string | null = null;
 const readySrc = new Map<string, string>();
 
@@ -97,7 +97,8 @@ if (!window.__cmsScrollSync) {
 }
 `;
 
-const iframeById = (id: string) => document.getElementById(id) as HTMLIFrameElement | null;
+const iframeById = (id: string) =>
+  document.getElementById(id) as HTMLIFrameElement | null;
 const originOf = (f: HTMLIFrameElement): string | null => {
   try {
     return new URL(f.src).origin;
@@ -122,7 +123,7 @@ const requestEval = (
   new Promise((resolve, reject) => {
     const origin = originOf(iframe);
     if (!iframe.contentWindow || !origin) {
-      reject(new Error('Diff iframe is not available'));
+      reject(new Error("Diff iframe is not available"));
       return;
     }
     const id = `diff-scroll-${++seq}`;
@@ -131,15 +132,20 @@ const requestEval = (
       reject(new Error(`Diff iframe request timed out: ${iframe.id}`));
     }, REQUEST_TIMEOUT_MS);
     pending.set(id, { resolve, reject, timer });
-    iframe.contentWindow.postMessage({ type: 'cms:eval', id, code }, origin);
+    iframe.contentWindow.postMessage({ type: "cms:eval", id, code }, origin);
   });
-const settle = (id: string, ok: boolean, value: unknown, error?: string): void => {
+const settle = (
+  id: string,
+  ok: boolean,
+  value: unknown,
+  error?: string,
+): void => {
   const entry = pending.get(id);
   if (!entry) return;
   pending.delete(id);
   clearTimeout(entry.timer);
   if (ok) entry.resolve(value);
-  else entry.reject(new Error(error || 'Diff iframe eval failed'));
+  else entry.reject(new Error(error || "Diff iframe eval failed"));
 };
 const collectDoc = (iframe: HTMLIFrameElement): Promise<MarkerDoc> =>
   requestEval(iframe, `return ${COLLECT_MARKERS_JS};`) as Promise<MarkerDoc>;
@@ -176,11 +182,11 @@ const alignLiveFrames = async (sig: string): Promise<void> => {
   if (!before || !after) return;
   aligningSig = sig;
   try {
-    let [a, b] = (await Promise.all([collectDoc(before), collectDoc(after)])) as [
-      MarkerDoc,
-      MarkerDoc,
-    ];
-    if (currentSig() !== sig || store.state.workspace.compareMode !== 'content')
+    let [a, b] = (await Promise.all([
+      collectDoc(before),
+      collectDoc(after),
+    ])) as [MarkerDoc, MarkerDoc];
+    if (currentSig() !== sig || store.state.workspace.compareMode !== "content")
       return;
     const confidence = matchConfidence(a, b);
     const plan = spacingPlan(a.m, a.h, b.m, b.h);
@@ -198,10 +204,13 @@ const alignLiveFrames = async (sig: string): Promise<void> => {
         ])) as [MarkerDoc, MarkerDoc],
       {
         enabled:
-          confidence.score >= ALIGN_CONFIDENCE_MIN && correctiveSkipSig !== sig,
+          (confidence.score >= ALIGN_CONFIDENCE_MIN ||
+            confidence.trustedRate > 0) &&
+          correctiveSkipSig !== sig,
+        trustedOnly: confidence.score < ALIGN_CONFIDENCE_MIN,
         isCurrent: () =>
           currentSig() === sig &&
-          store.state.workspace.compareMode === 'content',
+          store.state.workspace.compareMode === "content",
       },
     );
     if (aligned.aborted) return;
@@ -213,7 +222,7 @@ const alignLiveFrames = async (sig: string): Promise<void> => {
     setDocs(aligned.a, aligned.b);
     appliedSig = sig;
   } catch (err) {
-    console.warn('[diff-scroll] live side-by-side alignment failed:', err);
+    console.warn("[diff-scroll] live side-by-side alignment failed:", err);
   } finally {
     if (aligningSig === sig) aligningSig = null;
   }
@@ -234,7 +243,7 @@ export const registerDiffScrollSync = (): void => {
   if (registered) return;
   registered = true;
 
-  window.addEventListener('message', (ev: MessageEvent) => {
+  window.addEventListener("message", (ev: MessageEvent) => {
     const frames = IFRAME_IDS.map(iframeById);
     const src = frames.find((f) => f && f.contentWindow === ev.source);
     if (!src) return; // not one of the diff iframes
@@ -250,23 +259,31 @@ export const registerDiffScrollSync = (): void => {
       top?: number;
       doc?: MarkerDoc;
     } | null;
-    if (!data || typeof data.type !== 'string') return;
+    if (!data || typeof data.type !== "string") return;
 
-    if (data.type === 'cms:agent-ready') {
+    if (data.type === "cms:agent-ready") {
       markerDocs.delete(src.id); // new document — old markers are stale
       anchorCache = new Map();
       readySrc.set(src.id, src.src);
       if (appliedSig && currentSig() !== appliedSig) appliedSig = null;
       if (correctiveSkipSig && currentSig() !== correctiveSkipSig)
         correctiveSkipSig = null;
-      postTo(src, { type: 'cms:eval', id: `scroll-sync-${++seq}`, code: SYNC_CODE });
+      postTo(src, {
+        type: "cms:eval",
+        id: `scroll-sync-${++seq}`,
+        code: SYNC_CODE,
+      });
       void syncDiffContentAlignment(store.state);
-    } else if (data.type === 'cms:eval-result' && typeof data.id === 'string') {
+    } else if (data.type === "cms:eval-result" && typeof data.id === "string") {
       settle(data.id, data.ok === true, data.value, data.error);
-    } else if (data.type === 'cms:markers' && data.doc && Array.isArray(data.doc.m)) {
+    } else if (
+      data.type === "cms:markers" &&
+      data.doc &&
+      Array.isArray(data.doc.m)
+    ) {
       markerDocs.set(src.id, data.doc);
       anchorCache = new Map();
-    } else if (data.type === 'cms:scroll' && typeof data.frac === 'number') {
+    } else if (data.type === "cms:scroll" && typeof data.frac === "number") {
       const now = performance.now();
       if (leaderId && leaderId !== src.id && now < leaderUntil) return;
       leaderId = src.id;
@@ -276,13 +293,17 @@ export const registerDiffScrollSync = (): void => {
       // 'content' mode: map the absolute position through the matched
       // content anchors; fall back to fraction sync without markers.
       const anchors =
-        store.state.workspace.compareMode === 'content' && typeof data.top === 'number'
+        store.state.workspace.compareMode === "content" &&
+        typeof data.top === "number"
           ? anchorsFor(src.id, other.id)
           : null;
       if (anchors) {
-        postTo(other, { type: 'cms:scroll-to', top: mapPosition(data.top!, anchors) });
+        postTo(other, {
+          type: "cms:scroll-to",
+          top: mapPosition(data.top!, anchors),
+        });
       } else {
-        postTo(other, { type: 'cms:scroll-to', frac: data.frac });
+        postTo(other, { type: "cms:scroll-to", frac: data.frac });
       }
     }
   });
@@ -305,14 +326,17 @@ export const syncDiffContentAlignment = async (
     lastMode = mode;
     return;
   }
-  if (mode === 'height') {
-    if (lastMode === 'content' && appliedSig) reloadFrames();
+  if (mode === "height") {
+    if (lastMode === "content" && appliedSig) reloadFrames();
     lastMode = mode;
     return;
   }
   lastMode = mode;
   const sig = currentSig();
-  if (readySrc.get(before.id) !== before.src || readySrc.get(after.id) !== after.src)
+  if (
+    readySrc.get(before.id) !== before.src ||
+    readySrc.get(after.id) !== after.src
+  )
     return;
   if (!sig || appliedSig === sig || aligningSig === sig) return;
   await alignLiveFrames(sig);

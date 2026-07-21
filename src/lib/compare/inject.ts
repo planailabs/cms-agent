@@ -94,6 +94,8 @@ export const INJECT_SPACERS = (
       growItem(el, s.px);
     } else if (s.mode === "cell") {
       insertCell(el, s.px);
+    } else if (s.mode === "item") {
+      pushBefore(columnOf(el).item, s.px);
     } else if (s.mode === "grid") {
       let g: Element = el;
       for (
