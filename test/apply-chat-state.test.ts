@@ -30,6 +30,7 @@ const snap = (over: Partial<ChatStateSnapshot> = {}): ChatStateSnapshot => ({
   targetAhead: true,
   tabs: null,
   turnPhase: 'idle',
+  canResume: false,
   pendingQuestion: null,
   lastError: null,
   ...over,
@@ -159,16 +160,26 @@ describe('applyChatState', () => {
 
     // crash recovery: tool_pending with no client turn in flight → Continue
     applyChatState(snap({ epoch: 'turn-1', seq: 4 }));
-    applyChatState(snap({ epoch: 'turn-1', seq: 5, turnPhase: 'tool_pending' }));
+    applyChatState(
+      snap({ epoch: 'turn-1', seq: 5, turnPhase: 'tool_pending', canResume: true }),
+    );
     expect(mc.canContinue).toBe(true);
+
+    // A live server-owned tool call is not an interruption.
+    mc.phase = 'tool';
+    applyChatState(
+      snap({ epoch: 'turn-1', seq: 6, turnPhase: 'tool_pending', canResume: false }),
+    );
+    expect(mc.phase).toBe('tool');
+    expect(mc.canContinue).toBe(false);
 
     // optimistic waiting is never downgraded by an idle snapshot…
     mc.phase = 'waiting' as typeof mc.phase;
-    applyChatState(snap({ epoch: 'turn-1', seq: 6 }));
+    applyChatState(snap({ epoch: 'turn-1', seq: 7 }));
     expect(mc.phase).toBe('waiting');
 
     // …EXCEPT on reconnect resync (a lost 'done' must not spin forever)
-    applyChatState(snap({ epoch: 'turn-1', seq: 7 }), undefined, {
+    applyChatState(snap({ epoch: 'turn-1', seq: 8 }), undefined, {
       allowIdleDowngrade: true,
     });
     expect(mc.phase).toBe('idle');

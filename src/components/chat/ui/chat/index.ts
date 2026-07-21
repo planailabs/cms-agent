@@ -14,7 +14,7 @@ import { escapeHtml } from '../../utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 
 import { renderMessageBubbles } from './bubbles';
-import { renderStreamingBubble, renderThinkingIndicator, renderToolIndicator, renderErrorMessage, renderContinuePrompt } from './indicators';
+import { renderStreamingBubble, renderThinkingIndicator, renderToolIndicator, renderErrorMessage } from './indicators';
 import { renderQuestionUI } from './prompts';
 import { renderChatComposer, renderEmptyState } from './composer';
 import { renderWorkflowCards, renderContextChip } from './cards';
@@ -91,7 +91,6 @@ export const renderChatSection = (
         ${thinkingIndicator}
         ${toolIndicator}
         ${errorMessage}
-        ${renderContinuePrompt(mc)}
         ${workflowCards}
         ${questionLabel}
         ${questionButtons}

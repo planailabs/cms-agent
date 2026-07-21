@@ -4,6 +4,7 @@
 
 import { escapeHtml } from '../../utils/html';
 import { SEND_ICON_SVG } from '../icons';
+import { t, uiLocale } from '@/lib/i18n';
 
 import type { LocaleContent, ChatModeLocale } from '../../content';
 import type { ChatState } from '../../app/state';
@@ -17,6 +18,18 @@ export const renderChatComposer = (
   locale: LocaleContent,
   modeLocale: ChatModeLocale,
 ): string => {
+  if (mc.canContinue && mc.phase === 'idle') {
+    return `<div class="composer-card composer-card--resume" data-form="machine-config-composer">
+          <div class="composer-resume-copy">
+            ${escapeHtml(t(uiLocale(), 'chat.continue.interrupted'))}
+          </div>
+          <button type="button" class="composer-resume-button" data-action="chat-continue">
+            <span aria-hidden="true">▶</span>
+            ${escapeHtml(t(uiLocale(), 'chat.continue.button'))}
+          </button>
+        </div>`;
+  }
+
   const prompt = mc.phase === 'question' ? mc.clientPrompt : undefined;
   const skipLabel = escapeHtml(modeLocale.cancelLabel);
 

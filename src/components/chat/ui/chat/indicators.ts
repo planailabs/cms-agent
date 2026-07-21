@@ -57,16 +57,3 @@ export const renderErrorMessage = (mc: AiChat): string =>
           </button>
         </div>`
     : '';
-
-/** Interrupted turn (e.g. server restart) — offer to continue where it stopped. */
-export const renderContinuePrompt = (mc: AiChat): string =>
-  mc.canContinue && mc.phase === 'idle'
-    ? `<div class="flex flex-col items-start gap-2">
-          <p class="max-w-full text-sm leading-relaxed text-amber-500">
-            ${escapeHtml(t(uiLocale(), 'chat.continue.interrupted'))}
-          </p>
-          <button type="button" class="ws-mini-button" data-action="chat-continue">
-            ▶ ${escapeHtml(t(uiLocale(), 'chat.continue.button'))}
-          </button>
-        </div>`
-    : '';

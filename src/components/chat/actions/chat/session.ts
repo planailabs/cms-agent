@@ -58,6 +58,7 @@ export interface ChatStateSnapshot {
   targetAhead: boolean;
   tabs: { tabs: string[]; activeIndex: number; byUserId: string } | null;
   turnPhase: string;
+  canResume: boolean;
   pendingQuestion: { toolName: string; input: Record<string, unknown> } | null;
   lastError: string | null;
 }
@@ -203,9 +204,13 @@ export const applyChatState = (
         mc.streamingText = undefined;
       }
       mc.canContinue = false;
-    } else if (snapshot.turnPhase === 'tool_pending' && mc.phase === 'idle') {
-      // Interrupted mid-turn (server crash/restart) — offer Continue live
+    } else if (snapshot.canResume) {
+      // The persisted tool call has no active server turn (crash/restart).
+      // This server-authoritative edge may replace a stale local spinner.
+      mc.phase = 'idle';
       mc.canContinue = true;
+    } else {
+      mc.canContinue = false;
     }
   }
 

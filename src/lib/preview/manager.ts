@@ -260,6 +260,13 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     state.startPhases.set(branch, 'server');
     const port = await freePort();
 
+    // Astro persists its dev PID in the worktree. Preview processes run in
+    // separate PID namespaces, where the Astro child commonly gets the same
+    // small PID after a container restart; a stale record can therefore look
+    // alive and block startup forever. There is no managed instance for this
+    // branch at this point, so remove only Astro's generated session record.
+    fs.rmSync(path.join(worktree, '.astro', 'dev.json'), { force: true });
+
     // REPO_DEV_COMMAND is split on whitespace (document: no shell quoting)
     const [cmd, ...args] = e.REPO_DEV_COMMAND.split(/\s+/);
     const child = spawnSandboxed(

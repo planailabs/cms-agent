@@ -70,6 +70,7 @@ function release(map: Map<string, string>, key: string, lockId: string): void {
 /** One in-flight turn per chat. */
 export const acquireTurnLock = (chatId: string) => acquire(activeTurns, chatId);
 export const releaseTurnLock = (chatId: string, id: string) => release(activeTurns, chatId, id);
+export const hasActiveTurn = (chatId: string): boolean => activeTurns.has(chatId);
 
 /** One mutating chat per branch worktree (EXECUTE turns, commits, reverts). */
 export const acquireBranchLock = (branchId: string) => acquire(branchLocks, branchId);

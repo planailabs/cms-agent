@@ -303,6 +303,48 @@ html.is-first-visit #app {
       0 0 0 1px color-mix(in lab, var(--accent) 15%, transparent);
   }
 
+  .composer-card--resume {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem;
+    border-color: color-mix(in lab, var(--accent) 38%, var(--border-muted));
+    background:
+      linear-gradient(110deg, color-mix(in lab, var(--accent) 9%, transparent), transparent 55%),
+      var(--surface-elevated);
+  }
+
+  .composer-resume-copy {
+    padding-left: 0.375rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+
+  .composer-resume-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 36px;
+    padding: 0.5rem 0.875rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--text-primary);
+    color: var(--surface-base);
+    font-size: 0.75rem;
+    font-weight: 650;
+    cursor: pointer;
+    transition: transform 150ms ease, opacity 150ms ease;
+  }
+
+  .composer-resume-button:hover,
+  .composer-resume-button:focus-visible {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
   /* Wrapper: positions input and button (optional skip button on the left) */
   .composer-wrapper {
     display: grid;

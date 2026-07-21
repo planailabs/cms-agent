@@ -11,6 +11,7 @@ import { simpleGit } from 'simple-git';
 import { prisma } from '@/lib/db';
 import { addConnection } from '@/lib/agent/bus';
 import { buildChatState, emitChatState } from '@/lib/agent/chatState';
+import { acquireTurnLock, releaseTurnLock } from '@/lib/agent/bus';
 import { GET as historyGet } from '@/pages/api/chat/history';
 
 let chatId: string;
@@ -52,6 +53,7 @@ describe('streamed chat state', () => {
     expect(state!.executionSha).toBe('c'.repeat(40));
     // remote turn state: pending question only while waiting_for_answer
     expect(state!.turnPhase).toBe('idle');
+    expect(state!.canResume).toBe(false);
     expect(state!.pendingQuestion).toBeNull();
     await prisma.chat.update({
       where: { id: chatId },
@@ -82,6 +84,26 @@ describe('streamed chat state', () => {
     await prisma.chat.update({ where: { id: chatId }, data: { workflowPhase: 'published' } });
     expect((await buildChatState(chatId))!.publication?.status).toBe('succeeded');
     await prisma.chat.update({ where: { id: chatId }, data: { workflowPhase: 'execute' } });
+  });
+
+  it('offers resume only when a pending tool call has no active turn owner', async () => {
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: { turnPhase: 'tool_pending' },
+    });
+    expect((await buildChatState(chatId))!.canResume).toBe(true);
+
+    const lock = acquireTurnLock(chatId);
+    expect(lock).not.toBeNull();
+    try {
+      expect((await buildChatState(chatId))!.canResume).toBe(false);
+    } finally {
+      releaseTurnLock(chatId, lock!);
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: { turnPhase: 'idle' },
+      });
+    }
   });
 
   it('emits coalesced, sequenced state events matching the builder', async () => {

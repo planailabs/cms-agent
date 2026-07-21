@@ -69,12 +69,18 @@ describe('preview manager', () => {
     const { ensureBranch, ensureWorktree } = await import('@/lib/git/engine');
     await ensureBranch('draft-x');
     const wt = await ensureWorktree('draft-x');
+    fs.mkdirSync(path.join(wt, '.astro'), { recursive: true });
+    fs.writeFileSync(
+      path.join(wt, '.astro', 'dev.json'),
+      JSON.stringify({ pid: 13, port: 44185, url: 'http://127.0.0.1:44185' }),
+    );
     fs.writeFileSync(
       path.join(wt, 'src', 'pages', 'index.astro'),
       '<html><body><h1>Draft content</h1></body></html>',
     );
 
     const instance = await manager.ensureInstance('draft-x');
+    expect(instance.status).toBe('ready');
     const res = await fetch(`http://127.0.0.1:${instance.port}/`);
     expect(await res.text()).toContain('Draft content');
     await manager.stopInstance('draft-x');
