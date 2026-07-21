@@ -12,6 +12,8 @@ import {
 } from '@/lib/compare/markers';
 
 const mk = (k: string, y: number): Marker => ({ k, y });
+/** Container-layer marker: carries a structural signature `s`. */
+const mkc = (k: string, y: number, s: string): Marker => ({ k, y, s });
 
 describe('computeAnchors', () => {
   it('matches identical content in order', () => {
@@ -49,6 +51,50 @@ describe('computeAnchors', () => {
     const a = [mk('LI:Item#1', 10), mk('LI:Item#2', 20)];
     const b = [mk('LI:Item#1', 10), mk('LI:Item#2', 40)];
     expect(computeAnchors(a, b)).toHaveLength(2);
+  });
+
+  it('anchors a reworded section by its structure when the text changed', () => {
+    // Section wraps a heading + paragraph whose text was fully reworded, so
+    // no leaf keys match — but the container's structural signature does, so
+    // the section boundary still anchors.
+    const sig = 'SECTION/2/H1Pp#1';
+    const a = [mkc(sig, 100, 'SECTION/2/H1Pp'), mk('H1:Old heading#1', 110), mk('P:Old body#1', 160)];
+    const b = [mkc(sig, 300, 'SECTION/2/H1Pp'), mk('H1:New heading#1', 310), mk('P:New body#1', 360)];
+    expect(computeAnchors(a, b)).toEqual([{ a: 100, b: 300 }]);
+  });
+
+  it('adds container breakpoints on top of the leaf anchors (layers)', () => {
+    const a = [
+      mkc('#SECTION/1/H1#1', 0, 'SECTION/1/H1'),
+      mk('H1:Title#1', 10),
+      mkc('#UL/2/LiLi#1', 200, 'UL/2/LiLi'),
+      mk('LI:One#1', 210),
+    ];
+    const b = [
+      mkc('#SECTION/1/H1#1', 0, 'SECTION/1/H1'),
+      mk('H1:Title#1', 10),
+      mkc('#UL/2/LiLi#1', 400, 'UL/2/LiLi'),
+      mk('LI:One#1', 410),
+    ];
+    // Leaf anchors (H1, LI) plus both container anchors → denser breakpoints.
+    expect(computeAnchors(a, b)).toEqual([
+      { a: 0, b: 0 },
+      { a: 10, b: 10 },
+      { a: 200, b: 400 },
+      { a: 210, b: 410 },
+    ]);
+  });
+
+  it('never lets a structural anchor break monotonicity of the leaf anchors', () => {
+    const a = [mk('P:Kept#1', 100), mkc('#DIV/1/P#1', 150, 'X'), mk('P:Tail#1', 200)];
+    // The structural marker in B sits BEFORE the kept leaf → inserting it would
+    // fold the mapping back; it must be dropped.
+    const b = [mkc('#DIV/1/P#1', 20, 'X'), mk('P:Kept#1', 100), mk('P:Tail#1', 260)];
+    const anchors = computeAnchors(a, b);
+    for (let i = 1; i < anchors.length; i++) {
+      expect(anchors[i].a).toBeGreaterThan(anchors[i - 1].a);
+      expect(anchors[i].b).toBeGreaterThan(anchors[i - 1].b);
+    }
   });
 });
 
