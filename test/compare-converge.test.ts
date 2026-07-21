@@ -118,6 +118,21 @@ describe("runCorrectiveAlignment", () => {
     expect(Math.abs(result.end.max)).toBeGreaterThan(Math.abs(result.start));
   });
 
+  it("keeps converged mutations when only the subpixel tail overshoots", async () => {
+    const states = [doc(2), doc(0.25), doc(0.375)];
+    let round = 0;
+    const result = await runCorrectiveAlignment(
+      states[0],
+      doc(0),
+      async () => [states[++round], doc(0)],
+      { maxRounds: 5 },
+    );
+
+    expect(result.rounds).toBe(2);
+    expect(result.end.max).toBe(0.375);
+    expect(result.regressed).toBe(false);
+  });
+
   it("ignores untrusted structural matches in conservative mode", async () => {
     const a: MarkerDoc = {
       h: 500,

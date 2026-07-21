@@ -117,8 +117,11 @@ them into a fixture under `test/fixtures/` and add a scaffold.
 - The additive corrective loop requires unchanged-content or stable-ID trust;
   scope/class/structural matches can seed coarse layout but cannot authorize
   irreversible correction of a full-page rewrite. Every round is monotonic: if
-  absolute drift worsens, discard that browser pair and recapture from the
-  structural seed (the production 13,099px → 44,701px regression).
+  absolute drift worsens materially, discard that browser pair and recapture
+  from the structural seed (the production 13,099px → 44,701px regression).
+  A fractional oscillation where both measurements are within one CSS pixel
+  stops and keeps the converged DOM; discarding it resurrected a 32px painted-
+  frame mismatch after the rest of the page had converged.
 - Low-confidence pages still require unchanged-content/stable-ID anchors for
   authorization, then converge in a strictly forward hierarchy: top-level
   landmarks → scoped section inset → visual rows → item-local flows → rowless

@@ -20,6 +20,7 @@ import {
 export const ALIGN_CORRECTIVE_THRESHOLD = 1 / 64;
 export const ALIGN_CORRECTIVE_ROUNDS = 250;
 export const ALIGN_CONFIDENCE_MIN = 0.35;
+const MATERIAL_REGRESSION_PX = 1;
 
 export interface CorrectiveAlignmentOptions {
   enabled?: boolean;
@@ -169,6 +170,13 @@ export const runCorrectiveAlignment = async (
       ? Math.max(selectedMetric + 32, selectedMetric * 1.5)
       : selectedMetric + threshold;
     if (!aborted && current > regressionLimit) {
+      // Fractional CSS constraints can oscillate below one rendered pixel.
+      // Keep that converged DOM; rollback is for visible/material worsening.
+      if (
+        selectedMetric <= MATERIAL_REGRESSION_PX &&
+        current <= MATERIAL_REGRESSION_PX
+      )
+        break;
       regressed = true;
       break;
     }
