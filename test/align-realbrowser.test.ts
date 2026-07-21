@@ -545,3 +545,44 @@ describe("real-browser alignment — chaos", () => {
     }, 30_000);
   }
 });
+
+// Stable data-cmsm: an element's handle survives re-collection after the DOM
+// changes (fillers injected, an earlier element removed) so the aligner
+// re-selects the exact same element every round instead of a shifted index.
+describe("stable element handles", () => {
+  it("keeps a marker's id when an earlier element disappears", async () => {
+    const page = await browser.newPage({
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      await page.setContent(base);
+      const before = await collect(page);
+      const heroId = before.m.find((m) => m.k.startsWith("H1:"))!.i;
+      const capId = before.m.find((m) => m.k.startsWith("H2:Latest"))!.i;
+      // Remove an early element (shifts every following element's document
+      // position) and inject a filler, then re-collect.
+      await page.evaluate(() => document.querySelector("#masthead")!.remove());
+      const after = await collect(page);
+      // Same content elements still present, and their ids are UNCHANGED.
+      expect(after.m.find((m) => m.k.startsWith("H1:"))!.i).toBe(heroId);
+      expect(after.m.find((m) => m.k.startsWith("H2:Latest"))!.i).toBe(capId);
+      // A brand-new element gets a fresh id beyond the existing maximum.
+      const maxBefore = Math.max(...before.m.map((m) => m.i ?? 0));
+      await page.evaluate(() =>
+        document
+          .querySelector("#hero")!
+          .insertAdjacentHTML(
+            "beforeend",
+            '<p class="swiss-body">A newly added line.</p>',
+          ),
+      );
+      const grown = await collect(page);
+      const fresh = grown.m.find((m) =>
+        m.k.startsWith("P:A newly added line"),
+      )!;
+      expect(fresh.i!).toBeGreaterThan(maxBefore);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+});

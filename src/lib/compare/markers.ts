@@ -22,8 +22,11 @@ export interface Marker {
   k: string;
   /** Document-absolute top in CSS px. */
   y: number;
-  /** Marker index = the element's `data-cmsm` attribute, so the aligner can
-   *  re-select it in the page to inject spacers before re-screenshotting. */
+  /** Stable per-element handle = the element's `data-cmsm` attribute. Assigned
+   *  ONCE and never reassigned, so it survives re-collection after filler
+   *  injection — the aligner re-selects the exact same element every round. NOT
+   *  an array index (ids may have gaps once elements come and go); only ever used
+   *  as `[data-cmsm="i"]` and as a map key. */
   i?: number;
   /** Bounding box (document-absolute CSS px): left, width, height. Enables the
    *  2-D rectangle-split layout (columns/cells), not just vertical position. */
@@ -99,6 +102,15 @@ export const COLLECT_MARKERS_JS = `(function () {
   var counts = {};
   var out = [];
   var scrollY = window.scrollY || window.pageYOffset || 0;
+  // Stable handles: reuse any data-cmsm already on the page (from a prior
+  // collection) and only hand out fresh ids beyond the current maximum, so an
+  // element keeps its id across re-collections even as fillers are injected.
+  var nextId = 0;
+  var tagged = document.querySelectorAll('[data-cmsm]');
+  for (var ti = 0; ti < tagged.length; ti++) {
+    var tv = parseInt(tagged[ti].getAttribute('data-cmsm'), 10);
+    if (!isNaN(tv) && tv >= nextId) nextId = tv + 1;
+  }
   var els = document.querySelectorAll(LEAF + ',' + CONT);
   for (var i = 0; i < els.length && out.length < MAX; i++) {
     var el = els[i];
@@ -137,7 +149,11 @@ export const COLLECT_MARKERS_JS = `(function () {
       continue;
     }
     var n = counts[key] = (counts[key] || 0) + 1;
-    var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig, i: out.length };
+    // Reuse this element's existing stable id, or mint a fresh one.
+    var idA = el.getAttribute('data-cmsm');
+    var id = (idA !== null && idA !== '') ? parseInt(idA, 10) : NaN;
+    if (isNaN(id)) { id = nextId++; }
+    var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig, i: id };
     // Parent index: nearest ancestor already tagged (document order = pre-order,
     // so ancestors are emitted first). Lets the aligner rebuild the tree.
     var pi = -1;
@@ -164,8 +180,8 @@ export const COLLECT_MARKERS_JS = `(function () {
     } catch (e) {}
     mk.d = d;
     // Tag the element so the aligner can re-select it to inject spacers before
-    // re-screenshotting (invisible; set before the shot). data-cmsm = marker i.
-    try { el.setAttribute('data-cmsm', String(out.length)); } catch (e) {}
+    // re-screenshotting (invisible; set before the shot). Stable across rounds.
+    try { el.setAttribute('data-cmsm', String(id)); } catch (e) {}
     if (el.id) mk.id = el.id;
     var cls = typeof el.className === 'string' ? el.className : '';
     if (cls) mk.c = cls.slice(0, 100);
