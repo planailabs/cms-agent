@@ -19,6 +19,7 @@ import type { Browser, Page } from "playwright";
 import { COLLECT_MARKERS_JS, type MarkerDoc } from "@/lib/compare/markers";
 import {
   buildLayout,
+  boxDiff,
   spacingPlan,
   matchedYDelta,
 } from "@/lib/compare/layout";
@@ -900,8 +901,36 @@ describe("visual marker collection", () => {
       expect(
         markers.m.some((marker) => marker.k.includes("Visible answer")),
       ).toBe(true);
+      expect(
+        markers.m.some((marker) => marker.k.includes("Closed question")),
+      ).toBe(true);
     } finally {
       await page.close();
+    }
+  });
+
+  it("highlights changed questions while closed answers stay hidden", async () => {
+    const before = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const after = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await before.setContent(`
+        <main><section id="faq"><details><summary class="question">Can we deploy today?</summary><p>Hidden old answer</p></details></section></main>
+      `);
+      await after.setContent(`
+        <main><section id="faq"><details><summary class="question">Can plan.ai be deployed today?</summary><p>Hidden new answer</p></details></section></main>
+      `);
+      const [a, b] = await Promise.all([collect(before), collect(after)]);
+      expect(a.m.some((marker) => marker.k.includes("Hidden old answer"))).toBe(
+        false,
+      );
+      expect(b.m.some((marker) => marker.k.includes("Hidden new answer"))).toBe(
+        false,
+      );
+      expect(boxDiff(a.m, a.h, b.m, b.h)).toMatchObject([
+        { kind: "changed" },
+      ]);
+    } finally {
+      await Promise.all([before.close(), after.close()]);
     }
   });
 });

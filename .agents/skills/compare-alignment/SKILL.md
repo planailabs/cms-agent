@@ -150,6 +150,9 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   otherwise the correction is dropped rather than guessed.
 - Matching ≠ change-detection: identity can score a changed element ~1, so
   `boxDiff` decides "changed" by comparing the content key, not the match score.
+- Closed `<details>` answers are not painted and remain excluded, but their
+  visible `<summary>` questions are leaf markers so changed FAQ rows receive
+  normal highlight boxes.
 - Substantial painted `div`/SVG/canvas/video blocks are visual anchors even when
   they contain no marker text. Only uniquely identified painted roles authorize
   correction; repeated card frames remain excluded to avoid ambiguous pairing.

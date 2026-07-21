@@ -101,7 +101,7 @@ export interface Anchor {
  * Markers are capped so the O(n·m) match stays bounded on huge pages.
  */
 export const COLLECT_MARKERS_JS = `(function () {
-  var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,table,figure,img,td,th';
+  var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,summary,table,figure,img,td,th';
   var CONT = 'section,article,header,footer,main,nav,aside,ul,ol,figure,table,form,blockquote';
   var VISUAL = 'div,svg,canvas,video';
   var MAX = 800;      // markers kept (bounds the O(n·m) matcher)
