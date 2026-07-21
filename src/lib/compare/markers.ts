@@ -22,6 +22,11 @@ export interface Marker {
   k: string;
   /** Document-absolute top in CSS px. */
   y: number;
+  /** Bounding box (document-absolute CSS px): left, width, height. Enables the
+   *  2-D rectangle-split layout (columns/cells), not just vertical position. */
+  x?: number;
+  w?: number;
+  h?: number;
   /** Structural signature for container "layers" (tag + descendant-block
    *  shape, text-independent). Empty/absent for leaf blocks. Lets a section
    *  anchor by structure even when its text was reworded. */
@@ -52,11 +57,10 @@ export interface Anchor {
  *    the same structsig (tag + descendant-block shape).
  * The matcher uses k for exact content and s for structure, so a section AND
  * each element inside it still anchor 1:1 when the text was reworded or
- * translated (different words, same roles in the same order). Leaves that
- * share a visual row (grid/multi-column) are collapsed to one anchor per row —
- * they can't be ordered in 1-D, but the row still anchors so its height delta
- * lands as a filler per row. Markers are capped so the O(n·m) match stays
- * bounded on huge pages.
+ * translated (different words, same roles in the same order). Each marker also
+ * carries its bounding box (x/w/h) so the renderer can partition a shot into
+ * rectangles (columns/cells) and align each on its own — see compare/layout.
+ * Markers are capped so the O(n·m) match stays bounded on huge pages.
  */
 export const COLLECT_MARKERS_JS = `(function () {
   var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,table,figure,img';
@@ -77,6 +81,9 @@ export const COLLECT_MARKERS_JS = `(function () {
     var r = el.getBoundingClientRect();
     if (r.height <= 0) continue;
     var y = Math.round(r.top + scrollY);
+    var x = Math.round(r.left);
+    var w = Math.round(r.width);
+    var hgt = Math.round(r.height);
     var kids = el.querySelectorAll(LEAF);
     var key, sig;
     if (el.matches(CONT) && kids.length >= 1) {
@@ -102,27 +109,10 @@ export const COLLECT_MARKERS_JS = `(function () {
       continue;
     }
     var n = counts[key] = (counts[key] || 0) + 1;
-    out.push({ k: key + '#' + n, y: y, s: sig });
-  }
-  // Grid rows: leaves on the same visual row (multi-column) can't be ordered
-  // in 1-D. Collapse each row to ONE anchor (the first leaf on it) instead of
-  // dropping the row entirely — so each grid ROW anchors and its height delta
-  // lands as a filler right after that row, not one giant filler for the whole
-  // grid. Stacked (distinct-y) leaves are each their own row → unaffected.
-  var ROW = 6;
-  var rowYs = [];
-  var kept = [];
-  for (var c = 0; c < out.length; c++) {
-    if (out[c].k.charAt(0) !== '#') {
-      var dup = false;
-      for (var d = 0; d < rowYs.length; d++) if (Math.abs(rowYs[d] - out[c].y) <= ROW) { dup = true; break; }
-      if (dup) continue; // a leaf already anchors this row
-      rowYs.push(out[c].y);
-    }
-    kept.push(out[c]);
+    out.push({ k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig });
   }
   var root = document.scrollingElement || document.documentElement;
-  return { h: Math.round(root.scrollHeight), m: kept };
+  return { h: Math.round(root.scrollHeight), m: out };
 })()`;
 
 /** LCS over a chosen marker key → raw matched (yA,yB) pairs in order. */
@@ -248,7 +238,22 @@ export function alignedSegments(
   heightA: number,
   heightB: number,
 ): AlignedSegment[] {
-  const b = bracketAnchors(anchors, heightA, heightB);
+  return alignedSegmentsIn(anchors, 0, heightA, 0, heightB);
+}
+
+/** Aligned segments bracketed to an arbitrary [startA,endA]×[startB,endB]
+ *  range — the 2-D layout aligns each rectangle within its own y-band. */
+export function alignedSegmentsIn(
+  anchors: Anchor[],
+  startA: number,
+  endA: number,
+  startB: number,
+  endB: number,
+): AlignedSegment[] {
+  const inner = anchors.filter(
+    (p) => p.a > startA && p.a < endA && p.b > startB && p.b < endB,
+  );
+  const b: Anchor[] = [{ a: startA, b: startB }, ...inner, { a: endA, b: endB }];
   const segs: AlignedSegment[] = [];
   for (let i = 1; i < b.length; i++) {
     const hA = b[i].a - b[i - 1].a;

@@ -16,6 +16,7 @@ import {
   type AlignedSegment,
   type MarkerDoc,
 } from '@/lib/compare/markers';
+import { buildLayout, type ANode } from '@/lib/compare/layout';
 import type { AppState } from '../chat/app/state';
 
 const markerCache = new Map<string, Promise<MarkerDoc | null>>();
@@ -78,21 +79,29 @@ const ctxFor = (img: HTMLImageElement): CanvasRenderingContext2D | null => {
   return ctx;
 };
 
-/** Dominant colour of the pixel row at natural y — the page background, since
- *  text/foreground is a minority of a row's width. Returns '' if unreadable. */
-const rowColor = (ctx: CanvasRenderingContext2D, yNatural: number): string => {
+/** Dominant colour of a pixel row within [x0,x1) at natural y — the local page
+ *  background, since text/foreground is a minority of a row's width. '' if
+ *  unreadable. */
+const rowColor = (
+  ctx: CanvasRenderingContext2D,
+  yNatural: number,
+  x0 = 0,
+  x1 = ctx.canvas.width,
+): string => {
   const { width, height } = ctx.canvas;
   const y = Math.max(0, Math.min(height - 1, Math.round(yNatural)));
+  const lo = Math.max(0, Math.min(width - 1, Math.round(x0)));
+  const w = Math.max(1, Math.min(width - lo, Math.round(x1 - x0)));
   let data: Uint8ClampedArray;
   try {
-    data = ctx.getImageData(0, y, width, 1).data;
+    data = ctx.getImageData(lo, y, w, 1).data;
   } catch {
     return '';
   }
   const counts = new Map<string, number>();
   let best = '';
   let bestN = 0;
-  for (let x = 0; x < width; x += 6) {
+  for (let x = 0; x < w; x += 6) {
     const i = x * 4;
     const key = `${data[i] >> 3},${data[i + 1] >> 3},${data[i + 2] >> 3}`; // quantized
     const n = (counts.get(key) ?? 0) + 1;
@@ -151,9 +160,84 @@ const buildColumn = (
   return col;
 };
 
+// ── 2-D rectangle-split rendering ─────────────────────────────────────────
+
+interface RC {
+  src: string;
+  ctx: CanvasRenderingContext2D | null;
+  scale: number;
+  naturalW: number;
+  naturalH: number;
+}
+
+/** A content slice: the source rect [x0,top]→[x0+w,top+own] at natural scale. */
+const sliceEl = (rc: RC, x0: number, top: number, w: number, own: number): HTMLElement => {
+  const d = document.createElement('div');
+  d.className = 'ws-onion__segment';
+  d.style.width = `${w * rc.scale}px`;
+  d.style.height = `${own * rc.scale}px`;
+  d.style.backgroundImage = `url("${rc.src}")`;
+  d.style.backgroundSize = `${rc.naturalW * rc.scale}px ${rc.naturalH * rc.scale}px`;
+  d.style.backgroundPosition = `${-x0 * rc.scale}px ${-top * rc.scale}px`;
+  return d;
+};
+
+/** A gap filler: solid page-background colour sampled within [x0,x0+w] at y. */
+const fillerEl = (rc: RC, x0: number, w: number, fill: number, sampleY: number): HTMLElement => {
+  const d = document.createElement('div');
+  d.className = 'ws-onion__segment ws-onion__filler';
+  d.style.width = `${w * rc.scale}px`;
+  d.style.height = `${fill * rc.scale}px`;
+  const color = rc.ctx ? rowColor(rc.ctx, sampleY, x0, x0 + w) : '';
+  if (color) d.style.backgroundColor = color;
+  return d;
+};
+
+/** Natural y of a node's content bottom on one side (for filler sampling). */
+const bottomY = (node: ANode, side: 'a' | 'b'): number => {
+  if (node.kind === 'leaf') {
+    let y = 0;
+    for (const seg of node.segs ?? []) {
+      const top = side === 'a' ? seg.topA : seg.topB;
+      const own = side === 'a' ? seg.hA : seg.hB;
+      if (own > 0) y = Math.max(y, top + own);
+    }
+    return y;
+  }
+  const kids = node.children ?? [];
+  if (node.kind === 'col') return kids.length ? bottomY(kids[kids.length - 1], side) : 0;
+  return kids.length ? Math.max(...kids.map((c) => bottomY(c, side))) : 0;
+};
+
+/** Render one side of an aligned node, padded to `targetH` natural px. */
+const renderNode = (node: ANode, side: 'a' | 'b', rc: RC, targetH: number): HTMLElement => {
+  const el = document.createElement('div');
+  el.className = 'ws-onion__box';
+  el.style.width = `${node.w * rc.scale}px`;
+  if (node.kind === 'leaf') {
+    for (const seg of node.segs ?? []) {
+      const top = side === 'a' ? seg.topA : seg.topB;
+      const own = side === 'a' ? seg.hA : seg.hB;
+      if (own > 0) el.appendChild(sliceEl(rc, node.x0, top, node.w, own));
+      const fill = seg.h - own;
+      if (fill > 0) {
+        el.appendChild(fillerEl(rc, node.x0, node.w, fill, own > 0 ? top + own - 1 : Math.max(0, top - 1)));
+      }
+    }
+  } else if (node.kind === 'col') {
+    for (const c of node.children ?? []) el.appendChild(renderNode(c, side, rc, c.h));
+  } else {
+    el.style.display = 'flex';
+    for (const c of node.children ?? []) el.appendChild(renderNode(c, side, rc, node.h));
+  }
+  const pad = targetH - node.h;
+  if (pad > 0.5) el.appendChild(fillerEl(rc, node.x0, node.w, pad, bottomY(node, side)));
+  return el;
+};
+
 const cleanup = (container: HTMLElement): void => {
   container.classList.remove('is-content-aligned');
-  for (const el of container.querySelectorAll('.ws-onion__segments')) el.remove();
+  for (const el of container.querySelectorAll('.ws-onion__segments, .ws-onion__box')) el.remove();
   delete container.dataset.alignSig;
 };
 
@@ -196,16 +280,26 @@ async function enhance(container: HTMLElement, mode: 'height' | 'content'): Prom
     return;
   }
 
-  const segs = alignedSegments(computeAnchors(a.m, b.m), a.h, b.h);
-  if (segs.length === 0) {
-    cleanup(container);
-    return;
-  }
   const scale = width / sizeA.w;
+  for (const el of container.querySelectorAll('.ws-onion__segments, .ws-onion__box')) el.remove();
 
-  for (const el of container.querySelectorAll('.ws-onion__segments')) el.remove();
-  beforeWrap.appendChild(buildColumn(beforeImg, segs, 'a', scale, sizeA.h));
-  afterWrap.appendChild(buildColumn(afterImg, segs, 'b', scale, sizeB.h));
+  // Preferred: 2-D rectangle-split layout (needs bounding boxes in markers).
+  const layout = buildLayout(a.m, a.h, b.m, b.h);
+  if (layout) {
+    const rcA: RC = { src: beforeImg.src, ctx: ctxFor(beforeImg), scale, naturalW: sizeA.w, naturalH: sizeA.h };
+    const rcB: RC = { src: afterImg.src, ctx: ctxFor(afterImg), scale, naturalW: sizeB.w, naturalH: sizeB.h };
+    beforeWrap.appendChild(renderNode(layout, 'a', rcA, layout.h));
+    afterWrap.appendChild(renderNode(layout, 'b', rcB, layout.h));
+  } else {
+    // Fallback: plain 1-D column (old marker caches without boxes).
+    const segs = alignedSegments(computeAnchors(a.m, b.m), a.h, b.h);
+    if (segs.length === 0) {
+      cleanup(container);
+      return;
+    }
+    beforeWrap.appendChild(buildColumn(beforeImg, segs, 'a', scale, sizeA.h));
+    afterWrap.appendChild(buildColumn(afterImg, segs, 'b', scale, sizeB.h));
+  }
   container.classList.add('is-content-aligned');
   container.dataset.alignSig = sig;
 

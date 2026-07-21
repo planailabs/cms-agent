@@ -2205,6 +2205,13 @@ html.is-first-visit #app {
     background-repeat: no-repeat;
   }
 
+  /* 2-D rectangle-split nodes: leaf/col stack; row is flex (set inline). Boxes
+     keep their own width and never flex-grow/shrink so columns tile exactly. */
+  .ws-onion__box {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
 }
 
 .icon-size {
