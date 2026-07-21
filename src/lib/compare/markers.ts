@@ -52,7 +52,9 @@ export interface Anchor {
  *    the same structsig (tag + descendant-block shape).
  * The matcher uses k for exact content and s for structure, so a section AND
  * each element inside it still anchor 1:1 when the text was reworded or
- * translated (different words, same roles in the same order). Markers are
+ * translated (different words, same roles in the same order). Leaves that
+ * share a visual row (grid/multi-column) are dropped — they can't be ordered
+ * in 1-D, so their container anchors the row as one unit instead. Markers are
  * capped so the O(n·m) match stays bounded on huge pages.
  */
 export const COLLECT_MARKERS_JS = `(function () {
@@ -101,8 +103,25 @@ export const COLLECT_MARKERS_JS = `(function () {
     var n = counts[key] = (counts[key] || 0) + 1;
     out.push({ k: key + '#' + n, y: y, s: sig });
   }
+  // Grid rows: leaves sharing a row (same y as another leaf) can't be ordered
+  // in 1-D vertical alignment, so their per-element anchors go erratic and
+  // inflate the grid's cells. Drop them and let the enclosing container anchor
+  // the row as one unit — the height delta then lands as a single trailing
+  // filler. Stacked (non-grid) leaves keep their per-element anchoring.
+  var ROW = 6;
+  var leafYs = [];
+  for (var a = 0; a < out.length; a++) if (out[a].k.charAt(0) !== '#') leafYs.push(out[a].y);
+  var kept = [];
+  for (var c = 0; c < out.length; c++) {
+    if (out[c].k.charAt(0) !== '#') {
+      var share = 0;
+      for (var d = 0; d < leafYs.length; d++) if (Math.abs(leafYs[d] - out[c].y) <= ROW) share++;
+      if (share > 1) continue;
+    }
+    kept.push(out[c]);
+  }
   var root = document.scrollingElement || document.documentElement;
-  return { h: Math.round(root.scrollHeight), m: out };
+  return { h: Math.round(root.scrollHeight), m: kept };
 })()`;
 
 /** LCS over a chosen marker key → raw matched (yA,yB) pairs in order. */
