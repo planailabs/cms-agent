@@ -47,6 +47,14 @@ export interface Marker {
    *  flex/grid ancestor. Leaves in the same cell (card) share it; different
    *  columns of one grid differ — so a grid's columns never cross-match. */
   fx?: string;
+  /** Parent index: the `i` of the nearest ANCESTOR that is also a kept marker,
+   *  or -1 at the root. Lets the aligner rebuild the pruned DOM tree from the
+   *  flat list and walk both pages in lockstep (see compare/treeAlign). */
+  pi?: number;
+  /** How THIS element arranges its children, from the real computed style:
+   *  'g' grid · 'r' row (flex-row / inline-block run) · 's' stack (block /
+   *  flex-column). Ground truth for the recursive aligner's layout mode. */
+  d?: "g" | "r" | "s";
 }
 
 export interface MarkerDoc {
@@ -130,6 +138,31 @@ export const COLLECT_MARKERS_JS = `(function () {
     }
     var n = counts[key] = (counts[key] || 0) + 1;
     var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig, i: out.length };
+    // Parent index: nearest ancestor already tagged (document order = pre-order,
+    // so ancestors are emitted first). Lets the aligner rebuild the tree.
+    var pi = -1;
+    for (var an = el.parentElement; an; an = an.parentElement) {
+      var t = an.getAttribute && an.getAttribute('data-cmsm');
+      if (t !== null && t !== undefined && t !== '') { pi = parseInt(t, 10); break; }
+    }
+    mk.pi = pi;
+    // Child arrangement of THIS element, from computed style: grid / row / stack.
+    var d = 's';
+    try {
+      var cs = getComputedStyle(el);
+      var dp2 = cs.display;
+      if (dp2 === 'grid' || dp2 === 'inline-grid') d = 'g';
+      else if ((dp2 === 'flex' || dp2 === 'inline-flex') && cs.flexDirection.indexOf('row') === 0) d = 'r';
+      else {
+        // A block whose element children are inline-block/inline flow in a row.
+        var fc = el.children && el.children.length ? el.children[0] : null;
+        if (fc) {
+          var fd = getComputedStyle(fc).display;
+          if (fd === 'inline-block' || fd === 'inline-flex' || fd === 'inline') d = 'r';
+        }
+      }
+    } catch (e) {}
+    mk.d = d;
     // Tag the element so the aligner can re-select it to inject spacers before
     // re-screenshotting (invisible; set before the shot). data-cmsm = marker i.
     try { el.setAttribute('data-cmsm', String(out.length)); } catch (e) {}
@@ -184,7 +217,11 @@ function strictlyIncreasing(pairs: Anchor[]): Anchor[] {
   return out;
 }
 
-const tokenize = (s: string): string[] => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+const tokenize = (s: string): string[] =>
+  s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
 /** Word-set Jaccard similarity (0..1); 1 for identical text. */
 const jaccard = (a: string, b: string): number => {
   if (a === b) return 1;
@@ -202,10 +239,15 @@ const jaccard = (a: string, b: string): number => {
 };
 
 const parseKey = (k: string): { cont: boolean; tag: string; text: string } => {
-  if (k.charCodeAt(0) === 35) return { cont: true, tag: k.replace(/#\d+$/, ''), text: '' };
-  const c = k.indexOf(':');
-  const h = k.lastIndexOf('#');
-  return { cont: false, tag: c > 0 ? k.slice(0, c) : '', text: c >= 0 ? k.slice(c + 1, h > c ? h : k.length) : '' };
+  if (k.charCodeAt(0) === 35)
+    return { cont: true, tag: k.replace(/#\d+$/, ""), text: "" };
+  const c = k.indexOf(":");
+  const h = k.lastIndexOf("#");
+  return {
+    cont: false,
+    tag: c > 0 ? k.slice(0, c) : "",
+    text: c >= 0 ? k.slice(c + 1, h > c ? h : k.length) : "",
+  };
 };
 
 /** Jaccard over the two class lists (mild identity signal). */
@@ -245,16 +287,18 @@ export const similarity = (a: Marker, b: Marker): number => {
   // Different columns of the SAME flex/grid are distinct — never let a section's
   // scope-id fold two columns together (that overlays a grid's cells).
   if (a.fx && b.fx && a.fx !== b.fx) {
-    const ga = a.fx.slice(0, a.fx.indexOf('#'));
-    const gb = b.fx.slice(0, b.fx.indexOf('#'));
+    const ga = a.fx.slice(0, a.fx.indexOf("#"));
+    const gb = b.fx.slice(0, b.fx.indexOf("#"));
     if (ga === gb) return Math.min(text, 0.3); // same grid, other cell → not it
   }
   if (a.id && a.id === b.id) return 1; // same tag + same stable id
-  if (a.fx && a.fx === b.fx && a.sid === b.sid) return Math.min(1, 0.6 + 0.4 * text); // same cell
+  if (a.fx && a.fx === b.fx && a.sid === b.sid)
+    return Math.min(1, 0.6 + 0.4 * text); // same cell
   // Stable identity from scope (section) + classes (semantic role). Same tag +
   // same section + same class ≈ the same element, so lift the score toward 1
   // even if every word changed; short of that, text carries it.
-  const idBoost = (a.sid && a.sid === b.sid ? 0.5 : 0) + 0.5 * classSim(a.c, b.c);
+  const idBoost =
+    (a.sid && a.sid === b.sid ? 0.5 : 0) + 0.5 * classSim(a.c, b.c);
   return Math.min(1, text + idBoost * (1 - text));
 };
 
@@ -280,7 +324,10 @@ export interface Alignment {
 export function alignMarkers(a: Marker[], b: Marker[]): Alignment {
   const n = a.length;
   const m = b.length;
-  const dp: Float64Array[] = Array.from({ length: n + 1 }, () => new Float64Array(m + 1));
+  const dp: Float64Array[] = Array.from(
+    { length: n + 1 },
+    () => new Float64Array(m + 1),
+  );
   for (let i = 1; i <= n; i++) {
     for (let j = 1; j <= m; j++) {
       const diag = dp[i - 1][j - 1] + similarity(a[i - 1], b[j - 1]);
@@ -328,8 +375,14 @@ export function computeAnchors(a: Marker[], b: Marker[]): Anchor[] {
 }
 
 /** Anchors bracketed with document start/end — the piecewise breakpoints. */
-export function bracketAnchors(anchors: Anchor[], heightA: number, heightB: number): Anchor[] {
-  const inner = anchors.filter((p) => p.a > 0 && p.a < heightA && p.b > 0 && p.b < heightB);
+export function bracketAnchors(
+  anchors: Anchor[],
+  heightA: number,
+  heightB: number,
+): Anchor[] {
+  const inner = anchors.filter(
+    (p) => p.a > 0 && p.a < heightA && p.b > 0 && p.b < heightB,
+  );
   return [{ a: 0, b: 0 }, ...inner, { a: heightA, b: heightB }];
 }
 
@@ -385,13 +438,23 @@ export function alignedSegmentsIn(
   const inner = anchors.filter(
     (p) => p.a > startA && p.a < endA && p.b > startB && p.b < endB,
   );
-  const b: Anchor[] = [{ a: startA, b: startB }, ...inner, { a: endA, b: endB }];
+  const b: Anchor[] = [
+    { a: startA, b: startB },
+    ...inner,
+    { a: endA, b: endB },
+  ];
   const segs: AlignedSegment[] = [];
   for (let i = 1; i < b.length; i++) {
     const hA = b[i].a - b[i - 1].a;
     const hB = b[i].b - b[i - 1].b;
     if (hA <= 0 && hB <= 0) continue;
-    segs.push({ topA: b[i - 1].a, topB: b[i - 1].b, hA, hB, h: Math.max(hA, hB) });
+    segs.push({
+      topA: b[i - 1].a,
+      topB: b[i - 1].b,
+      hA,
+      hB,
+      h: Math.max(hA, hB),
+    });
   }
   return segs;
 }
