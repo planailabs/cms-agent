@@ -129,7 +129,7 @@ export const COLLECT_MARKERS_JS = `(function () {
     if (closedDetails && !(el.closest('summary') && el.closest('summary').parentElement === closedDetails)) continue;
     var r = el.getBoundingClientRect();
     if (r.height <= 0) continue;
-    var y = Math.round(r.top + scrollY);
+    var y = r.top + scrollY;
     var x = Math.round(r.left);
     var w = Math.round(r.width);
     var hgt = Math.round(r.height);
@@ -182,7 +182,7 @@ export const COLLECT_MARKERS_JS = `(function () {
     for (var pp = el.parentElement; pp; pp = pp.parentElement) {
       if (pp.id) {
         scopeId = pp.id;
-        scopeTop = Math.round(pp.getBoundingClientRect().top + scrollY);
+        scopeTop = pp.getBoundingClientRect().top + scrollY;
         break;
       }
     }
@@ -210,8 +210,8 @@ export const COLLECT_MARKERS_JS = `(function () {
           if (rq.children[rki] === rowChild) { rci = rki; break; }
         }
         mk.rg = (rq.id || rq.tagName) + '/' + rq.children.length + '@' + Math.round(rr.left) + ':' + Math.round(rr.width);
-        mk.rp = Math.round(rr.top + scrollY);
-        mk.ry = Math.round(ir.top + scrollY);
+        mk.rp = rr.top + scrollY;
+        mk.ry = ir.top + scrollY;
         mk.rc = rci;
         break;
       }

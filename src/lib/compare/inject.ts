@@ -361,13 +361,13 @@ export const PROBE_SPACER_OWNERS = (
         const effect = group.effects.get(target) ?? 0;
         return effect > 0.05 ? (px - (predicted.get(target) ?? 0)) / effect : 0;
       })
-      .filter((px) => px > 0.5)
+      .filter((px) => px >= 1 / 64)
       .sort((a, b) => a - b);
     const amount = needed[Math.floor(needed.length / 2)] ?? 0;
-    if (amount < 0.5) return [];
+    if (amount < 1 / 64) return [];
     for (const [target, effect] of group.effects)
       predicted.set(target, (predicted.get(target) ?? 0) + amount * effect);
-    return [{ ...group.spacer, px: Math.round(amount) }];
+    return [{ ...group.spacer, px: Math.round(amount * 64) / 64 }];
   });
   return [...solved, ...direct];
 };

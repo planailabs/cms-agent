@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ALIGN_CORRECTIVE_THRESHOLD,
   runCorrectiveAlignment,
   type CorrectiveAlignmentResult,
 } from "@/lib/compare/converge";
@@ -63,6 +64,21 @@ describe("runCorrectiveAlignment", () => {
     expect(result.rounds).toBe(calls);
     expect(Math.abs(result.end.max)).toBeLessThanOrEqual(2);
     expect(result.aborted).toBe(false);
+    expect(result.regressed).toBe(false);
+  });
+
+  it("converges fractional geometry to the browser layout quantum", async () => {
+    let a = doc(100.5);
+    let b = doc(100);
+    const result = await runCorrectiveAlignment(a, b, async (plan) => {
+      a = shift(a, plan.a);
+      b = shift(b, plan.b);
+      return [a, b];
+    });
+
+    expect(Math.abs(result.end.max)).toBeLessThanOrEqual(
+      ALIGN_CORRECTIVE_THRESHOLD,
+    );
     expect(result.regressed).toBe(false);
   });
 

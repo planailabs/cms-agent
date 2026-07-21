@@ -22,7 +22,10 @@ import {
   spacingPlan,
   matchedYDelta,
 } from "@/lib/compare/layout";
-import { runCorrectiveAlignment } from "@/lib/compare/converge";
+import {
+  ALIGN_CORRECTIVE_THRESHOLD,
+  runCorrectiveAlignment,
+} from "@/lib/compare/converge";
 import {
   INJECT_SPACERS,
   PROBE_SPACER_OWNERS,
@@ -609,7 +612,7 @@ describe("real-browser alignment — last-resort corrective", () => {
       ).textContent = "Rewritten.";
     };
     const r = await residualCorrected(mutate as never);
-    expect(r).toBeLessThanOrEqual(1);
+    expect(r).toBeLessThanOrEqual(ALIGN_CORRECTIVE_THRESHOLD);
   }, 30_000);
 
   it("never worsens a case the structural pass cannot fully solve", async () => {
@@ -631,11 +634,11 @@ describe("real-browser alignment — chaos", () => {
     it(`seed ${seed} → matched content aligns`, async () => {
       const ops = buildOps(seed);
       const r = await residualCorrected(applyOps as never, ops);
-      if (r > 1)
+      if (r > ALIGN_CORRECTIVE_THRESHOLD)
         console.warn(
           `[chaos:${seed}] residual ${r}px ops=${JSON.stringify(ops)}`,
         );
-      expect(r).toBeLessThanOrEqual(1);
+      expect(r).toBeLessThanOrEqual(ALIGN_CORRECTIVE_THRESHOLD);
     }, 30_000);
   }
 });
@@ -665,9 +668,9 @@ describe("real-browser alignment — computed-style chaos", () => {
         applyComputedStyleChaos as never,
         seed,
       );
-      if (drift > 1)
+      if (drift > ALIGN_CORRECTIVE_THRESHOLD)
         console.warn(`[style-chaos:${seed}] residual ${drift}px`);
-      expect(drift).toBeLessThanOrEqual(1);
+      expect(drift).toBeLessThanOrEqual(ALIGN_CORRECTIVE_THRESHOLD);
     }, 60_000);
   }
 });
@@ -686,19 +689,19 @@ describe("measured spacer owners", () => {
       const first = markers.m.find((marker) => marker.k.startsWith("P:First"))!;
       const second = markers.m.find((marker) => marker.k.startsWith("P:Second"))!;
       const refined = await page.evaluate(PROBE_SPACER_OWNERS, [
-        { i: first.i!, px: 20, mode: "el" },
-        { i: second.i!, px: 30, mode: "el" },
+        { i: first.i!, px: 20.5, mode: "el" },
+        { i: second.i!, px: 30.25, mode: "el" },
       ]);
 
-      expect(refined.map((spacer) => spacer.px)).toEqual([20, 10]);
+      expect(refined.map((spacer) => spacer.px)).toEqual([20.5, 9.75]);
       await page.evaluate(INJECT_SPACERS, refined);
       const after = await collect(page);
       expect(
         after.m.find((marker) => marker.i === first.i)!.y - first.y,
-      ).toBe(20);
+      ).toBe(20.5);
       expect(
         after.m.find((marker) => marker.i === second.i)!.y - second.y,
-      ).toBe(30);
+      ).toBe(30.25);
     } finally {
       await page.close();
     }

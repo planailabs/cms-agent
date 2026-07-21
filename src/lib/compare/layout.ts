@@ -758,10 +758,12 @@ export const matchedYDelta = (
       worst.push({ ia: la[mm.ai].i, ib: lb[mm.bi].i, dy: Math.round(dy) });
   }
   worst.sort((p, q) => Math.abs(q.dy) - Math.abs(p.dy));
-  return { max: Math.round(max), worst: worst.slice(0, 8) };
+  return { max, worst: worst.slice(0, 8) };
 };
 
 type ResidualPair = { ea: Marker; eb: Marker; dy: number };
+const CSS_PX = 1 / 64;
+const cssPx = (value: number): number => Math.round(value / CSS_PX) * CSS_PX;
 
 const strongLeafPairs = (a: Marker[], b: Marker[]): ResidualPair[] => {
   const fa = a.filter((m) => !isContainer(m));
@@ -786,7 +788,7 @@ const reportPairs = (
     (found, p) => (Math.abs(p.dy) > Math.abs(found) ? p.dy : found),
     0,
   );
-  return { max: Math.round(max), worst: worst.slice(0, 8) };
+  return { max, worst: worst.slice(0, 8) };
 };
 
 const landmarkPairs = (a: Marker[], b: Marker[]): ResidualPair[] => {
@@ -817,11 +819,11 @@ export const correctiveLandmarks = (
   let cumB = 0;
   for (const { ea, eb } of landmarkPairs(a, b)) {
     const d = ea.y + cumA - (eb.y + cumB);
-    if (d > 0.5 && eb.i !== undefined) {
-      B.push({ i: eb.i, px: Math.round(d), mode: "el" });
+    if (d > CSS_PX && eb.i !== undefined) {
+      B.push({ i: eb.i, px: cssPx(d), mode: "el" });
       cumB += d;
-    } else if (d < -0.5 && ea.i !== undefined) {
-      A.push({ i: ea.i, px: Math.round(-d), mode: "el" });
+    } else if (d < -CSS_PX && ea.i !== undefined) {
+      A.push({ i: ea.i, px: cssPx(-d), mode: "el" });
       cumA -= d;
     }
   }
@@ -861,10 +863,10 @@ export const correctiveScopeLeads = (a: Marker[], b: Marker[]): SpacingPlan => {
   const A: Spacer[] = [];
   const B: Spacer[] = [];
   for (const { ea, eb, dy: d } of scopeLeadPairs(a, b)) {
-    if (d > 0.5 && eb.i !== undefined) {
-      B.push({ i: eb.i, px: Math.round(d), mode: "scope", sid: eb.sid });
-    } else if (d < -0.5 && ea.i !== undefined) {
-      A.push({ i: ea.i, px: Math.round(-d), mode: "scope", sid: ea.sid });
+    if (d > CSS_PX && eb.i !== undefined) {
+      B.push({ i: eb.i, px: cssPx(d), mode: "scope", sid: eb.sid });
+    } else if (d < -CSS_PX && ea.i !== undefined) {
+      A.push({ i: ea.i, px: cssPx(-d), mode: "scope", sid: ea.sid });
     }
   }
   return { a: A, b: B };
@@ -975,8 +977,8 @@ export const correctiveRows = (
     let cumB = 0;
     for (const row of rows) {
       const d = median(row.pairs.map((p) => p.dy)) + cumA - cumB;
-      const px = Math.round(Math.abs(d) * gain);
-      if (px < 1) continue;
+      const px = cssPx(Math.abs(d) * gain);
+      if (px < CSS_PX) continue;
       const marker = d > 0 ? row.pairs[0].eb : row.pairs[0].ea;
       if (marker.i === undefined) continue;
       (d > 0 ? B : A).push({ i: marker.i, px, mode: "row" });
@@ -1045,8 +1047,8 @@ export const correctiveItemFlows = (
     // is what remains per item, including a first leaf hidden by row consensus.
     for (const { ea, eb, dy } of pairs) {
       const d = dy + cumA - cumB;
-      const px = Math.round(Math.abs(d) * gain);
-      if (px < 1) continue;
+      const px = cssPx(Math.abs(d) * gain);
+      if (px < CSS_PX) continue;
       const marker = d > 0 ? eb : ea;
       if (marker.i === undefined) continue;
       (d > 0 ? B : A).push({ i: marker.i, px, mode: "el" });
@@ -1100,8 +1102,8 @@ export const correctiveSectionFlows = (
     let cumB = 0;
     for (const { ea, eb, dy } of pairs) {
       const d = dy + cumA - cumB;
-      const px = Math.round(Math.abs(d) * gain);
-      if (px < 1) continue;
+      const px = cssPx(Math.abs(d) * gain);
+      if (px < CSS_PX) continue;
       const marker = d > 0 ? eb : ea;
       if (marker.i === undefined) continue;
       (d > 0 ? B : A).push({ i: marker.i, px, mode: "el" });
@@ -1156,8 +1158,8 @@ export const correctiveFooterFlows = (
     let cumB = 0;
     for (const { ea, eb, dy } of pairs) {
       const d = dy + cumA - cumB;
-      const px = Math.round(Math.abs(d) * gain);
-      if (px < 1) continue;
+      const px = cssPx(Math.abs(d) * gain);
+      if (px < CSS_PX) continue;
       const marker = d > 0 ? eb : ea;
       if (marker.i === undefined) continue;
       (d > 0 ? B : A).push({ i: marker.i, px, mode: "el" });
@@ -1198,12 +1200,12 @@ export const correctiveFlat = (
   const B: Spacer[] = [];
   for (const { ea, eb } of pairs) {
     const d = ea.y - eb.y;
-    if (d > 0.5 && eb.i !== undefined) {
+    if (d > CSS_PX && eb.i !== undefined) {
       const px = d * gain;
-      B.push({ i: eb.i, px: Math.round(px), mode: "el" });
-    } else if (d < -0.5 && ea.i !== undefined) {
+      B.push({ i: eb.i, px: cssPx(px), mode: "el" });
+    } else if (d < -CSS_PX && ea.i !== undefined) {
       const px = -d * gain;
-      A.push({ i: ea.i, px: Math.round(px), mode: "el" });
+      A.push({ i: ea.i, px: cssPx(px), mode: "el" });
     }
   }
   return { a: A, b: B };
