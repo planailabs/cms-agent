@@ -25,7 +25,10 @@ import {
   ALIGN_CONFIDENCE_MIN,
   runCorrectiveAlignment,
 } from "@/lib/compare/converge";
-import { INJECT_SPACERS } from "@/lib/compare/inject";
+import {
+  INJECT_SPACERS,
+  PROBE_SPACER_OWNERS,
+} from "@/lib/compare/inject";
 import { store } from "../chat/app/store";
 import type { AppState } from "../chat/app/state";
 
@@ -159,6 +162,14 @@ const applyAndCollect = (
       spacers,
     )}); return ${COLLECT_MARKERS_JS};`,
   ) as Promise<MarkerDoc>;
+const probeOwners = (
+  iframe: HTMLIFrameElement,
+  spacers: Spacer[],
+): Promise<Spacer[]> =>
+  requestEval(
+    iframe,
+    `return (${PROBE_SPACER_OWNERS.toString()})(${JSON.stringify(spacers)});`,
+  ) as Promise<Spacer[]>;
 const reloadFrames = (): void => {
   for (const id of IFRAME_IDS) {
     const iframe = iframeById(id);
@@ -211,6 +222,13 @@ const alignLiveFrames = async (sig: string): Promise<void> => {
         isCurrent: () =>
           currentSig() === sig &&
           store.state.workspace.compareMode === "content",
+        refinePlan: async (candidate) => {
+          const [a, b] = await Promise.all([
+            probeOwners(before, candidate.a),
+            probeOwners(after, candidate.b),
+          ]);
+          return { a, b };
+        },
       },
     );
     if (aligned.aborted) return;

@@ -30,6 +30,9 @@ export interface CorrectiveAlignmentOptions {
   trustedOnly?: boolean;
   /** Stops a stale live run before it mutates a replaced iframe pair. */
   isCurrent?: () => boolean;
+  /** Reversibly probe the browser DOM and replace inferred spacer targets with
+   * measured flow owners before committing a round. */
+  refinePlan?: (plan: SpacingPlan) => Promise<SpacingPlan>;
 }
 
 export interface CorrectiveAlignmentResult {
@@ -150,6 +153,11 @@ export const runCorrectiveAlignment = async (
     } else {
       plan = correctiveFlat(a.m, b.m);
     }
+    if (!isCurrent()) {
+      aborted = true;
+      break;
+    }
+    if (options.refinePlan) plan = await options.refinePlan(plan);
     if (!plan.a.length && !plan.b.length) break;
     if (!isCurrent()) {
       aborted = true;

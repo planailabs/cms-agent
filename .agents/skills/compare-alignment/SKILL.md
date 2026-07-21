@@ -31,10 +31,11 @@ diff pipeline screenshots both raw, computes a spacing plan, injects filler
   its whole ROW gets taller — equalises a grid/flex/inline-block row height),
   `cell` (insert an empty column so an add/remove doesn't reflow the cells after
   it), `row` (pad every item in one visual row), and `scope` (shift content
-  inside the exact stable-id section). `columnOf()` finds the column box for any
-  row layout: a grid child, a flex-ROW child, or an inline-block element (NOT a
-  flex-column card's internals). All fillers lock height/min/max + box-model with
-  `!important` so no page CSS can distort a spacer.
+  inside the exact stable-id section). `owner` targets a flow owner measured by
+  `PROBE_SPACER_OWNERS`, rather than inferred from tag names. `columnOf()` finds
+  the column box for any row layout: a grid child, a flex-ROW child, or an
+  inline-block element (NOT a flex-column card's internals). All fillers lock
+  height/min/max + box-model with `!important` so page CSS cannot distort them.
 - `src/lib/diff/screenshot.ts` — `alignedShots()`: inject and re-screenshot;
   falls back to the raw shots on failure.
 - Client: `diffViewer.ts` / `browserCompare.ts` request the `-aligned` kinds in
@@ -104,6 +105,12 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   item flow aligns content inside each card/column. Generic item groups require
   corroborating descendants; sparse footer columns use a separate terminal pass
   because they have no downstream page flow.
+- Ordinary residual spacers probe the target and every ancestor with a temporary
+  7px mutation, recording every marker whose position or size changes. Accept an
+  owner only after the complete candidate graph is measured and every affected
+  marker returns to its prior geometry; deduplicate spacers that resolve to the
+  same nearest owner. This fallback handles tables and unknown nested layout
+  dependencies in both screenshot and live-iframe paths.
 - Matching ≠ change-detection: identity can score a changed element ~1, so
   `boxDiff` decides "changed" by comparing the content key, not the match score.
 - A full rewrite (structures don't correspond) overlays as one rectangle rather
@@ -160,6 +167,9 @@ grid-list (`#compounding`), 6-card dept grid (`#departments`), inline-block
 columns (`#legacy`), FAQ, and a table. The chaos generator issues random text
 changes across all of them and asserts the FULL pipeline (structural + iterative
 corrective) converges — widen the seed range to hunt new failure modes.
+The computed-style chaos additionally enumerates every property exposed by
+`getComputedStyle`, assigns all of them to deterministic random visible elements
+using observed valid values, and runs several seeds through the same pipeline.
 
 ## Known limitation
 

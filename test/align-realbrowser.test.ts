@@ -23,7 +23,10 @@ import {
   matchedYDelta,
 } from "@/lib/compare/layout";
 import { runCorrectiveAlignment } from "@/lib/compare/converge";
-import { INJECT_SPACERS } from "@/lib/compare/inject";
+import {
+  INJECT_SPACERS,
+  PROBE_SPACER_OWNERS,
+} from "@/lib/compare/inject";
 
 const base = readFileSync(
   path.join(
@@ -76,6 +79,7 @@ const residual = async (
 const residualCorrected = async (
   mutate: (arg?: unknown) => void,
   arg?: unknown,
+  options: Parameters<typeof runCorrectiveAlignment>[3] = {},
 ): Promise<number> => {
   const before = await browser.newPage({
     viewport: { width: 1280, height: 900 },
@@ -92,13 +96,27 @@ const residualCorrected = async (
     await before.evaluate(INJECT_SPACERS, plan.a as never);
     await after.evaluate(INJECT_SPACERS, plan.b as never);
     const [ab, aa] = await Promise.all([collect(before), collect(after)]);
-    const aligned = await runCorrectiveAlignment(ab, aa, async (corr) => {
-      await Promise.all([
-        before.evaluate(INJECT_SPACERS, corr.a as never),
-        after.evaluate(INJECT_SPACERS, corr.b as never),
-      ]);
-      return await Promise.all([collect(before), collect(after)]);
-    });
+    const aligned = await runCorrectiveAlignment(
+      ab,
+      aa,
+      async (corr) => {
+        await Promise.all([
+          before.evaluate(INJECT_SPACERS, corr.a as never),
+          after.evaluate(INJECT_SPACERS, corr.b as never),
+        ]);
+        return await Promise.all([collect(before), collect(after)]);
+      },
+      {
+        ...options,
+        refinePlan: async (candidate) => {
+          const [a, b] = await Promise.all([
+            before.evaluate(PROBE_SPACER_OWNERS, candidate.a),
+            after.evaluate(PROBE_SPACER_OWNERS, candidate.b),
+          ]);
+          return { a: a as never, b: b as never };
+        },
+      },
+    );
     // Screenshot/live callers discard a regressed additive round and retain the
     // structural seed, so model that transaction boundary here as well.
     return Math.abs(aligned.regressed ? aligned.start : aligned.end.max);
@@ -525,6 +543,56 @@ const applyOps = (
   }
 };
 
+/** Exercise every property exposed by getComputedStyle on random visible
+ * leaves. Values come from another real element; uniform properties use the
+ * universally valid `initial` value so the property is still covered. */
+const applyComputedStyleChaos = (seed: number): void => {
+  const elements = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      "h1,h2,h3,h4,p,li,span,td,th,a,strong",
+    ),
+  ).filter((element) => element.getClientRects().length > 0);
+  const snapshots = elements.map((element) => {
+    const style = getComputedStyle(element);
+    return {
+      element,
+      values: new Map(
+        Array.from(style, (property) => [
+          property,
+          style.getPropertyValue(property),
+        ]),
+      ),
+    };
+  });
+  const properties = [
+    ...new Set(snapshots.flatMap(({ values }) => [...values.keys()])),
+  ].sort();
+  let state = seed | 0;
+  const random = () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+
+  for (const property of properties) {
+    const target = snapshots[Math.floor(random() * snapshots.length)];
+    const original = target.values.get(property);
+    const alternatives = snapshots.filter(
+      ({ values }) => values.get(property) !== original,
+    );
+    const source = alternatives[Math.floor(random() * alternatives.length)];
+    target.element.style.setProperty(
+      property,
+      source?.values.get(property) || "initial",
+      "important",
+    );
+  }
+  document.documentElement.dataset.styleChaosProperties = String(
+    properties.length,
+  );
+};
+
 // The last-resort corrective pass patches leftover FLOW drift and must never
 // make a case worse (grid/flex cells are left to the structural pass).
 describe("real-browser alignment — last-resort corrective", () => {
@@ -570,6 +638,80 @@ describe("real-browser alignment — chaos", () => {
       expect(r).toBeLessThanOrEqual(8);
     }, 30_000);
   }
+});
+
+describe("real-browser alignment — computed-style chaos", () => {
+  for (const seed of [101, 202, 303]) {
+    it(`seed ${seed} covers every computed property`, async () => {
+      const page = await browser.newPage({
+        viewport: { width: 1280, height: 900 },
+      });
+      try {
+        await page.setContent(base);
+        const expected = await page.evaluate(
+          () => Array.from(getComputedStyle(document.body)).length,
+        );
+        await page.evaluate(applyComputedStyleChaos, seed);
+        const covered = await page.evaluate(
+          () => Number(document.documentElement.dataset.styleChaosProperties),
+        );
+        expect(covered).toBe(expected);
+        expect(covered).toBeGreaterThan(300);
+      } finally {
+        await page.close();
+      }
+
+      const drift = await residualCorrected(
+        applyComputedStyleChaos as never,
+        seed,
+        { threshold: 7, maxRounds: 8 },
+      );
+      if (drift > 8)
+        console.warn(`[style-chaos:${seed}] residual ${drift}px`);
+      expect(drift).toBeLessThanOrEqual(8);
+    }, 60_000);
+  }
+});
+
+describe("measured spacer owners", () => {
+  it("probes ancestors and collapses one table row to one owner", async () => {
+    const page = await browser.newPage({
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      await page.setContent(base);
+      const markers = await collect(page);
+      const cells = markers.m.filter(
+        (marker) =>
+          marker.k.startsWith("TD:") &&
+          ["#r1c0", "#r1c1", "#r1c2"].some((cell) =>
+            marker.fx?.endsWith(cell),
+          ),
+      );
+      const target = cells[0];
+      const top = (id: number | undefined) =>
+        page.evaluate(
+          (markerId) =>
+            document
+              .querySelector(`[data-cmsm="${markerId}"]`)!
+              .getBoundingClientRect().top,
+          id,
+        );
+      const before = await top(target.i);
+      const refined = await page.evaluate(
+        PROBE_SPACER_OWNERS,
+        cells.map((cell) => ({ i: cell.i!, px: 24, mode: "el" })),
+      );
+      expect(refined).toHaveLength(1);
+      expect(refined[0].mode).toBe("owner");
+      await page.evaluate(INJECT_SPACERS, refined);
+      expect(Math.abs((await top(target.i)) - before - 24)).toBeLessThanOrEqual(
+        1,
+      );
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
 });
 
 // Stable data-cmsm: an element's handle survives re-collection after the DOM

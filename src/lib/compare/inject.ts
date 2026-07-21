@@ -6,7 +6,13 @@
  * and mustn't gain an extra grid cell). mode 'grid' pushes the whole flex/grid.
  */
 export const INJECT_SPACERS = (
-  spacers: Array<{ i: number; px: number; mode: string; sid?: string }>,
+  spacers: Array<{
+    i: number;
+    px: number;
+    mode: string;
+    sid?: string;
+    owner?: string;
+  }>,
 ) => {
   // An exact, inert gap of `px`. Every sizing + box-model property is locked with
   // !important so no page rule (resets, inherited line-height, flex stretch,
@@ -130,6 +136,11 @@ export const INJECT_SPACERS = (
       } else {
         scope.insertBefore(mkFiller(s.px), scope.firstChild);
       }
+    } else if (s.mode === "owner") {
+      const owner = s.owner
+        ? document.querySelector('[data-cmso="' + s.owner + '"]')
+        : null;
+      if (owner) pushBefore(owner, s.px);
     } else if (s.mode === "grid") {
       let g: Element = el;
       for (
@@ -148,4 +159,120 @@ export const INJECT_SPACERS = (
       pushBefore(el, s.px);
     }
   }
+};
+
+/** Find the nearest real flow owner for every ordinary corrective spacer.
+ * Each candidate is probed reversibly; no inferred grid/table model is used. */
+export const PROBE_SPACER_OWNERS = (
+  spacers: Array<{
+    i: number;
+    px: number;
+    mode: string;
+    sid?: string;
+    owner?: string;
+  }>,
+) => {
+  const PROBE = 7;
+  let nextOwner = document.querySelectorAll("[data-cmso]").length;
+  const markers = Array.from(
+    document.querySelectorAll<HTMLElement>("[data-cmsm]"),
+  );
+  const probe = (target: Element, candidate: Element): boolean => {
+    const before = new Map(
+      markers.map((marker) => {
+        const rect = marker.getBoundingClientRect();
+        return [marker, { top: rect.top, height: rect.height }];
+      }),
+    );
+    const targetBefore = before.get(target as HTMLElement)?.top;
+    if (targetBefore === undefined) return false;
+    const parent = candidate.parentElement;
+    if (!parent) return false;
+    const display = getComputedStyle(parent).display;
+    let filler: HTMLElement | undefined;
+    const oldMargin = (candidate as HTMLElement).style.getPropertyValue(
+      "margin-top",
+    );
+    const oldPriority = (candidate as HTMLElement).style.getPropertyPriority(
+      "margin-top",
+    );
+    if (display.indexOf("grid") >= 0 || display.indexOf("flex") >= 0) {
+      const current = parseFloat(getComputedStyle(candidate).marginTop) || 0;
+      (candidate as HTMLElement).style.setProperty(
+        "margin-top",
+        current + PROBE + "px",
+        "important",
+      );
+    } else {
+      filler = document.createElement("div");
+      filler.setAttribute("aria-hidden", "true");
+      filler.style.cssText =
+        "display:block!important;height:" +
+        PROBE +
+        "px!important;min-height:" +
+        PROBE +
+        "px!important;max-height:" +
+        PROBE +
+        "px!important;margin:0!important;padding:0!important;border:0!important;";
+      parent.insertBefore(filler, candidate);
+    }
+    const moved = target.getBoundingClientRect().top - targetBefore;
+    const affected = markers.filter((marker) => {
+      const old = before.get(marker)!;
+      const rect = marker.getBoundingClientRect();
+      return (
+        Math.abs(rect.top - old.top) > 0.5 ||
+        Math.abs(rect.height - old.height) > 0.5
+      );
+    });
+    filler?.remove();
+    if (!filler) {
+      if (oldMargin)
+        (candidate as HTMLElement).style.setProperty(
+          "margin-top",
+          oldMargin,
+          oldPriority,
+        );
+      else (candidate as HTMLElement).style.removeProperty("margin-top");
+    }
+    const restored = affected.every((marker) => {
+      const old = before.get(marker)!;
+      const rect = marker.getBoundingClientRect();
+      return (
+        Math.abs(rect.top - old.top) <= 0.5 &&
+        Math.abs(rect.height - old.height) <= 0.5
+      );
+    });
+    return Math.abs(moved - PROBE) <= 1 && restored;
+  };
+
+  const refined = spacers.map((spacer) => {
+    if (spacer.mode !== "el") return spacer;
+    const target = document.querySelector('[data-cmsm="' + spacer.i + '"]');
+    if (!target) return spacer;
+    let measuredOwner: Element | null = null;
+    for (
+      let candidate: Element | null = target;
+      candidate && candidate !== document.documentElement;
+      candidate = candidate.parentElement
+    ) {
+      if (probe(target, candidate) && !measuredOwner) measuredOwner = candidate;
+    }
+    if (measuredOwner) {
+      let owner = measuredOwner.getAttribute("data-cmso");
+      if (!owner) {
+        owner = "o" + nextOwner++;
+        measuredOwner.setAttribute("data-cmso", owner);
+      }
+      return { ...spacer, mode: "owner", owner };
+    }
+    return spacer;
+  });
+  const owners = new Set<string>();
+  return refined.filter((spacer) => {
+    if (spacer.mode !== "owner" || !spacer.owner) return true;
+    if (owners.has(spacer.owner)) return false;
+    owners.add(spacer.owner);
+    return true;
+  });
 };

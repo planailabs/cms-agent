@@ -458,8 +458,17 @@ export const boxDiff = (
 export interface Spacer {
   i: number;
   px: number;
-  mode: "el" | "grid" | "tail" | "cell" | "item" | "row" | "scope";
+  mode:
+    | "el"
+    | "grid"
+    | "tail"
+    | "cell"
+    | "item"
+    | "row"
+    | "scope"
+    | "owner";
   sid?: string;
+  owner?: string;
 }
 export interface SpacingPlan {
   a: Spacer[];

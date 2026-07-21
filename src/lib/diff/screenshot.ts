@@ -27,7 +27,10 @@ import {
   ALIGN_CORRECTIVE_THRESHOLD,
   runCorrectiveAlignment,
 } from "@/lib/compare/converge";
-import { INJECT_SPACERS } from "@/lib/compare/inject";
+import {
+  INJECT_SPACERS,
+  PROBE_SPACER_OWNERS,
+} from "@/lib/compare/inject";
 import { branchSha, defaultBranch } from "@/lib/git/engine";
 import { ensureInstance } from "@/lib/preview/manager";
 
@@ -236,6 +239,13 @@ async function alignedShots(
       {
         enabled: conf.score >= ALIGN_CONFIDENCE_MIN || conf.trustedRate > 0,
         trustedOnly: conf.score < ALIGN_CONFIDENCE_MIN,
+        refinePlan: async (candidate) => {
+          const [a, b] = await Promise.all([
+            openedA.page.evaluate(PROBE_SPACER_OWNERS, candidate.a),
+            openedB.page.evaluate(PROBE_SPACER_OWNERS, candidate.b),
+          ]);
+          return { a: a as Spacer[], b: b as Spacer[] };
+        },
       },
     );
     if (conf.score < ALIGN_CONFIDENCE_MIN || conf.truncated) {
