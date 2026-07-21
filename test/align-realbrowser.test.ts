@@ -91,10 +91,15 @@ const residualCorrected = async (
     await before.evaluate(INJECT_SPACERS, plan.a as never);
     await after.evaluate(INJECT_SPACERS, plan.b as never);
     let [ab, aa] = await Promise.all([collect(before), collect(after)]);
-    const corr = correctiveSpacers(ab.m, aa.m);
-    await before.evaluate(INJECT_SPACERS, corr.a as never);
-    await after.evaluate(INJECT_SPACERS, corr.b as never);
-    [ab, aa] = await Promise.all([collect(before), collect(after)]);
+    // Iterate the corrective: adjust both sides until they fit (or give up).
+    for (let round = 0; round < 4; round++) {
+      if (Math.abs(matchedYDelta(ab.m, aa.m).max) <= 8) break;
+      const corr = correctiveSpacers(ab.m, aa.m);
+      if (!corr.a.length && !corr.b.length) break;
+      await before.evaluate(INJECT_SPACERS, corr.a as never);
+      await after.evaluate(INJECT_SPACERS, corr.b as never);
+      [ab, aa] = await Promise.all([collect(before), collect(after)]);
+    }
     return Math.abs(matchedYDelta(ab.m, aa.m).max);
   } finally {
     await Promise.all([before.close(), after.close()]);
@@ -246,6 +251,80 @@ const cases: Array<{ name: string; mutate: () => void; max: number }> = [
     },
   },
   {
+    name: "grow a 4-col card body (DIV/4 row)",
+    max: 6,
+    mutate: () => {
+      (
+        document.querySelectorAll(
+          "#environments .cell .swiss-body",
+        )[2] as HTMLElement
+      ).textContent =
+        "Compact units placed close to where the work and the data already live, sized to slot into an existing rack and quiet enough to run beside a desk without any special handling at all.";
+    },
+  },
+  {
+    name: "wrap a 4-col card heading (DIV/4)",
+    max: 6,
+    mutate: () => {
+      (
+        document.querySelectorAll("#environments .cell h4")[1] as HTMLElement
+      ).textContent = "Colocation and managed facilities";
+    },
+  },
+  {
+    name: "reword the prose side of a 2-col split (DIV/2)",
+    max: 6,
+    mutate: () => {
+      (
+        document.querySelector(
+          "#architecture .two > div .swiss-body-lg",
+        ) as HTMLElement
+      ).textContent =
+        "Not a per-seat SaaS but a physical AI node you own outright, provisioned for your organisation and yours to keep, so the prose column grows taller than the checklist beside it.";
+    },
+  },
+  {
+    name: "lengthen a checklist item (flex LI + P)",
+    max: 6,
+    mutate: () => {
+      (
+        document.querySelectorAll(
+          "#architecture .checklist li .swiss-body",
+        )[1] as HTMLElement
+      ).textContent =
+        "Autonomous agent orchestration with sandboxed execution, permissions, and clear human-in-the-loop triggers so nothing runs unattended without an explicit, auditable approval step.";
+    },
+  },
+  {
+    name: "reword a grid-list item (UL as 2-col grid)",
+    max: 6,
+    mutate: () => {
+      (
+        document.querySelectorAll(
+          "#compounding .gridlist li .swiss-body",
+        )[0] as HTMLElement
+      ).textContent =
+        "Every approved source makes the next answer sharper, and the improvement compounds quietly in the background across every department that touches the node.";
+    },
+  },
+  {
+    name: "change a stat number (DIV/4 of P)",
+    max: 4,
+    mutate: () => {
+      (
+        document.querySelectorAll("#compounding .stat")[1] as HTMLElement
+      ).textContent = "5×";
+    },
+  },
+  {
+    name: "lengthen an FAQ answer (stacked Q/A)",
+    max: 4,
+    mutate: () => {
+      (document.querySelectorAll("#faq p.a")[0] as HTMLElement).textContent =
+        "No. The node is telemetry-minimal by design and stays off the public internet by default; diagnostics, if ever enabled, are opt-in and strictly local to the machine you control.";
+    },
+  },
+  {
     name: "multiple simultaneous edits",
     max: 6,
     mutate: () => {
@@ -320,6 +399,16 @@ const OP_KINDS = [
   "growCol",
   "addTableRow",
   "changeCell",
+  // random text changes across every imported plan.ai pattern
+  "rewordForce", // 3-col cards (inflection)
+  "rewordEnv", // 4-col cards (environments)
+  "wrapEnvHead", // 4-col card heading
+  "rewordSplit", // 2-col split prose (architecture)
+  "rewordCheck", // checklist flex LI
+  "rewordGrid", // grid-list item (compounding)
+  "changeStat", // stat number
+  "rewordFaq", // FAQ answer
+  "rewordFeature", // single-row 3-col grid (features)
 ];
 
 /** Build a random op list for a seed. */
@@ -377,6 +466,35 @@ const applyOps = (
     else if (op.kind === "changeCell") {
       const e = at("td", i);
       if (e) e.textContent = t.slice(0, 6);
+    } else if (op.kind === "rewordForce") {
+      const e = at("#inflection .force .swiss-body", i);
+      if (e) e.textContent = t + " " + t;
+    } else if (op.kind === "rewordEnv") {
+      const e = at("#environments .cell .swiss-body", i % 4);
+      if (e) e.textContent = t + " " + t;
+    } else if (op.kind === "wrapEnvHead") {
+      const e = at("#environments .cell h4", i % 4);
+      if (e) e.textContent = t.slice(0, 30);
+    } else if (op.kind === "rewordSplit") {
+      const e = document.querySelector(
+        "#architecture .two > div .swiss-body-lg",
+      ) as HTMLElement | null;
+      if (e) e.textContent = t + " " + t;
+    } else if (op.kind === "rewordCheck") {
+      const e = at("#architecture .checklist li .swiss-body", i % 4);
+      if (e) e.textContent = t + " " + t;
+    } else if (op.kind === "rewordGrid") {
+      const e = at("#compounding .gridlist li .swiss-body", i % 4);
+      if (e) e.textContent = t + " " + t;
+    } else if (op.kind === "changeStat") {
+      const e = at("#compounding .stat", i % 4);
+      if (e) e.textContent = String(2 + i) + "×";
+    } else if (op.kind === "rewordFaq") {
+      const e = at("#faq p.a", i % 3);
+      if (e) e.textContent = t + " " + t;
+    } else if (op.kind === "rewordFeature") {
+      const e = at("#features .card .swiss-body", i % 3);
+      if (e) e.textContent = t + " " + t;
     }
   }
 };
@@ -411,16 +529,19 @@ describe("real-browser alignment — last-resort corrective", () => {
   }, 30_000);
 });
 
+// Chaos runs the FULL production pipeline (structural plan + iterative
+// corrective) and asserts it converges — arbitrary combinations of edits across
+// every imported plan.ai pattern must end up aligned.
 describe("real-browser alignment — chaos", () => {
   for (let seed = 1; seed <= 16; seed++) {
     it(`seed ${seed} → matched content aligns`, async () => {
       const ops = buildOps(seed);
-      const r = await residual(applyOps as never, ops);
-      if (r.max > 8)
+      const r = await residualCorrected(applyOps as never, ops);
+      if (r > 8)
         console.warn(
-          `[chaos:${seed}] residual ${r.max}px ops=${JSON.stringify(ops)} worst=${JSON.stringify(r.worst)}`,
+          `[chaos:${seed}] residual ${r}px ops=${JSON.stringify(ops)}`,
         );
-      expect(r.max).toBeLessThanOrEqual(8);
+      expect(r).toBeLessThanOrEqual(8);
     }, 30_000);
   }
 });

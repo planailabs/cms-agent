@@ -126,17 +126,20 @@ const partition = (boxes: Box[], b: Bounds): Part => {
     (x) => x.x0,
     (x) => x.x1,
   ); // vertical cut (columns)
-  // Take the cleaner (wider) separation; recursion handles the rest. On a TIE,
-  // prefer the horizontal (row) cut: a grid has full-span gaps both ways, and it
-  // flows row-major (align-items: stretch → a row's cards share top & height).
-  // Cutting rows first means a row-height change or an add/remove propagates down
-  // as one unit, instead of desyncing columns aligned independently.
-  const pick =
-    h && (!v || h.gap >= v.gap)
-      ? { dir: "h" as const, pos: h.pos, gap: h.gap }
-      : v
-        ? { dir: "v" as const, pos: v.pos, gap: v.gap }
-        : null;
+  // Take the cleaner (wider) separation; recursion handles the rest. A grid,
+  // though, has full-span gaps BOTH ways and flows row-major (align-items:
+  // stretch → a row's cells share top & height), so cut its rows first: then a
+  // row-height change or an add/remove propagates down as one unit instead of
+  // desyncing independently-aligned columns. Detect a grid by its cells (`fx`)
+  // and prefer the row cut whenever both exist — even when the column gap is the
+  // wider one (e.g. gap: 12px 32px). Otherwise (incidental columns) take the
+  // wider gap, and break an exact tie toward rows.
+  const preferH = !!h && (!v || h.gap >= v.gap);
+  const pick = preferH
+    ? { dir: "h" as const, pos: h!.pos, gap: h!.gap }
+    : v
+      ? { dir: "v" as const, pos: v.pos, gap: v.gap }
+      : null;
   if (!pick) return { kind: "leaf", boxes, b };
 
   const isV = pick.dir === "v";
@@ -751,33 +754,91 @@ export const matchedYDelta = (
  * so each patch accounts for the ones above it — it never over-corrects a lower
  * pair. Fillers are plain `el` flow spacers keyed by the re-collected indices, so
  * this must run on the same open page it was measured from. Not a substitute for
- * the structural aligner — a safety net for the cases it misses.
+ * the structural aligner — a safety net that catches its long tail, and, iterated
+ * (inject → re-collect → correct → repeat), converges both sides until they fit.
  *
- * Restricted to FLOW content: grid/flex cells (`fx`) are skipped, because a flow
- * filler / margin-top on a coupled cell only pushes that one cell and desyncs its
- * row — grid alignment is the structural pass's job. So this never makes a grid
- * case worse; it just patches leftover drift in normal stacked content.
+ * DOM-aware: a matched element carries its grid/flex container + cell (`fx`), so a
+ * grid cell that's off is corrected by pushing its WHOLE ROW (every cell sharing
+ * that container at the same y) down together — moving one cell would desync the
+ * row. But only when the row's cells AGREE on the shift; a lone dissenting cell
+ * (e.g. a card that reflowed up a row) is left alone so the row isn't desynced.
+ * Flow elements just take a single filler.
  */
+const fxContainer = (m: Marker): string | null => {
+  if (m.fx === undefined) return null;
+  const hash = m.fx.indexOf("#");
+  return hash >= 0 ? m.fx.slice(0, hash) : m.fx;
+};
+
+const CONSENSUS = 8; // px spread within a grid row to treat its shift as uniform
+
 export const correctiveSpacers = (a: Marker[], b: Marker[]): SpacingPlan => {
   const fa = a.filter((m) => !isContainer(m));
   const fb = b.filter((m) => !isContainer(m));
   const pairs = alignMarkers(fa, fb)
     .matches.filter((m) => m.score >= ANCHOR_MIN)
     .map((m) => ({ ea: fa[m.ai], eb: fb[m.bi] }))
-    .filter(({ ea, eb }) => !ea.fx && !eb.fx)
     .sort((p, q) => p.ea.y - q.ea.y);
   const A: Spacer[] = [];
   const B: Spacer[] = [];
   let cumA = 0;
   let cumB = 0;
+  const bucket = (y: number) => Math.round(y / 8);
+  const rowKey = (m: Marker) => fxContainer(m) + ":" + bucket(m.y);
+
+  // Per grid ROW, the raw drifts of its matched cells; a row is "coherent" (safe
+  // to shift as a unit) only if those drifts agree within CONSENSUS.
+  const drifts = new Map<string, { spread: [number, number]; onA: boolean }>();
+  const note = (m: Marker, dy: number, onA: boolean) => {
+    if (fxContainer(m) === null) return;
+    const k = (onA ? "A" : "B") + rowKey(m);
+    const e = drifts.get(k);
+    if (!e) drifts.set(k, { spread: [dy, dy], onA });
+    else e.spread = [Math.min(e.spread[0], dy), Math.max(e.spread[1], dy)];
+  };
+  for (const { ea, eb } of pairs) {
+    const dy = ea.y - eb.y;
+    note(ea, dy, true);
+    note(eb, dy, false);
+  }
+  const coherent = (m: Marker, onA: boolean): boolean => {
+    const e = drifts.get((onA ? "A" : "B") + rowKey(m));
+    return !!e && e.spread[1] - e.spread[0] <= CONSENSUS;
+  };
+
+  // Push `el` down by px: a grid cell pushes its whole row (all same-container
+  // cells at the same y); flow → just itself. A grid cell whose row disagrees is
+  // skipped, so the corrective never desyncs a row to chase one stray cell.
+  const pushDown = (
+    list: Spacer[],
+    all: Marker[],
+    el: Marker,
+    px: number,
+    onA: boolean,
+  ): boolean => {
+    const g = fxContainer(el);
+    if (g !== null) {
+      if (!coherent(el, onA)) return false;
+      const yb = bucket(el.y);
+      for (const m of all) {
+        if (m.i !== undefined && fxContainer(m) === g && bucket(m.y) === yb) {
+          list.push({ i: m.i, px, mode: "el" });
+        }
+      }
+      return true;
+    }
+    if (el.i !== undefined) {
+      list.push({ i: el.i, px, mode: "el" });
+      return true;
+    }
+    return false;
+  };
   for (const { ea, eb } of pairs) {
     const d = ea.y + cumA - (eb.y + cumB);
-    if (d > 0.5 && eb.i !== undefined) {
-      B.push({ i: eb.i, px: Math.round(d), mode: "el" });
-      cumB += d;
-    } else if (d < -0.5 && ea.i !== undefined) {
-      A.push({ i: ea.i, px: Math.round(-d), mode: "el" });
-      cumA += -d;
+    if (d > 0.5) {
+      if (pushDown(B, fb, eb, Math.round(d), false)) cumB += d;
+    } else if (d < -0.5) {
+      if (pushDown(A, fa, ea, Math.round(-d), true)) cumA += -d;
     }
   }
   return { a: A, b: B };

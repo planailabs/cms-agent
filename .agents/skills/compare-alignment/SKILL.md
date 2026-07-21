@@ -26,7 +26,7 @@ diff pipeline screenshots both raw, computes a spacing plan, injects filler
   **`verifyAlignment()`** = the quality harness.
 - `src/lib/compare/inject.ts` — `INJECT_SPACERS`: applies the plan in the browser.
   Filler modes: `el` (flow div / margin-top on a flex-grid item), `grid` (push a
-  whole flex/grid down), `tail` (grow the *column box* that holds an element so
+  whole flex/grid down), `tail` (grow the _column box_ that holds an element so
   its whole ROW gets taller — equalises a grid/flex/inline-block row height),
   `cell` (insert an empty column so an add/remove doesn't reflow the cells after
   it). `columnOf()` finds the column box for any row layout: a grid child, a
@@ -41,6 +41,7 @@ diff pipeline screenshots both raw, computes a spacing plan, injects filler
 ## The self-improving loop
 
 `verifyAlignment(a, ah, b, bh)` applies the plan and reports:
+
 - `maxPairDelta` — worst matched-pair `y` misalignment (**the** signal; should be ~0),
 - `heightGap` — plan under-fill (informational; the very bottom is covered by shot padding),
 - `misaligned[]` — the offending `{ia, ib, dy}` pairs.
@@ -94,31 +95,53 @@ them into a fixture under `test/fixtures/` and add a scaffold.
 - An added/removed card reflows the cells after it; a `cell` filler on the side
   missing the card keeps the survivors in place.
 - **Grow the row by its TALLEST column, not the first.** Equalise a grid row from
-  the *aligned* column heights (`matchAlign(ca,cb).h`, which accounts for headings
+  the _aligned_ column heights (`matchAlign(ca,cb).h`, which accounts for headings
   that wrap to different line counts) + each column's trailing deficit — growing
   only the first card fails when it isn't the tallest, so the row never grows and
   everything below drifts (the "silicon shift" cascade, ~50px per card section).
 
-## Last-resort corrective pass
+## Iterative corrective pass (the convergence loop)
 
-`correctiveSpacers(a, b)` (layout.ts) + `alignedShots` (screenshot.ts) run a
-SECOND injection when the structural reflow still leaves > 8px residual: walk
-matched anchors top-to-bottom on the re-collected markers and push the higher
-side down by the leftover gap (cumulative, `el` fillers). It is restricted to
-FLOW content — grid/flex cells (`fx`) are skipped, since a margin-top on a coupled
-cell only desyncs its row. So it never worsens a grid case; it patches leftover
-drift in normal stacked content. It is a net, not a substitute — fix the
-structural aligner first; the corrective is what catches the long tail. `verifyAlignment`'s
-linear sim does NOT model `tail`/`grid`/`cell`/corrective fillers — trust the
-real-browser `matchedYDelta`, not the sim, for grid work.
+`correctiveSpacers(a, b)` (layout.ts) + the loop in `alignedShots` (screenshot.ts):
+after the structural reflow, while residual > 8px, re-measure the reflowed
+markers and push the higher side down by the leftover gap, re-collect, and repeat
+(≤4 rounds) so BOTH sides converge until they fit. It measures real geometry each
+round, so it self-corrects rather than needing a perfect one-shot plan.
+
+- **DOM-aware, not geometric.** A matched element carries its grid/flex container
+  - cell in `fx`; a grid cell that's off is corrected by pushing its WHOLE ROW
+    (all same-container cells at the same y) so the row stays internally aligned —
+    moving one cell would desync it. Flow elements take a single `el` filler.
+- **Consensus gate.** A grid row is shifted as a unit only when its cells AGREE on
+  the drift (spread ≤ 8px). A lone dissenting cell — e.g. a card that reflowed up
+  a row on a grid card removal — is left alone, so the corrective never desyncs a
+  row chasing one stray cell. This is why it converges the asymmetric-gap grid
+  list (`gap: 12px 32px`, cut column-first by the geometric partition) yet never
+  worsens the cross-row removal.
+
+It is a net, not a substitute — fix the structural aligner first; the loop catches
+the long tail (and the cases the geometric guillotine mis-partitions, like a grid
+whose column gap is wider than its row gap). `verifyAlignment`'s linear sim does
+NOT model `tail`/`grid`/`cell`/corrective fillers — trust the real-browser
+`matchedYDelta`, not the sim, for grid work.
+
+## Fixture coverage (imported plan.ai patterns)
+
+`test/fixtures/align/base.html` reproduces every distinct plan.ai layout:
+hero, section-header (caption+H3+lead), 3-col cards (`#inflection`), 4-col cards
+(`#environments`), 2-col split + checklist (`#architecture`), stat row + 2-col
+grid-list (`#compounding`), 6-card dept grid (`#departments`), inline-block
+columns (`#legacy`), FAQ, and a table. The chaos generator issues random text
+changes across all of them and asserts the FULL pipeline (structural + iterative
+corrective) converges — widen the seed range to hunt new failure modes.
 
 ## Known limitation
 
-Removing/adding a card in an *early* row of a multi-row grid is a true 2-D
+Removing/adding a card in an _early_ row of a multi-row grid is a true 2-D
 row-major reflow: a later card pulls up into the previous row (e.g. remove a
 row-1 card → the first row-2 card jumps to row 1). A height-based aligner can't
-undo a cross-row move, so that one card stays a row off. Editing card *text* (the
-common case) and add/remove in the *last* row are handled. The chaos test
+undo a cross-row move, so that one card stays a row off. Editing card _text_ (the
+common case) and add/remove in the _last_ row are handled. The chaos test
 deliberately restricts grid removal to row 2 for this reason. Fixing it properly
 needs grid-flatten (align all cards as one row-major sequence, then re-group into
 rows) — do that if cross-row grid edits become common.
@@ -128,4 +151,4 @@ rows) — do that if cross-row grid edits become common.
 Treat it as living. Whenever you fix a new alignment failure mode: (a) add the
 reproduction scaffold, (b) record the new invariant under "Known-good", and
 (c) update the pipeline map if the code moved. The scaffolds + `verifyAlignment`
-are the objective measure; this doc is the memory of *why*.
+are the objective measure; this doc is the memory of _why_.

@@ -181,6 +181,7 @@ async function openAligned(
 }
 
 const CORRECTIVE_THRESHOLD = 8; // px residual that trips the last-resort patch
+const CORRECTIVE_ROUNDS = 4; // max iterations to converge both sides
 
 /** Render both aligned shots (best-effort) from a computed spacing plan. If the
  *  structural reflow leaves residual drift, a last-resort corrective pass patches
@@ -205,27 +206,35 @@ async function alignedShots(
     ]);
     let ra = A.markers;
     let rb = B.markers;
-    // Last resort: the structural pass left residual → patch the leftover drift
-    // with corrective fillers on the higher side, then re-collect.
-    const before = matchedYDelta(ra.m, rb.m);
-    if (Math.abs(before.max) > CORRECTIVE_THRESHOLD) {
+    // Last resort: whatever drift the structural pass left, iterate the corrective
+    // (inject on the higher side → re-collect) so both sides converge until they
+    // fit or there's nothing left to move.
+    const inject = (p: AlignedPage, s: Spacer[]) =>
+      s.length
+        ? p.page.evaluate(
+            INJECT_SPACERS,
+            s as Array<{ i: number; px: number; mode: string }>,
+          )
+        : Promise.resolve();
+    const start = matchedYDelta(ra.m, rb.m).max;
+    for (let round = 0; round < CORRECTIVE_ROUNDS; round++) {
+      if (Math.abs(matchedYDelta(ra.m, rb.m).max) <= CORRECTIVE_THRESHOLD)
+        break;
       const corr = correctiveSpacers(ra.m, rb.m);
-      const inject = (p: AlignedPage, s: Spacer[]) =>
-        s.length
-          ? p.page.evaluate(
-              INJECT_SPACERS,
-              s as Array<{ i: number; px: number; mode: string }>,
-            )
-          : Promise.resolve();
+      if (!corr.a.length && !corr.b.length) break;
       await Promise.all([inject(A, corr.a), inject(B, corr.b)]);
       [ra, rb] = (await Promise.all([
         A.page.evaluate(COLLECT_MARKERS_JS),
         B.page.evaluate(COLLECT_MARKERS_JS),
       ])) as [MarkerDoc, MarkerDoc];
-      const after = matchedYDelta(ra.m, rb.m);
+    }
+    const end = matchedYDelta(ra.m, rb.m);
+    if (Math.abs(start) > CORRECTIVE_THRESHOLD) {
       console.warn(
-        `[align] ${route}: corrective pass ${before.max}px → ${after.max}px`,
-        JSON.stringify(after.worst),
+        `[align] ${route}: corrective ${start}px → ${end.max}px`,
+        Math.abs(end.max) > CORRECTIVE_THRESHOLD
+          ? JSON.stringify(end.worst)
+          : "",
       );
     }
     await Promise.all([
