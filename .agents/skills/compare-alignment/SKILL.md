@@ -161,7 +161,7 @@ linear simulation, for grid work: differently rewritten list containers can
 have different outer heights while every visible child is aligned. The plan.ai
 full-rewrite production regression excludes six hidden closed-details paragraphs
 and converges all 130 painted matched leaves to integer-pixel parity through the
-probed flat path. The 12-round ceiling is a guard, not a fixed cost; convergence
+probed flat path. The 250-round ceiling is a guard, not a fixed cost; convergence
 stops once the worst rounded marker delta is ≤1px.
 
 ## Fixture coverage (imported plan.ai patterns)

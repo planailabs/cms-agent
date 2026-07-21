@@ -18,7 +18,7 @@ import {
 } from "./layout";
 
 export const ALIGN_CORRECTIVE_THRESHOLD = 1;
-export const ALIGN_CORRECTIVE_ROUNDS = 12;
+export const ALIGN_CORRECTIVE_ROUNDS = 250;
 export const ALIGN_CONFIDENCE_MIN = 0.35;
 
 export interface CorrectiveAlignmentOptions {
@@ -59,9 +59,7 @@ export const runCorrectiveAlignment = async (
   options: CorrectiveAlignmentOptions = {},
 ): Promise<CorrectiveAlignmentResult> => {
   const threshold = options.threshold ?? ALIGN_CORRECTIVE_THRESHOLD;
-  const maxRounds =
-    options.maxRounds ??
-    (options.trustedOnly ? ALIGN_CORRECTIVE_ROUNDS * 4 : ALIGN_CORRECTIVE_ROUNDS);
+  const maxRounds = options.maxRounds ?? ALIGN_CORRECTIVE_ROUNDS;
   const isCurrent = options.isCurrent ?? (() => true);
   let a = initialA;
   let b = initialB;
