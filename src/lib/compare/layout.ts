@@ -478,7 +478,7 @@ export const boxDiff = (
 export interface Spacer {
   i: number;
   px: number;
-  mode: "el" | "grid" | "tail" | "cell" | "push";
+  mode: "el" | "grid" | "tail" | "cell";
 }
 export interface SpacingPlan {
   a: Spacer[];

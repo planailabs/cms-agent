@@ -92,12 +92,6 @@ export const INJECT_SPACERS = (
     if (!el) continue;
     if (s.mode === "tail") {
       growItem(el, s.px);
-    } else if (s.mode === "push") {
-      // Push the whole grid ITEM (card) that holds el down — margin-top on the
-      // column box so a grid row moves as a unit (used by the recursive aligner).
-      const item = columnOf(el).item as HTMLElement;
-      const cur = parseFloat(getComputedStyle(item).marginTop) || 0;
-      item.style.setProperty("margin-top", cur + s.px + "px", "important");
     } else if (s.mode === "cell") {
       insertCell(el, s.px);
     } else if (s.mode === "grid") {

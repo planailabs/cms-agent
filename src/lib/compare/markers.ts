@@ -50,14 +50,6 @@ export interface Marker {
    *  flex/grid ancestor. Leaves in the same cell (card) share it; different
    *  columns of one grid differ — so a grid's columns never cross-match. */
   fx?: string;
-  /** Parent index: the `i` of the nearest ANCESTOR that is also a kept marker,
-   *  or -1 at the root. Lets the aligner rebuild the pruned DOM tree from the
-   *  flat list and walk both pages in lockstep (see compare/treeAlign). */
-  pi?: number;
-  /** How THIS element arranges its children, from the real computed style:
-   *  'g' grid · 'r' row (flex-row / inline-block run) · 's' stack (block /
-   *  flex-column). Ground truth for the recursive aligner's layout mode. */
-  d?: "g" | "r" | "s";
 }
 
 export interface MarkerDoc {
@@ -154,31 +146,6 @@ export const COLLECT_MARKERS_JS = `(function () {
     var id = (idA !== null && idA !== '') ? parseInt(idA, 10) : NaN;
     if (isNaN(id)) { id = nextId++; }
     var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig, i: id };
-    // Parent index: nearest ancestor already tagged (document order = pre-order,
-    // so ancestors are emitted first). Lets the aligner rebuild the tree.
-    var pi = -1;
-    for (var an = el.parentElement; an; an = an.parentElement) {
-      var t = an.getAttribute && an.getAttribute('data-cmsm');
-      if (t !== null && t !== undefined && t !== '') { pi = parseInt(t, 10); break; }
-    }
-    mk.pi = pi;
-    // Child arrangement of THIS element, from computed style: grid / row / stack.
-    var d = 's';
-    try {
-      var cs = getComputedStyle(el);
-      var dp2 = cs.display;
-      if (dp2 === 'grid' || dp2 === 'inline-grid') d = 'g';
-      else if ((dp2 === 'flex' || dp2 === 'inline-flex') && cs.flexDirection.indexOf('row') === 0) d = 'r';
-      else {
-        // A block whose element children are inline-block/inline flow in a row.
-        var fc = el.children && el.children.length ? el.children[0] : null;
-        if (fc) {
-          var fd = getComputedStyle(fc).display;
-          if (fd === 'inline-block' || fd === 'inline-flex' || fd === 'inline') d = 'r';
-        }
-      }
-    } catch (e) {}
-    mk.d = d;
     // Tag the element so the aligner can re-select it to inject spacers before
     // re-screenshotting (invisible; set before the shot). Stable across rounds.
     try { el.setAttribute('data-cmsm', String(id)); } catch (e) {}

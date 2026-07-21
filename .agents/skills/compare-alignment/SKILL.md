@@ -145,20 +145,23 @@ deliberately restricts grid removal to row 2 for this reason. Fixing it properly
 needs grid-flatten (align all cards as one row-major sequence, then re-group into
 rows) — do that if cross-row grid edits become common.
 
-## Planned refactor direction (council verdict, not yet executed)
+## Refactor direction (council verdict — in progress)
 
-The insight that should drive the next refactor: **matching is the product; align
-and `boxDiff` are two thin consumers of it.** Everything structural (the guillotine
-`spacingPlan`, the WIP `treeAlign`) is scaffolding around the one real primitive —
-a robust before↔after element matching (`alignMarkers`, now tree-aware via
-`pi`/`d`). Sequenced, in priority order:
+The insight driving the refactor: **matching is the product; align and `boxDiff`
+are two thin consumers of it.** Everything structural (the guillotine `spacingPlan`)
+is scaffolding around the one real primitive — a robust before↔after element
+matching (`alignMarkers`). A one-shot recursive DOM-tree aligner was prototyped and
+**abandoned** (failed chaos combinations; the model-free `correctiveFlat` beat it) —
+deleted rather than hoarded. Sequenced, in priority order:
 
+0. **DONE — resolve the abandoned experiment.** `treeAlign` and its collector infra
+   (`pi`/`d` marker fields, `push` inject mode) removed; the pivot to `correctiveFlat`
+   is the "better solution." Re-add a parent-index to the collector only when step 3's
+   tree-aware matcher actually needs it.
 1. **Build a regression oracle FIRST.** There is no ground truth for overlay /
    highlight quality beyond the chaos test, so every "improvement" is currently
-   unfalsifiable. Make a labeled corpus of real before/after pairs (pull
-   cms-server markers) with expected residuals + highlight boxes, and instrument
-   the live loop with p95/p99 round-count + wall-clock. Do this before touching
-   either algorithm.
+   unfalsifiable. Check in real before/after marker pairs as regression fixtures and
+   instrument the live loop with round-count. Do this before touching either algorithm.
 2. **Decouple `boxDiff` from the guillotine.** align and changed are entangled
    through the shared partition — ripping the guillotine out for align silently
    regresses highlights. Reframe "changed" as a CLASSIFIER over the shared match:
@@ -171,10 +174,9 @@ a robust before↔after element matching (`alignMarkers`, now tree-aware via
    should place matched elements AT their partner's y (gain ~1.0), then fine-tune
    at 0.7; make the cap adaptive; cache the match by stable id across re-diffs.
 4. **Then measure and decide the guillotine's fate.** If the warm-start matches
-   its latency on real pages → delete `spacingPlan` + partition + tail/cell/grid/
-   push + the WIP `treeAlign`. If not → keep it as an OPTIONAL, measured seed, not
-   the default. Do not delete ~500 lines on 80 synthetic combos without the
-   latency number.
+   its latency on real pages → delete `spacingPlan` + partition + tail/cell/grid.
+   If not → keep it as an OPTIONAL, measured seed, not the default. Do not delete
+   ~500 lines on 80 synthetic combos without the latency number.
 
 ## This skill is SELF-IMPROVING
 
