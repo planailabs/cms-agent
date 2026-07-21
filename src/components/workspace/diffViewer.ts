@@ -20,7 +20,7 @@ const MODES: Array<{ key: DiffViewMode; labelKey: string }> = [
   { key: 'onion', labelKey: 'workspace.diff.mode.onion' },
 ];
 
-const shotUrl = (chatId: string, route: string, kind: 'before' | 'after' | 'diff'): string =>
+const shotUrl = (chatId: string, route: string, kind: 'before' | 'after' | 'diff' | 'before-aligned' | 'after-aligned'): string =>
   `/api/diff/${encodeURIComponent(chatId)}/shot?route=${encodeURIComponent(route)}&kind=${kind}`;
 
 /** Screenshot <img> wrapped with a per-image loading spinner. */
@@ -80,9 +80,14 @@ const renderHighlight = (state: AppState, route: string): string => {
 const renderScroll = (state: AppState, route: string): string => {
   const locale = uiLocale();
   const chatId = state.activeChatId!;
-  return `<div class="ws-bc-scroll" data-onion>
-      ${renderShot(shotUrl(chatId, route, 'before'), t(locale, 'workspace.diff.beforeRoute', { route }), 'ws-onion__before')}
-      ${renderShot(shotUrl(chatId, route, 'after'), t(locale, 'workspace.diff.afterRoute', { route }), 'ws-onion__after')}
+  // Content mode: overlay the server-aligned shots (real reflow, spacer divs),
+  // no client canvas. Height mode: raw shots.
+  const content = state.workspace.compareMode === 'content';
+  const bk = content ? 'before-aligned' : 'before';
+  const ak = content ? 'after-aligned' : 'after';
+  return `<div class="ws-bc-scroll">
+      ${renderShot(shotUrl(chatId, route, bk), t(locale, 'workspace.diff.beforeRoute', { route }), 'ws-onion__before')}
+      ${renderShot(shotUrl(chatId, route, ak), t(locale, 'workspace.diff.afterRoute', { route }), 'ws-onion__after')}
       <span class="ws-onion__label ws-onion__label--left">${escapeHtml(t(locale, 'workspace.diff.before'))}</span>
       <span class="ws-onion__label ws-onion__label--right">${escapeHtml(t(locale, 'workspace.diff.after'))}</span>
     </div>`;
@@ -92,11 +97,14 @@ const renderOnion = (state: AppState, route: string): string => {
   const locale = uiLocale();
   const chatId = state.activeChatId!;
   const pct = state.workspace.diff.onionPercent;
-  return `<div class="ws-onion" data-onion>
+  const content = state.workspace.compareMode === 'content';
+  const bk = content ? 'before-aligned' : 'before';
+  const ak = content ? 'after-aligned' : 'after';
+  return `<div class="ws-onion">
       <div class="ws-onion__canvas">
-        ${renderShot(shotUrl(chatId, route, 'before'), t(locale, 'workspace.diff.beforeRoute', { route }), 'ws-onion__before')}
+        ${renderShot(shotUrl(chatId, route, bk), t(locale, 'workspace.diff.beforeRoute', { route }), 'ws-onion__before')}
         ${renderShot(
-          shotUrl(chatId, route, 'after'),
+          shotUrl(chatId, route, ak),
           t(locale, 'workspace.diff.afterRoute', { route }),
           'ws-onion__after',
           // top layer visible RIGHT of the slider — matches the after label

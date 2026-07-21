@@ -16,8 +16,8 @@ export const GET: APIRoute = async ({ params, url }) => {
   if (!route || !route.startsWith('/')) {
     return new Response(JSON.stringify({ error: 'route (starting with /) required' }), { status: 400 });
   }
-  if (!['before', 'after', 'diff'].includes(kind)) {
-    return new Response(JSON.stringify({ error: 'kind must be before|after|diff' }), { status: 400 });
+  if (!['before', 'after', 'diff', 'before-aligned', 'after-aligned'].includes(kind)) {
+    return new Response(JSON.stringify({ error: 'bad kind' }), { status: 400 });
   }
 
   const chat = await prisma.chat.findUnique({

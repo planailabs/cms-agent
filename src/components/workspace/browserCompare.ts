@@ -23,7 +23,7 @@ const shotUrl = (
   route: string,
   a: BrowserName,
   b: BrowserName,
-  kind: 'before' | 'after' | 'diff',
+  kind: 'before' | 'after' | 'diff' | 'before-aligned' | 'after-aligned',
 ): string =>
   `/api/preview/browsers-shot?branch=${encodeURIComponent(branch)}` +
   `&route=${encodeURIComponent(route)}&a=${a}&b=${b}&kind=${kind}`;
@@ -47,13 +47,18 @@ export const renderBrowserCompare = (state: AppState): string => {
   const branch = previewBranchName(state);
   const route = state.workspace.previewRoute;
 
+  // Content mode overlays the server-aligned shots (real reflow); height mode
+  // the raw shots. No client canvas.
+  const content = state.workspace.compareMode === 'content';
+  const bk = content ? 'before-aligned' : 'before';
+  const ak = content ? 'after-aligned' : 'after';
   const body =
     bc.mode === 'onion'
-      ? `<div class="ws-onion" data-onion data-onion-target="browserCompare">
+      ? `<div class="ws-onion">
           <div class="ws-onion__canvas">
-            ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'before'), bc.a, 'ws-onion__before')}
+            ${renderShot(shotUrl(branch, route, bc.a, bc.b, bk), bc.a, 'ws-onion__before')}
             ${renderShot(
-              shotUrl(branch, route, bc.a, bc.b, 'after'),
+              shotUrl(branch, route, bc.a, bc.b, ak),
               bc.b,
               'ws-onion__after',
               `clip-path: inset(0 0 0 ${bc.onionPercent}%);`,
@@ -66,12 +71,11 @@ export const renderBrowserCompare = (state: AppState): string => {
           </div>
         </div>`
       : bc.mode === 'scroll'
-        ? // Side-by-side scroll: ONE scroll container, both shots as columns.
-          // The onion wrapper classes let the content-align enhancer stretch
-          // matched sections, so the columns scroll in lockstep.
-          `<div class="ws-bc-scroll" data-onion>
-            ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'before'), bc.a, 'ws-onion__before')}
-            ${renderShot(shotUrl(branch, route, bc.a, bc.b, 'after'), bc.b, 'ws-onion__after')}
+        ? // Side-by-side scroll: ONE scroll container, both (aligned) shots as
+          // columns — pre-aligned server-side, so they scroll in lockstep.
+          `<div class="ws-bc-scroll">
+            ${renderShot(shotUrl(branch, route, bc.a, bc.b, bk), bc.a, 'ws-onion__before')}
+            ${renderShot(shotUrl(branch, route, bc.a, bc.b, ak), bc.b, 'ws-onion__after')}
             <span class="ws-onion__label ws-onion__label--left">${escapeHtml(bc.a)}</span>
             <span class="ws-onion__label ws-onion__label--right">${escapeHtml(bc.b)}</span>
           </div>`

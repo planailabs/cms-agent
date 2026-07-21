@@ -16,11 +16,15 @@ import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
 import { env } from '@/lib/env';
 import { GIT_COMMIT } from '@/lib/buildInfo';
-import { COLLECT_MARKERS_JS } from '@/lib/compare/markers';
+import { COLLECT_MARKERS_JS, type MarkerDoc } from '@/lib/compare/markers';
+import { spacingPlan, type Spacer } from '@/lib/compare/layout';
 import { branchSha, defaultBranch } from '@/lib/git/engine';
 import { ensureInstance } from '@/lib/preview/manager';
 
-export type ShotKind = 'before' | 'after' | 'diff';
+// Content-aligned shots: the same page re-rendered with filler <div>s injected
+// (a real reflow — no canvas slicing) so before/after content sits at the same
+// y. The onion "content" mode overlays these directly.
+export type ShotKind = 'before' | 'after' | 'diff' | 'before-aligned' | 'after-aligned';
 export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 export const BROWSERS: readonly BrowserName[] = ['chromium', 'firefox', 'webkit'];
 const isBrowser = (v: string): v is BrowserName => (BROWSERS as readonly string[]).includes(v);
@@ -57,22 +61,62 @@ function shotFiles(dir: string, key: string): Record<ShotKind, string> & { meta:
     before: `${base}-before.png`,
     after: `${base}-after.png`,
     diff: `${base}-diff.png`,
+     'before-aligned': `${base}-before-aligned.png`,
+    'after-aligned': `${base}-after-aligned.png`,
     meta: `${base}-meta.json`,
   };
 }
+
+// Injected in the page (via page.evaluate) to push elements down with real
+// filler divs — or margin-top for flex/grid items, which don't margin-collapse
+// and mustn't gain an extra grid item. Elements are found by data-cmsm index.
+const INJECT_SPACERS = (spacers: Array<{ i: number; px: number; mode: string }>) => {
+  var pushBefore = function (el: Element, px: number) {
+    var parent = el.parentElement;
+    if (!parent) return;
+    var disp = getComputedStyle(parent).display;
+    if (disp.indexOf('flex') >= 0 || disp.indexOf('grid') >= 0) {
+      var cur = parseFloat(getComputedStyle(el).marginTop) || 0;
+      (el as HTMLElement).style.marginTop = cur + px + 'px';
+    } else {
+      var sp = document.createElement('div');
+      sp.style.height = px + 'px';
+      sp.style.width = '100%';
+      sp.style.flex = '0 0 auto';
+      parent.insertBefore(sp, el);
+    }
+  };
+  for (var n = 0; n < spacers.length; n++) {
+    var s = spacers[n];
+    var el = document.querySelector('[data-cmsm="' + s.i + '"]');
+    if (!el) continue;
+    if (s.mode === 'grid') {
+      var g: Element = el;
+      for (var p = el.parentElement, d = 0; p && d < 8; p = p.parentElement, d++) {
+        var dp = getComputedStyle(p).display;
+        if (dp.indexOf('flex') >= 0 || dp.indexOf('grid') >= 0) { g = p; break; }
+      }
+      pushBefore(g, s.px);
+    } else {
+      pushBefore(el, s.px);
+    }
+  }
+};
 
 async function screenshot(
   port: number,
   route: string,
   outFile: string,
   browser: BrowserName = 'chromium',
-): Promise<void> {
+  spacers?: Spacer[],
+): Promise<MarkerDoc | null> {
   const playwright = await import('playwright');
   // chromiumSandbox: false — chromium's own SUID/namespace sandbox is
   // unreliable inside the container; the content is our own site preview.
   const launched = await playwright[browser].launch(
     browser === 'chromium' ? { chromiumSandbox: false } : {},
   );
+  let markers: MarkerDoc | null = null;
   try {
     const page = await launched.newPage({ viewport: VIEWPORT });
     // Connect on the host the dev server actually binds (HOST — ::1 in dev,
@@ -80,18 +124,72 @@ async function screenshot(
     const host = env().HOST;
     const h = host.includes(':') ? `[${host}]` : host;
     await page.goto(`http://${h}:${port}${route}`, { waitUntil: 'networkidle', timeout: 30_000 });
-    // Content markers next to the shot — the compare views use them for
-    // content-aligned spacing/scrolling (fail-soft: a marker-less shot just
-    // falls back to height mode). Captured BEFORE the shot: same layout.
+    // Content markers next to the shot — also tags each element (data-cmsm) so
+    // the aligned pass can re-select it. Captured BEFORE the shot: same layout.
     try {
-      const markers = await page.evaluate(COLLECT_MARKERS_JS);
-      fs.writeFileSync(`${outFile}.markers.json`, JSON.stringify(markers));
+      markers = (await page.evaluate(COLLECT_MARKERS_JS)) as MarkerDoc;
+      if (!spacers) fs.writeFileSync(`${outFile}.markers.json`, JSON.stringify(markers));
     } catch (err) {
       console.warn(`[diff] marker collection failed for ${route}:`, err);
+    }
+    // Aligned pass: inject filler divs, then shoot the reflowed page.
+    if (spacers && spacers.length) {
+      try {
+        await page.evaluate(INJECT_SPACERS, spacers as Array<{ i: number; px: number; mode: string }>);
+      } catch (err) {
+        console.warn(`[diff] spacer injection failed for ${route}:`, err);
+      }
     }
     await page.screenshot({ path: outFile, fullPage: true });
   } finally {
     await launched.close();
+  }
+  return markers;
+}
+
+/** Pad two PNGs to identical dimensions in place (the onion overlays them). */
+function padPair(fileA: string, fileB: string): void {
+  try {
+    const a = PNG.sync.read(fs.readFileSync(fileA));
+    const b = PNG.sync.read(fs.readFileSync(fileB));
+    const width = Math.max(a.width, b.width);
+    const height = Math.max(a.height, b.height);
+    const ap = padTo(a, width, height);
+    const bp = padTo(b, width, height);
+    if (ap !== a) fs.writeFileSync(fileA, PNG.sync.write(ap));
+    if (bp !== b) fs.writeFileSync(fileB, PNG.sync.write(bp));
+  } catch (err) {
+    console.warn('[diff] aligned pad failed:', err);
+  }
+}
+
+/** Render both aligned shots (best-effort) from a computed spacing plan. */
+async function alignedShots(
+  aPort: number,
+  bPort: number,
+  route: string,
+  files: Record<ShotKind, string>,
+  markersA: MarkerDoc,
+  markersB: MarkerDoc,
+  browserA: BrowserName = 'chromium',
+  browserB: BrowserName = 'chromium',
+): Promise<void> {
+  try {
+    const plan = spacingPlan(markersA.m, markersA.h, markersB.m, markersB.h);
+    await Promise.all([
+      screenshot(aPort, route, files['before-aligned'], browserA, plan.a),
+      screenshot(bPort, route, files['after-aligned'], browserB, plan.b),
+    ]);
+    padPair(files['before-aligned'], files['after-aligned']);
+  } catch (err) {
+    console.warn('[diff] aligned shots failed:', err);
+    // Fall back to the raw shots so the content mode still has something.
+    try {
+      fs.copyFileSync(files.before, files['before-aligned']);
+      fs.copyFileSync(files.after, files['after-aligned']);
+    } catch {
+      /* raw shots also missing — the mode just 404s */
+    }
   }
 }
 
@@ -172,12 +270,16 @@ export async function diffRoute(branch: string, route: string, base?: string): P
       ensureInstance(branch),
     ]);
 
-    await Promise.all([
+    const [ma, mb] = await Promise.all([
       screenshot(mainInstance.port, route, files.before),
       screenshot(branchInstance.port, route, files.after),
     ]);
 
     const { changed, total } = pixelDiff(files.before, files.after, files.diff);
+    // Aligned shots for the onion "content" mode — real reflow, not canvas.
+    if (ma && mb) {
+      await alignedShots(mainInstance.port, branchInstance.port, route, files, ma, mb);
+    }
     const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
     fs.writeFileSync(metaFile, JSON.stringify(result));
     return result;
@@ -208,12 +310,15 @@ export async function diffBrowsers(
     }
 
     const instance = await ensureInstance(branch);
-    await Promise.all([
+    const [ma, mb] = await Promise.all([
       screenshot(instance.port, route, files.before, browserA),
       screenshot(instance.port, route, files.after, browserB),
     ]);
 
     const { changed, total } = pixelDiff(files.before, files.after, files.diff);
+    if (ma && mb) {
+      await alignedShots(instance.port, instance.port, route, files, ma, mb, browserA, browserB);
+    }
     const result: DiffResult = { route, changedPixels: changed, totalPixels: total, files };
     fs.writeFileSync(metaFile, JSON.stringify(result));
     return result;

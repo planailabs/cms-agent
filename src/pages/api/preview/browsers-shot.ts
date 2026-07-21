@@ -29,7 +29,8 @@ export const GET: APIRoute = async ({ url, locals }) => {
 
   if (!PREVIEW_BRANCH_RE.test(branch)) return json({ error: 'invalid branch' }, 400);
   if (!route || !route.startsWith('/')) return json({ error: 'route (starting with /) required' }, 400);
-  if (!['before', 'after', 'diff'].includes(kind)) return json({ error: 'bad kind' }, 400);
+  if (!['before', 'after', 'diff', 'before-aligned', 'after-aligned'].includes(kind))
+    return json({ error: 'bad kind' }, 400);
 
   try {
     const result = await diffBrowsers(branch, route, a, b);
