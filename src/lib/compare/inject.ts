@@ -6,7 +6,7 @@
  * and mustn't gain an extra grid cell). mode 'grid' pushes the whole flex/grid.
  */
 export const INJECT_SPACERS = (
-  spacers: Array<{ i: number; px: number; mode: string }>,
+  spacers: Array<{ i: number; px: number; mode: string; sid?: string }>,
 ) => {
   // An exact, inert gap of `px`. Every sizing + box-model property is locked with
   // !important so no page rule (resets, inherited line-height, flex stretch,
@@ -42,8 +42,12 @@ export const INJECT_SPACERS = (
     let par = el.parentElement;
     for (let d = 0; par && d < 8; d++) {
       const pd = getComputedStyle(par);
+      const gridCols =
+        pd.display.indexOf("grid") >= 0
+          ? pd.gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length
+          : 0;
       const parentIsRow =
-        pd.display.indexOf("grid") >= 0 ||
+        gridCols > 1 ||
         (pd.display.indexOf("flex") >= 0 &&
           pd.flexDirection.indexOf("row") >= 0);
       if (parentIsRow) break;
@@ -87,6 +91,14 @@ export const INJECT_SPACERS = (
       parent.insertBefore(mkFiller(px), el);
     }
   };
+  const padItemTop = (el: Element, px: number): void => {
+    const cur = parseFloat(getComputedStyle(el).paddingTop) || 0;
+    (el as HTMLElement).style.setProperty(
+      "padding-top",
+      cur + px + "px",
+      "important",
+    );
+  };
   for (const s of spacers) {
     const el = document.querySelector('[data-cmsm="' + s.i + '"]');
     if (!el) continue;
@@ -96,6 +108,28 @@ export const INJECT_SPACERS = (
       insertCell(el, s.px);
     } else if (s.mode === "item") {
       pushBefore(columnOf(el).item, s.px);
+    } else if (s.mode === "row") {
+      const { item, par } = columnOf(el);
+      if (!par) continue;
+      const top = Math.round(item.getBoundingClientRect().top);
+      for (const sibling of Array.from(par.children)) {
+        if (Math.abs(Math.round(sibling.getBoundingClientRect().top) - top) <= 2)
+          padItemTop(sibling, s.px);
+      }
+    } else if (s.mode === "scope") {
+      const scope =
+        (s.sid ? document.getElementById(s.sid) : null) ?? el.closest("[id]");
+      if (!scope) continue;
+      const display = getComputedStyle(scope).display;
+      if (
+        display.indexOf("grid") >= 0 ||
+        (display.indexOf("flex") >= 0 &&
+          getComputedStyle(scope).flexDirection.indexOf("row") >= 0)
+      ) {
+        padItemTop(scope, s.px);
+      } else {
+        scope.insertBefore(mkFiller(s.px), scope.firstChild);
+      }
     } else if (s.mode === "grid") {
       let g: Element = el;
       for (

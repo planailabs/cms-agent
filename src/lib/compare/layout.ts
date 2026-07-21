@@ -458,7 +458,8 @@ export const boxDiff = (
 export interface Spacer {
   i: number;
   px: number;
-  mode: "el" | "grid" | "tail" | "cell" | "item";
+  mode: "el" | "grid" | "tail" | "cell" | "item" | "row" | "scope";
+  sid?: string;
 }
 export interface SpacingPlan {
   a: Spacer[];
@@ -832,6 +833,416 @@ export const correctiveTrusted = (
   }
   return { a: A, b: B };
 };
+
+type ResidualPair = { ea: Marker; eb: Marker; dy: number };
+
+const strongLeafPairs = (a: Marker[], b: Marker[]): ResidualPair[] => {
+  const fa = a.filter((m) => !isContainer(m));
+  const fb = b.filter((m) => !isContainer(m));
+  return alignMarkers(fa, fb)
+    .matches.filter((m) => m.score >= ANCHOR_MIN)
+    .map((m) => ({
+      ea: fa[m.ai],
+      eb: fb[m.bi],
+      dy: fa[m.ai].y - fb[m.bi].y,
+    }));
+};
+
+const reportPairs = (
+  pairs: ResidualPair[],
+): { max: number; worst: Array<{ ia?: number; ib?: number; dy: number }> } => {
+  const worst = pairs
+    .filter((p) => Math.abs(p.dy) > 8)
+    .map((p) => ({ ia: p.ea.i, ib: p.eb.i, dy: Math.round(p.dy) }))
+    .sort((p, q) => Math.abs(q.dy) - Math.abs(p.dy));
+  const max = pairs.reduce(
+    (found, p) => (Math.abs(p.dy) > Math.abs(found) ? p.dy : found),
+    0,
+  );
+  return { max: Math.round(max), worst: worst.slice(0, 8) };
+};
+
+const landmarkPairs = (a: Marker[], b: Marker[]): ResidualPair[] => {
+  const landmark = (m: Marker) =>
+    isContainer(m) &&
+    (m.d ?? Number.POSITIVE_INFINITY) <= 1 &&
+    /^#(?:SECTION|ARTICLE|HEADER|FOOTER|ASIDE|NAV)\//.test(m.k);
+  const fa = a.filter(landmark);
+  const fb = b.filter(landmark);
+  return alignMarkers(fa, fb)
+    .matches.filter((m) => m.score >= ANCHOR_MIN)
+    .map((m) => ({
+      ea: fa[m.ai],
+      eb: fb[m.bi],
+      dy: fa[m.ai].y - fb[m.bi].y,
+    }))
+    .sort((p, q) => p.ea.y - q.ea.y);
+};
+
+/** Align top-level semantic landmarks as one ordinary vertical flow. */
+export const correctiveLandmarks = (
+  a: Marker[],
+  b: Marker[],
+): SpacingPlan => {
+  const A: Spacer[] = [];
+  const B: Spacer[] = [];
+  let cumA = 0;
+  let cumB = 0;
+  for (const { ea, eb } of landmarkPairs(a, b)) {
+    const d = ea.y + cumA - (eb.y + cumB);
+    if (d > 0.5 && eb.i !== undefined) {
+      B.push({ i: eb.i, px: Math.round(d), mode: "el" });
+      cumB += d;
+    } else if (d < -0.5 && ea.i !== undefined) {
+      A.push({ i: ea.i, px: Math.round(-d), mode: "el" });
+      cumA -= d;
+    }
+  }
+  return { a: A, b: B };
+};
+
+export const landmarkYDelta = (a: Marker[], b: Marker[]) =>
+  reportPairs(landmarkPairs(a, b));
+
+const scopeLeadPairs = (a: Marker[], b: Marker[]): ResidualPair[] => {
+  const scoped = new Map<string, ResidualPair[]>();
+  for (const pair of strongLeafPairs(a, b)) {
+    if (
+      !pair.ea.sid ||
+      pair.ea.sid !== pair.eb.sid ||
+      pair.ea.sy === undefined ||
+      pair.eb.sy === undefined
+    )
+      continue;
+    const list = scoped.get(pair.ea.sid) ?? [];
+    list.push({
+      ...pair,
+      dy: pair.ea.y - pair.ea.sy - (pair.eb.y - pair.eb.sy),
+    });
+    scoped.set(pair.ea.sid, list);
+  }
+  return [...scoped.values()]
+    // A lone rewritten element is only a structural guess. Require another
+    // corresponding descendant before moving an entire scoped section.
+    .filter((pairs) => pairs.length > 1)
+    .map((pairs) => pairs.sort((x, y) => x.ea.y - y.ea.y)[0])
+    .sort((x, y) => x.ea.y - y.ea.y);
+};
+
+/** Align the first visible content inside each corresponding scoped section. */
+export const correctiveScopeLeads = (a: Marker[], b: Marker[]): SpacingPlan => {
+  const A: Spacer[] = [];
+  const B: Spacer[] = [];
+  for (const { ea, eb, dy: d } of scopeLeadPairs(a, b)) {
+    if (d > 0.5 && eb.i !== undefined) {
+      B.push({ i: eb.i, px: Math.round(d), mode: "scope", sid: eb.sid });
+    } else if (d < -0.5 && ea.i !== undefined) {
+      A.push({ i: ea.i, px: Math.round(-d), mode: "scope", sid: ea.sid });
+    }
+  }
+  return { a: A, b: B };
+};
+
+export const scopeLeadYDelta = (a: Marker[], b: Marker[]) =>
+  reportPairs(scopeLeadPairs(a, b));
+
+interface ResidualGroup {
+  key: string;
+  orderA: number;
+  orderB: number;
+  pairs: ResidualPair[];
+}
+
+const median = (values: number[]): number => {
+  const sorted = values.slice().sort((x, y) => x - y);
+  return sorted[Math.floor(sorted.length / 2)] ?? 0;
+};
+
+const scopeBaselines = (pairs: ResidualPair[]): Map<string, number> => {
+  const byScope = new Map<string, ResidualPair[]>();
+  for (const pair of pairs) {
+    if (!pair.ea.sid || pair.ea.sid !== pair.eb.sid) continue;
+    const list = byScope.get(pair.ea.sid) ?? [];
+    list.push(pair);
+    byScope.set(pair.ea.sid, list);
+  }
+  const result = new Map<string, number>();
+  for (const [scope, scoped] of byScope) {
+    scoped.sort((x, y) => x.ea.y - y.ea.y || x.eb.y - y.eb.y);
+    const first = scoped[0];
+    const firstRow = scoped.filter(
+      (pair) =>
+        Math.abs(pair.ea.y - first.ea.y) <= 2 &&
+        Math.abs(pair.eb.y - first.eb.y) <= 2,
+    );
+    result.set(scope, median(firstRow.map((pair) => pair.dy)));
+  }
+  return result;
+};
+
+const rowGroups = (a: Marker[], b: Marker[]): ResidualGroup[] => {
+  const groups = new Map<string, ResidualGroup>();
+  const pairs = strongLeafPairs(a, b);
+  const baselines = scopeBaselines(pairs);
+  for (const pair of pairs) {
+    const { ea, eb } = pair;
+    if (
+      !ea.rg ||
+      !eb.rg ||
+      // Icon/text internals of a list item are horizontal presentation, not a
+      // page-flow row. Treating every LI as its own row grows every list item
+      // and accumulates large downstream drift; the outer column item-flow
+      // pass aligns the LI blocks instead.
+      ea.rg.startsWith("LI/") ||
+      eb.rg.startsWith("LI/") ||
+      ea.rp === undefined ||
+      eb.rp === undefined ||
+      ea.ry === undefined ||
+      eb.ry === undefined ||
+      ea.rg.split("@")[0] !== eb.rg.split("@")[0]
+    )
+      continue;
+    const baseline = ea.sid && ea.sid === eb.sid ? baselines.get(ea.sid) : undefined;
+    if (baseline === undefined) continue;
+    const parent = `${ea.sid ?? ""}|${ea.rg}|${ea.rp}|${eb.sid ?? ""}|${eb.rg}|${eb.rp}`;
+    const key = `${parent}|${ea.ry}|${eb.ry}`;
+    const group = groups.get(key) ?? {
+      key: parent,
+      orderA: ea.ry,
+      orderB: eb.ry,
+      pairs: [],
+    };
+    // Measure visible descendants, not the row item's border box. Grid margins
+    // and padding can move content while getBoundingClientRect().top on the
+    // item remains unchanged, which otherwise reports false convergence.
+    group.pairs.push({
+      ...pair,
+      dy: pair.dy - baseline,
+    });
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+};
+
+/**
+ * Align complete grid/flex rows. All matched descendants of one visual row
+ * collapse to one consensus correction, and the browser moves every item in
+ * that row together. Cumulative carry is isolated per row container.
+ */
+export const correctiveRows = (
+  a: Marker[],
+  b: Marker[],
+  gain = 0.7,
+): SpacingPlan => {
+  const A: Spacer[] = [];
+  const B: Spacer[] = [];
+  const byParent = new Map<string, ResidualGroup[]>();
+  for (const row of rowGroups(a, b)) {
+    const list = byParent.get(row.key) ?? [];
+    list.push(row);
+    byParent.set(row.key, list);
+  }
+  for (const rows of byParent.values()) {
+    rows.sort((x, y) => x.orderA - y.orderA || x.orderB - y.orderB);
+    let cumA = 0;
+    let cumB = 0;
+    for (const row of rows) {
+      const d = median(row.pairs.map((p) => p.dy)) + cumA - cumB;
+      const px = Math.round(Math.abs(d) * gain);
+      if (px < 1) continue;
+      const marker = d > 0 ? row.pairs[0].eb : row.pairs[0].ea;
+      if (marker.i === undefined) continue;
+      (d > 0 ? B : A).push({ i: marker.i, px, mode: "row" });
+      if (d > 0) cumB += px;
+      else cumA += px;
+    }
+  }
+  return { a: A, b: B };
+};
+
+export const rowYDelta = (a: Marker[], b: Marker[]) =>
+  reportPairs(
+    rowGroups(a, b).map((row) => {
+      const pair = row.pairs[0];
+      return { ...pair, dy: median(row.pairs.map((p) => p.dy)) };
+    }),
+  );
+
+const itemFlowGroups = (a: Marker[], b: Marker[]): ResidualGroup[] => {
+  const groups = new Map<string, ResidualGroup>();
+  const pairs = strongLeafPairs(a, b);
+  const baselines = scopeBaselines(pairs);
+  for (const pair of pairs) {
+    const { ea, eb } = pair;
+    if (
+      !ea.rg ||
+      !eb.rg ||
+      ea.rp === undefined ||
+      eb.rp === undefined ||
+      ea.rc === undefined ||
+      eb.rc === undefined ||
+      ea.rg.split("@")[0] !== eb.rg.split("@")[0]
+    )
+      continue;
+    const baseline = ea.sid && ea.sid === eb.sid ? baselines.get(ea.sid) : undefined;
+    if (baseline === undefined) continue;
+    const key = `${ea.sid ?? ""}|${ea.rg}|${ea.rp}|${ea.rc}|${eb.sid ?? ""}|${eb.rg}|${eb.rp}|${eb.rc}`;
+    const group = groups.get(key) ?? {
+      key,
+      orderA: ea.y,
+      orderB: eb.y,
+      pairs: [],
+    };
+    group.pairs.push({
+      ...pair,
+      dy: pair.dy - baseline,
+    });
+    groups.set(key, group);
+  }
+  return [...groups.values()].filter((group) => group.pairs.length > 1);
+};
+
+/** Align content flow inside corresponding grid/flex items after row tops fit. */
+export const correctiveItemFlows = (
+  a: Marker[],
+  b: Marker[],
+  gain = 0.7,
+): SpacingPlan => {
+  const A: Spacer[] = [];
+  const B: Spacer[] = [];
+  for (const group of itemFlowGroups(a, b)) {
+    const pairs = group.pairs.slice().sort((x, y) => x.ea.y - y.ea.y);
+    let cumA = 0;
+    let cumB = 0;
+    // The row stage owns the shared row shift; this section-relative residual
+    // is what remains per item, including a first leaf hidden by row consensus.
+    for (const { ea, eb, dy } of pairs) {
+      const d = dy + cumA - cumB;
+      const px = Math.round(Math.abs(d) * gain);
+      if (px < 1) continue;
+      const marker = d > 0 ? eb : ea;
+      if (marker.i === undefined) continue;
+      (d > 0 ? B : A).push({ i: marker.i, px, mode: "el" });
+      if (d > 0) cumB += px;
+      else cumA += px;
+    }
+  }
+  return { a: A, b: B };
+};
+
+export const itemFlowYDelta = (a: Marker[], b: Marker[]) =>
+  reportPairs(itemFlowGroups(a, b).flatMap((g) => g.pairs));
+
+const sectionFlowGroups = (a: Marker[], b: Marker[]): ResidualGroup[] => {
+  const groups = new Map<string, ResidualGroup>();
+  for (const pair of strongLeafPairs(a, b)) {
+    const { ea, eb } = pair;
+    if (!ea.sid || ea.sid !== eb.sid || ea.rg || eb.rg) continue;
+    const group = groups.get(ea.sid) ?? {
+      key: ea.sid,
+      orderA: ea.y,
+      orderB: eb.y,
+      pairs: [],
+    };
+    group.pairs.push(pair);
+    groups.set(ea.sid, group);
+  }
+  return [...groups.values()]
+    .filter((group) => group.pairs.length > 1)
+    .map((group) => {
+      const pairs = group.pairs.slice().sort((x, y) => x.ea.y - y.ea.y);
+      const baseline = pairs[0].dy;
+      return {
+        ...group,
+        pairs: pairs.map((pair) => ({ ...pair, dy: pair.dy - baseline })),
+      };
+    });
+};
+
+/** Align ordinary vertical content that sits between/after row layouts. */
+export const correctiveSectionFlows = (
+  a: Marker[],
+  b: Marker[],
+  gain = 0.7,
+): SpacingPlan => {
+  const A: Spacer[] = [];
+  const B: Spacer[] = [];
+  for (const group of sectionFlowGroups(a, b)) {
+    const pairs = group.pairs.slice().sort((x, y) => x.ea.y - y.ea.y);
+    let cumA = 0;
+    let cumB = 0;
+    for (const { ea, eb, dy } of pairs) {
+      const d = dy + cumA - cumB;
+      const px = Math.round(Math.abs(d) * gain);
+      if (px < 1) continue;
+      const marker = d > 0 ? eb : ea;
+      if (marker.i === undefined) continue;
+      (d > 0 ? B : A).push({ i: marker.i, px, mode: "el" });
+      if (d > 0) cumB += px;
+      else cumA += px;
+    }
+  }
+  return { a: A, b: B };
+};
+
+export const sectionFlowYDelta = (a: Marker[], b: Marker[]) =>
+  reportPairs(sectionFlowGroups(a, b).flatMap((group) => group.pairs));
+
+const footerFlowGroups = (a: Marker[], b: Marker[]): ResidualGroup[] => {
+  const groups = new Map<string, ResidualGroup>();
+  for (const pair of strongLeafPairs(a, b)) {
+    const { ea, eb } = pair;
+    if (
+      !ea.s?.startsWith("FOOTER/") ||
+      !eb.s?.startsWith("FOOTER/") ||
+      !ea.rg ||
+      !eb.rg ||
+      ea.rc === undefined ||
+      eb.rc === undefined ||
+      ea.rg.split("@")[0] !== eb.rg.split("@")[0]
+    )
+      continue;
+    const key = `${ea.rg}|${ea.rc}|${eb.rg}|${eb.rc}`;
+    const group = groups.get(key) ?? {
+      key,
+      orderA: ea.y,
+      orderB: eb.y,
+      pairs: [],
+    };
+    group.pairs.push(pair);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+};
+
+/** Align terminal footer columns independently; they have no downstream flow. */
+export const correctiveFooterFlows = (
+  a: Marker[],
+  b: Marker[],
+  gain = 0.7,
+): SpacingPlan => {
+  const A: Spacer[] = [];
+  const B: Spacer[] = [];
+  for (const group of footerFlowGroups(a, b)) {
+    const pairs = group.pairs.slice().sort((x, y) => x.ea.y - y.ea.y);
+    let cumA = 0;
+    let cumB = 0;
+    for (const { ea, eb, dy } of pairs) {
+      const d = dy + cumA - cumB;
+      const px = Math.round(Math.abs(d) * gain);
+      if (px < 1) continue;
+      const marker = d > 0 ? eb : ea;
+      if (marker.i === undefined) continue;
+      (d > 0 ? B : A).push({ i: marker.i, px, mode: "el" });
+      if (d > 0) cumB += px;
+      else cumA += px;
+    }
+  }
+  return { a: A, b: B };
+};
+
+export const footerFlowYDelta = (a: Marker[], b: Marker[]) =>
+  reportPairs(footerFlowGroups(a, b).flatMap((group) => group.pairs));
 
 /**
  * LAST-RESORT corrective, computed from the ALREADY-reflowed markers (after the

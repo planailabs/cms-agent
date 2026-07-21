@@ -50,6 +50,18 @@ export interface Marker {
    *  flex/grid ancestor. Leaves in the same cell (card) share it; different
    *  columns of one grid differ — so a grid's columns never cross-match. */
   fx?: string;
+  /** Nearest visual row-layout identity and geometry. `rg` identifies the row
+   *  container shape/column, `ry` is the row item's top, and `rc` is that
+   *  item's child index. Used by the measured recursive corrective pass. */
+  rg?: string;
+  rp?: number;
+  ry?: number;
+  rc?: number;
+  /** Number of semantic container ancestors. Top-level landmarks have d <= 1. */
+  d?: number;
+  /** Top of the nearest stable-id scope, used to separate section-local inset
+   *  from whole-page flow drift. */
+  sy?: number;
 }
 
 export interface MarkerDoc {
@@ -150,7 +162,11 @@ export const COLLECT_MARKERS_JS = `(function () {
     var idA = el.getAttribute('data-cmsm');
     var id = (idA !== null && idA !== '') ? parseInt(idA, 10) : NaN;
     if (isNaN(id)) { id = nextId++; }
-    var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig, i: id };
+    var semanticDepth = 0;
+    for (var dp = el.parentElement; dp; dp = dp.parentElement) {
+      if (dp.matches && dp.matches(CONT)) semanticDepth++;
+    }
+    var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig, i: id, d: semanticDepth };
     // Tag the element so the aligner can re-select it to inject spacers before
     // re-screenshotting (invisible; set before the shot). Stable across rounds.
     try { el.setAttribute('data-cmsm', String(id)); } catch (e) {}
@@ -158,10 +174,45 @@ export const COLLECT_MARKERS_JS = `(function () {
     var cls = typeof el.className === 'string' ? el.className : '';
     if (cls) mk.c = cls.slice(0, 100);
     var scopeId = '';
+    var scopeTop = null;
     for (var pp = el.parentElement; pp; pp = pp.parentElement) {
-      if (pp.id) { scopeId = pp.id; break; }
+      if (pp.id) {
+        scopeId = pp.id;
+        scopeTop = Math.round(pp.getBoundingClientRect().top + scrollY);
+        break;
+      }
     }
-    if (scopeId) mk.sid = scopeId;
+    if (scopeId) { mk.sid = scopeId; mk.sy = scopeTop; }
+    // Nearest ROW layout. Flex-column wrappers (cards) are deliberately
+    // skipped so a heading inside a card resolves to the card's outer grid
+    // row. The key excludes y so corresponding rows remain comparable after
+    // reflow; ry identifies the concrete row within that layout.
+    var rowChild = el;
+    for (var rq = el.parentElement, rd = 0; rq && rd < 10; rq = rq.parentElement, rd++) {
+      var rs = null;
+      try { rs = getComputedStyle(rq); } catch (e) { rs = null; }
+      var gridCols = rs && (rs.display === 'grid' || rs.display === 'inline-grid')
+        ? rs.gridTemplateColumns.trim().split(/\\s+/).filter(Boolean).length
+        : 0;
+      var isRow = rs && (
+        gridCols > 1 ||
+        ((rs.display === 'flex' || rs.display === 'inline-flex') && rs.flexDirection.indexOf('row') === 0)
+      );
+      if (isRow && rq.children.length > 1) {
+        var rr = rq.getBoundingClientRect();
+        var ir = rowChild.getBoundingClientRect();
+        var rci = 0;
+        for (var rki = 0; rki < rq.children.length; rki++) {
+          if (rq.children[rki] === rowChild) { rci = rki; break; }
+        }
+        mk.rg = (rq.id || rq.tagName) + '/' + rq.children.length + '@' + Math.round(rr.left) + ':' + Math.round(rr.width);
+        mk.rp = Math.round(rr.top + scrollY);
+        mk.ry = Math.round(ir.top + scrollY);
+        mk.rc = rci;
+        break;
+      }
+      rowChild = rq;
+    }
     // Cell identity so a grid's/table's columns are distinct and never cross-
     // match. Tables: (row,col) of the enclosing cell. Flex/grid: the leaf's
     // index in the nearest flex/grid ancestor.

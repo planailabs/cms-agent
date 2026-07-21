@@ -16,7 +16,8 @@ diff pipeline screenshots both raw, computes a spacing plan, injects filler
 - `src/lib/compare/markers.ts` — `COLLECT_MARKERS_JS` collects per-element
   markers in the browser: bounding box (`x/w/h`), content key `k` (tag+text),
   structural role `s`, stable identity (`id`, scope `sid`, class `c`), grid/table
-  cell `fx`, and index `i` (tags `data-cmsm=i` for re-selection). `similarity()`
+  cell `fx`, row geometry (`rg/rp/ry/rc`), scope top `sy`, semantic depth `d`,
+  and index `i` (tags `data-cmsm=i` for re-selection). `similarity()`
   = the match degree (id → text/scope/class → structure); `alignMarkers()` = the
   Needleman–Wunsch alignment (matches + added/removed gaps); `computeAnchors()`.
 - `src/lib/compare/layout.ts` — `partition()` guillotine-cuts each shot into
@@ -29,10 +30,11 @@ diff pipeline screenshots both raw, computes a spacing plan, injects filler
   whole flex/grid down), `tail` (grow the _column box_ that holds an element so
   its whole ROW gets taller — equalises a grid/flex/inline-block row height),
   `cell` (insert an empty column so an add/remove doesn't reflow the cells after
-  it). `columnOf()` finds the column box for any row layout: a grid child, a
-  flex-ROW child, or an inline-block element (NOT a flex-column card's internals).
-  All fillers lock height/min/max + box-model with `!important` so no page CSS can
-  distort a spacer.
+  it), `row` (pad every item in one visual row), and `scope` (shift content
+  inside the exact stable-id section). `columnOf()` finds the column box for any
+  row layout: a grid child, a flex-ROW child, or an inline-block element (NOT a
+  flex-column card's internals). All fillers lock height/min/max + box-model with
+  `!important` so no page CSS can distort a spacer.
 - `src/lib/diff/screenshot.ts` — `alignedShots()`: inject and re-screenshot;
   falls back to the raw shots on failure.
 - Client: `diffViewer.ts` / `browserCompare.ts` request the `-aligned` kinds in
@@ -87,10 +89,21 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   irreversible correction of a full-page rewrite. Every round is monotonic: if
   absolute drift worsens, discard that browser pair and recapture from the
   structural seed (the production 13,099px → 44,701px regression).
-- Low-confidence pages still use unique unchanged-content/stable-ID anchors for
-  a conservative pass. Grid/flex anchors move their containing row item, anchors
-  sharing a visual row move together, and that row's downstream shift is counted
-  once. This removes sparse residual drift without authorizing structural matches.
+- Low-confidence pages still require unchanged-content/stable-ID anchors for
+  authorization, then converge in a strictly forward hierarchy: top-level
+  landmarks → scoped section inset → visual rows → item-local flows → rowless
+  section tails → final landmarks → terminal footer columns. A later local pass
+  never jumps backward to landmarks; that oscillation caused the production
+  full-rewrite drift.
+- Residuals are measured in the coordinate system that owns them. Section inset
+  is `leaf.y - scope.sy`; rows and items are relative to the section lead. Never
+  subtract a grid top when measuring placement of that grid inside its section,
+  and never feed absolute section drift into every child item: both multiply
+  additive padding catastrophically.
+- Row and item ownership is explicit: rows align coupled row placement, then
+  item flow aligns content inside each card/column. Generic item groups require
+  corroborating descendants; sparse footer columns use a separate terminal pass
+  because they have no downstream page flow.
 - Matching ≠ change-detection: identity can score a changed element ~1, so
   `boxDiff` decides "changed" by comparing the content key, not the match score.
 - A full rewrite (structures don't correspond) overlays as one rectangle rather
@@ -115,11 +128,11 @@ them into a fixture under `test/fixtures/` and add a scaffold.
 
 ## Iterative corrective pass (the convergence loop)
 
-`correctiveFlat(a, b, gain)` (layout.ts) + the loop in `alignedShots`
-(screenshot.ts): after the structural reflow, while residual > 8px, re-measure the
-reflowed markers, pad each element still too high by its OWN residual, re-collect,
-and repeat (≤6 rounds) so BOTH sides converge. It measures real geometry each
-round, so it self-corrects rather than trusting a model.
+High-confidence pages use `correctiveFlat(a, b, gain)`. Low-confidence pages
+with at least one trusted anchor use the staged hierarchy in `converge.ts` and a
+larger round budget. Both paths re-measure real browser geometry after every
+additive mutation; a round that materially worsens its selected metric marks the
+pair regressed so callers recapture the structural seed.
 
 - **Model-free.** No grid/row/consensus logic — it just moves measured content to
   where its match sits (a `margin-top` flow filler keyed by the re-collected id).
@@ -131,11 +144,12 @@ round, so it self-corrects rather than trusting a model.
   cumulative can over-estimate. `gain` (0.7) makes every step approach the target
   from below — never overshoots; a couple more rounds instead.
 
-This replaced a DOM-aware corrective (push whole grid rows via `fx`, gated by a
-consensus check) that couldn't fix a row whose cells drifted unevenly — the flat
-loop is simpler AND strictly better there. The structural `spacingPlan` still runs
-first as a fast seed so the loop finishes in 1–2 rounds. Trust the real-browser
-`matchedYDelta`, not `verifyAlignment`'s linear sim, for grid work.
+The structural `spacingPlan` still runs first as the fast seed. Trust
+real-browser matched-leaf deltas, not container bounds or `verifyAlignment`'s
+linear simulation, for grid work: differently rewritten list containers can
+have different outer heights while every visible child is aligned. The plan.ai
+full-rewrite production regression converges all 136 matched leaves to ≤8px
+(p90 4px) through this staged path.
 
 ## Fixture coverage (imported plan.ai patterns)
 
