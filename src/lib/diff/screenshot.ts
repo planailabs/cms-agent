@@ -16,7 +16,11 @@ import { PNG } from "pngjs";
 import pixelmatch from "pixelmatch";
 import { env } from "@/lib/env";
 import { GIT_COMMIT } from "@/lib/buildInfo";
-import { COLLECT_MARKERS_JS, type MarkerDoc } from "@/lib/compare/markers";
+import {
+  COLLECT_MARKERS_JS,
+  matchConfidence,
+  type MarkerDoc,
+} from "@/lib/compare/markers";
 import {
   correctiveFlat,
   matchedYDelta,
@@ -182,6 +186,7 @@ async function openAligned(
 
 const CORRECTIVE_THRESHOLD = 8; // px residual that trips the last-resort patch
 const CORRECTIVE_ROUNDS = 6; // max iterations to converge both sides
+const CONFIDENCE_MIN = 0.35; // below this, skip the corrective (seed only)
 
 /** Render both aligned shots (best-effort) from a computed spacing plan. If the
  *  structural reflow leaves residual drift, a last-resort corrective pass patches
@@ -216,25 +221,43 @@ async function alignedShots(
             s as Array<{ i: number; px: number; mode: string }>,
           )
         : Promise.resolve();
+    // Trust the shared match before polishing it. On a low-confidence page
+    // (a big rewrite, heavy boilerplate, or a truncated capture) the corrective
+    // would spend browser round-trips chasing a wrong correspondence, so stop at
+    // the structural seed and let the diff read as coarse rather than confidently
+    // misaligned. Graceful degradation, per the matcher-confidence council.
+    const conf = matchConfidence(markersA, markersB);
     const start = matchedYDelta(ra.m, rb.m).max;
     let rounds = 0;
-    for (let round = 0; round < CORRECTIVE_ROUNDS; round++) {
-      if (Math.abs(matchedYDelta(ra.m, rb.m).max) <= CORRECTIVE_THRESHOLD)
-        break;
-      rounds = round + 1;
-      const corr = correctiveFlat(ra.m, rb.m);
-      if (!corr.a.length && !corr.b.length) break;
-      await Promise.all([inject(A, corr.a), inject(B, corr.b)]);
-      [ra, rb] = (await Promise.all([
-        A.page.evaluate(COLLECT_MARKERS_JS),
-        B.page.evaluate(COLLECT_MARKERS_JS),
-      ])) as [MarkerDoc, MarkerDoc];
+    if (conf.score >= CONFIDENCE_MIN) {
+      for (let round = 0; round < CORRECTIVE_ROUNDS; round++) {
+        if (Math.abs(matchedYDelta(ra.m, rb.m).max) <= CORRECTIVE_THRESHOLD)
+          break;
+        rounds = round + 1;
+        const corr = correctiveFlat(ra.m, rb.m);
+        if (!corr.a.length && !corr.b.length) break;
+        await Promise.all([inject(A, corr.a), inject(B, corr.b)]);
+        [ra, rb] = (await Promise.all([
+          A.page.evaluate(COLLECT_MARKERS_JS),
+          B.page.evaluate(COLLECT_MARKERS_JS),
+        ])) as [MarkerDoc, MarkerDoc];
+      }
     }
     const end = matchedYDelta(ra.m, rb.m);
+    if (conf.score < CONFIDENCE_MIN || conf.truncated) {
+      console.warn(
+        `[align] ${route}: low match confidence ${conf.score.toFixed(2)}` +
+          ` (rate ${conf.matchRate.toFixed(2)}, dup ${conf.dupPressure.toFixed(2)}` +
+          `${conf.truncated ? ", TRUNCATED" : ""}) — seed only, corrective skipped`,
+      );
+    }
     // Round-count is the guillotine seed's value signal: the structural pass
     // converges most pages in 0 corrective rounds; a page that needs many rounds
     // (or hits the cap without converging) is where the aligner should improve.
-    if (Math.abs(start) > CORRECTIVE_THRESHOLD) {
+    if (
+      conf.score >= CONFIDENCE_MIN &&
+      Math.abs(start) > CORRECTIVE_THRESHOLD
+    ) {
       console.warn(
         `[align] ${route}: corrective ${start}px → ${end.max}px in ${rounds} round(s)`,
         Math.abs(end.max) > CORRECTIVE_THRESHOLD

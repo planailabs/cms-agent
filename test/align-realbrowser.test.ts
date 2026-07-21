@@ -586,3 +586,35 @@ describe("stable element handles", () => {
     }
   }, 30_000);
 });
+
+// Marker cap: over the budget, keep the largest-by-AREA elements, not the first
+// N in document order — so a big element at the page BOTTOM survives (document-
+// order truncation would silently drop the whole tail).
+describe("marker cap (area priority)", () => {
+  it("keeps large bottom-of-page content, drops small, surfaces trunc", async () => {
+    const page = await browser.newPage({
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      // 900 tiny paragraphs (prefix), then 4 large blocks at the very bottom.
+      const tiny = Array.from({ length: 900 }, (_, i) => `<p>t${i}</p>`).join(
+        "",
+      );
+      const big = Array.from(
+        { length: 4 },
+        (_, i) => `<h1 style="height:240px">BOTTOM-BIG-${i}</h1>`,
+      ).join("");
+      await page.setContent(`<!doctype html><body>${tiny}${big}</body>`);
+      const doc = await collect(page);
+      // Capped to the budget, and truncation surfaced.
+      expect(doc.m.length).toBe(800);
+      expect(doc.trunc ?? 0).toBeGreaterThan(0);
+      // The 4 large blocks at the BOTTOM survived (document-order truncation would
+      // have kept only the first 800 tiny paragraphs and dropped these).
+      const kept = doc.m.filter((m) => m.k.includes("BOTTOM-BIG")).length;
+      expect(kept).toBe(4);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+});

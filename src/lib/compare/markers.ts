@@ -56,6 +56,10 @@ export interface MarkerDoc {
   /** Full scroll height of the document at capture time. */
   h: number;
   m: Marker[];
+  /** How many markers were dropped to fit the matcher budget (0 = full page
+   *  captured). > 0 means the page exceeded the cap and only its largest-by-area
+   *  elements were kept — a signal to lower alignment/diff confidence. */
+  trunc?: number;
 }
 
 /** Matched content anchor: the same content at yA (before) and yB (after). */
@@ -84,7 +88,8 @@ export interface Anchor {
 export const COLLECT_MARKERS_JS = `(function () {
   var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,table,figure,img,td,th';
   var CONT = 'section,article,header,footer,main,nav,aside,ul,ol,figure,table,form,blockquote';
-  var MAX = 800;
+  var MAX = 800;      // markers kept (bounds the O(n·m) matcher)
+  var HARD = 3000;    // candidates gathered before area-ranking (bounds collect cost)
   var contTagOf = function (el) {
     for (var p = el.parentElement; p; p = p.parentElement) {
       if (p.matches(CONT)) return p.tagName;
@@ -104,7 +109,7 @@ export const COLLECT_MARKERS_JS = `(function () {
     if (!isNaN(tv) && tv >= nextId) nextId = tv + 1;
   }
   var els = document.querySelectorAll(LEAF + ',' + CONT);
-  for (var i = 0; i < els.length && out.length < MAX; i++) {
+  for (var i = 0; i < els.length && out.length < HARD; i++) {
     var el = els[i];
     var r = el.getBoundingClientRect();
     if (r.height <= 0) continue;
@@ -185,8 +190,24 @@ export const COLLECT_MARKERS_JS = `(function () {
     }
     out.push(mk);
   }
+  // Over the matcher's budget: keep the MAX largest-by-AREA markers, not the
+  // first MAX in document order. Document-order truncation drops the page TAIL —
+  // the matcher becomes a prefix matcher and the bottom of a long page is
+  // silently invisible/misaligned. Area-ranking keeps a representative spread
+  // across the whole page. trunc surfaces how many were dropped so a caller can
+  // lower confidence / fall back rather than trust a partial match.
+  var trunc = 0;
+  if (out.length > MAX) {
+    var byArea = out.slice().sort(function (p, q) { return q.w * q.h - p.w * p.h; });
+    var keep = {};
+    for (var ka = 0; ka < MAX; ka++) keep[byArea[ka].i] = 1;
+    var pruned = [];
+    for (var pj = 0; pj < out.length; pj++) if (keep[out[pj].i]) pruned.push(out[pj]);
+    trunc = out.length - pruned.length;
+    out = pruned;
+  }
   var root = document.scrollingElement || document.documentElement;
-  return { h: Math.round(root.scrollHeight), m: out };
+  return { h: Math.round(root.scrollHeight), m: out, trunc: trunc };
 })()`;
 
 /** Keep only anchors strictly increasing in y on BOTH sides (a moved block
@@ -345,6 +366,65 @@ export function alignMarkers(a: Marker[], b: Marker[]): Alignment {
 /** Anchor score floor: below this a diagonal pairing is positional, not a
  *  content match, so it isn't used as an alignment breakpoint. */
 export const ANCHOR_MIN = 0.5;
+
+export interface MatchConfidence {
+  /** Overall 0..1 trust in the before↔after match. */
+  score: number;
+  /** Fraction of the smaller side that found a strong (≥ ANCHOR_MIN) match. */
+  matchRate: number;
+  /** Fraction of markers whose text key repeats — boilerplate/clones make the
+   *  order-preserving match ambiguous (a paragraph could pair several ways). */
+  dupPressure: number;
+  /** Either side hit the marker cap, so the match is over a partial page. */
+  truncated: boolean;
+}
+
+/**
+ * How much to TRUST the shared match — the single failure domain both align and
+ * changed sit on, so surface its quality instead of assuming convergence. Low
+ * confidence should degrade gracefully (align stops at the seed, highlights go
+ * coarse, onion falls back to raw) rather than polish a wrong correspondence.
+ *  - matchRate: most content corresponds → high; a big structural change or an
+ *    outright mismatch → low.
+ *  - dupPressure: repeated identical text (nav/footer/cards) makes pairing
+ *    ambiguous — penalize.
+ *  - truncated: a capped (partial) page can't be fully trusted — clamp.
+ */
+export const matchConfidence = (
+  a: MarkerDoc,
+  b: MarkerDoc,
+): MatchConfidence => {
+  const leaf = (m: Marker): boolean => m.k.charCodeAt(0) !== 35;
+  const la = a.m.filter(leaf);
+  const lb = b.m.filter(leaf);
+  const truncated = (a.trunc ?? 0) > 0 || (b.trunc ?? 0) > 0;
+  const n = Math.min(la.length, lb.length);
+  if (n === 0) return { score: 0, matchRate: 0, dupPressure: 0, truncated };
+
+  const strong = alignMarkers(la, lb).matches.filter(
+    (m) => m.score >= ANCHOR_MIN,
+  ).length;
+  const matchRate = strong / n;
+
+  const base = (k: string): string => k.replace(/#\d+$/, "");
+  const dupOf = (ms: Marker[]): number => {
+    const c = new Map<string, number>();
+    for (const m of ms) c.set(base(m.k), (c.get(base(m.k)) ?? 0) + 1);
+    let rep = 0;
+    for (const v of c.values()) if (v > 1) rep += v;
+    return ms.length ? rep / ms.length : 0;
+  };
+  const dupPressure = (dupOf(la) + dupOf(lb)) / 2;
+
+  let score = matchRate * (1 - 0.5 * dupPressure);
+  if (truncated) score = Math.min(score, 0.6);
+  return {
+    score: Math.max(0, Math.min(1, score)),
+    matchRate,
+    dupPressure,
+    truncated,
+  };
+};
 
 /** Aligned (yA,yB) breakpoints from the scored alignment — matches at or above
  *  ANCHOR_MIN, strictly increasing on both sides. */

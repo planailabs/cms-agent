@@ -187,20 +187,20 @@ deleted rather than hoarded. Sequenced, in priority order:
 A cross-model council (GPT-5.2, reading the source) surfaced gaps the Claude
 councils under-weighted. In priority order:
 
-- **The 800-marker cap is a silent CORRECTNESS cliff, not a scale nicety.**
-  `COLLECT_MARKERS_JS` caps at `MAX=800` in `querySelectorAll` (document) order, so
-  on a >800-element page the collector becomes a PREFIX capture — the page tail is
-  invisible, the NW matcher degrades to a prefix matcher, and alignment/highlights
-  on the tail can be arbitrarily wrong WHILE metrics look stable (the loop never
-  sees the missing anchors). Fix first: surface `truncated` + cap-hit count, and
-  prioritize markers by area/visibility (not first-come DOM order); raise the cap
-  with a perf bound. Until then, large-page metrics are suspect.
-- **No confidence signal / graceful degradation.** `alignMarkers` is now the single
-  failure domain but reports no trust. Add per-run confidence (match rate,
-  duplicate-key pressure, count of low-margin matches, cap-hit) and DEGRADE when
-  low: CHANGED → coarse add/remove region boxes; ALIGN → stop at the seed (don't
-  spend 6 round-trips polishing a wrong correspondence); onion → raw overlay. An
-  obvious coarse output beats a confidently-wrong fine one.
+- **DONE — the 800-marker cap.** Was a silent correctness cliff: `MAX=800` in
+  `querySelectorAll` (document) order made the collector a PREFIX capture on large
+  pages — the tail invisible, the matcher a prefix matcher, metrics falsely stable.
+  Now the collector gathers up to `HARD=3000` candidates and keeps the `MAX`
+  largest-by-AREA (a whole-page spread, not the prefix), and surfaces `trunc`
+  (count dropped) on `MarkerDoc`. Test: a big element at the page BOTTOM survives
+  the cap where document-order truncation would drop it.
+- **DONE (align side) — confidence signal + graceful degradation.**
+  `matchConfidence(a, b)` scores the shared match (match rate × (1 − ½·dup
+  pressure), clamped when truncated). `alignedShots` skips the corrective loop
+  below `CONFIDENCE_MIN` (0.35) — seed only, don't spend round-trips polishing a
+  wrong correspondence — and logs it. STILL OPEN: the CHANGED side (coarse region
+  boxes) and the onion raw-overlay fallback are not wired yet; `matchConfidence`
+  is the hook when they are.
 - **Shared-matcher tension (unresolved).** 2 of 3 GPT voices argued ALIGN and
   CHANGED optimize different truths (ALIGN wants stable anchors ACROSS rewrites;
   CHANGED wants to EXPOSE rewrites) and shouldn't fully share one global matcher —
