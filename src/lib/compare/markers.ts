@@ -53,9 +53,10 @@ export interface Anchor {
  * The matcher uses k for exact content and s for structure, so a section AND
  * each element inside it still anchor 1:1 when the text was reworded or
  * translated (different words, same roles in the same order). Leaves that
- * share a visual row (grid/multi-column) are dropped — they can't be ordered
- * in 1-D, so their container anchors the row as one unit instead. Markers are
- * capped so the O(n·m) match stays bounded on huge pages.
+ * share a visual row (grid/multi-column) are collapsed to one anchor per row —
+ * they can't be ordered in 1-D, but the row still anchors so its height delta
+ * lands as a filler per row. Markers are capped so the O(n·m) match stays
+ * bounded on huge pages.
  */
 export const COLLECT_MARKERS_JS = `(function () {
   var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,table,figure,img';
@@ -103,20 +104,20 @@ export const COLLECT_MARKERS_JS = `(function () {
     var n = counts[key] = (counts[key] || 0) + 1;
     out.push({ k: key + '#' + n, y: y, s: sig });
   }
-  // Grid rows: leaves sharing a row (same y as another leaf) can't be ordered
-  // in 1-D vertical alignment, so their per-element anchors go erratic and
-  // inflate the grid's cells. Drop them and let the enclosing container anchor
-  // the row as one unit — the height delta then lands as a single trailing
-  // filler. Stacked (non-grid) leaves keep their per-element anchoring.
+  // Grid rows: leaves on the same visual row (multi-column) can't be ordered
+  // in 1-D. Collapse each row to ONE anchor (the first leaf on it) instead of
+  // dropping the row entirely — so each grid ROW anchors and its height delta
+  // lands as a filler right after that row, not one giant filler for the whole
+  // grid. Stacked (distinct-y) leaves are each their own row → unaffected.
   var ROW = 6;
-  var leafYs = [];
-  for (var a = 0; a < out.length; a++) if (out[a].k.charAt(0) !== '#') leafYs.push(out[a].y);
+  var rowYs = [];
   var kept = [];
   for (var c = 0; c < out.length; c++) {
     if (out[c].k.charAt(0) !== '#') {
-      var share = 0;
-      for (var d = 0; d < leafYs.length; d++) if (Math.abs(leafYs[d] - out[c].y) <= ROW) share++;
-      if (share > 1) continue;
+      var dup = false;
+      for (var d = 0; d < rowYs.length; d++) if (Math.abs(rowYs[d] - out[c].y) <= ROW) { dup = true; break; }
+      if (dup) continue; // a leaf already anchors this row
+      rowYs.push(out[c].y);
     }
     kept.push(out[c]);
   }
