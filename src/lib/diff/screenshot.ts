@@ -1,10 +1,16 @@
 /**
  * Screenshot diff — Playwright renders a route on the main instance and the
  * branch instance, pixelmatch highlights changed regions. Results cached by
- * (route, mainSha, branchSha) under VAR_DIR/diffs (plan §6).
+ * (route, mainSha, branchSha) under TMPDIR/cms-agent-diffs (plan §6).
+ *
+ * Deliberately ephemeral (TMPDIR, not the persistent VAR_DIR): shots + markers
+ * are derived artifacts, regenerable from branch content. Persisting them bloated
+ * the data volume (deploy ENOSPC) and stranded stale shots across deploys; a
+ * tmpdir clears on restart so every run regenerates fresh.
  */
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { PNG } from 'pngjs';
 import pixelmatch from 'pixelmatch';
@@ -30,7 +36,8 @@ export interface DiffResult {
 const VIEWPORT = { width: 1280, height: 900 };
 
 function cacheDir(branch: string): string {
-  return path.join(path.resolve(env().VAR_DIR), 'diffs', branch);
+  // TMPDIR, not VAR_DIR — ephemeral by design (see file header).
+  return path.join(os.tmpdir(), 'cms-agent-diffs', branch);
 }
 
 function cacheKey(...parts: string[]): string {
