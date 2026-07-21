@@ -117,6 +117,27 @@ const scheduleSave = (): void => {
   }, SAVE_DEBOUNCE_MS);
 };
 
+/** Mirror the current view state NOW (before an update reload), bypassing the
+ *  debounce. Uses sendBeacon so it survives the imminent navigation. */
+export const flushWindowSessionSave = (): void => {
+  if (!windowId || !store.state.user) return;
+  const blob = captureViewState(store.state);
+  const serialized = JSON.stringify(blob);
+  if (serialized === lastSaved) return;
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  lastSaved = serialized;
+  // keepalive lets the request outlive the imminent reload navigation.
+  void fetch('/api/window-sessions', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: windowId, label: sessionLabel(store.state), state: blob }),
+    keepalive: true,
+  }).catch(() => {});
+};
+
 // ── Boot: silent self-restore or the picker offer ────────────────────────
 
 const fetchSession = async (id: string): Promise<WindowViewState | null> => {

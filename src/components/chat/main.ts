@@ -26,6 +26,7 @@ import { renderPlanModal } from '../workspace/planModal';
 import { syncOnionAlignment } from '../workspace/onionAlign';
 import { renderCodeBrowser } from '../workspace/codeBrowser';
 import { bootWindowSession, renderWindowPicker } from '../workspace/windowSession';
+import { startUpdateWatcher } from '../workspace/appUpdate';
 import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
@@ -190,6 +191,8 @@ const initApp = () => {
   // Window-session boot: a fresh window sees the "continue where you left
   // off?" offer FIRST; the workspace loads only after the choice.
   void bootWindowSession();
+  // Reload + restore this window when a newer build is deployed.
+  startUpdateWatcher();
 
   store.notify(); // Initial render via subscription (since render is subscribed)
   render();
