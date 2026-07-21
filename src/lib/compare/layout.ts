@@ -78,11 +78,11 @@ const partitionPair = (
   bh: number,
 ): { pa: Part; pb: Part } | null => {
   const boxesA = a
-    .filter((m) => !isContainer(m) && !m.v)
+    .filter((m) => !isContainer(m) && !m.v && !m.na)
     .map(boxOf)
     .filter((x): x is Box => x !== null);
   const boxesB = b
-    .filter((m) => !isContainer(m) && !m.v)
+    .filter((m) => !isContainer(m) && !m.v && !m.na)
     .map(boxOf)
     .filter((x): x is Box => x !== null);
   if (boxesA.length === 0 || boxesB.length === 0) return null;
@@ -720,8 +720,8 @@ export const matchedYDelta = (
   b: Marker[],
   trustedOnly = false,
 ): { max: number; worst: Array<{ ia?: number; ib?: number; dy: number }> } => {
-  const la = a.filter((m) => !isContainer(m));
-  const lb = b.filter((m) => !isContainer(m));
+  const la = a.filter((m) => !isContainer(m) && !m.na);
+  const lb = b.filter((m) => !isContainer(m) && !m.na);
   const { matches } = alignMarkers(la, lb);
   const base = (k: string): string => k.replace(/#\d+$/, "");
   const counts = (ms: Marker[], field: "k" | "id"): Map<string, number> => {
@@ -777,8 +777,8 @@ const CSS_PX = 1 / 64;
 const cssPx = (value: number): number => Math.round(value / CSS_PX) * CSS_PX;
 
 const strongLeafPairs = (a: Marker[], b: Marker[]): ResidualPair[] => {
-  const fa = a.filter((m) => !isContainer(m));
-  const fb = b.filter((m) => !isContainer(m));
+  const fa = a.filter((m) => !isContainer(m) && !m.na);
+  const fb = b.filter((m) => !isContainer(m) && !m.na);
   const base = (m: Marker): string => m.k.replace(/#\d+$/, "");
   const visualCounts = (markers: Marker[]): Map<string, number> => {
     const counts = new Map<string, number>();

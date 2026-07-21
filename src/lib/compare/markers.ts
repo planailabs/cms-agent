@@ -65,6 +65,8 @@ export interface Marker {
   /** Substantial CSS/SVG-painted block. These anchors align visual frames and
    *  illustrations but are not content changes or guillotine input boxes. */
   v?: boolean;
+  /** Change/scroll marker that must not request layout correction. */
+  na?: boolean;
 }
 
 export interface MarkerDoc {
@@ -173,6 +175,9 @@ export const COLLECT_MARKERS_JS = `(function () {
       key = el.tagName + ':' + txt;
       sig = contTagOf(el) + '/' + el.tagName;
     } else if (el.matches(VISUAL)) {
+      // One rigid painted block gets one correction target. Nested targets
+      // otherwise fight their frame and accumulate padding on both sides.
+      if (el.parentElement && el.parentElement.closest('[data-cmsv]')) continue;
       var vs = null;
       try { vs = getComputedStyle(el); } catch (e) { vs = null; }
       var border = vs && (
@@ -205,9 +210,11 @@ export const COLLECT_MARKERS_JS = `(function () {
     }
     var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig, i: id, d: semanticDepth };
     if (visual) mk.v = true;
+    if (el.tagName === 'SPAN') mk.na = true;
     // Tag the element so the aligner can re-select it to inject spacers before
     // re-screenshotting (invisible; set before the shot). Stable across rounds.
     try { el.setAttribute('data-cmsm', String(id)); } catch (e) {}
+    if (visual) try { el.setAttribute('data-cmsv', '1'); } catch (e) {}
     if (el.id) mk.id = el.id;
     var cls = typeof el.className === 'string' ? el.className : '';
     if (cls) mk.c = cls.slice(0, 100);
@@ -497,7 +504,8 @@ export const matchConfidence = (
   a: MarkerDoc,
   b: MarkerDoc,
 ): MatchConfidence => {
-  const leaf = (m: Marker): boolean => m.k.charCodeAt(0) !== 35 && !m.v;
+  const leaf = (m: Marker): boolean =>
+    m.k.charCodeAt(0) !== 35 && !m.v && !m.na;
   const la = a.m.filter(leaf);
   const lb = b.m.filter(leaf);
   const truncated = (a.trunc ?? 0) > 0 || (b.trunc ?? 0) > 0;

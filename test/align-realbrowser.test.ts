@@ -826,7 +826,7 @@ describe("visual marker collection", () => {
         markers.m.some(
           (marker) => marker.v && marker.k.toUpperCase().startsWith("V:SVG"),
         ),
-      ).toBe(true);
+      ).toBe(false);
     } finally {
       await page.close();
     }
@@ -952,6 +952,7 @@ describe("visual marker collection", () => {
       `);
       const [a, b] = await Promise.all([collect(before), collect(after)]);
       expect(a.m.some((marker) => marker.c === "caption")).toBe(true);
+      expect(a.m.find((marker) => marker.c === "caption")?.na).toBe(true);
       expect(a.m.some((marker) => marker.c === "emphasis")).toBe(false);
       const changed = boxDiff(a.m, a.h, b.m, b.h).filter(
         (box) => box.kind === "changed",

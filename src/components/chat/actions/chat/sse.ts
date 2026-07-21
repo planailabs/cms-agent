@@ -116,7 +116,7 @@ export const connectEvents = (): Promise<void> => {
         'compaction_start', 'compaction',
         'question', 'phase_changed', 'done', 'error',
         // Workspace events (execution/publish lifecycle, chat meta)
-        'execution_committed', 'execution_reverted', 'publish_log', 'publish_done',
+        'state', 'execution_committed', 'execution_reverted', 'publish_log', 'publish_done',
         'chat_renamed', 'tabs_updated', 'automatism', 'automatism_state', 'chat_archived',
       ];
       for (const type of eventTypes) {

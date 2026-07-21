@@ -156,10 +156,14 @@ them into a fixture under `test/fixtures/` and add a scaffold.
 - Standalone non-inline `<span>` elements are content leaves because sites
   commonly use block spans for diagram labels and captions. Spans nested in an
   existing content leaf remain folded into that parent regardless of computed
-  display, avoiding duplicate highlights and unstable style-driven candidates.
+  display. Standalone captions participate in highlights and scroll matching but
+  never request corrective spacers, so changed labels cannot deform their
+  painted parent.
 - Substantial painted `div`/SVG/canvas/video blocks are visual anchors even when
   they contain no marker text. Only uniquely identified painted roles authorize
   correction; repeated card frames remain excluded to avoid ambiguous pairing.
+  Only the outermost painted block in a nested illustration authorizes
+  correction; internal SVG/painted descendants cannot fight their frame.
   Painted anchors do not enter text highlights, match confidence, or the
   guillotine seed.
 - A full rewrite (structures don't correspond) overlays as one rectangle rather
