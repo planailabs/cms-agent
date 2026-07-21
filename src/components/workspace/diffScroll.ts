@@ -66,13 +66,19 @@ const anchorsFor = (srcId: string, dstId: string): Anchor[] | null => {
 
 // Runs inside each preview iframe (has `agent` in scope, per bootstrap eval).
 // Echo suppression is by position, not timing: the scroll event caused by a
-// programmatic scrollTop can arrive after the next rAF, so a timed "applying"
+// a programmatic scroll event can arrive after the next rAF, so a timed "applying"
 // flag leaks echoes back to the other pane and the two fight (jitter). Instead
 // we remember the target we set and swallow the one event that lands on it.
-const SYNC_CODE = `
+export const DIFF_SCROLL_SYNC_CODE = `
 if (!window.__cmsScrollSync) {
   window.__cmsScrollSync = true;
   var el = document.scrollingElement || document.documentElement;
+  function forceInstantScroll() {
+    document.documentElement.style.setProperty('scroll-behavior', 'auto', 'important');
+    if (document.body) document.body.style.setProperty('scroll-behavior', 'auto', 'important');
+    el.style.setProperty('scroll-behavior', 'auto', 'important');
+  }
+  forceInstantScroll();
   var expected = -1;
   window.addEventListener('scroll', function () {
     if (expected >= 0) {
@@ -94,6 +100,8 @@ if (!window.__cmsScrollSync) {
       : (d && typeof d.frac === 'number' ? d.frac : 0) * max;
     if (Math.abs(el.scrollTop - top) < 1) return;
     expected = top;
+    // Reassert in case site code changed the inline style after setup.
+    forceInstantScroll();
     el.scrollTop = top;
   });
   agent.post({ type: 'cms:markers', doc: ${COLLECT_MARKERS_JS} });
@@ -289,7 +297,7 @@ export const registerDiffScrollSync = (): void => {
       postTo(src, {
         type: "cms:eval",
         id: `scroll-sync-${++seq}`,
-        code: SYNC_CODE,
+        code: DIFF_SCROLL_SYNC_CODE,
       });
       void syncDiffContentAlignment(store.state);
     } else if (data.type === "cms:eval-result" && typeof data.id === "string") {

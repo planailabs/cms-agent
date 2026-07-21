@@ -150,6 +150,10 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   otherwise the correction is dropped rather than guessed.
 - Matching ≠ change-detection: identity can score a changed element ~1, so
   `boxDiff` decides "changed" by comparing the content key, not the match score.
+- Live side-by-side scroll sync forces `scroll-behavior: auto !important` on
+  each iframe's root scroller and reasserts it before every relayed position.
+  Site CSS (including later inline changes) must not animate synchronization;
+  `test/diff-scroll-realbrowser.test.ts` covers this in Chromium.
 - Closed `<details>` answers are not painted and remain excluded, but their
   visible `<summary>` questions are leaf markers so changed FAQ rows receive
   normal highlight boxes.
