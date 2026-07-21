@@ -333,10 +333,9 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   pickerActive: false,
   plan: null,
   planModalOpen: false,
-  // 'content' by default: matched content lines up even when the two shots
-  // differ in height (cross-browser rendering, added/removed sections). Fails
-  // soft to plain height when a shot has no markers.
-  compareMode: 'content',
+  // Height is the predictable default; content alignment remains opt-in and
+  // is restored when an existing window session selected it explicitly.
+  compareMode: 'height',
   codeBrowser: createInitialCodeBrowserState(),
   windowPicker: null,
   executionSha: null,

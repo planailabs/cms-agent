@@ -48,7 +48,7 @@ const pending = new Map<
 const REQUEST_TIMEOUT_MS = 15_000;
 let appliedSig: string | null = null;
 let aligningSig: string | null = null;
-let lastMode: "height" | "content" = "content";
+let lastMode: "height" | "content" = "height";
 let correctiveSkipSig: string | null = null;
 const readySrc = new Map<string, string>();
 
