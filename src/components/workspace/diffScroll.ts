@@ -4,8 +4,9 @@
  * we go through the injected bootstrap's cms:eval channel (same trust model
  * the preview agent already uses): on each iframe's cms:agent-ready we eval a
  * tiny reporter/receiver into it, then relay cms:scroll from one iframe to the
- * other as cms:scroll-to. Sync is by scroll fraction so differing content
- * heights (before vs after) still line up.
+ * other as cms:scroll-to. In content mode, the same bridge also injects the
+ * live spacer plan into both iframes so the editable before/after documents
+ * line up structurally, not just by scroll fraction.
  */
 
 const IFRAME_IDS = ['ws-diff-before', 'ws-diff-after'] as const;
@@ -18,13 +19,36 @@ import {
   type Anchor,
   type MarkerDoc,
 } from '@/lib/compare/markers';
+import {
+  correctiveFlat,
+  matchedYDelta,
+  spacingPlan,
+  type Spacer,
+} from '@/lib/compare/layout';
+import { INJECT_SPACERS } from '@/lib/compare/inject';
 import { store } from '../chat/app/store';
+import type { AppState } from '../chat/app/state';
 
 /** Marker docs per iframe id (repopulated on every document load). */
 const markerDocs = new Map<string, MarkerDoc>();
 /** Bracketed anchors keyed by direction ("srcId>dstId"), invalidated on
  *  marker updates. */
 let anchorCache = new Map<string, Anchor[]>();
+const pending = new Map<
+  string,
+  {
+    resolve: (value: unknown) => void;
+    reject: (err: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }
+>();
+const REQUEST_TIMEOUT_MS = 15_000;
+const CORRECTIVE_THRESHOLD = 8;
+const CORRECTIVE_ROUNDS = 6;
+let appliedSig: string | null = null;
+let aligningSig: string | null = null;
+let lastMode: 'height' | 'content' = 'content';
+const readySrc = new Map<string, string>();
 
 const anchorsFor = (srcId: string, dstId: string): Anchor[] | null => {
   const key = `${srcId}>${dstId}`;
@@ -86,6 +110,109 @@ const postTo = (f: HTMLIFrameElement, msg: Record<string, unknown>): void => {
   const origin = originOf(f);
   if (f.contentWindow && origin) f.contentWindow.postMessage(msg, origin);
 };
+const currentSig = (): string | null => {
+  const a = iframeById(IFRAME_IDS[0]);
+  const b = iframeById(IFRAME_IDS[1]);
+  if (!a?.src || !b?.src) return null;
+  return `${a.src}|${b.src}`;
+};
+const requestEval = (
+  iframe: HTMLIFrameElement,
+  code: string,
+): Promise<unknown> =>
+  new Promise((resolve, reject) => {
+    const origin = originOf(iframe);
+    if (!iframe.contentWindow || !origin) {
+      reject(new Error('Diff iframe is not available'));
+      return;
+    }
+    const id = `diff-scroll-${++seq}`;
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`Diff iframe request timed out: ${iframe.id}`));
+    }, REQUEST_TIMEOUT_MS);
+    pending.set(id, { resolve, reject, timer });
+    iframe.contentWindow.postMessage({ type: 'cms:eval', id, code }, origin);
+  });
+const settle = (id: string, ok: boolean, value: unknown, error?: string): void => {
+  const entry = pending.get(id);
+  if (!entry) return;
+  pending.delete(id);
+  clearTimeout(entry.timer);
+  if (ok) entry.resolve(value);
+  else entry.reject(new Error(error || 'Diff iframe eval failed'));
+};
+const collectDoc = (iframe: HTMLIFrameElement): Promise<MarkerDoc> =>
+  requestEval(iframe, `return ${COLLECT_MARKERS_JS};`) as Promise<MarkerDoc>;
+const applyAndCollect = (
+  iframe: HTMLIFrameElement,
+  spacers: Spacer[],
+): Promise<MarkerDoc> =>
+  requestEval(
+    iframe,
+    `(${INJECT_SPACERS.toString()})(${JSON.stringify(
+      spacers,
+    )}); return ${COLLECT_MARKERS_JS};`,
+  ) as Promise<MarkerDoc>;
+const reloadFrames = (): void => {
+  for (const id of IFRAME_IDS) {
+    const iframe = iframeById(id);
+    if (iframe?.src) iframe.src = iframe.src;
+  }
+  markerDocs.clear();
+  anchorCache = new Map();
+  readySrc.clear();
+  appliedSig = null;
+  aligningSig = null;
+};
+const setDocs = (a: MarkerDoc, b: MarkerDoc): void => {
+  markerDocs.set(IFRAME_IDS[0], a);
+  markerDocs.set(IFRAME_IDS[1], b);
+  anchorCache = new Map();
+};
+const alignLiveFrames = async (sig: string): Promise<void> => {
+  if (aligningSig === sig || appliedSig === sig) return;
+  const before = iframeById(IFRAME_IDS[0]);
+  const after = iframeById(IFRAME_IDS[1]);
+  if (!before || !after) return;
+  aligningSig = sig;
+  try {
+    let [a, b] = (await Promise.all([collectDoc(before), collectDoc(after)])) as [
+      MarkerDoc,
+      MarkerDoc,
+    ];
+    if (currentSig() !== sig || store.state.workspace.compareMode !== 'content')
+      return;
+    const plan = spacingPlan(a.m, a.h, b.m, b.h);
+    [a, b] = (await Promise.all([
+      applyAndCollect(before, plan.a),
+      applyAndCollect(after, plan.b),
+    ])) as [MarkerDoc, MarkerDoc];
+    for (let round = 0; round < CORRECTIVE_ROUNDS; round++) {
+      if (
+        currentSig() !== sig ||
+        store.state.workspace.compareMode !== 'content' ||
+        Math.abs(matchedYDelta(a.m, b.m).max) <= CORRECTIVE_THRESHOLD
+      ) {
+        break;
+      }
+      const corr = correctiveFlat(a.m, b.m);
+      if (!corr.a.length && !corr.b.length) break;
+      [a, b] = (await Promise.all([
+        applyAndCollect(before, corr.a),
+        applyAndCollect(after, corr.b),
+      ])) as [MarkerDoc, MarkerDoc];
+    }
+    if (currentSig() !== sig || store.state.workspace.compareMode !== 'content')
+      return;
+    setDocs(a, b);
+    appliedSig = sig;
+  } catch (err) {
+    console.warn('[diff-scroll] live side-by-side alignment failed:', err);
+  } finally {
+    if (aligningSig === sig) aligningSig = null;
+  }
+};
 
 let seq = 0;
 let registered = false;
@@ -110,6 +237,10 @@ export const registerDiffScrollSync = (): void => {
 
     const data = ev.data as {
       type?: string;
+      id?: string;
+      ok?: boolean;
+      value?: unknown;
+      error?: string;
       frac?: number;
       top?: number;
       doc?: MarkerDoc;
@@ -119,7 +250,12 @@ export const registerDiffScrollSync = (): void => {
     if (data.type === 'cms:agent-ready') {
       markerDocs.delete(src.id); // new document — old markers are stale
       anchorCache = new Map();
+      readySrc.set(src.id, src.src);
+      if (appliedSig && currentSig() !== appliedSig) appliedSig = null;
       postTo(src, { type: 'cms:eval', id: `scroll-sync-${++seq}`, code: SYNC_CODE });
+      void syncDiffContentAlignment(store.state);
+    } else if (data.type === 'cms:eval-result' && typeof data.id === 'string') {
+      settle(data.id, data.ok === true, data.value, data.error);
     } else if (data.type === 'cms:markers' && data.doc && Array.isArray(data.doc.m)) {
       markerDocs.set(src.id, data.doc);
       anchorCache = new Map();
@@ -143,4 +279,34 @@ export const registerDiffScrollSync = (): void => {
       }
     }
   });
+};
+
+/** Keep the live side-by-side iframes aligned with the current compare mode.
+ *  In content mode we inject the same spacer plan the screenshot pipeline uses;
+ *  switching back to height mode reloads the iframes once to drop those
+ *  injected spacers and restore the untouched documents. */
+export const syncDiffContentAlignment = async (
+  state: AppState,
+): Promise<void> => {
+  const mode = state.workspace.compareMode;
+  const before = iframeById(IFRAME_IDS[0]);
+  const after = iframeById(IFRAME_IDS[1]);
+  if (!before || !after) {
+    readySrc.clear();
+    appliedSig = null;
+    aligningSig = null;
+    lastMode = mode;
+    return;
+  }
+  if (mode === 'height') {
+    if (lastMode === 'content' && appliedSig) reloadFrames();
+    lastMode = mode;
+    return;
+  }
+  lastMode = mode;
+  const sig = currentSig();
+  if (readySrc.get(before.id) !== before.src || readySrc.get(after.id) !== after.src)
+    return;
+  if (!sig || appliedSig === sig || aligningSig === sig) return;
+  await alignLiveFrames(sig);
 };

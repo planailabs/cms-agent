@@ -29,6 +29,18 @@ const mkState = (): AppState => {
 };
 
 describe('diff compare renderers', () => {
+  it('keeps side-by-side mode on live before/after iframes', () => {
+    const state = mkState();
+    state.workspace.compareMode = 'content';
+    state.workspace.diff.mode = 'side-by-side';
+
+    const html = renderDiffViewer(state);
+    expect(html).toContain('id="ws-diff-before"');
+    expect(html).toContain('id="ws-diff-after"');
+    expect(html).not.toContain('kind=before');
+    expect(html).not.toContain('kind=after');
+  });
+
   it('renders raw diff shots for onion mode and marks the container for content alignment', () => {
     const state = mkState();
     state.workspace.compareMode = 'content';
