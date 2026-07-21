@@ -1,12 +1,15 @@
 /**
  * App-update watcher: polls /api/version and, when the deployed commit no
- * longer matches this tab's baked-in APP_COMMIT (a redeploy happened),
+ * longer matches the commit this tab was served with (a redeploy happened),
  * flushes the window session and reloads. The reload is silent — the window
  * keeps its sessionStorage id, so bootWindowSession restores exactly where it
  * was (see windowSession.ts). Only reloads when the app is idle (agent not
  * mid-turn) so a running conversation is never interrupted.
+ *
+ * The tab's own commit comes from the authed SSR page (#app dataset), not a
+ * bundle constant — the exact build must never leak to anonymous callers.
  */
-import { APP_COMMIT } from '../chat/constants';
+import { getAppBuild } from '../chat/constants';
 import { store } from '../chat/app/store';
 import { flushWindowSessionSave } from './windowSession';
 
@@ -33,14 +36,16 @@ let started = false;
 export const startUpdateWatcher = (): void => {
   if (started) return;
   started = true;
-  // Nothing to compare against on a dev build without a baked commit.
-  if (!APP_COMMIT) return;
+  // The commit this tab was served with (from the authed #app dataset).
+  // Nothing to compare against on a dev build without a commit.
+  const ownCommit = getAppBuild().commit;
+  if (!ownCommit) return;
 
   let updated = false; // latched once a newer build is seen
 
   const check = async (): Promise<void> => {
-    const commit = updated ? APP_COMMIT : await serverCommit();
-    if (commit && commit !== APP_COMMIT) updated = true;
+    const commit = updated ? ownCommit : await serverCommit();
+    if (commit && commit !== ownCommit) updated = true;
     // Reload only when idle: a mid-turn reload would drop the live stream.
     if (updated && !agentBusy()) {
       flushWindowSessionSave();

@@ -10,9 +10,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const APP_NAME = 'CMS Agent';
-export const APP_VERSION = 'v0.1.0';
-/** Short git commit embedded at build time (empty when unknown). */
-export const APP_COMMIT = import.meta.env.PUBLIC_GIT_COMMIT ?? '';
+
+/** Build identity (version + commit) for display and the update watcher.
+ *  Read from the authed SSR page's #app data attributes — NOT baked into the
+ *  client bundle, so anonymous callers can't fingerprint the exact build.
+ *  Server-side, the values live in src/lib/buildInfo.ts. */
+export interface AppBuild {
+  version: string;
+  commit: string;
+}
+let cachedBuild: AppBuild | null = null;
+export const getAppBuild = (): AppBuild => {
+  if (cachedBuild) return cachedBuild;
+  const el = typeof document !== 'undefined' ? document.getElementById('app') : null;
+  cachedBuild = { version: el?.dataset.appVersion ?? '', commit: el?.dataset.gitCommit ?? '' };
+  return cachedBuild;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Storage Keys

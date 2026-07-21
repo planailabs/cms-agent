@@ -6,8 +6,15 @@
  *
  * BASE_DOMAIN + scheme are inlined as data attributes on #app because
  * import.meta.env.PUBLIC_* is not configured for this deployment.
+ *
+ * The build version/commit ride along the same way: this page is served only
+ * to signed-in users (middleware redirects anon to /signin), so passing them
+ * here — instead of baking them into the public client bundle — keeps the
+ * exact build identity out of anonymous hands. See src/lib/buildInfo.ts.
  */
 export const prerender = false;
+
+import { APP_VERSION, GIT_COMMIT } from '@/lib/buildInfo';
 
 const user = Astro.locals.user!;
 const baseDomain = process.env.BASE_DOMAIN ?? 'localhost';
@@ -28,6 +35,8 @@ const scheme =
       data-base-domain={baseDomain}
       data-scheme={scheme}
       data-user-name={user.name}
+      data-app-version={APP_VERSION}
+      data-git-commit={GIT_COMMIT}
     >
     </div>
     <script>

@@ -16,7 +16,7 @@ import {
 } from '../content';
 import type { AppState } from '../app/state';
 import { store } from '../app/store';
-import { APP_COMMIT, APP_NAME, APP_VERSION } from '../constants';
+import { APP_NAME, getAppBuild } from '../constants';
 import { t, uiLocale } from '@/lib/i18n';
 
 /**
@@ -148,6 +148,7 @@ const buildClassList = (...classes: (string | false | undefined)[]): string =>
 
 export const renderHeader = ({ locale, state }: HeaderParams): string => {
   const { navigation } = locale;
+  const appBuild = getAppBuild(); // version/commit from the authed #app dataset
 
   // Build conditional class lists
   const languageToggleClasses = buildClassList(
@@ -207,7 +208,7 @@ export const renderHeader = ({ locale, state }: HeaderParams): string => {
     <span class="logo-link flex items-center gap-2 text-base font-semibold tracking-tight text-(--text-primary) md:text-lg">
       <span class="flex items-baseline gap-2 leading-none">
         <span>${APP_NAME}</span>
-        <span class="text-[0.5em] font-bold text-(--text-muted)">${APP_VERSION}${APP_COMMIT ? ` <span class="font-normal">${APP_COMMIT}</span>` : ''}</span>
+        <span class="text-[0.5em] font-bold text-(--text-muted)">${appBuild.version}${appBuild.commit ? ` <span class="font-normal">${appBuild.commit}</span>` : ''}</span>
       </span>
     </span>
 
