@@ -182,6 +182,37 @@ deleted rather than hoarded. Sequenced, in priority order:
    `correctiveFlat` safety net for the residual few. Revisit only if real-page
    round-count logs show many pages needing the corrective.
 
+### Open gaps (2nd council, GPT-5.2 external voices — not yet done)
+
+A cross-model council (GPT-5.2, reading the source) surfaced gaps the Claude
+councils under-weighted. In priority order:
+
+- **The 800-marker cap is a silent CORRECTNESS cliff, not a scale nicety.**
+  `COLLECT_MARKERS_JS` caps at `MAX=800` in `querySelectorAll` (document) order, so
+  on a >800-element page the collector becomes a PREFIX capture — the page tail is
+  invisible, the NW matcher degrades to a prefix matcher, and alignment/highlights
+  on the tail can be arbitrarily wrong WHILE metrics look stable (the loop never
+  sees the missing anchors). Fix first: surface `truncated` + cap-hit count, and
+  prioritize markers by area/visibility (not first-come DOM order); raise the cap
+  with a perf bound. Until then, large-page metrics are suspect.
+- **No confidence signal / graceful degradation.** `alignMarkers` is now the single
+  failure domain but reports no trust. Add per-run confidence (match rate,
+  duplicate-key pressure, count of low-margin matches, cap-hit) and DEGRADE when
+  low: CHANGED → coarse add/remove region boxes; ALIGN → stop at the seed (don't
+  spend 6 round-trips polishing a wrong correspondence); onion → raw overlay. An
+  obvious coarse output beats a confidently-wrong fine one.
+- **Shared-matcher tension (unresolved).** 2 of 3 GPT voices argued ALIGN and
+  CHANGED optimize different truths (ALIGN wants stable anchors ACROSS rewrites;
+  CHANGED wants to EXPOSE rewrites) and shouldn't fully share one global matcher —
+  a direct challenge to Phase 2's consolidation. Don't reverse it on intuition;
+  resolve with a real corpus.
+- **The synthetic chaos metric is weak evidence.** 77/80-zero-rounds proves the
+  seed fits the GENERATOR, not real failure classes (boilerplate/nav/footer clones,
+  repeated cards, sticky headers, lazy content, reordered grids, translations).
+  Replace it: persist worst-pair artifacts from live diffs (the round-count log is
+  the hook) into a real regression corpus. The collector's marker identity is where
+  quality is actually won or lost — likely a bigger lever than the align loop.
+
 ## This skill is SELF-IMPROVING
 
 Treat it as living. Whenever you fix a new alignment failure mode: (a) add the
