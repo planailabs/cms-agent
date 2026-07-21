@@ -47,6 +47,11 @@ import { openGitModal, closeGitModal, loadGitCommits, selectGitCommit, backToGit
 import { openCapsModal, closeCapsModal, loadCapabilities } from './capsModal';
 import { openPlanModal, closePlanModal } from './planModal';
 import {
+  adoptWindowSession,
+  deleteWindowSession,
+  startFreshWindow,
+} from './windowSession';
+import {
   addCodeContext,
   beginLineSelect,
   closeCodeBrowser,
@@ -334,6 +339,13 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
   window.addEventListener('pointerup', () => endLineSelect());
   delegateEvent(app, 'click', '[data-action="ws-cb-add"]', () => addCodeContext());
+  delegateEvent(app, 'click', '[data-action="ws-wsn-restore"]', (_e, target) => {
+    if (target.dataset.id) void adoptWindowSession(target.dataset.id);
+  });
+  delegateEvent(app, 'click', '[data-action="ws-wsn-delete"]', (_e, target) => {
+    if (target.dataset.id) void deleteWindowSession(target.dataset.id);
+  });
+  delegateEvent(app, 'click', '[data-action="ws-wsn-fresh"]', () => startFreshWindow());
   delegateEvent(app, 'click', '[data-action="ws-compare-align"]', () => {
     const ws = store.state.workspace;
     ws.compareMode = ws.compareMode === 'content' ? 'height' : 'content';

@@ -260,6 +260,10 @@ export interface WorkspaceState {
   /** Code browser modal (read-only worktree view + line-range context). */
   codeBrowser: CodeBrowserState;
 
+  /** Saved window sessions offered to a FRESH window on load (null = no
+   *  offer pending). Not chat-scoped — survives switches. */
+  windowPicker: Array<{ id: string; label: string; updatedAt: string }> | null;
+
   /** Sha to publish — from phase_changed.executionSha / execution_committed. */
   executionSha: string | null;
   /** Committed-execution cards shown in the chat. */
@@ -331,6 +335,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   planModalOpen: false,
   compareMode: 'height',
   codeBrowser: createInitialCodeBrowserState(),
+  windowPicker: null,
   executionSha: null,
   executions: [],
   publish: null,

@@ -42,6 +42,7 @@ model User {
   approvedMemories       ApprovedMemory[]
   systemPromptExtensions SystemPromptExtension[]
   chatTabs               ChatTabs[]
+  windowSessions         WindowSession[]
 
   @@unique([email])
   @@map("user")
@@ -187,6 +188,23 @@ model Automatism {
   @@index([chatId])
   @@index([agentChatId])
   @@map("automatism")
+}
+
+// Soft window session: per-window view-state blob (which chat, diff mode,
+// compare mode, open code file, …). The client mirrors its view state here
+// debounced; fresh windows are OFFERED the saved sessions on load. Clicks
+// never round-trip — this is passive continuity storage, not live state.
+model WindowSession {
+  id        String   @id // client-generated window UUID
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String   @default("")
+  state     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+  @@map("window_session")
 }
 
 // Per-user open preview tabs of a chat (synced across sessions via SSE)

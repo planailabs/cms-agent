@@ -26,6 +26,7 @@ import { renderCapsModal } from '../workspace/capsModal';
 import { renderPlanModal } from '../workspace/planModal';
 import { syncOnionAlignment } from '../workspace/onionAlign';
 import { renderCodeBrowser } from '../workspace/codeBrowser';
+import { initWindowSession, renderWindowPicker } from '../workspace/windowSession';
 import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
 import { loadDiffPages } from '../workspace/actions';
@@ -165,6 +166,7 @@ const initApp = () => {
         renderCapsModal(state) +
         renderPlanModal(state) +
         renderCodeBrowser(state) +
+        renderWindowPicker(state) +
         renderInputModal(state);
       if (overlayRegion.innerHTML !== overlayMarkup) {
         overlayRegion.innerHTML = overlayMarkup;
@@ -186,7 +188,8 @@ const initApp = () => {
   // so load the profile and open the active chat straight away.
   initTheme();
   void loadProfile();
-  void ensureActiveChat();
+  // Window session AFTER the default chat is up — restoring may switch it.
+  void ensureActiveChat().then(() => initWindowSession());
 
   store.notify(); // Initial render via subscription (since render is subscribed)
   render();

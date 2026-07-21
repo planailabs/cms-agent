@@ -170,6 +170,11 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.code.binary': 'Binary file — no preview.',
     'workspace.code.truncated': 'File truncated for display.',
     'workspace.code.empty': 'No files.',
+    'workspace.window.heading': 'Continue where you left off?',
+    'workspace.window.restore': 'Restore',
+    'workspace.window.delete': 'Delete this window session',
+    'workspace.window.fresh': 'Start fresh',
+    'workspace.window.unnamed': 'Unnamed window',
     'workspace.compare.height': 'Height',
     'workspace.compare.content': 'Content',
     'workspace.compare.title':
@@ -351,6 +356,11 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.code.binary': 'Binärdatei — keine Vorschau.',
     'workspace.code.truncated': 'Datei für die Anzeige gekürzt.',
     'workspace.code.empty': 'Keine Dateien.',
+    'workspace.window.heading': 'Weitermachen, wo du aufgehört hast?',
+    'workspace.window.restore': 'Wiederherstellen',
+    'workspace.window.delete': 'Diese Fenster-Sitzung löschen',
+    'workspace.window.fresh': 'Neu starten',
+    'workspace.window.unnamed': 'Unbenanntes Fenster',
     'workspace.compare.height': 'Höhe',
     'workspace.compare.content': 'Inhalt',
     'workspace.compare.title':
