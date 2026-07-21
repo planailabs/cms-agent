@@ -1,0 +1,3 @@
+[submodule "fixtures"]
+	path = fixtures
+	url = git@git.plan.ai:plan-ai/cms-agent-fixtures.git
