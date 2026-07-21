@@ -421,7 +421,9 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
     leavesOf(p).slice().sort((x, y) => x.y0 - y.y0)[0];
   const heightOf = (p: Part): number => p.b.y1 - p.b.y0;
 
-  const leafRegion = (na: Part, nb: Part, pendA: number, pendB: number): void => {
+  // Returns leftover trailing pending [A,B] (the gap after the last anchor down
+  // to the region bottom, e.g. content appended at the end) to carry forward.
+  const leafRegion = (na: Part, nb: Part, pendA: number, pendB: number): [number, number] => {
     const ba = leavesOf(na).slice().sort((x, y) => x.y0 - y.y0);
     const bb = leavesOf(nb).slice().sort((x, y) => x.y0 - y.y0);
     if (ba[0]) push(A, ba[0].m.i, pendA, 'el'); // flow push of this region
@@ -442,6 +444,10 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
       pYA = eA.y0;
       pYB = eB.y0;
     }
+    const trailA = Math.max(0, na.b.y1 - pYA);
+    const trailB = Math.max(0, nb.b.y1 - pYB);
+    const h = Math.max(trailA, trailB);
+    return [h - trailA, h - trailB];
   };
 
   // Stacked flow: pending threads through siblings. Returns leftover pending.
@@ -452,8 +458,7 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
       const pairs = alignChildren(fa, fb);
       const matched = pairs.filter(([x, y]) => x && y).length;
       if (matched < 0.5 * Math.max(fa.length, fb.length)) {
-        leafRegion(na, nb, pendA, pendB);
-        return [0, 0];
+        return leafRegion(na, nb, pendA, pendB);
       }
       if (na.dir === 'v') {
         // Columns: push the whole grid down once, then each column is its own
@@ -475,8 +480,7 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
       }
       return [pA, pB];
     }
-    leafRegion(na, nb, pendA, pendB);
-    return [0, 0];
+    return leafRegion(na, nb, pendA, pendB);
   };
 
   walk(pair.pa, pair.pb, 0, 0);
