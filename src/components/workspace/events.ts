@@ -146,20 +146,20 @@ const registerSidebarResize = (app: HTMLElement): void => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const registerOnionSlider = (app: HTMLElement): void => {
-  let dragging = false;
+  let container: HTMLElement | null = null; // the .ws-onion being dragged
+  let isBc = false; // browser-compare vs diff viewer
 
   app.addEventListener('pointerdown', (event) => {
-    const handle = (event.target as HTMLElement | null)?.closest(
+    const handle = (event.target as HTMLElement | null)?.closest<HTMLElement>(
       '[data-action="ws-onion-handle"], [data-action="ws-bc-onion-handle"]',
     );
     if (!handle) return;
     event.preventDefault();
-    dragging = true;
+    container = handle.closest<HTMLElement>('.ws-onion');
+    isBc = handle.getAttribute('data-action') === 'ws-bc-onion-handle';
   });
 
   window.addEventListener('pointermove', (event) => {
-    if (!dragging) return;
-    const container = document.querySelector<HTMLElement>('[data-onion]');
     if (!container) return;
     // Measure the canvas, not the scroll container — the slider's left% is
     // relative to the canvas, which excludes the scrollbar width.
@@ -174,15 +174,12 @@ const registerOnionSlider = (app: HTMLElement): void => {
     if (after) after.style.clipPath = `inset(0 0 0 ${pct}%)`;
     if (slider) slider.style.left = `${pct}%`;
     // Route to the right state slice (silent — DOM already updated)
-    if (container.dataset.onionTarget === 'browserCompare') {
-      store.state.workspace.browserCompare.onionPercent = pct;
-    } else {
-      store.state.workspace.diff.onionPercent = pct;
-    }
+    if (isBc) store.state.workspace.browserCompare.onionPercent = pct;
+    else store.state.workspace.diff.onionPercent = pct;
   });
 
   window.addEventListener('pointerup', () => {
-    dragging = false;
+    container = null;
   });
 };
 
