@@ -13,6 +13,7 @@ import {
   type Marker,
   type MarkerDoc,
 } from "@/lib/compare/markers";
+import fullRewrite from "./fixtures/full-rewrite-markers.json" with { type: "json" };
 
 const mk = (k: string, y: number): Marker => ({ k, y });
 /** Container-layer marker: key is "#<structsig>", `s` is the structsig. */
@@ -294,6 +295,48 @@ describe("matchConfidence", () => {
     const a = doc(["P:alpha beta", "P:gamma delta", "H2:first"]);
     const b = doc(["P:xxxx yyyy", "P:zzzz wwww", "H3:second"]);
     expect(matchConfidence(a, b).score).toBeLessThan(0.35);
+  });
+
+  it("same structural roles do not make a full rewrite safe to correct", () => {
+    const roleDoc = (prefix: string): MarkerDoc => ({
+      h: 1000,
+      m: ["heading", "body", "caption", "item"].map((name, i) => ({
+        k: `${i === 0 ? "H2" : "P"}:${prefix} ${name}#1`,
+        y: i * 100,
+        i,
+        sid: "section",
+        c: i === 0 ? "heading" : "body",
+      })),
+    });
+    const confidence = matchConfidence(roleDoc("old"), roleDoc("new"));
+
+    expect(confidence.matchRate).toBe(1);
+    expect(confidence.trustedRate).toBe(0);
+    expect(confidence.score).toBeLessThan(0.35);
+  });
+
+  it("stable ids remain trusted across rewritten text", () => {
+    const a: MarkerDoc = {
+      h: 100,
+      m: [{ k: "H2:Old title#1", y: 0, id: "title" }],
+    };
+    const b: MarkerDoc = {
+      h: 100,
+      m: [{ k: "H2:New title#1", y: 0, id: "title" }],
+    };
+    expect(matchConfidence(a, b).trustedRate).toBe(1);
+    expect(matchConfidence(a, b).score).toBe(1);
+  });
+
+  it("keeps the production full-page rewrite out of corrective alignment", () => {
+    const confidence = matchConfidence(
+      fullRewrite.before as MarkerDoc,
+      fullRewrite.after as MarkerDoc,
+    );
+
+    expect(confidence.matchRate).toBe(1);
+    expect(confidence.trustedRate).toBeCloseTo(9 / 136, 5);
+    expect(confidence.score).toBeLessThan(0.35);
   });
 
   it("truncation clamps confidence even on a good match", () => {

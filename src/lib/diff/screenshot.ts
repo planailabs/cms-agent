@@ -204,7 +204,7 @@ async function alignedShots(
   let A: AlignedPage | undefined;
   let B: AlignedPage | undefined;
   try {
-    const [openedA, openedB] = await Promise.all([
+    let [openedA, openedB] = await Promise.all([
       openAligned(aPort, route, browserA, plan.a),
       openAligned(bPort, route, browserB, plan.b),
     ]);
@@ -241,9 +241,25 @@ async function alignedShots(
     if (conf.score < ALIGN_CONFIDENCE_MIN || conf.truncated) {
       console.warn(
         `[align] ${route}: low match confidence ${conf.score.toFixed(2)}` +
-          ` (rate ${conf.matchRate.toFixed(2)}, dup ${conf.dupPressure.toFixed(2)}` +
+          ` (rate ${conf.matchRate.toFixed(2)}, trusted ${conf.trustedRate.toFixed(2)},` +
+          ` dup ${conf.dupPressure.toFixed(2)}` +
           `${conf.truncated ? ", TRUNCATED" : ""}) — seed only, corrective skipped`,
       );
+    }
+    if (aligned.regressed) {
+      console.warn(
+        `[align] ${route}: corrective regressed ${aligned.start}px → ${aligned.end.max}px;` +
+          ` discarding mutations and capturing structural seed only`,
+      );
+      await Promise.all([openedA.launched.close(), openedB.launched.close()]);
+      A = undefined;
+      B = undefined;
+      [openedA, openedB] = await Promise.all([
+        openAligned(aPort, route, browserA, plan.a),
+        openAligned(bPort, route, browserB, plan.b),
+      ]);
+      A = openedA;
+      B = openedB;
     }
     // Round-count is the guillotine seed's value signal: the structural pass
     // converges most pages in 0 corrective rounds; a page that needs many rounds

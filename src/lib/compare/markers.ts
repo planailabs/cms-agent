@@ -379,6 +379,10 @@ export interface MatchConfidence {
   score: number;
   /** Fraction of the smaller side that found a strong (≥ ANCHOR_MIN) match. */
   matchRate: number;
+  /** Fraction backed by unchanged content or an explicit stable element id.
+   *  Structural role matches can seed layout, but are unsafe evidence for the
+   *  additive corrective loop because a full rewrite can make every role match. */
+  trustedRate: number;
   /** Fraction of markers whose text key repeats — boilerplate/clones make the
    *  order-preserving match ambiguous (a paragraph could pair several ways). */
   dupPressure: number;
@@ -406,14 +410,22 @@ export const matchConfidence = (
   const lb = b.m.filter(leaf);
   const truncated = (a.trunc ?? 0) > 0 || (b.trunc ?? 0) > 0;
   const n = Math.min(la.length, lb.length);
-  if (n === 0) return { score: 0, matchRate: 0, dupPressure: 0, truncated };
+  if (n === 0)
+    return { score: 0, matchRate: 0, trustedRate: 0, dupPressure: 0, truncated };
 
-  const strong = alignMarkers(la, lb).matches.filter(
+  const matches = alignMarkers(la, lb).matches;
+  const strong = matches.filter(
     (m) => m.score >= ANCHOR_MIN,
-  ).length;
-  const matchRate = strong / n;
-
+  );
+  const matchRate = strong.length / n;
   const base = (k: string): string => k.replace(/#\d+$/, "");
+  const trusted = strong.filter((m) => {
+    const a = la[m.ai];
+    const b = lb[m.bi];
+    return base(a.k) === base(b.k) || (!!a.id && a.id === b.id);
+  }).length;
+  const trustedRate = trusted / n;
+
   const dupOf = (ms: Marker[]): number => {
     const c = new Map<string, number>();
     for (const m of ms) c.set(base(m.k), (c.get(base(m.k)) ?? 0) + 1);
@@ -423,11 +435,15 @@ export const matchConfidence = (
   };
   const dupPressure = (dupOf(la) + dupOf(lb)) / 2;
 
-  let score = matchRate * (1 - 0.5 * dupPressure);
+  // Corrective spacers are irreversible within an open page. Authorize them
+  // from trusted correspondences, not merely same-role/class matches: the
+  // latter made a 76%-rewritten production page look 100% trustworthy.
+  let score = trustedRate * (1 - 0.5 * dupPressure);
   if (truncated) score = Math.min(score, 0.6);
   return {
     score: Math.max(0, Math.min(1, score)),
     matchRate,
+    trustedRate,
     dupPressure,
     truncated,
   };

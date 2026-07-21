@@ -20,6 +20,9 @@ export interface CorrectiveAlignmentResult {
   end: ReturnType<typeof matchedYDelta>;
   rounds: number;
   aborted: boolean;
+  /** A mutation increased absolute drift. The returned DOM measurements are
+   *  unsafe; callers must discard/reload the mutated pages before capture. */
+  regressed: boolean;
 }
 
 /**
@@ -41,6 +44,8 @@ export const runCorrectiveAlignment = async (
   const start = matchedYDelta(a.m, b.m).max;
   let rounds = 0;
   let aborted = !isCurrent();
+  let regressed = false;
+  let previous = Math.abs(start);
 
   while (
     !aborted &&
@@ -57,6 +62,12 @@ export const runCorrectiveAlignment = async (
     [a, b] = await apply(plan);
     rounds++;
     aborted = !isCurrent();
+    const current = Math.abs(matchedYDelta(a.m, b.m).max);
+    if (!aborted && current > previous + threshold) {
+      regressed = true;
+      break;
+    }
+    previous = current;
   }
 
   return {
@@ -66,5 +77,6 @@ export const runCorrectiveAlignment = async (
     end: matchedYDelta(a.m, b.m),
     rounds,
     aborted,
+    regressed,
   };
 };

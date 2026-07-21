@@ -56,6 +56,7 @@ describe("runCorrectiveAlignment", () => {
     expect(result.rounds).toBe(calls);
     expect(Math.abs(result.end.max)).toBeLessThanOrEqual(2);
     expect(result.aborted).toBe(false);
+    expect(result.regressed).toBe(false);
   });
 
   it("skips corrective mutations when confidence disables them", async () => {
@@ -79,5 +80,18 @@ describe("runCorrectiveAlignment", () => {
 
     expect(result.rounds).toBe(1);
     expect(result.aborted).toBe(true);
+  });
+
+  it("stops immediately when an additive round worsens drift", async () => {
+    const result = await runCorrectiveAlignment(
+      doc(100),
+      doc(0),
+      async () => [doc(100), doc(-250)],
+      { threshold: 8 },
+    );
+
+    expect(result.rounds).toBe(1);
+    expect(result.regressed).toBe(true);
+    expect(Math.abs(result.end.max)).toBeGreaterThan(Math.abs(result.start));
   });
 });

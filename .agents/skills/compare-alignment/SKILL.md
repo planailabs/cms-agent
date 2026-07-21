@@ -82,6 +82,11 @@ them into a fixture under `test/fixtures/` and add a scaffold.
   not the count above a threshold. Same-shaped cards are plausible weak matches,
   but they must not tie exact later cards and hide an insertion's filler (the
   "Squirrels before Challenges" regression).
+- The additive corrective loop requires unchanged-content or stable-ID trust;
+  scope/class/structural matches can seed coarse layout but cannot authorize
+  irreversible correction of a full-page rewrite. Every round is monotonic: if
+  absolute drift worsens, discard that browser pair and recapture from the
+  structural seed (the production 13,099px → 44,701px regression).
 - Matching ≠ change-detection: identity can score a changed element ~1, so
   `boxDiff` decides "changed" by comparing the content key, not the match score.
 - A full rewrite (structures don't correspond) overlays as one rectangle rather

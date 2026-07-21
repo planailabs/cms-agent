@@ -46,6 +46,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 let appliedSig: string | null = null;
 let aligningSig: string | null = null;
 let lastMode: 'height' | 'content' = 'content';
+let correctiveSkipSig: string | null = null;
 const readySrc = new Map<string, string>();
 
 const anchorsFor = (srcId: string, dstId: string): Anchor[] | null => {
@@ -196,13 +197,19 @@ const alignLiveFrames = async (sig: string): Promise<void> => {
           applyAndCollect(after, corr.b),
         ])) as [MarkerDoc, MarkerDoc],
       {
-        enabled: confidence.score >= ALIGN_CONFIDENCE_MIN,
+        enabled:
+          confidence.score >= ALIGN_CONFIDENCE_MIN && correctiveSkipSig !== sig,
         isCurrent: () =>
           currentSig() === sig &&
           store.state.workspace.compareMode === 'content',
       },
     );
     if (aligned.aborted) return;
+    if (aligned.regressed) {
+      correctiveSkipSig = sig;
+      reloadFrames();
+      return;
+    }
     setDocs(aligned.a, aligned.b);
     appliedSig = sig;
   } catch (err) {
@@ -250,6 +257,8 @@ export const registerDiffScrollSync = (): void => {
       anchorCache = new Map();
       readySrc.set(src.id, src.src);
       if (appliedSig && currentSig() !== appliedSig) appliedSig = null;
+      if (correctiveSkipSig && currentSig() !== correctiveSkipSig)
+        correctiveSkipSig = null;
       postTo(src, { type: 'cms:eval', id: `scroll-sync-${++seq}`, code: SYNC_CODE });
       void syncDiffContentAlignment(store.state);
     } else if (data.type === 'cms:eval-result' && typeof data.id === 'string') {

@@ -99,7 +99,9 @@ const residualCorrected = async (
       ]);
       return await Promise.all([collect(before), collect(after)]);
     });
-    return Math.abs(aligned.end.max);
+    // Screenshot/live callers discard a regressed additive round and retain the
+    // structural seed, so model that transaction boundary here as well.
+    return Math.abs(aligned.regressed ? aligned.start : aligned.end.max);
   } finally {
     await Promise.all([before.close(), after.close()]);
   }
