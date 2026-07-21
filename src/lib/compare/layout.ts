@@ -486,3 +486,94 @@ export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): S
   walk(pair.pa, pair.pb, 0, 0);
   return { a: A, b: B };
 };
+
+// ── Alignment verification (self-improving harness) ────────────────────────
+
+export interface AlignReport {
+  /** Aligned total height on each side (natural + injected fillers). */
+  alignedA: number;
+  alignedB: number;
+  /** |alignedA − alignedB| — should be ~0; large means a gap wasn't filled. */
+  heightGap: number;
+  /** Worst matched-pair y misalignment after applying the plan (px). */
+  maxPairDelta: number;
+  /** Matched pairs that still land > 2px apart: [markerA.i, markerB.i, dy]. */
+  misaligned: Array<{ ia?: number; ib?: number; dy: number }>;
+}
+
+/**
+ * Check the spacing plan actually aligns the two shots — used to iterate on the
+ * aligner (scaffold a failing case, tighten until heightGap and maxPairDelta go
+ * to ~0). Applies the plan to the marker y's (a simple top-to-bottom flow
+ * simulation) and compares matched pairs, plus the total heights. Absolute
+ * (x is unchanged by fillers; y is what the fillers move).
+ */
+export const verifyAlignment = (a: Marker[], ah: number, b: Marker[], bh: number): AlignReport => {
+  const plan = spacingPlan(a, ah, b, bh);
+  const sum = (s: Spacer[]): number => s.reduce((t, x) => t + x.px, 0);
+  const alignedA = ah + sum(plan.a);
+  const alignedB = bh + sum(plan.b);
+
+  // Flow simulation: a spacer before element i shifts i and everything below.
+  const applied = (m: Marker[], spacers: Spacer[]): Map<number, number> => {
+    const byI = new Map<number, number>();
+    for (const s of spacers) byI.set(s.i, (byI.get(s.i) ?? 0) + s.px);
+    const leaves = m
+      .filter((x) => x.i !== undefined && x.k.charCodeAt(0) !== 35)
+      .slice()
+      .sort((p, q) => p.y - q.y);
+    let cum = 0;
+    const out = new Map<number, number>();
+    for (const x of leaves) {
+      cum += byI.get(x.i!) ?? 0;
+      out.set(x.i!, x.y + cum);
+    }
+    return out;
+  };
+  const yA = applied(a, plan.a);
+  const yB = applied(b, plan.b);
+
+  const la = a.filter((m) => m.k.charCodeAt(0) !== 35);
+  const lb = b.filter((m) => m.k.charCodeAt(0) !== 35);
+  const { matches } = alignMarkers(la, lb);
+  const misaligned: AlignReport['misaligned'] = [];
+  let maxPairDelta = 0;
+  for (const mm of matches) {
+    if (mm.score < ANCHOR_MIN) continue;
+    const ia = la[mm.ai].i;
+    const ib = lb[mm.bi].i;
+    if (ia === undefined || ib === undefined) continue;
+    const dy = (yA.get(ia) ?? 0) - (yB.get(ib) ?? 0);
+    if (Math.abs(dy) > Math.abs(maxPairDelta)) maxPairDelta = dy;
+    if (Math.abs(dy) > 2) misaligned.push({ ia, ib, dy: Math.round(dy) });
+  }
+  return {
+    alignedA,
+    alignedB,
+    heightGap: Math.abs(alignedA - alignedB),
+    maxPairDelta: Math.round(maxPairDelta),
+    misaligned,
+  };
+};
+
+/**
+ * Residual misalignment between two ALREADY-reflowed shots (re-collected after
+ * spacer injection): matched elements should now share a y. Used server-side to
+ * log real absolute-y drift so the aligner can be improved. `max` is the worst
+ * signed dy; `worst` lists the largest offenders.
+ */
+export const matchedYDelta = (a: Marker[], b: Marker[]): { max: number; worst: Array<{ ia?: number; ib?: number; dy: number }> } => {
+  const la = a.filter((m) => !isContainer(m));
+  const lb = b.filter((m) => !isContainer(m));
+  const { matches } = alignMarkers(la, lb);
+  let max = 0;
+  const worst: Array<{ ia?: number; ib?: number; dy: number }> = [];
+  for (const mm of matches) {
+    if (mm.score < ANCHOR_MIN) continue;
+    const dy = la[mm.ai].y - lb[mm.bi].y;
+    if (Math.abs(dy) > Math.abs(max)) max = dy;
+    if (Math.abs(dy) > 8) worst.push({ ia: la[mm.ai].i, ib: lb[mm.bi].i, dy: Math.round(dy) });
+  }
+  worst.sort((p, q) => Math.abs(q.dy) - Math.abs(p.dy));
+  return { max: Math.round(max), worst: worst.slice(0, 8) };
+};

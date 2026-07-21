@@ -17,7 +17,7 @@ import pixelmatch from 'pixelmatch';
 import { env } from '@/lib/env';
 import { GIT_COMMIT } from '@/lib/buildInfo';
 import { COLLECT_MARKERS_JS, type MarkerDoc } from '@/lib/compare/markers';
-import { spacingPlan, type Spacer } from '@/lib/compare/layout';
+import { matchedYDelta, spacingPlan, type Spacer } from '@/lib/compare/layout';
 import { branchSha, defaultBranch } from '@/lib/git/engine';
 import { ensureInstance } from '@/lib/preview/manager';
 
@@ -132,10 +132,12 @@ async function screenshot(
     } catch (err) {
       console.warn(`[diff] marker collection failed for ${route}:`, err);
     }
-    // Aligned pass: inject filler divs, then shoot the reflowed page.
+    // Aligned pass: inject filler divs, then shoot the reflowed page — and
+    // re-collect markers so the caller can measure real post-reflow alignment.
     if (spacers && spacers.length) {
       try {
         await page.evaluate(INJECT_SPACERS, spacers as Array<{ i: number; px: number; mode: string }>);
+        markers = (await page.evaluate(COLLECT_MARKERS_JS)) as MarkerDoc;
       } catch (err) {
         console.warn(`[diff] spacer injection failed for ${route}:`, err);
       }
@@ -176,11 +178,18 @@ async function alignedShots(
 ): Promise<void> {
   try {
     const plan = spacingPlan(markersA.m, markersA.h, markersB.m, markersB.h);
-    await Promise.all([
+    const [ra, rb] = await Promise.all([
       screenshot(aPort, route, files['before-aligned'], browserA, plan.a),
       screenshot(bPort, route, files['after-aligned'], browserB, plan.b),
     ]);
     padPair(files['before-aligned'], files['after-aligned']);
+    // Self-check: matched content should now share a y in the reflowed shots.
+    if (ra && rb) {
+      const { max, worst } = matchedYDelta(ra.m, rb.m);
+      if (Math.abs(max) > 8) {
+        console.warn(`[align] ${route}: residual ${max}px misalignment`, JSON.stringify(worst));
+      }
+    }
   } catch (err) {
     console.warn('[diff] aligned shots failed:', err);
     // Fall back to the raw shots so the content mode still has something.
