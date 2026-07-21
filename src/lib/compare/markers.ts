@@ -22,6 +22,9 @@ export interface Marker {
   k: string;
   /** Document-absolute top in CSS px. */
   y: number;
+  /** Marker index = the element's `data-cmsm` attribute, so the aligner can
+   *  re-select it in the page to inject spacers before re-screenshotting. */
+  i?: number;
   /** Bounding box (document-absolute CSS px): left, width, height. Enables the
    *  2-D rectangle-split layout (columns/cells), not just vertical position. */
   x?: number;
@@ -126,7 +129,10 @@ export const COLLECT_MARKERS_JS = `(function () {
       continue;
     }
     var n = counts[key] = (counts[key] || 0) + 1;
-    var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig };
+    var mk = { k: key + '#' + n, y: y, x: x, w: w, h: hgt, s: sig, i: out.length };
+    // Tag the element so the aligner can re-select it to inject spacers before
+    // re-screenshotting (invisible; set before the shot). data-cmsm = marker i.
+    try { el.setAttribute('data-cmsm', String(out.length)); } catch (e) {}
     if (el.id) mk.id = el.id;
     var cls = typeof el.className === 'string' ? el.className : '';
     if (cls) mk.c = cls.slice(0, 100);

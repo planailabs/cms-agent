@@ -3,7 +3,7 @@
  * match the two trees, and align each rectangle on its own.
  */
 import { describe, expect, it } from 'vitest';
-import { boxDiff, buildLayout } from '@/lib/compare/layout';
+import { boxDiff, buildLayout, spacingPlan } from '@/lib/compare/layout';
 import type { Marker } from '@/lib/compare/markers';
 import planai from './fixtures/planai-markers.json' with { type: 'json' };
 
@@ -81,6 +81,25 @@ describe('buildLayout', () => {
     expect(first.segs![0].hB).toBeGreaterThan(0);
     // and the rest align 1:1 (both sides have real content)
     expect(n.children![1].segs?.some((s) => s.hA > 0 && s.hB > 0) ?? true).toBe(true);
+  });
+
+  it('spacingPlan: an inserted block adds a filler on the other side', () => {
+    const p = (k: string, y: number, i: number): Marker => ({ k, y, x: 0, w: 300, h: 40, i });
+    const a = [p('P:alpha one#1', 0, 0), p('P:gamma three#1', 60, 1)];
+    const b = [p('P:alpha one#1', 0, 0), p('P:beta two inserted#1', 60, 1), p('P:gamma three#1', 120, 2)];
+    const plan = spacingPlan(a, 100, b, 160);
+    // side A (missing 'beta') gets a filler so 'gamma' lines up; b stays put
+    const totalA = plan.a.reduce((s, x) => s + x.px, 0);
+    expect(totalA).toBeGreaterThan(0);
+    expect(plan.a.every((s) => s.i !== undefined && s.px > 0)).toBe(true);
+  });
+
+  it('spacingPlan: identical content needs no fillers', () => {
+    const p = (k: string, y: number, i: number): Marker => ({ k, y, x: 0, w: 300, h: 40, i });
+    const a = [p('P:one#1', 0, 0), p('P:two#1', 60, 1)];
+    const plan = spacingPlan(a, 100, a, 100);
+    expect(plan.a).toHaveLength(0);
+    expect(plan.b).toHaveLength(0);
   });
 
   it('falls back to a single leaf when the two structures do not match', () => {

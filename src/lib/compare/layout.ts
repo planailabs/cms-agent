@@ -15,6 +15,7 @@
  * the "before" shot — the two pages share a layout width; only heights differ.
  */
 import {
+  ANCHOR_MIN,
   alignMarkers,
   alignedSegmentsIn,
   bracketAnchors,
@@ -383,4 +384,101 @@ export const boxDiff = (a: Marker[], ah: number, b: Marker[], bh: number): DiffB
     }
   }
   return out;
+};
+
+// ── Spacing plan (DOM filler injection) ────────────────────────────────────
+
+/** One spacer to inject before re-screenshotting. `px` is the gap height.
+ *  mode 'el' inserts before the element (flow / inside a cell); mode 'grid'
+ *  inserts before the element's flex/grid container (pushes a whole grid). */
+export interface Spacer {
+  i: number;
+  px: number;
+  mode: 'el' | 'grid';
+}
+export interface SpacingPlan {
+  a: Spacer[];
+  b: Spacer[];
+}
+
+/**
+ * Turn the aligned layout into DOM spacer injections for each side: instead of
+ * slicing the shot on a canvas, push the real page's elements down with filler
+ * elements and re-screenshot. Walks the same partition as buildLayout; within a
+ * matched leaf region the anchors give inline gaps, one-sided blocks push the
+ * OTHER side (pending), and a grid row's incoming gap pushes the whole grid.
+ */
+export const spacingPlan = (a: Marker[], ah: number, b: Marker[], bh: number): SpacingPlan => {
+  const pair = partitionPair(a, ah, b, bh);
+  const A: Spacer[] = [];
+  const B: Spacer[] = [];
+  if (!pair) return { a: A, b: B };
+
+  const push = (list: Spacer[], i: number | undefined, px: number, mode: 'el' | 'grid'): void => {
+    if (i !== undefined && px > 0.5) list.push({ i, px: Math.round(px), mode });
+  };
+  const firstLeaf = (p: Part): Box | undefined =>
+    leavesOf(p).slice().sort((x, y) => x.y0 - y.y0)[0];
+  const heightOf = (p: Part): number => p.b.y1 - p.b.y0;
+
+  const leafRegion = (na: Part, nb: Part, pendA: number, pendB: number): void => {
+    const ba = leavesOf(na).slice().sort((x, y) => x.y0 - y.y0);
+    const bb = leavesOf(nb).slice().sort((x, y) => x.y0 - y.y0);
+    if (ba[0]) push(A, ba[0].m.i, pendA, 'el'); // flow push of this region
+    if (bb[0]) push(B, bb[0].m.i, pendB, 'el');
+    const anchors = alignMarkers(ba.map((x) => x.m), bb.map((x) => x.m)).matches.filter(
+      (m) => m.score >= ANCHOR_MIN,
+    );
+    let pYA = na.b.y0;
+    let pYB = nb.b.y0;
+    for (const an of anchors) {
+      const eA = ba[an.ai];
+      const eB = bb[an.bi];
+      const gapA = eA.y0 - pYA;
+      const gapB = eB.y0 - pYB;
+      const h = Math.max(gapA, gapB);
+      push(A, eA.m.i, h - gapA, 'el'); // inline gap before this anchor
+      push(B, eB.m.i, h - gapB, 'el');
+      pYA = eA.y0;
+      pYB = eB.y0;
+    }
+  };
+
+  // Stacked flow: pending threads through siblings. Returns leftover pending.
+  const walk = (na: Part, nb: Part, pendA: number, pendB: number): [number, number] => {
+    if (na.kind === 'split' && nb.kind === 'split' && na.dir === nb.dir) {
+      const fa = flattenChildren(na);
+      const fb = flattenChildren(nb);
+      const pairs = alignChildren(fa, fb);
+      const matched = pairs.filter(([x, y]) => x && y).length;
+      if (matched < 0.5 * Math.max(fa.length, fb.length)) {
+        leafRegion(na, nb, pendA, pendB);
+        return [0, 0];
+      }
+      if (na.dir === 'v') {
+        // Columns: push the whole grid down once, then each column is its own
+        // vertical flow (fresh pending, no cross-column carry).
+        const fla = firstLeaf(na);
+        const flb = firstLeaf(nb);
+        if (fla) push(A, fla.m.i, pendA, 'grid');
+        if (flb) push(B, flb.m.i, pendB, 'grid');
+        for (const [ca, cb] of pairs) if (ca && cb) walk(ca, cb, 0, 0);
+        return [0, 0];
+      }
+      // Stacked column of blocks.
+      let pA = pendA;
+      let pB = pendB;
+      for (const [ca, cb] of pairs) {
+        if (ca && cb) [pA, pB] = walk(ca, cb, pA, pB);
+        else if (ca) pB += heightOf(ca); // removed block → gap on B
+        else pA += heightOf(cb!); // added block → gap on A
+      }
+      return [pA, pB];
+    }
+    leafRegion(na, nb, pendA, pendB);
+    return [0, 0];
+  };
+
+  walk(pair.pa, pair.pb, 0, 0);
+  return { a: A, b: B };
 };
