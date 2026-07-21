@@ -76,7 +76,7 @@ export interface Anchor {
  * Markers are capped so the O(n·m) match stays bounded on huge pages.
  */
 export const COLLECT_MARKERS_JS = `(function () {
-  var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,table,figure,img';
+  var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,table,figure,img,td,th';
   var CONT = 'section,article,header,footer,main,nav,aside,ul,ol,figure,table,form,blockquote';
   var MAX = 800;
   var contTagOf = function (el) {
@@ -109,6 +109,10 @@ export const COLLECT_MARKERS_JS = `(function () {
       sig = el.tagName + '/' + kids.length + '/' + sig;
       key = '#' + sig;
     } else if (el.matches(LEAF)) {
+      // A table cell is the content unit — skip block leaves nested inside one
+      // (the cell captures their text), so a cell isn't double-counted.
+      var isCell = el.tagName === 'TD' || el.tagName === 'TH';
+      if (!isCell && el.closest && el.closest('td,th')) continue;
       // Leaf block: exact content identity from its text (src for images);
       // structural role = its nearest semantic container + its own tag.
       var txt = el.tagName === 'IMG'
@@ -131,21 +135,31 @@ export const COLLECT_MARKERS_JS = `(function () {
       if (pp.id) { scopeId = pp.id; break; }
     }
     if (scopeId) mk.sid = scopeId;
-    // Nearest flex/grid ancestor (bounded) + the leaf's cell index within it —
-    // so a grid's columns are distinct identities and never cross-match.
-    var child = el;
-    for (var q = el.parentElement, depth = 0; q && depth < 8; q = q.parentElement, depth++) {
-      var disp = '';
-      try { disp = getComputedStyle(q).display; } catch (e) { disp = ''; }
-      if (disp === 'flex' || disp === 'grid' || disp === 'inline-flex' || disp === 'inline-grid') {
-        if (q.children.length > 1) {
-          var ci = 0;
-          for (var ki = 0; ki < q.children.length; ki++) { if (q.children[ki] === child) { ci = ki; break; } }
-          mk.fx = (q.id || q.tagName) + '/' + q.children.length + '#' + ci;
+    // Cell identity so a grid's/table's columns are distinct and never cross-
+    // match. Tables: (row,col) of the enclosing cell. Flex/grid: the leaf's
+    // index in the nearest flex/grid ancestor.
+    var cell = el.closest ? el.closest('td,th') : null;
+    if (cell) {
+      var trow = cell.parentNode;
+      var rowIx = trow && typeof trow.rowIndex === 'number' ? trow.rowIndex : 0;
+      var tbl = cell.closest('table');
+      var ttop = tbl ? Math.round(tbl.getBoundingClientRect().top + scrollY) : 0;
+      mk.fx = 'T' + ttop + '/#r' + rowIx + 'c' + cell.cellIndex;
+    } else {
+      var child = el;
+      for (var q = el.parentElement, depth = 0; q && depth < 8; q = q.parentElement, depth++) {
+        var disp = '';
+        try { disp = getComputedStyle(q).display; } catch (e) { disp = ''; }
+        if (disp === 'flex' || disp === 'grid' || disp === 'inline-flex' || disp === 'inline-grid') {
+          if (q.children.length > 1) {
+            var ci = 0;
+            for (var ki = 0; ki < q.children.length; ki++) { if (q.children[ki] === child) { ci = ki; break; } }
+            mk.fx = (q.id || q.tagName) + '/' + q.children.length + '#' + ci;
+          }
+          break;
         }
-        break;
+        child = q;
       }
-      child = q;
     }
     out.push(mk);
   }

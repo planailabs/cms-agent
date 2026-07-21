@@ -84,6 +84,12 @@ describe('computeAnchors', () => {
     expect(computeAnchors(a, b)).toEqual([]); // other cell → no anchor → no overlay
   });
 
+  it('never cross-matches different cells of the same table', () => {
+    const a = [{ k: 'TD:Revenue#1', y: 0, fx: 'T100/#r0c1' }];
+    const b = [{ k: 'TD:Costs#1', y: 0, fx: 'T100/#r0c2' }]; // same table row, other column
+    expect(computeAnchors(a, b)).toEqual([]);
+  });
+
   it('matches the same grid cell even when its text changed', () => {
     const a = [{ k: 'H4:The regulatory wave#1', y: 0, sid: 'grid', c: 'card', fx: 'G/3#1' }];
     const b = [{ k: 'H4:Governance is becoming#1', y: 40, sid: 'grid', c: 'card', fx: 'G/3#1' }];
