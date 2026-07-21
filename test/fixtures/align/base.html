@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Georgia, serif; color: #1a1a1a; background: #f5f3ee; padding: 32px 48px; }
+      .wrap { max-width: 1180px; margin: 0 auto; }
+      header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 24px; border-bottom: 1px solid #ddd; }
+      nav { display: flex; gap: 20px; }
+      .swiss-caption { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #b45; }
+      .swiss-heading-xl { font-size: 72px; line-height: 1.05; margin: 16px 0; }
+      .swiss-heading-lg { font-size: 40px; margin: 8px 0; }
+      .swiss-heading-md { font-size: 26px; margin: 6px 0; }
+      .swiss-body-lg { font-size: 20px; line-height: 1.5; color: #444; max-width: 40ch; }
+      .swiss-body { font-size: 16px; line-height: 1.6; color: #555; }
+      section { padding: 56px 0; border-bottom: 1px solid #e3e0d8; }
+      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 40px; }
+      .card { padding: 24px; background: #fbfaf6; border: 1px solid #e3e0d8; border-radius: 4px; }
+      .posts { list-style: none; }
+      .post { padding: 32px 0; border-top: 1px solid #e3e0d8; }
+      .post .date { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #999; }
+      table { width: 100%; border-collapse: collapse; margin-top: 32px; }
+      td, th { padding: 12px 16px; border: 1px solid #e3e0d8; text-align: left; font-size: 15px; }
+      footer { padding-top: 32px; color: #888; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header id="masthead">
+        <strong>plan.ai</strong>
+        <nav><a href="#hero">Home</a><a href="#features">System</a><a href="#journal">Journal</a></nav>
+      </header>
+
+      <section id="hero">
+        <p class="swiss-caption">The plan.ai journal</p>
+        <h1 class="swiss-heading-xl">Ideas worth reading.</h1>
+        <p class="swiss-body-lg">A small collection of notes on building with more clarity, care, and momentum.</p>
+      </section>
+
+      <section id="features">
+        <h2 class="swiss-heading-lg">What the system does</h2>
+        <div class="grid">
+          <div class="card"><h3 class="swiss-heading-md">Command</h3><p class="swiss-body">Synthesizes priorities, surfaces what matters, and drafts decision briefs for the day.</p></div>
+          <div class="card"><h3 class="swiss-heading-md">Analysis</h3><p class="swiss-body">Collects approved sources, compares evidence, and produces market intelligence.</p></div>
+          <div class="card"><h3 class="swiss-heading-md">Voice</h3><p class="swiss-body">Drafts and edits communication against your tone, terminology and review standards.</p></div>
+        </div>
+      </section>
+
+      <section id="journal">
+        <h2 class="swiss-heading-lg">Latest notes</h2>
+        <ul class="posts">
+          <li class="post"><p class="date">Jul 18, 2026</p><h3 class="swiss-heading-md">Challenges in the AI Age</h3><p class="swiss-body">The useful gains of AI are real, but so are the choices we need to make around reliability, work, privacy, power, access, and resources.</p></li>
+          <li class="post"><p class="date">Mar 2, 2026</p><h3 class="swiss-heading-md">Shipping Faster with Small Batches</h3><p class="swiss-body">Why smaller pull requests get reviewed sooner and break less.</p></li>
+          <li class="post"><p class="date">Jan 10, 2026</p><h3 class="swiss-heading-md">Hello World</h3><p class="swiss-body">Our very first post on the new blog.</p></li>
+        </ul>
+      </section>
+
+      <section id="data">
+        <h2 class="swiss-heading-lg">By the numbers</h2>
+        <table>
+          <tr><th>Metric</th><th>2025</th><th>2026</th></tr>
+          <tr><td>Posts published</td><td>12</td><td>34</td></tr>
+          <tr><td>Readers</td><td>1,200</td><td>4,800</td></tr>
+          <tr><td>Avg. read time</td><td>3m</td><td>5m</td></tr>
+        </table>
+      </section>
+
+      <footer><p class="swiss-body">Thoughtful work, in progress.</p></footer>
+    </div>
+  </body>
+</html>

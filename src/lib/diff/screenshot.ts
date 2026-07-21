@@ -18,6 +18,7 @@ import { env } from '@/lib/env';
 import { GIT_COMMIT } from '@/lib/buildInfo';
 import { COLLECT_MARKERS_JS, type MarkerDoc } from '@/lib/compare/markers';
 import { matchedYDelta, spacingPlan, type Spacer } from '@/lib/compare/layout';
+import { INJECT_SPACERS } from '@/lib/compare/inject';
 import { branchSha, defaultBranch } from '@/lib/git/engine';
 import { ensureInstance } from '@/lib/preview/manager';
 
@@ -67,41 +68,6 @@ function shotFiles(dir: string, key: string): Record<ShotKind, string> & { meta:
   };
 }
 
-// Injected in the page (via page.evaluate) to push elements down with real
-// filler divs — or margin-top for flex/grid items, which don't margin-collapse
-// and mustn't gain an extra grid item. Elements are found by data-cmsm index.
-const INJECT_SPACERS = (spacers: Array<{ i: number; px: number; mode: string }>) => {
-  var pushBefore = function (el: Element, px: number) {
-    var parent = el.parentElement;
-    if (!parent) return;
-    var disp = getComputedStyle(parent).display;
-    if (disp.indexOf('flex') >= 0 || disp.indexOf('grid') >= 0) {
-      var cur = parseFloat(getComputedStyle(el).marginTop) || 0;
-      (el as HTMLElement).style.marginTop = cur + px + 'px';
-    } else {
-      var sp = document.createElement('div');
-      sp.style.height = px + 'px';
-      sp.style.width = '100%';
-      sp.style.flex = '0 0 auto';
-      parent.insertBefore(sp, el);
-    }
-  };
-  for (var n = 0; n < spacers.length; n++) {
-    var s = spacers[n];
-    var el = document.querySelector('[data-cmsm="' + s.i + '"]');
-    if (!el) continue;
-    if (s.mode === 'grid') {
-      var g: Element = el;
-      for (var p = el.parentElement, d = 0; p && d < 8; p = p.parentElement, d++) {
-        var dp = getComputedStyle(p).display;
-        if (dp.indexOf('flex') >= 0 || dp.indexOf('grid') >= 0) { g = p; break; }
-      }
-      pushBefore(g, s.px);
-    } else {
-      pushBefore(el, s.px);
-    }
-  }
-};
 
 async function screenshot(
   port: number,

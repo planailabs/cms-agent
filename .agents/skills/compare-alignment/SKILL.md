@@ -38,10 +38,13 @@ diff pipeline screenshots both raw, computes a spacing plan, injects filler
 
 When a compare looks wrong:
 
-1. **Reproduce it as a scaffold.** Add a marker set to
-   `test/compare-align-verify.test.ts` (or pull the real markers — see below) that
-   captures the exact shape (insertion, removal, reword, grid column, table cell,
-   nested section, near-empty side). Assert `maxPairDelta <= 2`.
+1. **Reproduce it as a scaffold.** Prefer a REAL-BROWSER case in
+   `test/align-realbrowser.test.ts`: add a one-edit DOM mutation to
+   `test/fixtures/align/base.html` (structure/classes/ids borrowed from plan.ai)
+   — it runs the actual pipeline (collect → spacingPlan → inject → re-collect in
+   Playwright) and asserts matched content lands at the same `y`. For a
+   pure-logic case use a marker set in `test/compare-align-verify.test.ts`
+   (assert `maxPairDelta <= 2`). Or pull real markers from a live diff (below).
 2. **Watch it fail**, read `misaligned[]` to see which elements drift and by how much.
 3. **Tighten the aligner** in `compare/layout.ts` / `markers.ts` (matching,
    sibling alignment, spacing walk) until the scaffold passes.
