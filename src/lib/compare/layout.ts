@@ -202,7 +202,15 @@ const matchAlign = (pa: Part, pb: Part): ANode => {
   if (pa.kind === 'split' && pb.kind === 'split' && pa.dir === pb.dir) {
     // Align siblings by content (not index) so an inserted/removed block gets a
     // filler in the right place instead of shifting everything after it.
-    const children = alignChildren(flattenChildren(pa), flattenChildren(pb)).map(([ca, cb]) =>
+    const fa = flattenChildren(pa);
+    const fb = flattenChildren(pb);
+    const pairs = alignChildren(fa, fb);
+    // If most siblings don't correspond, this region is a rewrite, not an edit —
+    // overlaying it as one rectangle (height = max) is right; stacking one-sided
+    // halves would double the height into a mess.
+    const matched = pairs.filter(([x, y]) => x && y).length;
+    if (matched < 0.5 * Math.max(fa.length, fb.length)) return alignLeaf(pa, pb);
+    const children = pairs.map(([ca, cb]) =>
       ca && cb ? matchAlign(ca, cb) : ca ? spanNode(ca, 'a') : spanNode(cb!, 'b'),
     );
     const x0 = pa.b.x0;

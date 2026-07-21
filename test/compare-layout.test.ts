@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { boxDiff, buildLayout } from '@/lib/compare/layout';
 import type { Marker } from '@/lib/compare/markers';
+import planai from './fixtures/planai-markers.json' with { type: 'json' };
 
 const bx = (k: string, y: number, x: number, w: number, h: number): Marker => ({ k, y, x, w, h, s: '' });
 
@@ -88,5 +89,40 @@ describe('buildLayout', () => {
     const b = [bx('P:l#1', 0, 0, 300, 50)];
     const n = buildLayout(a, 60, b, 60)!;
     expect(n.kind).toBe('leaf');
+  });
+});
+
+// Real captured markers from the plan.ai marketing page — a complicated layout
+// (hero, prose sections, multi-column card grids, nested containers).
+describe('buildLayout on a real complicated page (plan.ai)', () => {
+  const before = planai.before as { h: number; m: Marker[] };
+  const after = planai.after as { h: number; m: Marker[] };
+
+  const countKinds = (n: { kind: string; children?: unknown[] }): Record<string, number> => {
+    const c: Record<string, number> = { leaf: 0, row: 0, col: 0 };
+    const walk = (x: { kind: string; children?: unknown[] }): void => {
+      c[x.kind] = (c[x.kind] ?? 0) + 1;
+      for (const k of x.children ?? []) walk(k as typeof x);
+    };
+    walk(n);
+    return c;
+  };
+
+  it('does not double the height on a full rewrite (overlays, not stacks)', () => {
+    // before/after are two totally different marketing versions → few matches.
+    const n = buildLayout(before.m, before.h, after.m, after.h)!;
+    expect(n).not.toBeNull();
+    const maxH = Math.max(before.h, after.h);
+    // regression guard: stacking one-sided halves gave ~2x maxH (25109).
+    expect(n.h).toBeLessThan(maxH * 1.3);
+    expect(n.h).toBeGreaterThan(maxH * 0.7);
+  });
+
+  it('aligns the page to itself: exact height and real 2-D structure', () => {
+    const n = buildLayout(before.m, before.h, before.m, before.h)!;
+    expect(Math.round(n.h)).toBe(before.h); // identical → perfect alignment
+    const kinds = countKinds(n);
+    expect(kinds.row).toBeGreaterThan(0); // card grids → side-by-side rows
+    expect(kinds.leaf).toBeGreaterThan(50);
   });
 });
