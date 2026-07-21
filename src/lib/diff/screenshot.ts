@@ -22,11 +22,14 @@ import {
   type MarkerDoc,
 } from "@/lib/compare/markers";
 import {
-  correctiveFlat,
-  matchedYDelta,
   spacingPlan,
   type Spacer,
 } from "@/lib/compare/layout";
+import {
+  ALIGN_CONFIDENCE_MIN,
+  ALIGN_CORRECTIVE_THRESHOLD,
+  runCorrectiveAlignment,
+} from "@/lib/compare/converge";
 import { INJECT_SPACERS } from "@/lib/compare/inject";
 import { branchSha, defaultBranch } from "@/lib/git/engine";
 import { ensureInstance } from "@/lib/preview/manager";
@@ -184,10 +187,6 @@ async function openAligned(
   return { launched, page, markers };
 }
 
-const CORRECTIVE_THRESHOLD = 8; // px residual that trips the last-resort patch
-const CORRECTIVE_ROUNDS = 6; // max iterations to converge both sides
-const CONFIDENCE_MIN = 0.35; // below this, skip the corrective (seed only)
-
 /** Render both aligned shots (best-effort) from a computed spacing plan. If the
  *  structural reflow leaves residual drift, a last-resort corrective pass patches
  *  it geometrically before the shot. */
@@ -205,12 +204,12 @@ async function alignedShots(
   let A: AlignedPage | undefined;
   let B: AlignedPage | undefined;
   try {
-    [A, B] = await Promise.all([
+    const [openedA, openedB] = await Promise.all([
       openAligned(aPort, route, browserA, plan.a),
       openAligned(bPort, route, browserB, plan.b),
     ]);
-    let ra = A.markers;
-    let rb = B.markers;
+    A = openedA;
+    B = openedB;
     // Last resort: whatever drift the structural pass left, iterate the corrective
     // (inject on the higher side → re-collect) so both sides converge until they
     // fit or there's nothing left to move.
@@ -227,24 +226,19 @@ async function alignedShots(
     // the structural seed and let the diff read as coarse rather than confidently
     // misaligned. Graceful degradation, per the matcher-confidence council.
     const conf = matchConfidence(markersA, markersB);
-    const start = matchedYDelta(ra.m, rb.m).max;
-    let rounds = 0;
-    if (conf.score >= CONFIDENCE_MIN) {
-      for (let round = 0; round < CORRECTIVE_ROUNDS; round++) {
-        if (Math.abs(matchedYDelta(ra.m, rb.m).max) <= CORRECTIVE_THRESHOLD)
-          break;
-        rounds = round + 1;
-        const corr = correctiveFlat(ra.m, rb.m);
-        if (!corr.a.length && !corr.b.length) break;
-        await Promise.all([inject(A, corr.a), inject(B, corr.b)]);
-        [ra, rb] = (await Promise.all([
-          A.page.evaluate(COLLECT_MARKERS_JS),
-          B.page.evaluate(COLLECT_MARKERS_JS),
+    const aligned = await runCorrectiveAlignment(
+      openedA.markers,
+      openedB.markers,
+      async (corr) => {
+        await Promise.all([inject(openedA, corr.a), inject(openedB, corr.b)]);
+        return (await Promise.all([
+          openedA.page.evaluate(COLLECT_MARKERS_JS),
+          openedB.page.evaluate(COLLECT_MARKERS_JS),
         ])) as [MarkerDoc, MarkerDoc];
-      }
-    }
-    const end = matchedYDelta(ra.m, rb.m);
-    if (conf.score < CONFIDENCE_MIN || conf.truncated) {
+      },
+      { enabled: conf.score >= ALIGN_CONFIDENCE_MIN },
+    );
+    if (conf.score < ALIGN_CONFIDENCE_MIN || conf.truncated) {
       console.warn(
         `[align] ${route}: low match confidence ${conf.score.toFixed(2)}` +
           ` (rate ${conf.matchRate.toFixed(2)}, dup ${conf.dupPressure.toFixed(2)}` +
@@ -255,19 +249,19 @@ async function alignedShots(
     // converges most pages in 0 corrective rounds; a page that needs many rounds
     // (or hits the cap without converging) is where the aligner should improve.
     if (
-      conf.score >= CONFIDENCE_MIN &&
-      Math.abs(start) > CORRECTIVE_THRESHOLD
+      conf.score >= ALIGN_CONFIDENCE_MIN &&
+      Math.abs(aligned.start) > ALIGN_CORRECTIVE_THRESHOLD
     ) {
       console.warn(
-        `[align] ${route}: corrective ${start}px → ${end.max}px in ${rounds} round(s)`,
-        Math.abs(end.max) > CORRECTIVE_THRESHOLD
-          ? JSON.stringify(end.worst)
+        `[align] ${route}: corrective ${aligned.start}px → ${aligned.end.max}px in ${aligned.rounds} round(s)`,
+        Math.abs(aligned.end.max) > ALIGN_CORRECTIVE_THRESHOLD
+          ? JSON.stringify(aligned.end.worst)
           : "",
       );
     }
     await Promise.all([
-      A.page.screenshot({ path: files["before-aligned"], fullPage: true }),
-      B.page.screenshot({ path: files["after-aligned"], fullPage: true }),
+      openedA.page.screenshot({ path: files["before-aligned"], fullPage: true }),
+      openedB.page.screenshot({ path: files["after-aligned"], fullPage: true }),
     ]);
     padPair(files["before-aligned"], files["after-aligned"]);
   } catch (err) {

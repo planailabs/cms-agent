@@ -323,9 +323,14 @@ export interface Alignment {
  * match degree, letting unmatched markers fall through as gaps ("missing
  * element, fill up") instead of forcing a positional pairing. Exact matches
  * dominate; a genuinely different element scores ~0 and is skipped rather than
- * mis-paired.
+ * mis-paired. Consumers can raise `minScore` when a weak correspondence would
+ * be more misleading than separate add/remove gaps (box highlights do this).
  */
-export function alignMarkers(a: Marker[], b: Marker[]): Alignment {
+export function alignMarkers(
+  a: Marker[],
+  b: Marker[],
+  minScore = Number.EPSILON,
+): Alignment {
   const n = a.length;
   const m = b.length;
   const dp: Float64Array[] = Array.from(
@@ -334,7 +339,9 @@ export function alignMarkers(a: Marker[], b: Marker[]): Alignment {
   );
   for (let i = 1; i <= n; i++) {
     for (let j = 1; j <= m; j++) {
-      const diag = dp[i - 1][j - 1] + similarity(a[i - 1], b[j - 1]);
+      const score = similarity(a[i - 1], b[j - 1]);
+      const diag =
+        score >= minScore ? dp[i - 1][j - 1] + score : Number.NEGATIVE_INFINITY;
       dp[i][j] = Math.max(diag, dp[i - 1][j], dp[i][j - 1]);
     }
   }
@@ -345,7 +352,7 @@ export function alignMarkers(a: Marker[], b: Marker[]): Alignment {
   let j = m;
   while (i > 0 && j > 0) {
     const s = similarity(a[i - 1], b[j - 1]);
-    if (dp[i][j] === dp[i - 1][j - 1] + s) {
+    if (s >= minScore && dp[i][j] === dp[i - 1][j - 1] + s) {
       matches.push({ ai: i - 1, bi: j - 1, score: s });
       i--;
       j--;

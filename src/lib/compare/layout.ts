@@ -412,7 +412,9 @@ export const boxDiff = (
   const lb = b.filter(leafy);
   if (la.length === 0 && lb.length === 0) return [];
 
-  const { matches, onlyA, onlyB } = alignMarkers(la, lb);
+  // Change classification needs a trustworthy correspondence. Weak positional
+  // pairings are add/remove, not an amber "changed" box.
+  const { matches, onlyA, onlyB } = alignMarkers(la, lb, ANCHOR_MIN);
   const baseKey = (k: string): string => k.replace(/#\d+$/, "");
   const added: Marker[] = onlyB.map((i) => lb[i]);
   const removed: Marker[] = onlyA.map((i) => la[i]);

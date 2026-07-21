@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { boxDiff } from "@/lib/compare/layout";
-import type { MarkerDoc } from "@/lib/compare/markers";
+import type { Marker, MarkerDoc } from "@/lib/compare/markers";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const load = (n: string) =>
@@ -25,6 +25,34 @@ const kinds = (boxes: ReturnType<typeof boxDiff>) => ({
 });
 
 describe("boxDiff (flat classifier)", () => {
+  it("classifies unrelated same-tag blocks as add/remove, not changed", () => {
+    const marker = (k: string): Marker => ({ k, y: 20, x: 10, w: 200, h: 40 });
+    const boxes = boxDiff(
+      [marker("P:alpha beta#1")],
+      100,
+      [marker("P:totally unrelated#1")],
+      100,
+    );
+    expect(kinds(boxes)).toEqual({ added: 1, changed: 0, removed: 1 });
+  });
+
+  it("keeps a full rewrite with stable identity as changed", () => {
+    const a: Marker = {
+      k: "H2:Old words#1",
+      id: "hero-title",
+      y: 20,
+      x: 10,
+      w: 200,
+      h: 40,
+    };
+    const b: Marker = { ...a, k: "H2:Entirely new words#1" };
+    expect(kinds(boxDiff([a], 100, [b], 100))).toEqual({
+      added: 0,
+      changed: 1,
+      removed: 0,
+    });
+  });
+
   it("a reworded page → matched leaves flagged changed, not add+remove", () => {
     const boxes = boxDiff(before.m, before.h, after.m, after.h);
     const k = kinds(boxes);

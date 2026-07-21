@@ -20,8 +20,8 @@ import { COLLECT_MARKERS_JS, type MarkerDoc } from "@/lib/compare/markers";
 import {
   spacingPlan,
   matchedYDelta,
-  correctiveFlat,
 } from "@/lib/compare/layout";
+import { runCorrectiveAlignment } from "@/lib/compare/converge";
 import { INJECT_SPACERS } from "@/lib/compare/inject";
 
 const base = readFileSync(
@@ -90,17 +90,15 @@ const residualCorrected = async (
     const plan = spacingPlan(mb.m, mb.h, ma.m, ma.h);
     await before.evaluate(INJECT_SPACERS, plan.a as never);
     await after.evaluate(INJECT_SPACERS, plan.b as never);
-    let [ab, aa] = await Promise.all([collect(before), collect(after)]);
-    // Structural seed + FLAT corrective tail.
-    for (let round = 0; round < 6; round++) {
-      if (Math.abs(matchedYDelta(ab.m, aa.m).max) <= 8) break;
-      const corr = correctiveFlat(ab.m, aa.m);
-      if (!corr.a.length && !corr.b.length) break;
-      await before.evaluate(INJECT_SPACERS, corr.a as never);
-      await after.evaluate(INJECT_SPACERS, corr.b as never);
-      [ab, aa] = await Promise.all([collect(before), collect(after)]);
-    }
-    return Math.abs(matchedYDelta(ab.m, aa.m).max);
+    const [ab, aa] = await Promise.all([collect(before), collect(after)]);
+    const aligned = await runCorrectiveAlignment(ab, aa, async (corr) => {
+      await Promise.all([
+        before.evaluate(INJECT_SPACERS, corr.a as never),
+        after.evaluate(INJECT_SPACERS, corr.b as never),
+      ]);
+      return await Promise.all([collect(before), collect(after)]);
+    });
+    return Math.abs(aligned.end.max);
   } finally {
     await Promise.all([before.close(), after.close()]);
   }

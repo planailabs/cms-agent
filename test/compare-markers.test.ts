@@ -18,6 +18,31 @@ const mk = (k: string, y: number): Marker => ({ k, y });
 /** Container-layer marker: key is "#<structsig>", `s` is the structsig. */
 const mkc = (sig: string, y: number): Marker => ({ k: `#${sig}`, y, s: sig });
 
+describe("alignMarkers", () => {
+  it("leaves zero-similarity elements unmatched instead of pairing by position", () => {
+    const a = [mk("P:alpha beta#1", 100)];
+    const b = [mk("P:totally unrelated#1", 100)];
+
+    expect(alignMarkers(a, b)).toEqual({
+      matches: [],
+      onlyA: [0],
+      onlyB: [0],
+    });
+  });
+
+  it("supports a stronger score floor for classification consumers", () => {
+    const a = [mk("P:alpha beta gamma#1", 100)];
+    const b = [mk("P:alpha delta epsilon#1", 100)];
+
+    expect(alignMarkers(a, b).matches).toHaveLength(1);
+    expect(alignMarkers(a, b, 0.5)).toEqual({
+      matches: [],
+      onlyA: [0],
+      onlyB: [0],
+    });
+  });
+});
+
 describe("computeAnchors", () => {
   it("matches identical content in order", () => {
     const a = [mk("H1:Title#1", 0), mk("P:Intro#1", 100), mk("P:Outro#1", 300)];

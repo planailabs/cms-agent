@@ -12,19 +12,19 @@
 const IFRAME_IDS = ['ws-diff-before', 'ws-diff-after'] as const;
 
 import {
-  COLLECT_MARKERS_JS,
   bracketAnchors,
+  COLLECT_MARKERS_JS,
   computeAnchors,
   mapPosition,
+  matchConfidence,
   type Anchor,
   type MarkerDoc,
 } from '@/lib/compare/markers';
+import { spacingPlan, type Spacer } from '@/lib/compare/layout';
 import {
-  correctiveFlat,
-  matchedYDelta,
-  spacingPlan,
-  type Spacer,
-} from '@/lib/compare/layout';
+  ALIGN_CONFIDENCE_MIN,
+  runCorrectiveAlignment,
+} from '@/lib/compare/converge';
 import { INJECT_SPACERS } from '@/lib/compare/inject';
 import { store } from '../chat/app/store';
 import type { AppState } from '../chat/app/state';
@@ -43,8 +43,6 @@ const pending = new Map<
   }
 >();
 const REQUEST_TIMEOUT_MS = 15_000;
-const CORRECTIVE_THRESHOLD = 8;
-const CORRECTIVE_ROUNDS = 6;
 let appliedSig: string | null = null;
 let aligningSig: string | null = null;
 let lastMode: 'height' | 'content' = 'content';
@@ -183,29 +181,29 @@ const alignLiveFrames = async (sig: string): Promise<void> => {
     ];
     if (currentSig() !== sig || store.state.workspace.compareMode !== 'content')
       return;
+    const confidence = matchConfidence(a, b);
     const plan = spacingPlan(a.m, a.h, b.m, b.h);
     [a, b] = (await Promise.all([
       applyAndCollect(before, plan.a),
       applyAndCollect(after, plan.b),
     ])) as [MarkerDoc, MarkerDoc];
-    for (let round = 0; round < CORRECTIVE_ROUNDS; round++) {
-      if (
-        currentSig() !== sig ||
-        store.state.workspace.compareMode !== 'content' ||
-        Math.abs(matchedYDelta(a.m, b.m).max) <= CORRECTIVE_THRESHOLD
-      ) {
-        break;
-      }
-      const corr = correctiveFlat(a.m, b.m);
-      if (!corr.a.length && !corr.b.length) break;
-      [a, b] = (await Promise.all([
-        applyAndCollect(before, corr.a),
-        applyAndCollect(after, corr.b),
-      ])) as [MarkerDoc, MarkerDoc];
-    }
-    if (currentSig() !== sig || store.state.workspace.compareMode !== 'content')
-      return;
-    setDocs(a, b);
+    const aligned = await runCorrectiveAlignment(
+      a,
+      b,
+      async (corr) =>
+        (await Promise.all([
+          applyAndCollect(before, corr.a),
+          applyAndCollect(after, corr.b),
+        ])) as [MarkerDoc, MarkerDoc],
+      {
+        enabled: confidence.score >= ALIGN_CONFIDENCE_MIN,
+        isCurrent: () =>
+          currentSig() === sig &&
+          store.state.workspace.compareMode === 'content',
+      },
+    );
+    if (aligned.aborted) return;
+    setDocs(aligned.a, aligned.b);
     appliedSig = sig;
   } catch (err) {
     console.warn('[diff-scroll] live side-by-side alignment failed:', err);
