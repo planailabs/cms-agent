@@ -609,7 +609,7 @@ describe("real-browser alignment — last-resort corrective", () => {
       ).textContent = "Rewritten.";
     };
     const r = await residualCorrected(mutate as never);
-    expect(r).toBeLessThanOrEqual(8);
+    expect(r).toBeLessThanOrEqual(1);
   }, 30_000);
 
   it("never worsens a case the structural pass cannot fully solve", async () => {
@@ -631,11 +631,11 @@ describe("real-browser alignment — chaos", () => {
     it(`seed ${seed} → matched content aligns`, async () => {
       const ops = buildOps(seed);
       const r = await residualCorrected(applyOps as never, ops);
-      if (r > 8)
+      if (r > 1)
         console.warn(
           `[chaos:${seed}] residual ${r}px ops=${JSON.stringify(ops)}`,
         );
-      expect(r).toBeLessThanOrEqual(8);
+      expect(r).toBeLessThanOrEqual(1);
     }, 30_000);
   }
 });
@@ -664,11 +664,10 @@ describe("real-browser alignment — computed-style chaos", () => {
       const drift = await residualCorrected(
         applyComputedStyleChaos as never,
         seed,
-        { threshold: 7, maxRounds: 8 },
       );
-      if (drift > 8)
+      if (drift > 1)
         console.warn(`[style-chaos:${seed}] residual ${drift}px`);
-      expect(drift).toBeLessThanOrEqual(8);
+      expect(drift).toBeLessThanOrEqual(1);
     }, 60_000);
   }
 });

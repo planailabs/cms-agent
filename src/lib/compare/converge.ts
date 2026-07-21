@@ -17,7 +17,7 @@ import {
   type SpacingPlan,
 } from "./layout";
 
-export const ALIGN_CORRECTIVE_THRESHOLD = 8;
+export const ALIGN_CORRECTIVE_THRESHOLD = 1;
 export const ALIGN_CORRECTIVE_ROUNDS = 12;
 export const ALIGN_CONFIDENCE_MIN = 0.35;
 
