@@ -69,7 +69,7 @@ export interface DiffPage {
   file: string;
 }
 
-export type DiffViewMode = 'side-by-side' | 'highlight' | 'onion';
+export type DiffViewMode = 'side-by-side' | 'highlight' | 'onion' | 'scroll';
 
 export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 
@@ -333,7 +333,10 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   pickerActive: false,
   plan: null,
   planModalOpen: false,
-  compareMode: 'height',
+  // 'content' by default: matched content lines up even when the two shots
+  // differ in height (cross-browser rendering, added/removed sections). Fails
+  // soft to plain height when a shot has no markers.
+  compareMode: 'content',
   codeBrowser: createInitialCodeBrowserState(),
   windowPicker: null,
   executionSha: null,

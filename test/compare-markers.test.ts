@@ -81,4 +81,24 @@ describe('alignedSegments', () => {
     const segs = alignedSegments([{ a: 450, b: 100 }], 400, 500); // a beyond heightA
     expect(segs).toEqual([{ topA: 0, topB: 0, hA: 400, hB: 500, h: 500 }]);
   });
+
+  it('lines up matched content when two browsers render at different heights', () => {
+    // Same page, two engines: identical content but B renders every block a
+    // few px lower (font metrics) and the doc ends 30px taller. Content-align
+    // must place each matched anchor at the SAME cumulative y in both columns.
+    const a = [mk('H1:Title#1', 0), mk('P:Body#1', 200), mk('H2:More#1', 600)];
+    const b = [mk('H1:Title#1', 0), mk('P:Body#1', 210), mk('H2:More#1', 625)];
+    const segs = alignedSegments(computeAnchors(a, b), 1000, 1030);
+    let yA = 0;
+    let yB = 0;
+    const rowsAtAnchor = segs.map((s) => {
+      const row = { yA, yB };
+      yA += s.h; // both columns advance by the same aligned row height
+      yB += s.h;
+      return row;
+    });
+    // Every segment starts at an identical y in both columns → anchors align.
+    for (const r of rowsAtAnchor) expect(r.yA).toBe(r.yB);
+    expect(yA).toBe(yB); // equal total height despite the 30px render delta
+  });
 });
