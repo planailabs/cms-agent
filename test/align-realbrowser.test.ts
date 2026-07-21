@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Browser, Page } from "playwright";
 import { COLLECT_MARKERS_JS, type MarkerDoc } from "@/lib/compare/markers";
 import {
+  buildLayout,
   spacingPlan,
   matchedYDelta,
 } from "@/lib/compare/layout";
@@ -342,6 +343,31 @@ const cases: Array<{ name: string; mutate: () => void; max: number }> = [
 ];
 
 describe("real-browser alignment", () => {
+  it("inserting a repeated post creates a before-side filler", async () => {
+    const before = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const after = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await before.setContent(base);
+      await after.setContent(base);
+      await after.evaluate(() => {
+        document.querySelector(".posts")!.insertAdjacentHTML(
+          "afterbegin",
+          '<li class="post"><p class="date">Jul 19, 2026</p><h3 class="swiss-heading-md">What Squirrels Know</h3><p class="swiss-body">Good ideas rarely arrive fully formed; collect the small promising things.</p></li>',
+        );
+      });
+      const [mb, ma] = await Promise.all([collect(before), collect(after)]);
+      const layout = buildLayout(mb.m, mb.h, ma.m, ma.h)!;
+      const segments = (node: typeof layout): NonNullable<typeof layout.segs> =>
+        node.segs ?? node.children?.flatMap(segments) ?? [];
+      expect(segments(layout).some((s) => s.hB - s.hA >= 80)).toBe(true);
+
+      const plan = spacingPlan(mb.m, mb.h, ma.m, ma.h);
+      expect(plan.a.reduce((sum, spacer) => sum + spacer.px, 0)).toBeGreaterThanOrEqual(80);
+    } finally {
+      await Promise.all([before.close(), after.close()]);
+    }
+  }, 30_000);
+
   for (const c of cases) {
     it(`${c.name} → matched content aligns`, async () => {
       const r = await residual(c.mutate);

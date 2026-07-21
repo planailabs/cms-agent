@@ -78,6 +78,10 @@ them into a fixture under `test/fixtures/` and add a scaffold.
 - Grid/table columns never cross-match (`fx`); a whole section corresponds by
   `sid`+structure even when every word changed; insertions are detected (text
   disambiguates) not shifted.
+- Repeated sibling cards are matched by the SUM of their marker match strengths,
+  not the count above a threshold. Same-shaped cards are plausible weak matches,
+  but they must not tie exact later cards and hide an insertion's filler (the
+  "Squirrels before Challenges" regression).
 - Matching ≠ change-detection: identity can score a changed element ~1, so
   `boxDiff` decides "changed" by comparing the content key, not the match score.
 - A full rewrite (structures don't correspond) overlays as one rectangle rather

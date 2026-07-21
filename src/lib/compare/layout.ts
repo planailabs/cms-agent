@@ -229,10 +229,15 @@ const childSim = (pa: Part, pb: Part): number => {
   const ma = leavesOf(pa).map((x) => x.m);
   const mb = leavesOf(pb).map((x) => x.m);
   if (ma.length === 0 || mb.length === 0) return 0;
-  const good = alignMarkers(ma, mb).matches.filter(
-    (mm) => mm.score >= 0.5,
-  ).length;
-  const textSim = good / Math.max(ma.length, mb.length);
+  // Preserve match strength: repeated cards often share the same classes/cell
+  // roles, but those weak structural matches must not tie exact card content.
+  // Counting every >=0.5 match as 1 made an insertion look like a rewrite of
+  // the card at the same index, suppressing the one-sided filler.
+  const matchedScore = alignMarkers(ma, mb).matches.reduce(
+    (sum, mm) => sum + (mm.score >= ANCHOR_MIN ? mm.score : 0),
+    0,
+  );
+  const textSim = matchedScore / Math.max(ma.length, mb.length);
   const richness = Math.min(1, (Math.min(ma.length, mb.length) - 1) / 3); // 1 elem → 0
   return Math.min(1, textSim + 0.5 * structSim(pa, pb) * richness);
 };

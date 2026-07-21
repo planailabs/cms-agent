@@ -83,6 +83,33 @@ describe('buildLayout', () => {
     expect(n.children![1].segs?.some((s) => s.hA > 0 && s.hB > 0) ?? true).toBe(true);
   });
 
+  it('does not position-match repeated card roles when a rich card is inserted', () => {
+    const card = (title: string, body: string, y: number, firstIndex: number): Marker[] => [
+      { ...bx(`LI:${title} ${body}#1`, y, 0, 300, 120), i: firstIndex, fx: 'UL/3#0' },
+      { ...bx(`H3:${title}#1`, y + 20, 20, 240, 30), i: firstIndex + 1, fx: 'DIV/3#1' },
+      { ...bx(`P:${body}#1`, y + 60, 20, 240, 40), i: firstIndex + 2, fx: 'DIV/3#2' },
+    ];
+    const a = [
+      ...card('Challenges in the AI Age', 'The useful gains of AI are real', 0, 0),
+      ...card('Shipping Faster', 'Why smaller pull requests work', 140, 3),
+      ...card('Hello World', 'Our very first post', 280, 6),
+    ];
+    const b = [
+      ...card('What Squirrels Know', 'Good ideas rarely arrive fully formed', 0, 0),
+      ...card('Challenges in the AI Age', 'The useful gains of AI are real', 140, 3),
+      ...card('Shipping Faster', 'Why smaller pull requests work', 280, 6),
+      ...card('Hello World', 'Our very first post', 420, 9),
+    ];
+
+    const n = buildLayout(a, 400, b, 540)!;
+    const segments = (node: typeof n): NonNullable<typeof n.segs> =>
+      node.segs ?? node.children?.flatMap(segments) ?? [];
+    expect(segments(n).some((s) => s.hB - s.hA >= 100)).toBe(true);
+
+    const plan = spacingPlan(a, 400, b, 540);
+    expect(plan.a.reduce((sum, spacer) => sum + spacer.px, 0)).toBeGreaterThanOrEqual(100);
+  });
+
   it('spacingPlan: an inserted block adds a filler on the other side', () => {
     const p = (k: string, y: number, i: number): Marker => ({ k, y, x: 0, w: 300, h: 40, i });
     const a = [p('P:alpha one#1', 0, 0), p('P:gamma three#1', 60, 1)];
