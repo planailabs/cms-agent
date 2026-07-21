@@ -153,6 +153,10 @@ them into a fixture under `test/fixtures/` and add a scaffold.
 - Closed `<details>` answers are not painted and remain excluded, but their
   visible `<summary>` questions are leaf markers so changed FAQ rows receive
   normal highlight boxes.
+- Standalone non-inline `<span>` elements are content leaves because sites
+  commonly use block spans for diagram labels and captions. Spans nested in an
+  existing content leaf remain folded into that parent regardless of computed
+  display, avoiding duplicate highlights and unstable style-driven candidates.
 - Substantial painted `div`/SVG/canvas/video blocks are visual anchors even when
   they contain no marker text. Only uniquely identified painted roles authorize
   correction; repeated card frames remain excluded to avoid ambiguous pairing.

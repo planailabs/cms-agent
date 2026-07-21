@@ -933,6 +933,34 @@ describe("visual marker collection", () => {
       await Promise.all([before.close(), after.close()]);
     }
   });
+
+  it("highlights changed block-span diagram labels but ignores inline spans", async () => {
+    const before = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const after = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await before.setContent(`
+        <main><section id="architecture"><div class="diagram">
+          <span class="caption" style="display:block">Local machines<br />Private environment</span>
+          <p>Keep <span class="emphasis">this inline fragment</span> together</p>
+        </div></section></main>
+      `);
+      await after.setContent(`
+        <main><section id="architecture"><div class="diagram">
+          <span class="caption" style="display:block">Private environment</span>
+          <p>Keep <span class="emphasis">this changed fragment</span> together</p>
+        </div></section></main>
+      `);
+      const [a, b] = await Promise.all([collect(before), collect(after)]);
+      expect(a.m.some((marker) => marker.c === "caption")).toBe(true);
+      expect(a.m.some((marker) => marker.c === "emphasis")).toBe(false);
+      const changed = boxDiff(a.m, a.h, b.m, b.h).filter(
+        (box) => box.kind === "changed",
+      );
+      expect(changed).toHaveLength(2);
+    } finally {
+      await Promise.all([before.close(), after.close()]);
+    }
+  });
 });
 
 // Stable data-cmsm: an element's handle survives re-collection after the DOM

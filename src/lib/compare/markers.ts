@@ -101,7 +101,7 @@ export interface Anchor {
  * Markers are capped so the O(n·m) match stays bounded on huge pages.
  */
 export const COLLECT_MARKERS_JS = `(function () {
-  var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,summary,table,figure,img,td,th';
+  var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,summary,span,table,figure,img,td,th';
   var CONT = 'section,article,header,footer,main,nav,aside,ul,ol,figure,table,form,blockquote';
   var VISUAL = 'div,svg,canvas,video';
   var MAX = 800;      // markers kept (bounds the O(n·m) matcher)
@@ -149,6 +149,16 @@ export const COLLECT_MARKERS_JS = `(function () {
       sig = el.tagName + '/' + kids.length + '/' + sig;
       key = '#' + sig;
     } else if (el.matches(LEAF)) {
+      // Block spans are often captions/diagram labels. Inline spans are
+      // fragments of an enclosing content leaf and would double-count text.
+      if (el.tagName === 'SPAN') {
+        var spanDisplay = '';
+        try { spanDisplay = getComputedStyle(el).display; } catch (e) { spanDisplay = ''; }
+        var spanOwner = el.parentElement && el.parentElement.closest(
+          'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,summary,td,th'
+        );
+        if (spanDisplay === 'inline' || spanOwner) continue;
+      }
       // A table cell is the content unit — skip block leaves nested inside one
       // (the cell captures their text), so a cell isn't double-counted.
       var isCell = el.tagName === 'TD' || el.tagName === 'TH';
