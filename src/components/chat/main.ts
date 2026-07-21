@@ -151,6 +151,7 @@ const initApp = () => {
         const chatRegion = sidebarRegion.querySelector<HTMLElement>('#chat-scroll-region');
         const mc = state.chat?.aiChat;
         if (chatRegion && (mc?.phase === 'streaming' || mc?.phase === 'waiting'
+          || mc?.phase === 'compacting'
           || mc?.phase === 'idle' || mc?.phase === 'question')) {
           chatRegion.scrollTop = chatRegion.scrollHeight;
         }

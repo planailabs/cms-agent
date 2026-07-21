@@ -19,7 +19,7 @@ export type StoredMessage = {
   id?: string;
   // 'execution' is a client-side pseudo message anchoring the committed-
   // execution card at its chronological place in the transcript
-  role: 'user' | 'assistant' | 'cancel' | 'tool' | 'automatism' | 'execution';
+  role: 'user' | 'assistant' | 'cancel' | 'tool' | 'automatism' | 'compaction' | 'execution';
   content: string;
   /** role 'automatism': i18n container — rendered in the viewer's language,
    *  falling back to the stored English `content`. */

@@ -43,7 +43,7 @@ const TOOL_TRANSITION_DELAY_MS = 500;
  */
 export const transition = (
   mc: NonNullable<typeof store.state.chat>['aiChat'],
-  phase: 'idle' | 'waiting' | 'streaming' | 'tool' | 'question' | 'error',
+  phase: 'idle' | 'waiting' | 'streaming' | 'tool' | 'compacting' | 'question' | 'error',
 ) => {
   if (!mc) return;
 

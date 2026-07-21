@@ -13,6 +13,7 @@ import { addConnection } from '@/lib/agent/bus';
 import { buildChatState, emitChatState } from '@/lib/agent/chatState';
 import { acquireTurnLock, releaseTurnLock } from '@/lib/agent/bus';
 import { GET as historyGet } from '@/pages/api/chat/history';
+import { loadChatRecord } from '@/lib/agent/persistence';
 
 let chatId: string;
 
@@ -254,5 +255,32 @@ describe('streamed chat state', () => {
     const rebuilt = await buildChatState(chatId);
     expect({ ...body.state, seq: 0 }).toEqual(JSON.parse(JSON.stringify({ ...rebuilt, seq: 0 })));
     expect(body.state.turnPhase).toBeDefined(); // turn state lives IN the snapshot
+  });
+
+  it('loads conversation state from the newest compaction without deleting older rows', async () => {
+    const branch = await prisma.branch.findUniqueOrThrow({ where: { name: 'state-test-target' } });
+    const chat = await prisma.chat.create({
+      data: { branchId: branch.id, workBranch: `c-compact-${Date.now()}` },
+    });
+    await prisma.message.createMany({
+      data: [
+        { chatId: chat.id, role: 'user', content: 'old request', ordinal: 0 },
+        { chatId: chat.id, role: 'assistant', content: 'old response', ordinal: 1 },
+        { chatId: chat.id, role: 'compaction', content: 'durable summary', ordinal: 2 },
+        { chatId: chat.id, role: 'user', content: 'new request', ordinal: 3 },
+      ],
+    });
+
+    const record = await loadChatRecord(chat.id);
+    expect(record?.messages.map((m) => m.role)).toEqual(['compaction', 'user']);
+    expect(record?.nextOrdinal).toBe(4);
+
+    const res = await historyGet({
+      url: new URL(`http://localhost/api/chat/history?chatId=${chat.id}`),
+    } as never);
+    const body = (await res.json()) as { messages: Array<{ role: string; content: string }> };
+    expect(body.messages.map((m) => m.role)).toEqual(['compaction', 'user']);
+    expect(body.messages[0].content).toBe('durable summary');
+    expect(await prisma.message.count({ where: { chatId: chat.id } })).toBe(4);
   });
 });

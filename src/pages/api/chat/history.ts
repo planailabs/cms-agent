@@ -14,13 +14,19 @@ export const GET: APIRoute = async ({ url }) => {
     return new Response(JSON.stringify({ error: 'chatId required' }), { status: 400 });
   }
 
-  const chat = await prisma.chat.findUnique({
-    where: { id: chatId },
-    include: { messages: { orderBy: { ordinal: 'asc' } } },
-  });
+  const chat = await prisma.chat.findUnique({ where: { id: chatId } });
   if (!chat) {
     return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
   }
+  const checkpoint = await prisma.message.findFirst({
+    where: { chatId, role: 'compaction' },
+    orderBy: { ordinal: 'desc' },
+    select: { ordinal: true },
+  });
+  const rows = await prisma.message.findMany({
+    where: { chatId, ...(checkpoint ? { ordinal: { gte: checkpoint.ordinal } } : {}) },
+    orderBy: { ordinal: 'asc' },
+  });
 
   // Flatten for rendering: assistant text bubbles plus one 'tool' entry per
   // executed call (name/input joined from the preceding assistant row's
@@ -36,7 +42,7 @@ export const GET: APIRoute = async ({ url }) => {
   const messages: Array<Record<string, unknown>> = [];
   let openCalls = new Map<string, { name: string; input: unknown }>();
 
-  for (const m of chat.messages) {
+  for (const m of rows) {
     if (m.role === 'assistant') {
       const calls = (m.contentBlocks as ToolCallBlock[] | null) ?? [];
       openCalls = new Map(

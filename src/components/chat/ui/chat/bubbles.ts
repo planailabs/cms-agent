@@ -47,6 +47,14 @@ export const renderMessageBubbles = (mc: AiChat, executions: ExecutionCard[] = [
         const exec = executions.find((e) => e.sha === msg.sha);
         return exec ? renderExecutionCard(exec) : '';
       }
+      if (msg.role === 'compaction') {
+        return `<div class="ws-card ws-card--muted" data-card="compaction">
+            <div class="ws-card__header">
+              <span class="ws-card__title">${escapeHtml(t(uiLocale(), 'chat.compaction.title'))}</span>
+            </div>
+            <div class="chat-markdown ws-card__summary">${renderMarkdown(msg.content)}</div>
+          </div>`;
+      }
       if (msg.role === 'automatism') {
         // Agent-less flow event — rendered as a system event card, localized
         // via its TranslatedMessage container (English content as fallback)

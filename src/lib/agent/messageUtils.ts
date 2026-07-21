@@ -50,7 +50,9 @@ export const toOpenAiMessages = (msgs: StoredMessage[]): ChatMessage[] => {
   const result: ChatMessage[] = [];
   for (const m of msgs) {
     if (m.role === 'cancel') continue;
-    if (m.role === 'automatism') {
+    if (m.role === 'compaction') {
+      result.push({ role: 'user', content: `[Conversation summary]\n${m.content}` });
+    } else if (m.role === 'automatism') {
       // Agent-less flow events: model context, marked as such
       result.push({ role: 'user', content: `[Automatism]\n${m.content}` });
     } else if (m.role === 'user') {
@@ -122,46 +124,35 @@ export const hasToolCalls = (msg: StoredMessage): boolean =>
 
 export const isToolResultMsg = (msg: StoredMessage): boolean => msg.role === 'tool';
 
-export const trimMessages = (msgs: StoredMessage[]): StoredMessage[] => {
-  const CHAR_LIMIT = 65536;
-  if (msgs.length <= 1) return msgs;
+export const CONTEXT_CHAR_LIMIT = 65_536;
 
-  type Chunk = StoredMessage[];
-  const chunks: Chunk[] = [];
-  let ci = 0;
+export const needsCompaction = (
+  msgs: StoredMessage[],
+  limit = CONTEXT_CHAR_LIMIT,
+): boolean => msgs.reduce((sum, msg) => sum + contentSize(msg), 0) > limit;
 
-  while (ci < msgs.length) {
-    const msg = msgs[ci];
-    if (hasToolCalls(msg)) {
-      const group: StoredMessage[] = [msg];
-      let j = ci + 1;
-      while (j < msgs.length) {
-        group.push(msgs[j]);
-        if (isToolResultMsg(msgs[j])) { j++; break; }
-        j++;
+/** Plain transcript for the summarizer; this never replaces persisted rows. */
+export const compactionTranscript = (msgs: StoredMessage[], maxChars = 120_000): string => {
+  const rendered = msgs
+    .filter((msg) => msg.role !== 'cancel')
+    .map((msg) => {
+      if (msg.role === 'tool') {
+        return `[tool results]\n${msg.results.map((r) => r.content).join('\n')}`;
       }
-      chunks.push(group);
-      ci = j;
-      continue;
-    }
-    chunks.push([msg]);
-    ci++;
-  }
-
-  const chunkSize = (chunk: Chunk) => chunk.reduce((s, m) => s + contentSize(m), 0);
-
-  const firstChunk = chunks[0];
-  let budget = CHAR_LIMIT - chunkSize(firstChunk);
-  const tail: Chunk[] = [];
-
-  for (let i = chunks.length - 1; i >= 1 && budget > 0; i--) {
-    const size = chunkSize(chunks[i]);
-    if (size > budget) break;
-    budget -= size;
-    tail.unshift(chunks[i]);
-  }
-
-  return [...firstChunk, ...tail.flat()];
+      if (msg.role === 'assistant' && msg.toolCalls?.length) {
+        const calls = msg.toolCalls
+          .map((call) => `${call.function.name}(${call.function.arguments})`)
+          .join('\n');
+        return `[assistant]\n${msg.content}\n[tool calls]\n${calls}`;
+      }
+      return `[${msg.role}]\n${msg.content}`;
+    })
+    .join('\n\n');
+  if (rendered.length <= maxChars) return rendered;
+  // Keep the original request plus the largest possible recent tail.
+  const head = rendered.slice(0, 20_000);
+  const tail = rendered.slice(-(maxChars - head.length));
+  return `${head}\n\n[older transcript elided for summarization]\n\n${tail}`;
 };
 
 // ─── Tool call helpers ───────────────────────────────────────────────────────

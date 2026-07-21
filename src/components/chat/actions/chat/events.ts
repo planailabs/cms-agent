@@ -79,7 +79,13 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
  *  advanced meanwhile, the fetched history is older than the screen. */
 let transcriptEventSeq = 0;
 export const getTranscriptEventSeq = (): number => transcriptEventSeq;
-const TRANSCRIPT_EVENTS = new Set(['text_delta', 'text_done', 'tool_start', 'tool_end']);
+const TRANSCRIPT_EVENTS = new Set([
+  'text_delta',
+  'text_done',
+  'tool_start',
+  'tool_end',
+  'compaction',
+]);
 
 /**
  * Handles all server → client events from the SSE stream.
@@ -97,6 +103,20 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
   }
 
   switch (type) {
+    case 'compaction_start':
+      transition(currentMc, 'compacting');
+      store.notify();
+      break;
+
+    case 'compaction':
+      currentMc.messages.push({
+        role: 'compaction',
+        content: (data.content as string) ?? '',
+      });
+      cacheAIChatMessages(currentMc.messages);
+      store.notify();
+      break;
+
     case 'thinking':
       transition(currentMc, 'waiting');
       store.notify();

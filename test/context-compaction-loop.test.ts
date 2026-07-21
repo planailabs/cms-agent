@@ -1,0 +1,104 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { create } = vi.hoisted(() => ({
+  create: vi.fn(async (input?: { stream?: boolean }) => {
+    if (!input?.stream) {
+      return {
+        choices: [{ message: { content: 'Requirements and progress preserved.' } }],
+        usage: { prompt_tokens: 100, completion_tokens: 12 },
+      };
+    }
+    return {
+      async *[Symbol.asyncIterator]() {
+        yield { choices: [{ delta: { content: 'Continued.' }, finish_reason: null }] };
+        yield {
+          choices: [{ delta: {}, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 20, completion_tokens: 3 },
+        };
+      },
+    };
+  }),
+}));
+
+vi.mock('openai', () => ({
+  default: class MockOpenAI {
+    chat = { completions: { create } };
+  },
+}));
+
+vi.mock('@/lib/agent/mcp', () => ({
+  createMcpBridge: vi.fn(async () => ({
+    asOpenAiTools: async () => [],
+    promptHints: () => [],
+    callTool: vi.fn(),
+    close: vi.fn(),
+  })),
+}));
+
+import { addConnection } from '@/lib/agent/bus';
+import { runToolLoop } from '@/lib/agent/toolLoop';
+import type { StoredMessage } from '@/lib/agent/types';
+
+describe('tool-loop context compaction', () => {
+  beforeEach(() => create.mockClear());
+
+  it('summarizes in the background, persists a checkpoint, and continues the turn', async () => {
+    const messages: StoredMessage[] = [
+      { role: 'user', content: 'Original requirement' },
+      { role: 'assistant', content: 'x'.repeat(66_000) },
+    ];
+    const persisted = messages.slice();
+    const events: string[] = [];
+    const remove = addConnection('compact-loop', {
+      write: (event) => events.push(event),
+      end: () => {},
+    });
+
+    try {
+      await runToolLoop({
+        chatId: 'compact-loop',
+        userId: 'u1',
+        messages,
+        phase: 'idle',
+        toolContext: {
+          chatId: 'compact-loop',
+          branchId: 'b1',
+          branchName: 'draft',
+          targetBranchName: 'main',
+          userId: 'u1',
+          workflowPhase: 'preview',
+          chatKind: 'workflow',
+          worktreePath: '',
+          userContext: new Map(),
+          modifiedPaths: new Set(),
+        },
+        promptInput: {
+          phase: 'preview',
+          branchName: 'draft',
+          locale: 'en',
+          planJson: { summary: 'Approved work' },
+        },
+        setPhase: async () => {},
+        appendMsg: async (message) => {
+          messages.push(message);
+          persisted.push(message);
+        },
+        skipTokenAccounting: true,
+      });
+    } finally {
+      remove();
+    }
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(events.indexOf('compaction_start')).toBeLessThan(events.indexOf('compaction'));
+    expect(events.indexOf('compaction')).toBeLessThan(events.indexOf('thinking'));
+    expect(events).toContain('done');
+    expect(messages.map((m) => m.role)).toEqual(['compaction', 'assistant']);
+    expect(persisted.map((m) => m.role)).toEqual([
+      'user',
+      'assistant',
+      'compaction',
+      'assistant',
+    ]);
+  });
+});

@@ -8,6 +8,8 @@ export const chatCatalogs: AreaCatalogs = {
   en: {
     'chat.automatismHead': 'Automatism',
     'chat.toolRunning': 'running…',
+    'chat.compaction.working': 'Compacting…',
+    'chat.compaction.title': 'Earlier conversation compacted',
     // Plan approval card
     'chat.plan.title': 'Proposed plan',
     'chat.plan.view': 'View the plan in fullscreen',
@@ -68,6 +70,8 @@ export const chatCatalogs: AreaCatalogs = {
   de: {
     'chat.automatismHead': 'Automatismus',
     'chat.toolRunning': 'läuft…',
+    'chat.compaction.working': 'Kontext wird komprimiert…',
+    'chat.compaction.title': 'Früherer Gesprächsverlauf komprimiert',
     // Plan approval card
     'chat.plan.title': 'Vorgeschlagener Plan',
     'chat.plan.view': 'Plan im Vollbild ansehen',

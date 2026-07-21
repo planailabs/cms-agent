@@ -2,7 +2,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { sanitizeMessages, toOpenAiMessages, trimMessages } from '@/lib/agent/messageUtils';
+import {
+  compactionTranscript,
+  needsCompaction,
+  sanitizeMessages,
+  toOpenAiMessages,
+} from '@/lib/agent/messageUtils';
+import { buildSystemPrompt } from '@/lib/agent/prompt';
 import { buildQuestionToolResults } from '@/lib/agent/toolLoop';
 import { registerClientTools } from '@/lib/agent/tools/clientTools';
 import { registerFsTools } from '@/lib/agent/tools/fsTools';
@@ -49,10 +55,11 @@ describe('message conversion', () => {
       { role: 'assistant', content: 'looking', toolCalls: [call('t1', 'read_file', { path: 'x' })] },
       { role: 'tool', results: [{ toolCallId: 't1', content: 'data' }] },
       { role: 'cancel', content: 'cancelled' },
+      { role: 'compaction', content: 'Earlier work summary' },
       { role: 'assistant', content: 'done' },
     ];
     const out = toOpenAiMessages(messages);
-    expect(out.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
+    expect(out.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'user', 'assistant']);
     expect((out[1] as { tool_calls?: unknown[] }).tool_calls).toHaveLength(1);
     expect((out[2] as { tool_call_id: string }).tool_call_id).toBe('t1');
   });
@@ -83,7 +90,7 @@ describe('message conversion', () => {
     ]);
   });
 
-  it('trim keeps the first message and the newest tail within budget', () => {
+  it('requests compaction without deleting or slicing stored messages', () => {
     const big = 'x'.repeat(40_000);
     const msgs: StoredMessage[] = [
       { role: 'user', content: 'first' },
@@ -91,10 +98,24 @@ describe('message conversion', () => {
       { role: 'assistant', content: big },
       { role: 'user', content: 'latest' },
     ];
-    const out = trimMessages(msgs);
-    expect(out[0]).toEqual({ role: 'user', content: 'first' });
-    expect(out[out.length - 1]).toEqual({ role: 'user', content: 'latest' });
-    expect(out.length).toBeLessThan(msgs.length);
+    expect(needsCompaction(msgs)).toBe(true);
+    expect(msgs).toHaveLength(4);
+    const transcript = compactionTranscript(msgs);
+    expect(transcript).toContain('[user]\nfirst');
+    expect(transcript).toContain('[user]\nlatest');
+  });
+
+  it('loads an approved plan in every workflow phase prompt', () => {
+    for (const phase of ['plan', 'execute', 'preview', 'published'] as const) {
+      const prompt = buildSystemPrompt({
+        phase,
+        branchName: 'draft',
+        locale: 'en',
+        planJson: { summary: 'Keep this plan' },
+      });
+      expect(prompt).toContain('Approved workflow plan');
+      expect(prompt).toContain('Keep this plan');
+    }
   });
 });
 

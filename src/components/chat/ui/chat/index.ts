@@ -14,7 +14,13 @@ import { escapeHtml } from '../../utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 
 import { renderMessageBubbles } from './bubbles';
-import { renderStreamingBubble, renderThinkingIndicator, renderToolIndicator, renderErrorMessage } from './indicators';
+import {
+  renderCompactionIndicator,
+  renderErrorMessage,
+  renderStreamingBubble,
+  renderThinkingIndicator,
+  renderToolIndicator,
+} from './indicators';
 import { renderQuestionUI } from './prompts';
 import { renderChatComposer, renderEmptyState } from './composer';
 import { renderWorkflowCards, renderContextChip } from './cards';
@@ -62,6 +68,7 @@ export const renderChatSection = (
     const messageBubbles = renderMessageBubbles(mc, state.workspace.executions);
     const streamingBubble = renderStreamingBubble(mc);
     const thinkingIndicator = renderThinkingIndicator(mc);
+    const compactionIndicator = renderCompactionIndicator(mc);
     const toolIndicator = renderToolIndicator(mc, modeLocale);
     const errorMessage = renderErrorMessage(mc);
     const { questionLabel, questionButtons } = renderQuestionUI(mc, modeLocale);
@@ -89,6 +96,7 @@ export const renderChatSection = (
         ${messageBubbles}
         ${streamingBubble}
         ${thinkingIndicator}
+        ${compactionIndicator}
         ${toolIndicator}
         ${errorMessage}
         ${workflowCards}

@@ -42,13 +42,19 @@ export async function loadChatRecord(chatId: string): Promise<{
   workflowPhase: string;
   nextOrdinal: number;
 } | null> {
-  const chat = await prisma.chat.findUnique({
-    where: { id: chatId },
-    include: { messages: { orderBy: { ordinal: 'asc' } } },
-  });
+  const chat = await prisma.chat.findUnique({ where: { id: chatId } });
   if (!chat) return null;
+  const checkpoint = await prisma.message.findFirst({
+    where: { chatId, role: 'compaction' },
+    orderBy: { ordinal: 'desc' },
+    select: { ordinal: true },
+  });
+  const rows = await prisma.message.findMany({
+    where: { chatId, ...(checkpoint ? { ordinal: { gte: checkpoint.ordinal } } : {}) },
+    orderBy: { ordinal: 'asc' },
+  });
 
-  const messages: StoredMessage[] = chat.messages.map((row) => {
+  const messages: StoredMessage[] = rows.map((row) => {
     if (row.role === 'cancel') return { id: row.id, role: 'cancel', content: row.content };
     if (row.role === 'assistant') {
       return {
@@ -64,6 +70,9 @@ export async function loadChatRecord(chatId: string): Promise<{
     if (row.role === 'automatism') {
       return { id: row.id, role: 'automatism', content: row.content };
     }
+    if (row.role === 'compaction') {
+      return { id: row.id, role: 'compaction', content: row.content };
+    }
     return {
       id: row.id,
       role: 'user',
@@ -72,7 +81,7 @@ export async function loadChatRecord(chatId: string): Promise<{
     };
   });
 
-  const last = chat.messages[chat.messages.length - 1];
+  const last = rows[rows.length - 1];
   return {
     phase: chat.turnPhase as TurnPhase,
     pendingQuestion: (chat.pendingQuestion as ClientToolPrompt | null) ?? null,

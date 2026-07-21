@@ -7,7 +7,13 @@
 import OpenAI from 'openai';
 import { env } from '@/lib/env';
 import { broadcast } from './bus';
-import { getLastToolCalls, sanitizeMessages, toOpenAiMessages, trimMessages } from './messageUtils';
+import {
+  compactionTranscript,
+  getLastToolCalls,
+  needsCompaction,
+  sanitizeMessages,
+  toOpenAiMessages,
+} from './messageUtils';
 import type { PersistenceAdapter } from './persistence';
 import { recordTokenUsage } from './tokenBudget';
 import { buildSystemPrompt, type PromptInput } from './prompt';
@@ -143,8 +149,38 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++;
 
-      const trimmed = trimMessages(messages.filter((m) => m.role !== 'cancel'));
-      const chatMessages = sanitizeMessages(toOpenAiMessages(trimmed));
+      if (needsCompaction(messages)) {
+        broadcast(chatId, 'compaction_start', { type: 'compaction_start' });
+        const compacted = await openai.chat.completions.create({
+          model: e.OPENAI_MODEL,
+          max_tokens: Math.min(2048, e.OPENAI_MAX_TOKENS),
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Summarize this CMS agent conversation for another agent that must continue the work. ' +
+                'Preserve user requirements, decisions, current task state, completed work, file paths, ' +
+                'commands and test results, unresolved errors, and exact next steps. Do not add advice or ' +
+                `invent facts. Write in locale ${input.promptInput.locale}.`,
+            },
+            { role: 'user', content: compactionTranscript(messages) },
+          ],
+        });
+        totalInputTokens += compacted.usage?.prompt_tokens ?? 0;
+        totalOutputTokens += compacted.usage?.completion_tokens ?? 0;
+        const summary = compacted.choices[0]?.message.content?.trim();
+        if (!summary) throw new Error('Context compaction returned an empty summary');
+        const checkpoint: StoredMessage = { role: 'compaction', content: summary };
+        await appendMsg(checkpoint);
+        // Persistence retains every old row. Only the model-facing in-memory
+        // window advances to the durable checkpoint.
+        messages.splice(0, messages.length, checkpoint);
+        broadcast(chatId, 'compaction', { type: 'compaction', content: summary });
+      }
+
+      const chatMessages = sanitizeMessages(
+        toOpenAiMessages(messages.filter((m) => m.role !== 'cancel')),
+      );
 
       console.log(`[agent] chat=${chatId} round ${rounds}/${MAX_TOOL_ROUNDS}, ${chatMessages.length} msgs`);
       broadcast(chatId, 'thinking', { type: 'thinking' });

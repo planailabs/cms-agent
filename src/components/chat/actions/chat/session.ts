@@ -196,7 +196,8 @@ export const applyChatState = (
         mc.phase === 'error' ||
         // Reconnect resync: a 'done' lost in the SSE gap must not leave the
         // spinner running forever — the server-wins path may downgrade.
-        (opts?.allowIdleDowngrade && mc.phase === 'waiting')
+        (opts?.allowIdleDowngrade &&
+          (mc.phase === 'waiting' || mc.phase === 'compacting'))
       ) {
         mc.phase = 'idle';
         mc.clientPrompt = undefined;

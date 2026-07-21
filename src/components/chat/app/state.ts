@@ -94,10 +94,11 @@ export interface ChatState {
      *   waiting   → thinking indicator, waiting for server
      *   streaming → word-by-word reveal of assistant text
      *   tool      → executing a server-side tool (spinner indicator)
+     *   compacting → summarizing old context in the background
      *   question  → showing ask_question UI (buttons or text input)
      *   error     → error message + composer
      */
-    phase: 'idle' | 'waiting' | 'streaming' | 'tool' | 'question' | 'error';
+    phase: 'idle' | 'waiting' | 'streaming' | 'tool' | 'compacting' | 'question' | 'error';
     /** Word-by-word streaming reveal of the last assistant message */
     streamingText?: { full: string; visible: string };
     error?: string;

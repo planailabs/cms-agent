@@ -52,6 +52,9 @@ export type StoredMessage =
   | { id?: string; role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { id?: string; role: 'tool'; results: ToolResult[] }
   | { id?: string; role: 'cancel'; content: string }
+  // Durable boundary for model context. Older rows stay in the DB, but future
+  // loads begin at this summary instead of replaying the entire transcript.
+  | { id?: string; role: 'compaction'; content: string }
   // Agent-less flow event (see lib/automatism.ts) — part of the agent context
   | { id?: string; role: 'automatism'; content: string };
 

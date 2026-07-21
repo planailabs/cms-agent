@@ -55,10 +55,7 @@ An approved plan exists — implement exactly that plan in the worktree, nothing
 - If the implementation must deviate materially from the plan, stop and ask.
 - When done, call finish_execution with a short summary. ALL changes must be
   committed first — finish_execution is rejected while uncommitted changes exist.
-  Your commits are merged into the target branch when the user publishes.
-
-Approved plan:
-{plan}`,
+  Your commits are merged into the target branch when the user publishes.`,
   preview: `You are in the PREVIEW phase (read-only).
 The implementation is committed and the user is reviewing the visual diff.
 Explain changes, answer questions about them, and help the user decide between
@@ -122,10 +119,13 @@ export function buildSystemPrompt(input: PromptInput): string {
   let prompt =
     COMMON.replace('{language_directive}', directive).replace('{branch}', input.branchName) +
     '\n\n' +
-    PHASE_PROMPTS[input.phase].replace(
-      '{plan}',
-      input.planJson ? JSON.stringify(input.planJson, null, 2) : '(missing — ask the user)',
-    );
+    PHASE_PROMPTS[input.phase];
+
+  if (input.planJson) {
+    prompt += `\n\nApproved workflow plan (always authoritative across context compactions):\n${JSON.stringify(input.planJson, null, 2)}`;
+  } else if (input.phase === 'execute') {
+    prompt += '\n\nApproved workflow plan: (missing — ask the user)';
+  }
 
   if (input.needsTitle) {
     prompt += `\n\nThis chat is still untitled: call set_chat_title once, early in your reply,

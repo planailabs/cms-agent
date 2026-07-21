@@ -33,6 +33,16 @@ export const renderThinkingIndicator = (mc: AiChat): string =>
         </div>`
     : '';
 
+export const renderCompactionIndicator = (mc: AiChat): string =>
+  mc.phase === 'compacting'
+    ? `<div class="flex justify-start">
+          <div class="max-w-full flex items-center gap-2 text-xs text-(--text-muted)">
+            <span class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-(--text-muted) border-t-transparent"></span>
+            ${escapeHtml(t(uiLocale(), 'chat.compaction.working'))}
+          </div>
+        </div>`
+    : '';
+
 export const renderToolIndicator = (
   mc: AiChat,
   modeLocale: ChatModeLocale,

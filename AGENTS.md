@@ -149,4 +149,7 @@ npx tsc --noEmit && npx astro build
 ```
 
 UI changes: verify in a real browser against the prod build — see
-[`.agents/skills/ui-verify/SKILL.md`](.agents/skills/ui-verify/SKILL.md).
+[`.agents/skills/ui-verify/SKILL.md`](.agents/skills/ui-verify/SKILL.md). Also add
+or update a checked-in Playwright UI regression that asserts computed
+visibility and user-facing behavior; a scratch browser script alone is not
+sufficient verification.
