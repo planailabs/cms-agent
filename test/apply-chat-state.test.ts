@@ -165,21 +165,28 @@ describe('applyChatState', () => {
     );
     expect(mc.canContinue).toBe(true);
 
+    // A model request interrupted by a restart is equally resumable.
+    applyChatState(
+      snap({ epoch: 'turn-1', seq: 6, turnPhase: 'running', canResume: true }),
+    );
+    expect(mc.phase).toBe('idle');
+    expect(mc.canContinue).toBe(true);
+
     // A live server-owned tool call is not an interruption.
     mc.phase = 'tool';
     applyChatState(
-      snap({ epoch: 'turn-1', seq: 6, turnPhase: 'tool_pending', canResume: false }),
+      snap({ epoch: 'turn-1', seq: 7, turnPhase: 'tool_pending', canResume: false }),
     );
     expect(mc.phase).toBe('tool');
     expect(mc.canContinue).toBe(false);
 
     // optimistic waiting is never downgraded by an idle snapshot…
     mc.phase = 'waiting' as typeof mc.phase;
-    applyChatState(snap({ epoch: 'turn-1', seq: 7 }));
+    applyChatState(snap({ epoch: 'turn-1', seq: 8 }));
     expect(mc.phase).toBe('waiting');
 
     // …EXCEPT on reconnect resync (a lost 'done' must not spin forever)
-    applyChatState(snap({ epoch: 'turn-1', seq: 8 }), undefined, {
+    applyChatState(snap({ epoch: 'turn-1', seq: 9 }), undefined, {
       allowIdleDowngrade: true,
     });
     expect(mc.phase).toBe('idle');

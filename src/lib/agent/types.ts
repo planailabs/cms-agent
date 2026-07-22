@@ -8,7 +8,7 @@
 import type OpenAI from 'openai';
 
 /** Turn phase persisted on Chat.turnPhase (same machine as chat/). */
-export type TurnPhase = 'idle' | 'waiting_for_answer' | 'tool_pending';
+export type TurnPhase = 'idle' | 'running' | 'waiting_for_answer' | 'tool_pending';
 
 /** Workflow phase persisted on Chat.workflowPhase. */
 export type WorkflowPhase = 'plan' | 'execute' | 'preview' | 'published';

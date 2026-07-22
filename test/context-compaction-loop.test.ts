@@ -39,59 +39,85 @@ import { addConnection } from '@/lib/agent/bus';
 import { runToolLoop } from '@/lib/agent/toolLoop';
 import type { StoredMessage } from '@/lib/agent/types';
 
+const run = async (
+  messages: StoredMessage[],
+  persisted: StoredMessage[],
+  events: string[],
+) => {
+  const remove = addConnection('compact-loop', {
+    write: (event) => events.push(event),
+    end: () => {},
+  });
+  try {
+    await runToolLoop({
+      chatId: 'compact-loop',
+      userId: 'u1',
+      messages,
+      phase: 'idle',
+      toolContext: {
+        chatId: 'compact-loop',
+        branchId: 'b1',
+        branchName: 'draft',
+        targetBranchName: 'main',
+        userId: 'u1',
+        workflowPhase: 'preview',
+        chatKind: 'workflow',
+        worktreePath: '',
+        userContext: new Map(),
+        modifiedPaths: new Set(),
+      },
+      promptInput: {
+        phase: 'preview',
+        branchName: 'draft',
+        locale: 'en',
+        planJson: { summary: 'Approved work' },
+      },
+      setPhase: async () => {},
+      appendMsg: async (message) => {
+        messages.push(message);
+        persisted.push(message);
+      },
+      skipTokenAccounting: true,
+    });
+  } finally {
+    remove();
+  }
+};
+
 describe('tool-loop context compaction', () => {
   beforeEach(() => create.mockClear());
 
-  it('summarizes in the background, persists a checkpoint, and continues the turn', async () => {
+  it('does not compact merely because the transcript exceeds a character heuristic', async () => {
     const messages: StoredMessage[] = [
       { role: 'user', content: 'Original requirement' },
       { role: 'assistant', content: 'x'.repeat(66_000) },
     ];
     const persisted = messages.slice();
     const events: string[] = [];
-    const remove = addConnection('compact-loop', {
-      write: (event) => events.push(event),
-      end: () => {},
-    });
+    await run(messages, persisted, events);
 
-    try {
-      await runToolLoop({
-        chatId: 'compact-loop',
-        userId: 'u1',
-        messages,
-        phase: 'idle',
-        toolContext: {
-          chatId: 'compact-loop',
-          branchId: 'b1',
-          branchName: 'draft',
-          targetBranchName: 'main',
-          userId: 'u1',
-          workflowPhase: 'preview',
-          chatKind: 'workflow',
-          worktreePath: '',
-          userContext: new Map(),
-          modifiedPaths: new Set(),
-        },
-        promptInput: {
-          phase: 'preview',
-          branchName: 'draft',
-          locale: 'en',
-          planJson: { summary: 'Approved work' },
-        },
-        setPhase: async () => {},
-        appendMsg: async (message) => {
-          messages.push(message);
-          persisted.push(message);
-        },
-        skipTokenAccounting: true,
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(events).not.toContain('compaction_start');
+    expect(messages.map((m) => m.role)).toEqual(['user', 'assistant', 'assistant']);
+  });
+
+  it('compacts only after the model reports its context limit, then retries', async () => {
+    create.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('Maximum context length exceeded'), {
+        code: 'context_length_exceeded',
       });
-    } finally {
-      remove();
-    }
+    });
+    const messages: StoredMessage[] = [
+      { role: 'user', content: 'Original requirement' },
+      { role: 'assistant', content: 'Earlier progress' },
+    ];
+    const persisted = messages.slice();
+    const events: string[] = [];
+    await run(messages, persisted, events);
 
-    expect(create).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledTimes(3);
     expect(events.indexOf('compaction_start')).toBeLessThan(events.indexOf('compaction'));
-    expect(events.indexOf('compaction')).toBeLessThan(events.indexOf('thinking'));
+    expect(events.indexOf('compaction')).toBeLessThan(events.lastIndexOf('thinking'));
     expect(events).toContain('done');
     expect(messages.map((m) => m.role)).toEqual(['compaction', 'assistant']);
     expect(persisted.map((m) => m.role)).toEqual([

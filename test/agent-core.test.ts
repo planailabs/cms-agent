@@ -4,7 +4,6 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   compactionTranscript,
-  needsCompaction,
   sanitizeMessages,
   toOpenAiMessages,
 } from '@/lib/agent/messageUtils';
@@ -90,19 +89,23 @@ describe('message conversion', () => {
     ]);
   });
 
-  it('requests compaction without deleting or slicing stored messages', () => {
-    const big = 'x'.repeat(40_000);
+  it('renders a bounded compaction transcript without modifying stored messages', () => {
+    const big = 'x'.repeat(80_000);
     const msgs: StoredMessage[] = [
       { role: 'user', content: 'first' },
       { role: 'assistant', content: big },
       { role: 'assistant', content: big },
       { role: 'user', content: 'latest' },
     ];
-    expect(needsCompaction(msgs)).toBe(true);
     expect(msgs).toHaveLength(4);
     const transcript = compactionTranscript(msgs);
+    expect(transcript.length).toBeLessThanOrEqual(120_100);
     expect(transcript).toContain('[user]\nfirst');
     expect(transcript).toContain('[user]\nlatest');
+    const reduced = compactionTranscript(msgs, 8_000);
+    expect(reduced.length).toBeLessThanOrEqual(8_000);
+    expect(reduced).toContain('[user]\nfirst');
+    expect(reduced).toContain('[user]\nlatest');
   });
 
   it('loads an approved plan in every workflow phase prompt', () => {

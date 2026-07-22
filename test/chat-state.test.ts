@@ -87,7 +87,13 @@ describe('streamed chat state', () => {
     await prisma.chat.update({ where: { id: chatId }, data: { workflowPhase: 'execute' } });
   });
 
-  it('offers resume only when a pending tool call has no active turn owner', async () => {
+  it('offers resume only when interrupted work has no active turn owner', async () => {
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: { turnPhase: 'running' },
+    });
+    expect((await buildChatState(chatId))!.canResume).toBe(true);
+
     await prisma.chat.update({
       where: { id: chatId },
       data: { turnPhase: 'tool_pending' },

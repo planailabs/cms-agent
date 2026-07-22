@@ -116,20 +116,10 @@ export const sanitizeMessages = (msgs: ChatMessage[]): ChatMessage[] => {
 
 // ─── Size helpers + trimming (same chunking strategy as chat/) ───────────────
 
-export const contentSize = (msg: StoredMessage): number =>
-  msg.role === 'tool' ? JSON.stringify(msg.results).length : msg.content.length;
-
 export const hasToolCalls = (msg: StoredMessage): boolean =>
   msg.role === 'assistant' && !!msg.toolCalls?.length;
 
 export const isToolResultMsg = (msg: StoredMessage): boolean => msg.role === 'tool';
-
-export const CONTEXT_CHAR_LIMIT = 65_536;
-
-export const needsCompaction = (
-  msgs: StoredMessage[],
-  limit = CONTEXT_CHAR_LIMIT,
-): boolean => msgs.reduce((sum, msg) => sum + contentSize(msg), 0) > limit;
 
 /** Plain transcript for the summarizer; this never replaces persisted rows. */
 export const compactionTranscript = (msgs: StoredMessage[], maxChars = 120_000): string => {
@@ -150,9 +140,13 @@ export const compactionTranscript = (msgs: StoredMessage[], maxChars = 120_000):
     .join('\n\n');
   if (rendered.length <= maxChars) return rendered;
   // Keep the original request plus the largest possible recent tail.
-  const head = rendered.slice(0, 20_000);
-  const tail = rendered.slice(-(maxChars - head.length));
-  return `${head}\n\n[older transcript elided for summarization]\n\n${tail}`;
+  const marker = '\n\n[older transcript elided for summarization]\n\n';
+  const contentBudget = Math.max(0, maxChars - marker.length);
+  const headLength = Math.min(20_000, Math.floor(contentBudget / 3));
+  const head = rendered.slice(0, headLength);
+  const tailLength = contentBudget - headLength;
+  const tail = tailLength > 0 ? rendered.slice(-tailLength) : '';
+  return `${head}${marker}${tail}`;
 };
 
 // ─── Tool call helpers ───────────────────────────────────────────────────────

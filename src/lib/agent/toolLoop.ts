@@ -10,7 +10,6 @@ import { broadcast } from './bus';
 import {
   compactionTranscript,
   getLastToolCalls,
-  needsCompaction,
   sanitizeMessages,
   toOpenAiMessages,
 } from './messageUtils';
@@ -25,6 +24,18 @@ import type { ClientToolPrompt, StoredMessage, ToolCall, ToolResult, TurnPhase }
 const MAX_TOOL_ROUNDS = 250;
 const LOOP_WINDOW = 5;
 const LOOP_THRESHOLD = 3;
+
+export const isContextLengthError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { code?: unknown; type?: unknown; message?: unknown };
+  if (value.code === 'context_length_exceeded' || value.type === 'context_length_exceeded') {
+    return true;
+  }
+  return (
+    typeof value.message === 'string' &&
+    /maximum context length|context window|too many tokens/i.test(value.message)
+  );
+};
 
 /** Key-order-independent canonical form of tool arguments. */
 function canonicalArgs(v: unknown): string {
@@ -107,6 +118,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let activeContextTokens = 0;
 
   const flushTokens = async () => {
     if (!input.skipTokenAccounting && (totalInputTokens > 0 || totalOutputTokens > 0)) {
@@ -120,6 +132,47 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
     const tools = await bridge.asOpenAiTools();
     const systemPrompt = buildSystemPrompt({ ...input.promptInput, mcpHints: bridge.promptHints() });
     const detectLoop = createLoopDetector();
+    let compactedForRequest = false;
+
+    const compactContext = async (): Promise<void> => {
+      broadcast(chatId, 'compaction_start', { type: 'compaction_start' });
+      let maxChars = 120_000;
+      let compacted: OpenAI.Chat.Completions.ChatCompletion;
+      for (;;) {
+        try {
+          compacted = await openai.chat.completions.create({
+            model: e.OPENAI_MODEL,
+            max_tokens: Math.min(2048, e.OPENAI_MAX_TOKENS),
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Summarize this CMS agent conversation for another agent that must continue the work. ' +
+                  'Preserve user requirements, decisions, current task state, completed work, file paths, ' +
+                  'commands and test results, unresolved errors, and exact next steps. Do not add advice or ' +
+                  `invent facts. Write in locale ${input.promptInput.locale}.`,
+              },
+              { role: 'user', content: compactionTranscript(messages, maxChars) },
+            ],
+          });
+          break;
+        } catch (error) {
+          if (!isContextLengthError(error) || maxChars <= 8_000) throw error;
+          maxChars = Math.max(8_000, Math.floor(maxChars / 2));
+        }
+      }
+      totalInputTokens += compacted.usage?.prompt_tokens ?? 0;
+      totalOutputTokens += compacted.usage?.completion_tokens ?? 0;
+      const summary = compacted.choices[0]?.message.content?.trim();
+      if (!summary) throw new Error('Context compaction returned an empty summary');
+      const checkpoint: StoredMessage = { role: 'compaction', content: summary };
+      await appendMsg(checkpoint);
+      // Persistence retains every old row. Only the model-facing in-memory
+      // window advances to the durable checkpoint.
+      messages.splice(0, messages.length, checkpoint);
+      activeContextTokens = 0;
+      broadcast(chatId, 'compaction', { type: 'compaction', content: summary });
+    };
 
     // ── Pre-step: resume from tool_pending (crash/restart recovery) ─────────
     if (input.phase === 'tool_pending') {
@@ -141,42 +194,17 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
         });
       }
       await appendMsg({ role: 'tool', results });
-      await setPhase('idle');
+      await setPhase('running');
+    } else {
+      // A durable active-turn marker makes a model request interrupted by a
+      // server restart distinguishable from a completed idle conversation.
+      await setPhase('running');
     }
 
     // ── Main loop ────────────────────────────────────────────────────────────
     let rounds = 0;
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++;
-
-      if (needsCompaction(messages)) {
-        broadcast(chatId, 'compaction_start', { type: 'compaction_start' });
-        const compacted = await openai.chat.completions.create({
-          model: e.OPENAI_MODEL,
-          max_tokens: Math.min(2048, e.OPENAI_MAX_TOKENS),
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Summarize this CMS agent conversation for another agent that must continue the work. ' +
-                'Preserve user requirements, decisions, current task state, completed work, file paths, ' +
-                'commands and test results, unresolved errors, and exact next steps. Do not add advice or ' +
-                `invent facts. Write in locale ${input.promptInput.locale}.`,
-            },
-            { role: 'user', content: compactionTranscript(messages) },
-          ],
-        });
-        totalInputTokens += compacted.usage?.prompt_tokens ?? 0;
-        totalOutputTokens += compacted.usage?.completion_tokens ?? 0;
-        const summary = compacted.choices[0]?.message.content?.trim();
-        if (!summary) throw new Error('Context compaction returned an empty summary');
-        const checkpoint: StoredMessage = { role: 'compaction', content: summary };
-        await appendMsg(checkpoint);
-        // Persistence retains every old row. Only the model-facing in-memory
-        // window advances to the durable checkpoint.
-        messages.splice(0, messages.length, checkpoint);
-        broadcast(chatId, 'compaction', { type: 'compaction', content: summary });
-      }
 
       const chatMessages = sanitizeMessages(
         toOpenAiMessages(messages.filter((m) => m.role !== 'cancel')),
@@ -189,53 +217,78 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       // slightly nonconforming chunks ("missing role for choice 0") that
       // OpenAI-compatible backends emit on edge cases (empty completions,
       // usage-only streams). Accumulate leniently ourselves instead.
-      const stream = await openai.chat.completions.create({
-        model: e.OPENAI_MODEL,
-        max_tokens: e.OPENAI_MAX_TOKENS,
-        messages: [{ role: 'system', content: systemPrompt }, ...chatMessages],
-        tools: tools.length > 0 ? tools : undefined,
-        stream: true,
-        stream_options: { include_usage: true },
-      });
-
       let text = '';
       let finishReason: string | null = null;
       const accumulated: ToolCall[] = [];
-      for await (const chunk of stream) {
-        if (chunk.usage) {
-          totalInputTokens += chunk.usage.prompt_tokens ?? 0;
-          totalOutputTokens += chunk.usage.completion_tokens ?? 0;
-        }
-        const choice = chunk.choices?.[0];
-        if (!choice) continue;
-        finishReason = choice.finish_reason ?? finishReason;
-        const delta = choice.delta ?? {};
-        if (delta.content) {
-          text += delta.content;
-          broadcast(chatId, 'text_delta', { type: 'text_delta', content: delta.content });
-        }
-        for (const tc of delta.tool_calls ?? []) {
-          const idx = tc.index ?? accumulated.length;
-          accumulated[idx] ??= {
-            id: tc.id ?? `call_${idx}`,
-            type: 'function',
-            function: { name: '', arguments: '' },
-          };
-          if (tc.id) accumulated[idx].id = tc.id;
-          // Assign, don't concatenate: some backends (codex proxy) repeat the
-          // FULL name on every fragment; only arguments stream incrementally.
-          if (tc.function?.name) accumulated[idx].function.name = tc.function.name;
-          if (tc.function?.arguments) {
-            accumulated[idx].function.arguments = accumulateArgs(
-              accumulated[idx].function.arguments,
-              tc.function.arguments,
-            );
+      try {
+        const stream = await openai.chat.completions.create({
+          model: e.OPENAI_MODEL,
+          max_tokens: e.OPENAI_MAX_TOKENS,
+          messages: [{ role: 'system', content: systemPrompt }, ...chatMessages],
+          tools: tools.length > 0 ? tools : undefined,
+          stream: true,
+          stream_options: { include_usage: true },
+        });
+
+        for await (const chunk of stream) {
+          if (chunk.usage) {
+            const promptTokens = chunk.usage.prompt_tokens ?? 0;
+            totalInputTokens += promptTokens;
+            totalOutputTokens += chunk.usage.completion_tokens ?? 0;
+            if (promptTokens > 0) activeContextTokens = promptTokens;
+          }
+          const choice = chunk.choices?.[0];
+          if (!choice) continue;
+          finishReason = choice.finish_reason ?? finishReason;
+          const delta = choice.delta ?? {};
+          if (delta.content) {
+            text += delta.content;
+            broadcast(chatId, 'text_delta', { type: 'text_delta', content: delta.content });
+          }
+          for (const tc of delta.tool_calls ?? []) {
+            const idx = tc.index ?? accumulated.length;
+            accumulated[idx] ??= {
+              id: tc.id ?? `call_${idx}`,
+              type: 'function',
+              function: { name: '', arguments: '' },
+            };
+            if (tc.id) accumulated[idx].id = tc.id;
+            // Assign, don't concatenate: some backends (codex proxy) repeat the
+            // FULL name on every fragment; only arguments stream incrementally.
+            if (tc.function?.name) accumulated[idx].function.name = tc.function.name;
+            if (tc.function?.arguments) {
+              accumulated[idx].function.arguments = accumulateArgs(
+                accumulated[idx].function.arguments,
+                tc.function.arguments,
+              );
+            }
           }
         }
+      } catch (error) {
+        if (
+          !isContextLengthError(error) ||
+          compactedForRequest ||
+          text.length > 0 ||
+          accumulated.length > 0
+        ) {
+          throw error;
+        }
+        console.log(
+          `[agent] chat=${chatId} context limit reached for model=${e.OPENAI_MODEL}` +
+            (activeContextTokens > 0 ? ` after ${activeContextTokens} prompt tokens` : ''),
+        );
+        await compactContext();
+        compactedForRequest = true;
+        rounds--;
+        continue;
       }
 
+      compactedForRequest = false;
+
       const toolCalls = accumulated.filter(Boolean);
-      console.log(`[agent] finish=${finishReason}, ${toolCalls.length} tools`);
+      console.log(
+        `[agent] finish=${finishReason}, ${toolCalls.length} tools, context=${activeContextTokens} tokens`,
+      );
 
       if (text) broadcast(chatId, 'text_done', { type: 'text_done', content: text });
 
@@ -316,7 +369,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
         });
       }
       await appendMsg({ role: 'tool', results });
-      await setPhase('idle');
+      await setPhase('running');
     }
 
     // ── Max rounds reached ─────────────────────────────────────────────────

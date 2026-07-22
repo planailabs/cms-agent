@@ -206,7 +206,7 @@ export const applyChatState = (
       }
       mc.canContinue = false;
     } else if (snapshot.canResume) {
-      // The persisted tool call has no active server turn (crash/restart).
+      // Persisted active work has no server turn owner (crash/restart).
       // This server-authoritative edge may replace a stale local spinner.
       mc.phase = 'idle';
       mc.canContinue = true;

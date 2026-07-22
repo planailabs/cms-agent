@@ -68,7 +68,7 @@ export interface ChatStateSnapshot {
    *  phase from these; stream events (question/done/error) remain the
    *  transcript-ordered fast path. */
   turnPhase: string;
-  /** A persisted tool call has no in-process owner (usually after restart). */
+  /** Persisted active work has no in-process owner (usually after restart). */
   canResume: boolean;
   /** Only present while turnPhase === 'waiting_for_answer'. */
   pendingQuestion: { toolName: string; input: Record<string, unknown> } | null;
@@ -155,7 +155,9 @@ export async function buildChatState(
     targetAhead,
     tabs,
     turnPhase: chat.turnPhase,
-    canResume: chat.turnPhase === 'tool_pending' && !hasActiveTurn(chatId),
+    canResume:
+      (chat.turnPhase === 'running' || chat.turnPhase === 'tool_pending') &&
+      !hasActiveTurn(chatId),
     pendingQuestion:
       chat.turnPhase === 'waiting_for_answer' && chat.pendingQuestion
         ? (chat.pendingQuestion as { toolName: string; input: Record<string, unknown> })

@@ -174,7 +174,7 @@ export async function handleChatMessage(
     });
     await setPhase('idle');
   } else if (body.type === 'message') {
-    if (phase === 'waiting_for_answer' || phase === 'tool_pending') {
+    if (phase === 'running' || phase === 'waiting_for_answer' || phase === 'tool_pending') {
       broadcast(chatId, 'error', {
         type: 'error',
         message: 'A conversation turn is already in progress',
