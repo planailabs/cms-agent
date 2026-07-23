@@ -262,9 +262,42 @@ export async function initSystem(container: HTMLElement): Promise<void> {
     });
   }
 
+  // ── Global attachment settings: one-file-per-message toggle ────────────────
+  const settingsBox = document.createElement('div');
+  settingsBox.className = 'dash-settings-box';
+  container.prepend(settingsBox);
+  async function loadAttachmentSetting() {
+    try {
+      const { attachmentsOnePerMessage } = await fetchJson<{ attachmentsOnePerMessage: boolean }>(
+        '/api/admin/settings',
+      );
+      settingsBox.innerHTML = `
+        <label class="dash-toggle">
+          <input type="checkbox" class="attachments-one-per-message"${attachmentsOnePerMessage ? ' checked' : ''} />
+          <span>${escapeHtml(t(uiLocale(), 'dashboard.system.attachmentsOnePerMessage'))}</span>
+        </label>`;
+      settingsBox
+        .querySelector<HTMLInputElement>('.attachments-one-per-message')
+        ?.addEventListener('change', async (ev) => {
+          const checked = (ev.target as HTMLInputElement).checked;
+          try {
+            await fetchJson('/api/admin/settings', {
+              method: 'PUT',
+              body: JSON.stringify({ attachmentsOnePerMessage: checked }),
+            });
+            showStatus(statusMsg, t(uiLocale(), 'dashboard.system.settingSaved'), 'success');
+          } catch (err) {
+            report(err, t(uiLocale(), 'dashboard.system.settingFailed'));
+          }
+        });
+    } catch (err) {
+      report(err, t(uiLocale(), 'dashboard.system.settingFailed'));
+    }
+  }
+
   container.querySelector('.system-refresh')?.addEventListener('click', () => {
     void Promise.all([loadPreviews(), loadBranches(), loadChats()]);
   });
 
-  await Promise.all([loadPreviews(), loadBranches(), loadChats()]);
+  await Promise.all([loadPreviews(), loadBranches(), loadChats(), loadAttachmentSetting()]);
 }
