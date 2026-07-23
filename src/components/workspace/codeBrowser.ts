@@ -75,7 +75,17 @@ export const toggleDir = (path: string): void => {
   }
 };
 
-export const openFile = async (path: string): Promise<void> => {
+export const workFileTarget = (href: string): { path: string; line: number } | null => {
+  if (!href.startsWith('/work/')) return null;
+  try {
+    const match = decodeURIComponent(href.slice(6)).match(/^(.*?)(?::(\d+))?$/);
+    return match?.[1] ? { path: match[1], line: Number(match[2] ?? 0) } : null;
+  } catch {
+    return null;
+  }
+};
+
+export const openFile = async (path: string, line = 0): Promise<void> => {
   const seq = ++cbLoadSeq;
   const cb = store.state.workspace.codeBrowser;
   cb.loading = true;
@@ -83,8 +93,8 @@ export const openFile = async (path: string): Promise<void> => {
   cb.fileLines = [];
   cb.fileHighlighted = null;
   cb.fileTruncated = false;
-  cb.selStart = 0;
-  cb.selEnd = 0;
+  cb.selStart = line;
+  cb.selEnd = line;
   cb.error = null;
   store.notify();
   try {
@@ -106,6 +116,10 @@ export const openFile = async (path: string): Promise<void> => {
       cb.fileTruncated = Boolean(data.truncated);
     }
     store.notify();
+    if (line)
+      requestAnimationFrame(() =>
+        document.querySelector(`[data-action="ws-cb-line"][data-line="${line}"]`)?.scrollIntoView({ block: 'center' }),
+      );
   } catch (err) {
     if (seq !== cbLoadSeq) return;
     cb.loading = false;

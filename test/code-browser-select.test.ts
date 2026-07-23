@@ -9,6 +9,7 @@ import {
   beginLineSelect,
   dragLineSelect,
   endLineSelect,
+  workFileTarget,
 } from '@/components/workspace/codeBrowser';
 
 const sel = () => {
@@ -22,6 +23,15 @@ beforeEach(() => {
 });
 
 describe('code browser line selection', () => {
+  it('parses sandbox file links and their line numbers', () => {
+    expect(workFileTarget('/work/src/pages/%5Blang%5D/index.astro:93')).toEqual({
+      path: 'src/pages/[lang]/index.astro',
+      line: 93,
+    });
+    expect(workFileTarget('https://example.com/file.ts')).toBeNull();
+    expect(workFileTarget('/work/%ZZ')).toBeNull();
+  });
+
   it('drags a multi-line range (and supports dragging upwards)', () => {
     beginLineSelect(5, false);
     expect(sel()).toEqual([5, 5]);

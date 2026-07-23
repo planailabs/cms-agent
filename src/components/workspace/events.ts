@@ -62,6 +62,7 @@ import {
   openCodeBrowser,
   openFile,
   toggleDir,
+  workFileTarget,
 } from './codeBrowser';
 import type { DiffViewMode, PageContextElement, PageContextSelection } from './state';
 
@@ -215,6 +216,14 @@ const registerShotLoadStates = (): void => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const registerWorkspaceEvents = (app: HTMLElement): void => {
+  delegateEvent<MouseEvent>(app, 'click', '[data-action="chat-code-link"]', (event, link) => {
+    const target = workFileTarget(link.getAttribute('href') ?? '');
+    if (!target) return;
+    event.preventDefault();
+    openCodeBrowser();
+    void openFile(target.path, target.line);
+  });
+
   // ESC closes whichever workspace modal is open (topmost first). The settings
   // overlay has its own Esc handler (chat/actions/overlay.ts).
   window.addEventListener('keydown', (event) => {

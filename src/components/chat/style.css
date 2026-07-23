@@ -1296,6 +1296,22 @@ html.is-first-visit #app {
     opacity: 0.8;
   }
 
+  .chat-markdown .chat-code-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+  }
+
+  .chat-code-link svg {
+    width: 0.9em;
+    height: 0.9em;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+  }
+
   .chat-markdown h1,
   .chat-markdown h2,
   .chat-markdown h3,
