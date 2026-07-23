@@ -215,6 +215,28 @@ const registerShotLoadStates = (): void => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const registerWorkspaceEvents = (app: HTMLElement): void => {
+  // ESC closes whichever workspace modal is open (topmost first). The settings
+  // overlay has its own Esc handler (chat/actions/overlay.ts).
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const ws = store.state.workspace;
+    const closers: Array<[boolean, () => void]> = [
+      [ws.inputModal !== null, closeInputModal],
+      [ws.codeBrowser.open, closeCodeBrowser],
+      [ws.git.open, closeGitModal],
+      [ws.caps.open, closeCapsModal],
+      [ws.archive.open, closeArchive],
+      [ws.planModalOpen, closePlanModal],
+      [ws.windowPicker !== null, closeWindowPicker],
+      [ws.browserCompare.open, closeBrowserCompare],
+    ];
+    const hit = closers.find(([open]) => open);
+    if (hit) {
+      event.preventDefault();
+      hit[1]();
+    }
+  });
+
   // Phase / workflow card actions
   delegateEvent(app, 'click', '[data-action="ws-approve-plan"]', () => void approvePlanAction());
   delegateEvent(app, 'click', '[data-action="ws-request-changes"]', () =>

@@ -3026,6 +3026,12 @@ html.is-first-visit #app {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  /* Keep the panel within the viewport: without these, wide content (long code
+     lines, paths, tables) grows the flex item past the screen. Inner regions
+     scroll on their own, so clipping the panel is safe. */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   border: 1px solid var(--border-muted);
   border-radius: 1rem;
   background: var(--surface-base);
@@ -3291,6 +3297,10 @@ html.is-first-visit #app {
 .ws-cb-path {
   font-size: 0.8rem;
   opacity: 0.75;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Commit rows joined into one bordered list, GitHub-style */
