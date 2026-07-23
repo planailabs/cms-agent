@@ -66,6 +66,7 @@ const { lang = 'en' } = Astro.props;
         <button type="button" data-tab="prompts" class="dash-tab">{t(lang, 'dashboard.tabs.prompts')}</button>
         <button type="button" data-tab="grants" class="dash-tab">{t(lang, 'dashboard.tabs.grants')}</button>
         <button type="button" data-tab="memory" class="dash-tab">{t(lang, 'dashboard.tabs.memory')}</button>
+        <button type="button" data-tab="uploads" class="dash-tab">{t(lang, 'dashboard.tabs.uploads')}</button>
         <button type="button" data-tab="system" class="dash-tab">{t(lang, 'dashboard.tabs.system')}</button>
       </nav>
 
@@ -297,6 +298,33 @@ const { lang = 'en' } = Astro.props;
       </div>
 
       <!-- System Tab -->
+      <div id="tab-uploads" class="tab-panel hidden dash-stack">
+        <section class="dash-stack">
+          <h2 class="dash-section-title">{t(lang, 'dashboard.uploads.title')}</h2>
+          <div class="dash-table-wrap">
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th class="dash-sortable" data-sort="filename">{t(lang, 'dashboard.uploads.colFilename')} <span class="dash-sort-caret"></span></th>
+                  <th class="dash-sortable" data-sort="mime">{t(lang, 'dashboard.uploads.colType')} <span class="dash-sort-caret"></span></th>
+                  <th class="dash-num dash-sortable" data-sort="size">{t(lang, 'dashboard.uploads.colSize')} <span class="dash-sort-caret"></span></th>
+                  <th class="dash-sortable" data-sort="createdAt">{t(lang, 'dashboard.uploads.colUploaded')} <span class="dash-sort-caret"></span></th>
+                  <th class="dash-sortable" data-sort="user">{t(lang, 'dashboard.uploads.colUser')} <span class="dash-sort-caret"></span></th>
+                  <th>{t(lang, 'dashboard.uploads.colChat')}</th>
+                  <th>{t(lang, 'dashboard.system.colActions')}</th>
+                </tr>
+              </thead>
+              <tbody class="uploads-table-body">
+                <tr class="animate-pulse">
+                  <td class="dash-td-muted" colspan="7">{t(lang, 'dashboard.common.loadingData')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <div class="dash-status hidden"></div>
+      </div>
+
       <div id="tab-system" class="tab-panel hidden dash-stack">
         <div class="dash-search-row">
           <button type="button" class="system-refresh dash-btn">{t(lang, 'dashboard.system.refresh')}</button>

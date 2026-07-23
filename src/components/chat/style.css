@@ -2663,6 +2663,21 @@ html.is-first-visit #app {
   color: var(--text-muted);
 }
 
+.dash-sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.dash-sortable:hover {
+  color: var(--text-primary);
+}
+
+.dash-sort-caret {
+  font-size: 0.7em;
+  opacity: 0.7;
+}
+
 .dash-td-error {
   color: var(--accent-danger);
 }
