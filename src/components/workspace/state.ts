@@ -235,6 +235,8 @@ export interface WorkspaceState {
   sidebarCollapsed: boolean;
   /** Branch switcher / chat list panel expanded. */
   branchListOpen: boolean;
+  /** Secondary-actions ("⋯") dropdown in the branch panel expanded. */
+  branchMenuOpen: boolean;
 
   /** Current route inside the preview iframe (cms:navigation). */
   previewRoute: string;
@@ -326,6 +328,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   sidebarWidth: 420,
   sidebarCollapsed: false,
   branchListOpen: false,
+  branchMenuOpen: false,
   previewRoute: '/',
   previewTabs: ['/'],
   previewTabIds: [crypto.randomUUID()],

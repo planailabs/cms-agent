@@ -266,6 +266,12 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   // Branch switcher / chat list
   delegateEvent(app, 'click', '[data-action="ws-branch-list-toggle"]', () => {
     store.state.workspace.branchListOpen = !store.state.workspace.branchListOpen;
+    if (!store.state.workspace.branchListOpen) store.state.workspace.branchMenuOpen = false;
+    store.notify();
+  });
+  // Secondary-actions ("⋯") dropdown in the branch panel.
+  delegateEvent(app, 'click', '[data-action="ws-branch-menu-toggle"]', () => {
+    store.state.workspace.branchMenuOpen = !store.state.workspace.branchMenuOpen;
     store.notify();
   });
   delegateEvent(app, 'click', '[data-action="ws-new-branch"]', () =>
@@ -291,7 +297,10 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Archive modal (done chats)
-  delegateEvent(app, 'click', '[data-action="ws-archive-open"]', () => void openArchive());
+  delegateEvent(app, 'click', '[data-action="ws-archive-open"]', () => {
+    store.state.workspace.branchMenuOpen = false;
+    void openArchive();
+  });
   delegateEvent(app, 'click', '[data-action="ws-archive-close"]', () => closeArchive());
   delegateEvent(app, 'click', '[data-action="ws-archive-delete"]', (_e, target) => {
     const chatId = target.getAttribute('data-chat-id');
@@ -303,7 +312,10 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Git modal (commit list + diffs)
-  delegateEvent(app, 'click', '[data-action="ws-git-open"]', () => openGitModal());
+  delegateEvent(app, 'click', '[data-action="ws-git-open"]', () => {
+    store.state.workspace.branchMenuOpen = false;
+    openGitModal();
+  });
   delegateEvent(app, 'click', '[data-action="ws-git-close"]', () => closeGitModal());
   delegateEvent(app, 'click', '[data-action="ws-git-back"]', () => backToGitList());
   delegateEvent(app, 'click', '[data-action="ws-git-commit"]', (_e, target) => {
@@ -315,7 +327,10 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Capabilities modal (skills + MCP status)
-  delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => openCapsModal());
+  delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => {
+    store.state.workspace.branchMenuOpen = false;
+    openCapsModal();
+  });
   delegateEvent(app, 'click', '[data-action="ws-plan-open"]', () => openPlanModal());
   delegateEvent(app, 'click', '[data-action="ws-plan-close"]', () => closePlanModal());
   delegateEvent(app, 'click', '[data-action="ws-cb-modal-open"]', () => openCodeBrowser());
@@ -345,7 +360,10 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     if (target.dataset.id) void deleteWindowSession(target.dataset.id);
   });
   delegateEvent(app, 'click', '[data-action="ws-wsn-fresh"]', () => startFreshWindow());
-  delegateEvent(app, 'click', '[data-action="ws-wsn-open"]', () => void openWindowPicker());
+  delegateEvent(app, 'click', '[data-action="ws-wsn-open"]', () => {
+    store.state.workspace.branchMenuOpen = false;
+    void openWindowPicker();
+  });
   delegateEvent(app, 'click', '[data-action="ws-wsn-close"]', () => closeWindowPicker());
   delegateEvent(app, 'click', '[data-action="ws-compare-align"]', () => {
     const ws = store.state.workspace;

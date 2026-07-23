@@ -149,6 +149,10 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.git.loadFailed': 'Loading failed ({status})',
     'workspace.git.networkError': 'Network error — please try again.',
 
+    // ── Secondary-actions dropdown ──
+    'workspace.sidebar.moreButton': '⋯',
+    'workspace.sidebar.moreTitle': 'More actions',
+
     // ── Capabilities modal (skills + MCP status) ──
     'workspace.sidebar.capsButton': '🧩 Skills',
     'workspace.sidebar.capsTitle': 'Skills and MCP status per chat',
@@ -339,6 +343,10 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.git.onTarget': 'frühere Historie auf {target}',
     'workspace.git.loadFailed': 'Laden fehlgeschlagen ({status})',
     'workspace.git.networkError': 'Netzwerkfehler — bitte erneut versuchen.',
+
+    // ── Dropdown für weitere Aktionen ──
+    'workspace.sidebar.moreButton': '⋯',
+    'workspace.sidebar.moreTitle': 'Weitere Aktionen',
 
     // ── Capabilities-Modal (Skills + MCP-Status) ──
     'workspace.sidebar.capsButton': '🧩 Skills',
