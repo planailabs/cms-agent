@@ -1253,14 +1253,26 @@ export const correctiveFlat = (
   const pairs = strongLeafPairs(a, b).sort((p, q) => p.ea.y - q.ea.y);
   const A: Spacer[] = [];
   const B: Spacer[] = [];
+  const firstA = new Map<string, number | undefined>();
+  const firstB = new Map<string, number | undefined>();
+  for (const { ea, eb } of pairs) {
+    if (ea.sid && !firstA.has(ea.sid)) firstA.set(ea.sid, ea.i);
+    if (eb.sid && !firstB.has(eb.sid)) firstB.set(eb.sid, eb.i);
+  }
+  const spacer = (
+    marker: Marker,
+    first: Map<string, number | undefined>,
+    px: number,
+  ): Spacer =>
+    marker.sid && first.get(marker.sid) === marker.i
+      ? { i: marker.i!, px: cssPx(px), mode: "scope", sid: marker.sid }
+      : { i: marker.i!, px: cssPx(px), mode: "el" };
   for (const { ea, eb } of pairs) {
     const d = ea.y - eb.y;
     if (d > CSS_PX && eb.i !== undefined) {
-      const px = d * gain;
-      B.push({ i: eb.i, px: cssPx(px), mode: "el" });
+      B.push(spacer(eb, firstB, d * gain));
     } else if (d < -CSS_PX && ea.i !== undefined) {
-      const px = -d * gain;
-      A.push({ i: ea.i, px: cssPx(px), mode: "el" });
+      A.push(spacer(ea, firstA, -d * gain));
     }
   }
   return { a: A, b: B };

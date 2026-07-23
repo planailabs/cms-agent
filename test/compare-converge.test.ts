@@ -6,6 +6,7 @@ import {
 } from "@/lib/compare/converge";
 import type { MarkerDoc } from "@/lib/compare/markers";
 import {
+  correctiveFlat,
   correctiveFooterFlows,
   correctiveItemFlows,
   correctiveRows,
@@ -221,6 +222,24 @@ describe("runCorrectiveAlignment", () => {
 });
 
 describe("trusted correction", () => {
+  it("moves a stable scope from its first matched leaf", () => {
+    const a = [
+      { k: "H2:Capabilities#1", y: 100, i: 1, sid: "capabilities" },
+      { k: "P:Body#1", y: 150, i: 2, sid: "capabilities" },
+    ];
+    const b = [
+      { k: "H2:Capabilities#1", y: 130, i: 11, sid: "capabilities" },
+      { k: "P:Body#1", y: 180, i: 12, sid: "capabilities" },
+    ];
+
+    expect(correctiveFlat(a, b, 1).a[0]).toEqual({
+      i: 1,
+      px: 30,
+      mode: "scope",
+      sid: "capabilities",
+    });
+  });
+
   it("moves a scoped section's contents from its first visible anchor", () => {
     const a = [
       { k: "H2:Architecture#1", y: 135, i: 1, sid: "architecture", sy: 100 },
