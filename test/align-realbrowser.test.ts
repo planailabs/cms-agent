@@ -802,6 +802,112 @@ describe("measured spacer owners", () => {
 });
 
 describe("visual marker collection", () => {
+  it("collects direct-text div labels without collecting layout wrappers", async () => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.setContent(`
+        <section>
+          <div class="wrapper"><div class="section-eyebrow">// Capabilities</div><h2>What we build</h2></div>
+        </section>
+      `);
+      const markers = await collect(page);
+      expect(
+        markers.m.some(
+          (marker) =>
+            marker.k.startsWith("DIV:// Capabilities") &&
+            marker.c === "section-eyebrow",
+        ),
+      ).toBe(true);
+      expect(markers.m.some((marker) => marker.c === "wrapper")).toBe(false);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("keeps an unpainted section label with its section after an insertion", async () => {
+    const before = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const after = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const html = `
+      <style>
+        * { box-sizing: border-box }
+        body { margin: 0 }
+        section { padding: 80px }
+        .section-eyebrow { margin-bottom: 24px }
+        .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px }
+        .card { min-height: 160px; border: 1px solid #333; padding: 24px }
+      </style>
+      <section><h1>Embedded systems</h1><p>Hardware and firmware engineering.</p></section>
+      <section id="capabilities">
+        <div class="section-head">
+          <div class="section-eyebrow">// Capabilities</div>
+          <h2>What we build</h2>
+          <p>End-to-end delivery across embedded hardware and firmware.</p>
+        </div>
+        <div class="cards">
+          <div class="card"><h3>Firmware</h3><p>Bare-metal and RTOS systems.</p></div>
+          <div class="card"><h3>Hardware</h3><p>PCB and schematic design.</p></div>
+        </div>
+      </section>
+      <section><h2>Selected work</h2><p>Medical and industrial systems.</p></section>
+    `;
+    try {
+      await Promise.all([before.setContent(html), after.setContent(html)]);
+      await after.evaluate(() => {
+        document.querySelector("#capabilities")!.insertAdjacentHTML(
+          "beforebegin",
+          `<section>
+            <h2>Preview change review</h2>
+            <p>This added section should create a filler on the other side.</p>
+            <div class="cards">
+              <div class="card"><h3>Visible markers</h3><p>Added and ready.</p></div>
+              <div class="card"><h3>Status checklist</h3><p>Ready to review.</p></div>
+            </div>
+          </section>`,
+        );
+      });
+      const [mb, ma] = await Promise.all([collect(before), collect(after)]);
+      const plan = spacingPlan(mb.m, mb.h, ma.m, ma.h);
+      await Promise.all([
+        before.evaluate(INJECT_SPACERS, plan.a as never),
+        after.evaluate(INJECT_SPACERS, plan.b as never),
+      ]);
+      const [ab, aa] = await Promise.all([collect(before), collect(after)]);
+      await runCorrectiveAlignment(
+        ab,
+        aa,
+        async (correction) => {
+          await Promise.all([
+            before.evaluate(INJECT_SPACERS, correction.a as never),
+            after.evaluate(INJECT_SPACERS, correction.b as never),
+          ]);
+          return await Promise.all([collect(before), collect(after)]);
+        },
+        {
+          refinePlan: async (candidate) => ({
+            a: (await before.evaluate(
+              PROBE_SPACER_OWNERS,
+              candidate.a,
+            )) as never,
+            b: (await after.evaluate(
+              PROBE_SPACER_OWNERS,
+              candidate.b,
+            )) as never,
+          }),
+        },
+      );
+      const [beforeY, afterY] = await Promise.all(
+        [before, after].map((page) =>
+          page.locator(".section-eyebrow").evaluate(
+            (element) => element.getBoundingClientRect().top,
+          ),
+        ),
+      );
+      expect(Math.abs(beforeY - afterY)).toBeLessThanOrEqual(1);
+    } finally {
+      await Promise.all([before.close(), after.close()]);
+    }
+  }, 30_000);
+
   it("collects substantial painted blocks but not plain layout wrappers", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     try {
