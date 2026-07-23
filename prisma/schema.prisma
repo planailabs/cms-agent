@@ -155,6 +155,7 @@ model Chat {
   publications     Publication[]
   tabs             ChatTabs[]
   automatisms      Automatism[]
+  uploads          Upload[]
 
   @@index([branchId])
   @@map("chat")
@@ -239,6 +240,8 @@ model Message {
   ordinal       Int
 
   createdAt DateTime @default(now())
+
+  attachments Upload[]
 
   @@unique([chatId, ordinal])
   @@index([chatId])
@@ -350,6 +353,12 @@ model Upload {
   id         String   @id @default(cuid())
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Chat this upload is attached to (null for global editorial uploads).
+  chatId     String?
+  chat       Chat?    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  // Message the upload was sent with (set when the user turn is persisted).
+  messageId  String?
+  message    Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
   filename   String
   storedPath String
   mime       String
@@ -357,6 +366,8 @@ model Upload {
   sha256     String
   createdAt  DateTime @default(now())
 
+  @@index([chatId])
+  @@index([messageId])
   @@map("upload")
 }
 
@@ -405,4 +416,13 @@ model SystemPromptExtension {
   updatedAt DateTime @updatedAt
 
   @@map("system_prompt_extension")
+}
+
+// Global app-wide settings keyed by a stable string (e.g. admin toggles).
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("app_setting")
 }
