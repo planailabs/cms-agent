@@ -4,6 +4,7 @@
  */
 import { dbNull, prisma } from '@/lib/db';
 import type {
+  AttachmentMeta,
   ClientToolPrompt,
   PageContext,
   StoredMessage,
@@ -81,6 +82,28 @@ export async function loadChatRecord(chatId: string): Promise<{
     };
   });
 
+  // Attach chat-scoped uploads to the user messages they were sent with, so
+  // the manifest + image inlining survive across turns/reloads.
+  const userIds = rows.filter((r) => r.role === 'user').map((r) => r.id);
+  if (userIds.length) {
+    const uploads = await prisma.upload.findMany({
+      where: { messageId: { in: userIds } },
+      select: { id: true, mime: true, filename: true, messageId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (uploads.length) {
+      const byMessage = new Map<string, AttachmentMeta[]>();
+      for (const u of uploads) {
+        const list = byMessage.get(u.messageId!) ?? [];
+        list.push({ id: u.id, mime: u.mime, filename: u.filename });
+        byMessage.set(u.messageId!, list);
+      }
+      for (const m of messages) {
+        if (m.role === 'user' && m.id && byMessage.has(m.id)) m.attachments = byMessage.get(m.id);
+      }
+    }
+  }
+
   const last = rows[rows.length - 1];
   return {
     phase: chat.turnPhase as TurnPhase,
@@ -140,6 +163,13 @@ export function createDbAdapter(
             },
           });
           msg.id = row.id;
+          // Link chat-scoped attachments to this freshly-created user row.
+          if (msg.role === 'user' && msg.attachments?.length) {
+            await prisma.upload.updateMany({
+              where: { id: { in: msg.attachments.map((a) => a.id) }, chatId },
+              data: { messageId: row.id },
+            });
+          }
           return;
         } catch (err) {
           if ((err as { code?: string })?.code !== 'P2002' || attempt >= 4) throw err;

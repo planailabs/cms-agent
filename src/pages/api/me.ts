@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 
 export const GET: APIRoute = async ({ locals }) => {
   const user = locals.user!; // middleware guarantees auth on /api/*
+  const { getAttachmentsOnePerMessage } = await import('@/lib/settings');
   return new Response(
     JSON.stringify({
       id: user.id,
@@ -11,6 +12,7 @@ export const GET: APIRoute = async ({ locals }) => {
       role: user.role,
       theme: user.theme,
       language: user.language,
+      attachmentsOnePerMessage: await getAttachmentsOnePerMessage(),
     }),
     { headers: { 'Content-Type': 'application/json' } },
   );

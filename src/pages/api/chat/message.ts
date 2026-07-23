@@ -28,6 +28,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return json({ error: 'Invalid body: need { chatId, type, text }' }, 400);
   }
 
+  // Validate attachments: chat-scoped, owned by this user, within the cap.
+  if (body.attachmentIds?.length) {
+    const ids = [...new Set(body.attachmentIds)];
+    const { getAttachmentsOnePerMessage } = await import('@/lib/settings');
+    if ((await getAttachmentsOnePerMessage()) && ids.length > 1) {
+      return json({ error: 'Only one file per message is allowed.' }, 400);
+    }
+    const owned = await prisma.upload.count({
+      where: { id: { in: ids }, userId: user.id, chatId: body.chatId },
+    });
+    if (owned !== ids.length) {
+      return json({ error: 'One or more attachments are invalid for this chat.' }, 400);
+    }
+    body.attachmentIds = ids;
+  }
+
   // Archived chats are done — nothing may start a turn on them again.
   const chat = await prisma.chat.findUnique({
     where: { id: body.chatId },

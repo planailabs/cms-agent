@@ -147,6 +147,16 @@ export async function handleChatMessage(
   };
   const appendMsg = (msg: StoredMessage) => adapter.appendMsg(msg);
 
+  // Chat-scoped attachment metadata for the incoming message (validated in the
+  // endpoint). Client-safe fields only — storedPath is resolved later, server-side.
+  const attachments =
+    !opts.skipPersistence && body.attachmentIds?.length
+      ? await prisma.upload.findMany({
+          where: { id: { in: body.attachmentIds }, chatId },
+          select: { id: true, mime: true, filename: true },
+        })
+      : undefined;
+
   // ── Apply incoming message to the state machine ───────────────────────────
   if (body.type === 'answer') {
     if (phase !== 'waiting_for_answer') {
@@ -166,7 +176,7 @@ export async function handleChatMessage(
     if (cancelled) {
       await appendMsg({ role: 'cancel', content: '' });
     } else {
-      await appendMsg({ role: 'user', content: answer, pageContext: body.pageContext });
+      await appendMsg({ role: 'user', content: answer, pageContext: body.pageContext, attachments });
     }
     await appendMsg({
       role: 'tool',
@@ -181,7 +191,7 @@ export async function handleChatMessage(
       });
       return;
     }
-    await appendMsg({ role: 'user', content: body.text, pageContext: body.pageContext });
+    await appendMsg({ role: 'user', content: body.text, pageContext: body.pageContext, attachments });
     await setPhase('idle');
   } else if (body.type === 'continue') {
     // Resume after a failed turn or a server restart: nothing is appended —
@@ -261,6 +271,7 @@ export async function handleChatMessage(
       approvedMemories,
       needsTitle,
       worktreePath,
+      hasAttachments: messages.some((m) => m.role === 'user' && !!m.attachments?.length),
     },
     setPhase,
     appendMsg,

@@ -28,6 +28,22 @@ export const GET: APIRoute = async ({ url }) => {
     orderBy: { ordinal: 'asc' },
   });
 
+  // Attachments for user rows (rendered as chips; no thumbnails after reload).
+  const userRowIds = rows.filter((r) => r.role === 'user').map((r) => r.id);
+  const attachmentsByMsg = new Map<string, Array<{ id: string; filename: string; mime: string }>>();
+  if (userRowIds.length) {
+    const ups = await prisma.upload.findMany({
+      where: { messageId: { in: userRowIds } },
+      select: { id: true, filename: true, mime: true, messageId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    for (const u of ups) {
+      const list = attachmentsByMsg.get(u.messageId!) ?? [];
+      list.push({ id: u.id, filename: u.filename, mime: u.mime });
+      attachmentsByMsg.set(u.messageId!, list);
+    }
+  }
+
   // Flatten for rendering: assistant text bubbles plus one 'tool' entry per
   // executed call (name/input joined from the preceding assistant row's
   // tool_calls, result from the tool batch row).
@@ -83,6 +99,9 @@ export const GET: APIRoute = async ({ url }) => {
       // Automatism rows carry their TranslatedMessage container (i18n key +
       // params + English fallback) for per-viewer localization
       ...(m.role === 'automatism' && m.contentBlocks ? { tm: m.contentBlocks } : {}),
+      ...(m.role === 'user' && attachmentsByMsg.has(m.id)
+        ? { attachments: attachmentsByMsg.get(m.id) }
+        : {}),
     });
   }
 

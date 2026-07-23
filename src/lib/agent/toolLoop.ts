@@ -4,14 +4,17 @@
  * through the in-process MCP bridge; same resumable turn-phase machine:
  *   idle → (rounds of tool calls) → waiting_for_answer | tool_pending → idle
  */
+import fs from 'node:fs';
 import OpenAI from 'openai';
 import { env } from '@/lib/env';
+import { prisma } from '@/lib/db';
 import { broadcast } from './bus';
 import {
   compactionTranscript,
   getLastToolCalls,
   sanitizeMessages,
   toOpenAiMessages,
+  type ImageResolver,
 } from './messageUtils';
 import type { PersistenceAdapter } from './persistence';
 import { recordTokenUsage } from './tokenBudget';
@@ -116,6 +119,35 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
   const openai = new OpenAI({ baseURL: e.OPENAI_BASE_URL, apiKey: e.OPENAI_API_KEY });
   const bridge = await createMcpBridge(toolContext);
 
+  // Preload image attachments so an image read_upload can be inlined as a
+  // multimodal message (Chat Completions can't carry images in tool results;
+  // see toOpenAiMessages). Bytes are read lazily, only for images the agent
+  // actually reads.
+  const imageIds = new Set<string>();
+  for (const m of messages) {
+    if (m.role === 'user' && m.attachments) {
+      for (const a of m.attachments) if (a.mime.startsWith('image/')) imageIds.add(a.id);
+    }
+  }
+  let resolveImage: ImageResolver | undefined;
+  if (imageIds.size > 0) {
+    const ups = await prisma.upload.findMany({
+      where: { id: { in: [...imageIds] } },
+      select: { id: true, mime: true, storedPath: true },
+    });
+    const byId = new Map(ups.map((u) => [u.id, u]));
+    resolveImage = (uploadId) => {
+      const u = byId.get(uploadId);
+      if (!u) return null;
+      try {
+        const b = fs.readFileSync(u.storedPath);
+        return { mime: u.mime, dataUrl: `data:${u.mime};base64,${b.toString('base64')}` };
+      } catch {
+        return null;
+      }
+    };
+  }
+
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let activeContextTokens = 0;
@@ -207,8 +239,16 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       rounds++;
 
       const chatMessages = sanitizeMessages(
-        toOpenAiMessages(messages.filter((m) => m.role !== 'cancel')),
+        toOpenAiMessages(messages.filter((m) => m.role !== 'cancel'), resolveImage),
       );
+
+      // Route to the vision model when the context now contains an image part.
+      const usesVision = chatMessages.some(
+        (m) =>
+          Array.isArray(m.content) &&
+          m.content.some((p) => (p as { type?: string }).type === 'image_url'),
+      );
+      const model = usesVision && e.OPENAI_VISION_MODEL ? e.OPENAI_VISION_MODEL : e.OPENAI_MODEL;
 
       console.log(`[agent] chat=${chatId} round ${rounds}/${MAX_TOOL_ROUNDS}, ${chatMessages.length} msgs`);
       broadcast(chatId, 'thinking', { type: 'thinking' });
@@ -222,7 +262,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       const accumulated: ToolCall[] = [];
       try {
         const stream = await openai.chat.completions.create({
-          model: e.OPENAI_MODEL,
+          model,
           max_tokens: e.OPENAI_MAX_TOKENS,
           messages: [{ role: 'system', content: systemPrompt }, ...chatMessages],
           tools: tools.length > 0 ? tools : undefined,

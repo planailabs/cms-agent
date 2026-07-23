@@ -6,7 +6,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
-import { storeUpload, UploadError } from '@/lib/uploads';
+import { ATTACHMENT_KINDS, storeUpload, UploadError } from '@/lib/uploads';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -22,11 +22,25 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const file = form.get('file');
   if (!(file instanceof File)) return json({ error: '"file" field required' }, 400);
 
+  // Optional chat scoping: a chat attachment restricts to text + image.
+  const chatIdRaw = form.get('chatId');
+  const chatId = typeof chatIdRaw === 'string' && chatIdRaw ? chatIdRaw : null;
+  if (chatId) {
+    const chat = await prisma.chat.findUnique({ where: { id: chatId }, select: { id: true } });
+    if (!chat) return json({ error: 'Chat not found' }, 404);
+  }
+
   try {
-    const stored = storeUpload(file.name, file.type, Buffer.from(await file.arrayBuffer()));
+    const stored = storeUpload(
+      file.name,
+      file.type,
+      Buffer.from(await file.arrayBuffer()),
+      chatId ? ATTACHMENT_KINDS : undefined,
+    );
     const upload = await prisma.upload.create({
       data: {
         userId: user.id,
+        chatId,
         filename: file.name,
         storedPath: stored.storedPath,
         mime: stored.mime,

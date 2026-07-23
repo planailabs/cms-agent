@@ -47,8 +47,15 @@ export interface PageContext {
   };
 }
 
+/** Client-safe metadata for a file attached to a user message. */
+export interface AttachmentMeta {
+  id: string;
+  mime: string;
+  filename: string;
+}
+
 export type StoredMessage =
-  | { id?: string; role: 'user'; content: string; pageContext?: PageContext }
+  | { id?: string; role: 'user'; content: string; pageContext?: PageContext; attachments?: AttachmentMeta[] }
   | { id?: string; role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { id?: string; role: 'tool'; results: ToolResult[] }
   | { id?: string; role: 'cancel'; content: string }
@@ -70,4 +77,6 @@ export interface IncomingChatMessage {
   type: 'message' | 'answer' | 'continue';
   text: string;
   pageContext?: PageContext;
+  /** Ids of uploads (chat-scoped) attached to this message. */
+  attachmentIds?: string[];
 }
