@@ -105,7 +105,6 @@ export interface Anchor {
 export const COLLECT_MARKERS_JS = `(function () {
   var LEAF = 'h1,h2,h3,h4,h5,h6,p,li,pre,blockquote,summary,span,table,figure,img,td,th';
   var CONT = 'section,article,header,footer,main,nav,aside,ul,ol,figure,table,form,blockquote';
-  var TEXT = 'div';
   var VISUAL = 'div,svg,canvas,video';
   var MAX = 800;      // markers kept (bounds the O(n·m) matcher)
   var HARD = 3000;    // candidates gathered before area-ranking (bounds collect cost)
@@ -127,7 +126,7 @@ export const COLLECT_MARKERS_JS = `(function () {
     var tv = parseInt(tagged[ti].getAttribute('data-cmsm'), 10);
     if (!isNaN(tv) && tv >= nextId) nextId = tv + 1;
   }
-  var els = document.querySelectorAll(LEAF + ',' + CONT + ',' + TEXT + ',' + VISUAL);
+  var els = document.querySelectorAll(LEAF + ',' + CONT + ',' + VISUAL);
   for (var i = 0; i < els.length && out.length < HARD; i++) {
     var el = els[i];
     // Closed <details> descendants can retain non-zero geometry in Chromium
@@ -141,12 +140,6 @@ export const COLLECT_MARKERS_JS = `(function () {
     var w = Math.round(r.width);
     var hgt = Math.round(r.height);
     var kids = el.querySelectorAll(LEAF);
-    var directText = '';
-    for (var tn = 0; tn < el.childNodes.length; tn++) {
-      var node = el.childNodes[tn];
-      if (node.nodeType === 3) directText += ' ' + (node.nodeValue || '');
-    }
-    directText = directText.replace(/\\s+/g, ' ').trim().slice(0, 80);
     var key, sig, visual = false;
     if (el.matches(CONT) && kids.length >= 1) {
       // Container layer: signature from the descendant block shape only.
@@ -180,9 +173,6 @@ export const COLLECT_MARKERS_JS = `(function () {
       txt = txt.replace(/\\s+/g, ' ').trim().slice(0, 80);
       if (!txt) continue;
       key = el.tagName + ':' + txt;
-      sig = contTagOf(el) + '/' + el.tagName;
-    } else if (el.matches(TEXT) && el.children.length === 0 && directText) {
-      key = el.tagName + ':' + directText;
       sig = contTagOf(el) + '/' + el.tagName;
     } else if (el.matches(VISUAL)) {
       // One rigid painted block gets one correction target. Nested targets

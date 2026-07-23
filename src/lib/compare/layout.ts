@@ -493,13 +493,36 @@ export const spacingPlan = (
   const B: Spacer[] = [];
   if (!pair) return { a: A, b: B };
 
+  const flowTarget = (markers: Marker[], i: number): number => {
+    const marker = markers.find((candidate) => candidate.i === i);
+    if (!marker?.sid) return i;
+    const first = markers.find(
+      (candidate) =>
+        candidate.sid === marker.sid &&
+        !isContainer(candidate) &&
+        !candidate.v &&
+        !candidate.na,
+    );
+    if (first?.i !== i) return i;
+    return (
+      markers.find(
+        (candidate) =>
+          isContainer(candidate) && candidate.id === marker.sid,
+      )?.i ?? i
+    );
+  };
   const push = (
     list: Spacer[],
     i: number | undefined,
     px: number,
     mode: "el" | "grid" | "tail" | "cell",
   ): void => {
-    if (i !== undefined && px > 0.5) list.push({ i, px: Math.round(px), mode });
+    if (i !== undefined && px > 0.5)
+      list.push({
+        i: mode === "el" ? flowTarget(list === A ? a : b, i) : i,
+        px: Math.round(px),
+        mode,
+      });
   };
   const firstLeaf = (p: Part): Box | undefined =>
     leavesOf(p)

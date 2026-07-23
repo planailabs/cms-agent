@@ -802,28 +802,6 @@ describe("measured spacer owners", () => {
 });
 
 describe("visual marker collection", () => {
-  it("collects direct-text div labels without collecting layout wrappers", async () => {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-    try {
-      await page.setContent(`
-        <section>
-          <div class="wrapper"><div class="section-eyebrow">// Capabilities</div><h2>What we build</h2></div>
-        </section>
-      `);
-      const markers = await collect(page);
-      expect(
-        markers.m.some(
-          (marker) =>
-            marker.k.startsWith("DIV:// Capabilities") &&
-            marker.c === "section-eyebrow",
-        ),
-      ).toBe(true);
-      expect(markers.m.some((marker) => marker.c === "wrapper")).toBe(false);
-    } finally {
-      await page.close();
-    }
-  });
-
   it("keeps an unpainted section label with its section after an insertion", async () => {
     const before = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const after = await browser.newPage({ viewport: { width: 1280, height: 900 } });
