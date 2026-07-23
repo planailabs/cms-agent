@@ -88,4 +88,18 @@ describe('upload pipeline', () => {
     // pdf magic
     expect(() => storeUpload('x.pdf', 'application/pdf', Buffer.from('%PDF-1.4 ...'))).not.toThrow();
   });
+
+  it('restricts chat attachments to text + image (no PDF)', () => {
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(16),
+    ]);
+    // images and text pass with the attachment allow-list
+    expect(() => storeUpload('logo.png', 'image/png', png, ['text', 'image'])).not.toThrow();
+    expect(() => storeUpload('note.txt', 'text/plain', Buffer.from('hello'), ['text', 'image'])).not.toThrow();
+    // PDF is rejected for chat attachments even though it's otherwise supported
+    expect(() =>
+      storeUpload('doc.pdf', 'application/pdf', Buffer.from('%PDF-1.4 ...'), ['text', 'image']),
+    ).toThrow(/not allowed/);
+  });
 });

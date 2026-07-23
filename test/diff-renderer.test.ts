@@ -12,6 +12,7 @@ const mkState = (): AppState => {
   return {
     localeKey: 'en',
     themeMode: 'dark',
+    attachmentsOnePerMessage: false,
     isLanguageMenuOpen: false,
     isAuthMenuOpen: false,
     isSettingsOverlayOpen: false,

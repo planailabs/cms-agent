@@ -7,6 +7,8 @@ import type { AreaCatalogs } from './types';
 export const chatCatalogs: AreaCatalogs = {
   en: {
     'chat.automatismHead': 'Automatism',
+    'chat.attach.add': 'Attach a file',
+    'chat.attach.remove': 'Remove attachment',
     'chat.toolRunning': 'running…',
     'chat.compaction.working': 'Compacting…',
     'chat.compaction.title': 'Earlier conversation compacted',
@@ -69,6 +71,8 @@ export const chatCatalogs: AreaCatalogs = {
   },
   de: {
     'chat.automatismHead': 'Automatismus',
+    'chat.attach.add': 'Datei anhängen',
+    'chat.attach.remove': 'Anhang entfernen',
     'chat.toolRunning': 'läuft…',
     'chat.compaction.working': 'Kontext wird komprimiert…',
     'chat.compaction.title': 'Früherer Gesprächsverlauf komprimiert',

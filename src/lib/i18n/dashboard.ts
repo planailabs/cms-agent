@@ -202,6 +202,9 @@ export const dashboardCatalogs: AreaCatalogs = {
     'dashboard.system.failedDeleteBranch': 'Failed to delete {name}',
     'dashboard.system.failedLoadChats': 'Failed to load chats',
     'dashboard.system.noChats': 'No chats',
+    'dashboard.system.attachmentsOnePerMessage': 'Limit chat attachments to one file per message',
+    'dashboard.system.settingSaved': 'Setting saved',
+    'dashboard.system.settingFailed': 'Could not save the setting',
     'dashboard.system.confirmDeleteChat':
       'Delete chat "{title}" including its work branch and preview?',
     'dashboard.system.chatDeleted': 'Chat "{title}" deleted',
@@ -413,6 +416,9 @@ export const dashboardCatalogs: AreaCatalogs = {
       '{name} konnte nicht gelöscht werden',
     'dashboard.system.failedLoadChats': 'Chats konnten nicht geladen werden',
     'dashboard.system.noChats': 'Keine Chats',
+    'dashboard.system.attachmentsOnePerMessage': 'Chat-Anhänge auf eine Datei pro Nachricht begrenzen',
+    'dashboard.system.settingSaved': 'Einstellung gespeichert',
+    'dashboard.system.settingFailed': 'Einstellung konnte nicht gespeichert werden',
     'dashboard.system.confirmDeleteChat':
       'Chat "{title}" mitsamt Arbeits-Branch und Vorschau löschen?',
     'dashboard.system.chatDeleted': 'Chat "{title}" gelöscht',
