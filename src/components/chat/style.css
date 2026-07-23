@@ -507,6 +507,131 @@ html.is-first-visit #app {
     height: 14px;
   }
 
+  /* ── Attachments ─────────────────────────────────────────────────────── */
+  .composer-attach-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+    align-self: center;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .composer-attach-button:hover,
+  .composer-attach-button:focus-visible {
+    background: var(--surface-elevated);
+    color: var(--text-primary);
+  }
+
+  .composer-chips:empty {
+    display: none;
+  }
+
+  .composer-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 8px 0;
+  }
+
+  .composer-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 220px;
+    padding: 3px 6px 3px 4px;
+    border-radius: 8px;
+    background: var(--surface-elevated);
+    font-size: 12px;
+    color: var(--text-primary);
+  }
+
+  .composer-chip.is-uploading {
+    opacity: 0.6;
+  }
+
+  .composer-chip.is-error {
+    outline: 1px solid #e5484d;
+  }
+
+  .composer-chip__thumb {
+    width: 24px;
+    height: 24px;
+    object-fit: cover;
+    border-radius: 4px;
+  }
+
+  .composer-chip__glyph {
+    font-size: 14px;
+  }
+
+  .composer-chip__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-chip__remove {
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+  }
+
+  .composer-chip__remove:hover {
+    color: var(--text-primary);
+  }
+
+  .composer-card.is-dragover {
+    outline: 2px dashed var(--text-muted);
+    outline-offset: 2px;
+  }
+
+  /* ── Attachments on a sent user message ──────────────────────────────── */
+  .msg-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    max-width: 85%;
+  }
+
+  .msg-attachment {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 220px;
+    padding: 3px 8px 3px 4px;
+    border-radius: 10px;
+    background: var(--surface-elevated);
+    font-size: 12px;
+    color: var(--text-primary);
+  }
+
+  .msg-attachment__thumb {
+    width: 28px;
+    height: 28px;
+    object-fit: cover;
+    border-radius: 6px;
+  }
+
+  .msg-attachment__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* Legacy textarea styles (kept for potential fallback) */
   .composer-textarea {
     box-sizing: border-box;

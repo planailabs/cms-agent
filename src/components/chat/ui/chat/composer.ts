@@ -5,6 +5,12 @@
 import { escapeHtml } from '../../utils/html';
 import { SEND_ICON_SVG } from '../icons';
 import { t, uiLocale } from '@/lib/i18n';
+import { store } from '../../app/store';
+import {
+  ATTACHMENT_ACCEPT,
+  composerHasContent,
+  renderAttachmentChipsHtml,
+} from '../../actions/chat/attachments';
 
 import type { LocaleContent, ChatModeLocale } from '../../content';
 import type { ChatState } from '../../app/state';
@@ -44,8 +50,15 @@ export const renderChatComposer = (
     isTextQuestion ? (aqInput!.question ?? modeLocale.placeholder) : modeLocale.placeholder,
   );
 
+  const multiple = store.state.attachmentsOnePerMessage ? '' : ' multiple';
+  const attachLabel = escapeHtml(t(uiLocale(), 'chat.attach.add'));
+  // Attachments live in the module, not the store — seed from there so a full
+  // re-render reflects staged files; live updates patch the container in place.
+  const sendDisabled = composerHasContent('') ? '' : ' aria-disabled="true" disabled';
+
   return showComposer
-    ? `<div class="composer-card" data-form="machine-config-composer">
+    ? `<div class="composer-card" data-form="machine-config-composer" data-action="chat-dropzone">
+          <div class="composer-chips" data-attach-chips>${renderAttachmentChipsHtml()}</div>
           <div class="composer-wrapper">
             ${isTextQuestion
               ? `<button
@@ -54,6 +67,18 @@ export const renderChatComposer = (
                   data-action="mc-question-cancel"
                 >${skipLabel}</button>`
               : ''}
+            <button
+              type="button"
+              class="composer-attach-button"
+              data-action="chat-attach"
+              aria-label="${attachLabel}"
+              title="${attachLabel}">📎</button>
+            <input
+              type="file"
+              class="composer-attach-input"
+              data-action="chat-attach-input"
+              accept="${ATTACHMENT_ACCEPT}"${multiple}
+              hidden />
             <div
               class="composer-input"
               role="textbox"
@@ -69,8 +94,7 @@ export const renderChatComposer = (
               type="button"
               class="composer-send-button"
               data-action="machine-config-send"
-              aria-label="${escapeHtml(locale.composer.submitLabel)}"
-              aria-disabled="true" disabled>
+              aria-label="${escapeHtml(locale.composer.submitLabel)}"${sendDisabled}>
               ${SEND_ICON_SVG}
             </button>
           </div>

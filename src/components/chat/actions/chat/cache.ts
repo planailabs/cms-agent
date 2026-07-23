@@ -15,6 +15,15 @@ export interface ToolCallInfo {
   running?: boolean;
 }
 
+/** File attached to a user message (for display in the transcript). */
+export interface AttachmentDisplay {
+  id?: string;
+  filename: string;
+  mime: string;
+  /** Object URL for a just-sent image preview (absent after reload). */
+  url?: string;
+}
+
 export type StoredMessage = {
   id?: string;
   // 'execution' is a client-side pseudo message anchoring the committed-
@@ -24,6 +33,8 @@ export type StoredMessage = {
   /** role 'automatism': i18n container — rendered in the viewer's language,
    *  falling back to the stored English `content`. */
   tm?: TranslatedMessage;
+  /** role 'user': files attached to the message. */
+  attachments?: AttachmentDisplay[];
   tool?: ToolCallInfo;
   /** role 'execution': commit sha, resolved against workspace.executions. */
   sha?: string;

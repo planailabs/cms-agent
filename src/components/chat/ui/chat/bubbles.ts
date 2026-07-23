@@ -77,11 +77,25 @@ export const renderMessageBubbles = (mc: AiChat, executions: ExecutionCard[] = [
           `;
       }
       if (msg.role === 'user') {
-        return `
-            <div class="flex justify-end">
-              <p class="max-w-[85%] rounded-2xl bg-(--surface-elevated) px-3.5 py-2 text-sm text-(--text-primary)">
+        const chips = (msg.attachments ?? [])
+          .map((a) => {
+            const thumb =
+              a.url && a.mime.startsWith('image/')
+                ? `<img class="msg-attachment__thumb" src="${escapeHtml(a.url)}" alt="${escapeHtml(a.filename)}" />`
+                : `<span class="msg-attachment__glyph" aria-hidden="true">${a.mime.startsWith('image/') ? '🖼' : '📄'}</span>`;
+            return `<span class="msg-attachment" title="${escapeHtml(a.filename)}">${thumb}<span class="msg-attachment__name">${escapeHtml(a.filename)}</span></span>`;
+          })
+          .join('');
+        const attachmentsRow = chips ? `<div class="msg-attachments">${chips}</div>` : '';
+        const textRow = msg.content
+          ? `<p class="max-w-[85%] rounded-2xl bg-(--surface-elevated) px-3.5 py-2 text-sm text-(--text-primary)">
                 ${escapeHtml(msg.content)}
-              </p>
+              </p>`
+          : '';
+        return `
+            <div class="flex flex-col items-end gap-1">
+              ${attachmentsRow}
+              ${textRow}
             </div>
           `;
       }

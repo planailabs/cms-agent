@@ -4,6 +4,13 @@ import {
   answerChatQuestion,
   cancelChatQuestion,
 } from '../actions/chat';
+import {
+  clearAttachments,
+  composerHasContent,
+  readyAttachmentMeta,
+  removeAttachment,
+  stageFiles,
+} from '../actions/chat/attachments';
 
 export const registerChatEvents = (app: HTMLElement) => {
   // Chat: helpers for contenteditable input
@@ -25,6 +32,17 @@ export const registerChatEvents = (app: HTMLElement) => {
     }
   };
 
+  // Send text + any staged attachments; a message with attachments only
+  // (no text) is allowed.
+  const submitComposer = (input: HTMLElement) => {
+    const value = getMachineConfigValue(input);
+    const attachments = readyAttachmentMeta();
+    if (!value && attachments.length === 0) return;
+    clearMachineConfigInput(input);
+    clearAttachments();
+    void sendChatMessage(value, undefined, attachments);
+  };
+
   // Chat: Send
   delegateEvent(
     app,
@@ -32,11 +50,7 @@ export const registerChatEvents = (app: HTMLElement) => {
     '[data-action="machine-config-send"]',
     () => {
       const input = getMachineConfigInput();
-      if (!input) return;
-      const value = getMachineConfigValue(input);
-      if (!value) return;
-      clearMachineConfigInput(input);
-      void sendChatMessage(value);
+      if (input) submitComposer(input);
     },
   );
 
@@ -50,32 +64,62 @@ export const registerChatEvents = (app: HTMLElement) => {
       if (keyEvent.key !== 'Enter') return;
       if (keyEvent.shiftKey) return; // allow default newline insertion
       keyEvent.preventDefault();
-      const input = keyEvent.target as HTMLElement;
-      const value = getMachineConfigValue(input);
-      if (!value) return;
-      clearMachineConfigInput(input);
-      void sendChatMessage(value);
+      submitComposer(keyEvent.target as HTMLElement);
     },
   );
 
-  // Chat: sync empty state and send button
+  // Chat: sync empty state and send button (text OR ready attachments enable)
   delegateEvent(
     app,
     'input',
     '[data-action="machine-config-input"]',
     (event) => {
       const input = event.target as HTMLElement;
-      const hasContent = (input.textContent ?? '').trim().length > 0;
-      input.setAttribute('data-empty', hasContent ? 'false' : 'true');
+      const text = input.textContent ?? '';
+      input.setAttribute('data-empty', text.trim().length > 0 ? 'false' : 'true');
       const btn = app.querySelector<HTMLButtonElement>(
         '[data-action="machine-config-send"]',
       );
       if (btn) {
-        btn.disabled = !hasContent;
-        btn.setAttribute('aria-disabled', String(!hasContent));
+        const enabled = composerHasContent(text);
+        btn.disabled = !enabled;
+        btn.setAttribute('aria-disabled', String(!enabled));
       }
     },
   );
+
+  // Chat: open the file picker
+  delegateEvent(app, 'click', '[data-action="chat-attach"]', () => {
+    app.querySelector<HTMLInputElement>('[data-action="chat-attach-input"]')?.click();
+  });
+
+  // Chat: files chosen via the picker
+  delegateEvent(app, 'change', '[data-action="chat-attach-input"]', (_event, target) => {
+    const inputEl = target as HTMLInputElement;
+    if (inputEl.files?.length) stageFiles(inputEl.files);
+    inputEl.value = ''; // allow re-selecting the same file
+  });
+
+  // Chat: remove a staged attachment
+  delegateEvent(app, 'click', '[data-action="chat-attach-remove"]', (_event, target) => {
+    const localId = target.getAttribute('data-local-id');
+    if (localId) removeAttachment(localId);
+  });
+
+  // Chat: drag & drop files onto the composer
+  delegateEvent(app, 'dragover', '[data-action="chat-dropzone"]', (event, target) => {
+    event.preventDefault();
+    target.classList.add('is-dragover');
+  });
+  delegateEvent(app, 'dragleave', '[data-action="chat-dropzone"]', (_event, target) => {
+    target.classList.remove('is-dragover');
+  });
+  delegateEvent(app, 'drop', '[data-action="chat-dropzone"]', (event, target) => {
+    const dragEvent = event as DragEvent;
+    dragEvent.preventDefault();
+    target.classList.remove('is-dragover');
+    if (dragEvent.dataTransfer?.files.length) stageFiles(dragEvent.dataTransfer.files);
+  });
 
   // Chat: Example-prompt chip (empty state) — fills the composer
   delegateEvent(

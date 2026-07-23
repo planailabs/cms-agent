@@ -5,7 +5,7 @@
 
 import { store } from '../../app/store';
 import { locales } from '../../content';
-import { cacheAIChatMessages } from './cache';
+import { cacheAIChatMessages, type AttachmentDisplay } from './cache';
 import { connectEvents, postMessage } from './sse';
 import type { PageContext } from '../../../workspace/state';
 
@@ -92,14 +92,18 @@ export const transition = (
 // Chat Message Sending
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const sendChatMessage = async (message: string, pageContext?: PageContext) => {
+export const sendChatMessage = async (
+  message: string,
+  pageContext?: PageContext,
+  attachments?: AttachmentDisplay[],
+) => {
   const state = store.state;
   const mc = state.chat?.aiChat;
   if (!mc || !state.activeChatId) return;
 
-  // If there's an active question, route as answer
+  // If there's an active question, route as answer (carrying attachments)
   if (mc.phase === 'question') {
-    answerChatQuestion(message);
+    answerChatQuestion(message, attachments);
     return;
   }
 
@@ -107,32 +111,50 @@ export const sendChatMessage = async (message: string, pageContext?: PageContext
   pageContext = pageContext ?? takeContextChip();
 
   transition(mc, 'waiting');
-  mc.messages.push({ role: 'user', content: message });
+  mc.messages.push({
+    role: 'user',
+    content: message,
+    ...(attachments?.length ? { attachments } : {}),
+  });
   store.notify();
 
   // Ensure EventSource is connected before posting
   await connectEvents();
 
-  // POST the message (with chatId) — events arrive via SSE
-  void postMessage({ type: 'message', text: message, pageContext });
+  // POST the message (with chatId + attachment ids) — events arrive via SSE
+  void postMessage({
+    type: 'message',
+    text: message,
+    pageContext,
+    attachmentIds: attachments?.map((a) => a.id).filter((id): id is string => !!id),
+  });
 };
 
 /**
  * Sends the user's answer to a pending question via POST.
  */
-export const answerChatQuestion = async (text: string) => {
+export const answerChatQuestion = async (text: string, attachments?: AttachmentDisplay[]) => {
   const mc = store.state.chat?.aiChat;
   if (!mc) return;
 
   const pageContext = takeContextChip();
 
   transition(mc, 'waiting');
-  mc.messages.push({ role: 'user', content: text });
+  mc.messages.push({
+    role: 'user',
+    content: text,
+    ...(attachments?.length ? { attachments } : {}),
+  });
   cacheAIChatMessages(mc.messages);
   store.notify();
 
   await connectEvents();
-  void postMessage({ type: 'answer', text, pageContext });
+  void postMessage({
+    type: 'answer',
+    text,
+    pageContext,
+    attachmentIds: attachments?.map((a) => a.id).filter((id): id is string => !!id),
+  });
 };
 
 export const cancelChatQuestion = async () => {

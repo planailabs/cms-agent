@@ -33,6 +33,7 @@ export const postMessage = async (payload: {
   type: 'message' | 'answer';
   text: string;
   pageContext?: PageContext;
+  attachmentIds?: string[];
 }) => {
   const chatId = store.state.activeChatId;
   if (!chatId) return;

@@ -126,6 +126,8 @@ export interface AppState {
   localeKey: LocaleKey;
   /** Theme mode preference */
   themeMode: ThemeMode;
+  /** Admin setting: cap message attachments to one (from GET /api/me). */
+  attachmentsOnePerMessage: boolean;
 
   // ─── UI State ──────────────────────────────────────────────────────────────
   /** Whether the language dropdown is open */
@@ -293,6 +295,7 @@ export const createInitialState = (): AppState => {
   return {
     localeKey: readDocumentLocale() ?? readStoredLocale() ?? detectBrowserLocale(),
     themeMode: 'system', // Initial default, will be updated by initTheme
+    attachmentsOnePerMessage: false,
     isLanguageMenuOpen: false,
     isAuthMenuOpen: false,
     isSettingsOverlayOpen: false,

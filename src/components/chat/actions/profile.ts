@@ -38,10 +38,12 @@ export const loadProfile = (): Promise<void> => {
         role: string;
         theme?: string | null;
         language?: string | null;
+        attachmentsOnePerMessage?: boolean;
       };
 
       const state = store.state;
       state.user = { id: me.id, email: me.email, name: me.name, role: me.role };
+      state.attachmentsOnePerMessage = !!me.attachmentsOnePerMessage;
 
       // Cache user state for instant header render on reload
       cacheUserState(state.user);

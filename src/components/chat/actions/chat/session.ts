@@ -16,6 +16,7 @@ import {
 import { connectEvents } from './sse';
 import { getTranscriptEventSeq } from './events';
 import { sendChatMessage } from './stateMachine';
+import { clearAttachments } from './attachments';
 import { MAX_PUBLISH_LOG_LINES } from '../../../workspace/publishCard';
 
 export interface HistoryExecution {
@@ -239,6 +240,8 @@ export interface ChatHistoryResult {
 
 export const initAIChat = (messages: StoredMessage[], phase: 'idle' | 'waiting' = 'idle') => {
   const state = store.state;
+  // Drop any files staged for a previously-open chat.
+  clearAttachments();
   state.chat = {
     userPrompt: messages[0]?.content ?? '',
     assistantVisibleText: '',
