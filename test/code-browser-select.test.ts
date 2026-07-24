@@ -2,13 +2,15 @@
  * Code-browser multi-line selection: drag ranges, shift-extend, reverse
  * drags, and single-line deselect.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { store } from '@/components/chat/app/store';
 import { createInitialWorkspaceState } from '@/components/workspace/state';
 import {
   beginLineSelect,
   dragLineSelect,
   endLineSelect,
+  openCodeBrowser,
+  openFile,
   workFileTarget,
 } from '@/components/workspace/codeBrowser';
 
@@ -22,7 +24,34 @@ beforeEach(() => {
   endLineSelect();
 });
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe('code browser line selection', () => {
+  it('loads the tree and linked file independently', async () => {
+    store.state.activeChatId = 'chat';
+    store.state.workspace.codeBrowser.expanded = ['src'];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const path = new URL(input, 'http://localhost').searchParams.get('path');
+        return {
+          ok: true,
+          json: async () =>
+            path === 'src/file.ts'
+              ? { content: 'const loaded = true;' }
+              : { entries: [{ name: path === '.' ? 'src' : 'file.ts', dir: path === '.' }] },
+        };
+      }),
+    );
+
+    openCodeBrowser();
+    await openFile('src/file.ts');
+    await vi.waitFor(() => expect(store.state.workspace.codeBrowser.dirs['.']).toBeDefined());
+
+    expect(store.state.workspace.codeBrowser.dirs.src).toBeDefined();
+    expect(store.state.workspace.codeBrowser.fileLines).toEqual(['const loaded = true;']);
+  });
+
   it('parses sandbox file links and their line numbers', () => {
     expect(workFileTarget('/work/src/pages/%5Blang%5D/index.astro:93')).toEqual({
       path: 'src/pages/[lang]/index.astro',

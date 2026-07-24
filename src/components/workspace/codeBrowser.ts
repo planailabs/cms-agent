@@ -12,8 +12,8 @@ import type { AppState } from '../chat/app/state';
 
 const MAX_SNIPPET_CHARS = 4000;
 
-/** Load token — a newer load supersedes in-flight responses. */
-let cbLoadSeq = 0;
+let cbFileLoadSeq = 0;
+const cbDirLoadSeq = new Map<string, number>();
 
 const api = (path: string): string => {
   const chatId = store.state.activeChatId!;
@@ -25,7 +25,8 @@ export const openCodeBrowser = (): void => {
   cb.open = true;
   cb.error = null;
   store.notify();
-  if (!cb.dirs['.']) void loadDir('.');
+  for (const path of new Set(['.', ...cb.expanded]))
+    if (!cb.dirs[path]) void loadDir(path);
 };
 
 export const closeCodeBrowser = (): void => {
@@ -34,7 +35,8 @@ export const closeCodeBrowser = (): void => {
 };
 
 export const loadDir = async (path: string): Promise<void> => {
-  const seq = ++cbLoadSeq;
+  const seq = (cbDirLoadSeq.get(path) ?? 0) + 1;
+  cbDirLoadSeq.set(path, seq);
   const cb = store.state.workspace.codeBrowser;
   cb.loading = true;
   store.notify();
@@ -44,7 +46,7 @@ export const loadDir = async (path: string): Promise<void> => {
       entries?: Array<{ name: string; dir: boolean }>;
       error?: string;
     };
-    if (seq !== cbLoadSeq) return;
+    if (seq !== cbDirLoadSeq.get(path)) return;
     cb.loading = false;
     if (!res.ok || !data.entries) {
       cb.error = data.error ?? 'Load failed';
@@ -54,7 +56,7 @@ export const loadDir = async (path: string): Promise<void> => {
     }
     store.notify();
   } catch (err) {
-    if (seq !== cbLoadSeq) return;
+    if (seq !== cbDirLoadSeq.get(path)) return;
     cb.loading = false;
     cb.error = err instanceof Error ? err.message : String(err);
     store.notify();
@@ -86,7 +88,7 @@ export const workFileTarget = (href: string): { path: string; line: number } | n
 };
 
 export const openFile = async (path: string, line = 0): Promise<void> => {
-  const seq = ++cbLoadSeq;
+  const seq = ++cbFileLoadSeq;
   const cb = store.state.workspace.codeBrowser;
   cb.loading = true;
   cb.filePath = path;
@@ -106,7 +108,7 @@ export const openFile = async (path: string, line = 0): Promise<void> => {
       binary?: boolean;
       error?: string;
     };
-    if (seq !== cbLoadSeq) return;
+    if (seq !== cbFileLoadSeq) return;
     cb.loading = false;
     if (!res.ok) cb.error = data.error ?? 'Load failed';
     else if (data.binary) cb.error = t(uiLocale(), 'workspace.code.binary');
@@ -121,7 +123,7 @@ export const openFile = async (path: string, line = 0): Promise<void> => {
         document.querySelector(`[data-action="ws-cb-line"][data-line="${line}"]`)?.scrollIntoView({ block: 'center' }),
       );
   } catch (err) {
-    if (seq !== cbLoadSeq) return;
+    if (seq !== cbFileLoadSeq) return;
     cb.loading = false;
     cb.error = err instanceof Error ? err.message : String(err);
     store.notify();

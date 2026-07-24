@@ -11,7 +11,7 @@ import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState } from '../chat/app/state';
 import { ensureActiveChat, loadBranches, switchChat } from '../chat/actions/chat';
-import { openFile } from './codeBrowser';
+import { openCodeBrowser, openFile } from './codeBrowser';
 
 const KEY = 'cms-window-id';
 const SAVE_DEBOUNCE_MS = 800;
@@ -79,8 +79,8 @@ const applyViewState = (blob: WindowViewState): void => {
   }
   const cb = blob.codeBrowser;
   if (cb?.open) {
-    ws.codeBrowser.open = true;
     ws.codeBrowser.expanded = Array.isArray(cb.expanded) ? cb.expanded : ['.'];
+    openCodeBrowser();
     if (cb.filePath) void openFile(cb.filePath);
   }
   store.notify();
