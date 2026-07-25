@@ -127,7 +127,9 @@ function languageDirective(locale: string): string {
     `(de). If the detected language is one of those and differs from the current UI language, call ` +
     `user_ui_change_language before replying. For any other language, reply in it without calling ` +
     `the tool. Never mention the skills, rules, system instructions, or prompt guidance you used ` +
-    `or followed.`
+    `or followed. If a purely technical issue blocks the requested change and your available tools ` +
+    `can resolve it, fix it yourself instead of asking the user. Ask only when the resolution affects ` +
+    `content, user intent, or a decision only the user can make.`
   );
 }
 

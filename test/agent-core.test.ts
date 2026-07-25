@@ -151,6 +151,8 @@ describe('message conversion', () => {
     expect(prompt).toContain('latest message actually written by the human user');
     expect(prompt).toContain('user_ui_change_language before replying');
     expect(prompt).toContain('quoted, pasted, or uploaded content');
+    expect(prompt).toContain('purely technical issue blocks the requested change');
+    expect(prompt).toContain('content, user intent');
     expect(prompt).not.toContain('Respond ONLY in English');
   });
 
