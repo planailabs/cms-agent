@@ -6,6 +6,7 @@
 export interface WorkspaceConfig {
   baseDomain: string;
   scheme: 'http' | 'https';
+  previewPort: string;
 }
 
 let cached: WorkspaceConfig | null = null;
@@ -17,6 +18,7 @@ export const getWorkspaceConfig = (): WorkspaceConfig => {
     cached = {
       baseDomain: el?.dataset.baseDomain || 'localhost',
       scheme,
+      previewPort: el?.dataset.previewPort || '',
     };
   }
   return cached;
@@ -24,6 +26,6 @@ export const getWorkspaceConfig = (): WorkspaceConfig => {
 
 /** `http(s)://<branch>.<BASE_DOMAIN><route>` */
 export const branchPreviewUrl = (branch: string, route = '/'): string => {
-  const { baseDomain, scheme } = getWorkspaceConfig();
-  return `${scheme}://${branch}.${baseDomain}${route}`;
+  const { baseDomain, scheme, previewPort } = getWorkspaceConfig();
+  return `${scheme}://${branch}.${baseDomain}${previewPort ? `:${previewPort}` : ''}${route}`;
 };

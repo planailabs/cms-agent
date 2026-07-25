@@ -20,6 +20,7 @@ const user = Astro.locals.user!;
 const baseDomain = process.env.BASE_DOMAIN ?? 'localhost';
 const scheme =
   process.env.PUBLIC_SCHEME ?? (Astro.url.protocol === 'https:' ? 'https' : 'http');
+const previewPort = /^(1|true)$/i.test(process.env.DEV_PORT_CARRY ?? '') ? Astro.url.port : '';
 ---
 
 <!doctype html>
@@ -34,6 +35,7 @@ const scheme =
       id="app"
       data-base-domain={baseDomain}
       data-scheme={scheme}
+      data-preview-port={previewPort}
       data-user-name={user.name}
       data-app-version={APP_VERSION}
       data-git-commit={GIT_COMMIT}
