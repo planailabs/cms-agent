@@ -51,8 +51,12 @@ const schema = z.object({
 
   // Managed target repo
   REPO_PATH: z.string().min(1),
-  REPO_DEV_COMMAND: z.string().default('npx astro dev'),
-  REPO_BUILD_COMMAND: z.string().default('npx astro build'),
+  // Site backend id ('astro' | 'static'); auto-detected from the repo when
+  // unset. Validated against the registry in activeBackend(), not here.
+  SITE_BACKEND: z.string().optional(),
+  // Dev/build command overrides; defaults come from the active site backend.
+  REPO_DEV_COMMAND: z.string().optional(),
+  REPO_BUILD_COMMAND: z.string().optional(),
   ROUTE_MAPPINGS: z.string().optional(), // JSON: [{ files: glob, route: pattern }]
 
   // Deployment

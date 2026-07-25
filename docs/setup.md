@@ -8,8 +8,9 @@
 - PostgreSQL (production; tests use a throwaway SQLite automatically)
 - An OIDC identity provider (Keycloak, Authentik, Dex, Google, …)
 - Any OpenAI-compatible model endpoint
-- The target Astro site as a local git repository with its own
-  `node_modules` installed (the CMS runs `npx astro dev` inside it)
+- The target site as a local git repository. Astro sites need their own
+  `node_modules` installed (the CMS runs `npx astro dev` inside them);
+  static HTML sites need nothing.
 
 ## Environment variables
 
@@ -32,9 +33,10 @@
 | `HOST` / `PORT` | no | Internal CMS bind (default 127.0.0.1:4321) |
 | `FIRECRAWL_NATIVE_PATH` | outside Nix | Path to the Firecrawl napi-rs `.node` addon; Nix packages set it automatically |
 | `PROXY_NATIVE_PATH` | outside Nix | Required path to the embedded Pingora `.node` addon; Nix packages set it automatically |
-| `REPO_PATH` | yes | Path to the managed Astro site git repo |
-| `REPO_DEV_COMMAND` | no | Default `npx astro dev` (split on spaces, no shell) |
-| `REPO_BUILD_COMMAND` | no | Default `npx astro build` |
+| `REPO_PATH` | yes | Path to the managed site git repo |
+| `SITE_BACKEND` | no | `astro` \| `static`; auto-detected (`astro.config.*` or an `astro` dependency → astro, else static) |
+| `REPO_DEV_COMMAND` | no | Override the backend's dev command (astro default `npx astro dev`; split on spaces, no shell) |
+| `REPO_BUILD_COMMAND` | no | Override the backend's build command (astro default `npx astro build`; static default: no build) |
 | `ROUTE_MAPPINGS` | no | JSON `[{"files":"src/content/blog/*.md","route":"/blog/:slug/"}]` for the visual diff |
 | `DEPLOY_FLOW` | no | `git-push` (default) \| `web-agency` \| `github-ci` \| `cloudflare-pages` |
 | `DEPLOY_GIT_REMOTE` | flow | Remote for git-push / github-ci (default `origin`) |

@@ -16,6 +16,7 @@ import {
   worktreeStatus,
 } from '@/lib/git/engine';
 import { registerTool, type ToolContext, type ToolDef } from './registry';
+import { activeBackend } from '@/lib/site';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro']);
 const MAX_FILE_CHARS = 50_000;
@@ -132,14 +133,13 @@ const grepTool: ToolDef = {
 
 const listPagesTool: ToolDef = {
   name: 'list_pages',
-  description: 'List all page and content files of the Astro site (src/pages and src/content).',
+  description: 'List all page and content files of the site.',
   schema: z.object({}),
   phases: [...ALL_PHASES],
   async execute(_input, ctx) {
     const root = jail(ctx, '.');
-    const files = [...walk(root, root)].filter(
-      (f) => f.startsWith('src/pages') || f.startsWith('src/content'),
-    );
+    const backend = activeBackend();
+    const files = [...walk(root, root)].filter((f) => backend.isSiteContent(f));
     return files.join('\n') || '(no pages found)';
   },
 };

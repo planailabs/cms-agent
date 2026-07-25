@@ -1,6 +1,7 @@
 /**
- * Preview manager — one `astro dev` instance per branch worktree, spawned on
- * demand, stopped when idle. Publishes the routing table for the Pingora
+ * Preview manager — one dev-server instance per branch worktree (command from
+ * the active site backend), spawned on demand, stopped when idle. Publishes
+ * the routing table for the Pingora
  * embedded proxy (VAR_DIR/proxy-routes.json) and reads its access timestamps
  * (VAR_DIR/proxy-access.json) to stop idle instances. Plan §5.
  */
@@ -17,7 +18,7 @@ import {
   spawnSandboxed,
   type SandboxState,
 } from '@/lib/sandbox';
-import { prepareRouteGraphConfig } from './routeGraph';
+import { activeBackend } from '@/lib/site';
 import { updateProxyRoutes } from '@/lib/proxyNative';
 
 export interface PreviewInstance {
@@ -254,27 +255,15 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     state.startPhases.set(branch, 'server');
     const port = await freePort();
 
-    // Astro persists its dev PID in the worktree. Preview processes run in
-    // separate PID namespaces, where the Astro child commonly gets the same
-    // small PID after a container restart; a stale record can therefore look
-    // alive and block startup forever. There is no managed instance for this
-    // branch at this point, so remove only Astro's generated session record.
-    fs.rmSync(path.join(worktree, '.astro', 'dev.json'), { force: true });
-    const graphConfig = prepareRouteGraphConfig(worktree);
-
-    // REPO_DEV_COMMAND is split on whitespace (document: no shell quoting)
-    const [cmd, ...args] = e.REPO_DEV_COMMAND.split(/\s+/);
-    const child = spawnSandboxed(
-      sb,
-      [cmd, ...args, '--config', graphConfig, '--port', String(port), '--host', e.HOST],
-      {
-        cwd: worktree,
-        sessionKey: branch,
-        // The proxy preserves the public Host header (<branch>.<BASE_DOMAIN>),
-        // which Vite's host check would otherwise block.
-        extraEnv: { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: `${branch}.${e.BASE_DOMAIN}` },
-      },
-    );
+    // The active site backend builds the full dev-server argv (and may
+    // prepare worktree files, e.g. the Astro route-graph config).
+    const { argv, extraEnv } = activeBackend().devCommand({
+      worktree,
+      port,
+      host: e.HOST,
+      allowedHost: `${branch}.${e.BASE_DOMAIN}`,
+    });
+    const child = spawnSandboxed(sb, argv, { cwd: worktree, sessionKey: branch, extraEnv });
 
     const info: PreviewInstance = {
       branch,

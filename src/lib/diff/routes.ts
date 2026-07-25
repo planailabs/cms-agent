@@ -1,11 +1,13 @@
 /**
  * Map changed repo files to site routes for the visual diff (plan §6).
- * Conventions: src/pages/** by Astro routing rules; content collections via
- * ROUTE_MAPPINGS ([{files: glob, route: pattern-with-:slug}]); dynamic pages
- * without a mapping are reported as unresolved.
+ * Conventions: the active site backend's path rules (e.g. src/pages/** for
+ * Astro); content collections via ROUTE_MAPPINGS ([{files: glob, route:
+ * pattern-with-:slug}]); dynamic pages without a mapping are reported as
+ * unresolved.
  */
 import path from 'node:path';
 import { env } from '@/lib/env';
+import { activeBackend, type SiteBackend } from '@/lib/site';
 
 export interface RouteMapping {
   files: string;
@@ -31,17 +33,6 @@ export function globToRegExp(glob: string): RegExp {
     .replaceAll('*', '[^/]*')
     .replaceAll(DOUBLE_STAR, '.*');
   return new RegExp(`^${escaped}$`);
-}
-
-function pagesFileToRoute(file: string): string | null {
-  const rel = file.replace(/^src\/pages\//, '');
-  const ext = path.extname(rel);
-  if (!['.astro', '.md', '.mdx', '.html'].includes(ext)) return null;
-  let route = rel.slice(0, -ext.length);
-  if (route.includes('[')) return null; // dynamic — needs a mapping
-  if (route === 'index') return '/';
-  route = route.replace(/\/index$/, '');
-  return `/${route}/`;
 }
 
 function slugFromFile(file: string): string {
@@ -73,6 +64,7 @@ export function resolveChangedPages(
   plannedUrls: string[] = [],
   mappings: RouteMapping[] = parseRouteMappings(env().ROUTE_MAPPINGS),
   inferredPages: ChangedPage[] = [],
+  backend: SiteBackend = activeBackend(),
 ): RouteResolution {
   const pages = new Map<string, ChangedPage>();
   const unresolved: string[] = [];
@@ -88,13 +80,14 @@ export function resolveChangedPages(
       }
     }
 
-    if (!route && file.startsWith('src/pages/')) {
-      route = pagesFileToRoute(file);
+    if (!route) {
+      const pr = backend.pageRoute(file);
+      if (pr && !pr.dynamic) route = pr.route; // dynamic — needs a mapping
     }
 
     if (route) {
       if (!pages.has(route)) pages.set(route, { route, file });
-    } else if (file.startsWith('src/pages/') || file.startsWith('src/content/')) {
+    } else if (backend.isSiteContent(file)) {
       unresolved.push(file);
     }
     // Components and styles are resolved through the preview dependency graph;

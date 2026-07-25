@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const CONFIG_NAME = 'cms-preview.config.mjs';
 const GRAPH_NAME = 'cms-route-graph.json';
-const ASTRO_CONFIGS = [
+export const ASTRO_CONFIGS = [
   'astro.config.mjs',
   'astro.config.js',
   'astro.config.ts',

@@ -1,8 +1,8 @@
 /**
  * Sealed build artifacts (plan §12): clean checkout of the exact sha in a
- * temp worktree → REPO_BUILD_COMMAND → manifest (path/size/sha256 per file)
- * + tarball under VAR_DIR/artifacts. A retry for the same sha reuses the
- * sealed artifact instead of rebuilding.
+ * temp worktree → site backend's build command → manifest (path/size/sha256
+ * per file) + tarball under VAR_DIR/artifacts. A retry for the same sha
+ * reuses the sealed artifact instead of rebuilding.
  */
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -12,6 +12,14 @@ import { simpleGit } from 'simple-git';
 import { env } from '@/lib/env';
 import { ensureSandbox, spawnSandboxed, type SandboxState } from '@/lib/sandbox';
 import { hasErrors, validateDist } from '@/lib/validate';
+import { activeBackend } from '@/lib/site';
+
+/**
+ * Never part of a dist: node_modules trees and git metadata. Required for the
+ * no-build (static) case where the dist IS the checkout — the temp worktree
+ * carries a `.git` pointer file that must not leak into manifest or tarball.
+ */
+export const DIST_SKIP = new Set(['.git', 'node_modules']);
 
 export interface ArtifactInfo {
   sha: string;
@@ -45,11 +53,14 @@ function run(
 
 function* walkFiles(dir: string, root: string): Generator<string> {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (DIST_SKIP.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) yield* walkFiles(full, root);
     else if (entry.isFile()) yield path.relative(root, full);
   }
 }
+
+export const distFilter = (src: string): boolean => !DIST_SKIP.has(path.basename(src));
 
 /** Build (or reuse) the sealed artifact for a sha. */
 export async function sealArtifact(sha: string, log: (l: string) => void): Promise<ArtifactInfo> {
@@ -74,19 +85,24 @@ export async function sealArtifact(sha: string, log: (l: string) => void): Promi
   await git.raw(['worktree', 'add', '--detach', buildDir, sha]);
 
   try {
-    const sb = await ensureSandbox();
-    log(`Building ${sha.slice(0, 8)} with: ${e.REPO_BUILD_COMMAND}`);
-    // Site deps: install if the checkout has none (worktrees don't share node_modules)
-    if (fs.existsSync(path.join(buildDir, 'package.json')) && !fs.existsSync(path.join(buildDir, 'node_modules'))) {
-      log('Installing site dependencies…');
-      // --include=dev: NODE_ENV=production would omit devDependencies,
-      // where site build tooling (astro, integrations) usually lives
-      await run(sb, 'npm install --no-audit --no-fund --include=dev', buildDir, sha, log, 'development');
+    const backend = activeBackend();
+    const buildCommand = backend.buildCommand();
+    if (buildCommand) {
+      const sb = await ensureSandbox();
+      log(`Building ${sha.slice(0, 8)} with: ${buildCommand}`);
+      // Site deps: install if the checkout has none (worktrees don't share node_modules)
+      if (fs.existsSync(path.join(buildDir, 'package.json')) && !fs.existsSync(path.join(buildDir, 'node_modules'))) {
+        log('Installing site dependencies…');
+        // --include=dev: NODE_ENV=production would omit devDependencies,
+        // where site build tooling (astro, integrations) usually lives
+        await run(sb, 'npm install --no-audit --no-fund --include=dev', buildDir, sha, log, 'development');
+      }
+      await run(sb, buildCommand, buildDir, sha, log, 'production');
+    } else {
+      log('No build step for this site backend — publishing the checkout as-is');
     }
-    await run(sb, e.REPO_BUILD_COMMAND, buildDir, sha, log, 'production');
 
-    const builtDist = path.join(buildDir, 'dist');
-    if (!fs.existsSync(builtDist)) throw new Error('Build produced no dist/ directory');
+    const builtDist = backend.resolveDist(buildDir);
 
     // Pre-publish validation: no CMS/overlay code in production output,
     // local links resolve (medved §21.2)
@@ -108,9 +124,12 @@ export async function sealArtifact(sha: string, log: (l: string) => void): Promi
     }
 
     if (fs.existsSync(distDir)) fs.rmSync(distDir, { recursive: true, force: true });
-    fs.cpSync(builtDist, distDir, { recursive: true });
+    fs.cpSync(builtDist, distDir, { recursive: true, filter: distFilter });
 
-    await tar.create({ gzip: true, file: tarballPath, cwd: builtDist }, ['.']);
+    await tar.create(
+      { gzip: true, file: tarballPath, cwd: builtDist, filter: distFilter },
+      ['.'],
+    );
 
     const info: ArtifactInfo = {
       sha,
@@ -120,7 +139,8 @@ export async function sealArtifact(sha: string, log: (l: string) => void): Promi
       buildMeta: {
         gitSha: sha,
         node: process.version,
-        buildCommand: e.REPO_BUILD_COMMAND,
+        backend: backend.id,
+        buildCommand: buildCommand ?? '(none)',
         builtAt: new Date().toISOString(),
       },
     };

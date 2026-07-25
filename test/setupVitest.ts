@@ -20,6 +20,9 @@ const TEST_ENV_DEFAULTS: Record<string, string> = {
   OPENAI_MODEL: 'gpt-test',
   BASE_DOMAIN: 'cms.example.com',
   REPO_PATH: path.join(os.tmpdir(), 'cms-agent-unset-repo'),
+  // Pin the site backend: the tmp repo has no astro markers and existing
+  // tests assume Astro conventions. Backend tests override + reset caches.
+  SITE_BACKEND: 'astro',
   VAR_DIR: path.join(os.tmpdir(), 'cms-agent-unset-var'),
 };
 for (const [k, v] of Object.entries(TEST_ENV_DEFAULTS)) {

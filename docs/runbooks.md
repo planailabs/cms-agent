@@ -33,7 +33,8 @@ publish log.
 
 ### Build permanently broken
 `sealArtifact` logs the full build output into the publish log. Reproduce
-with `REPO_BUILD_COMMAND` in a clean checkout of the recorded sha.
+with the site backend's build command (`buildCommand` in the artifact's
+build meta) in a clean checkout of the recorded sha.
 
 ### Restore a known-good version
 Branch history panel → pick the commit → **Restore** (new commit applying the

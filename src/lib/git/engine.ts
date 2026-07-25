@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { env } from '@/lib/env';
+import { activeBackend } from '@/lib/site';
 
 const RESERVED_BRANCH_NAMES = new Set(['main', 'master', 'www', 'api', 'cms', 'mail', 'ns1', 'ns2']);
 const BRANCH_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -79,7 +80,8 @@ function repoGit(): SimpleGit {
 // a no-op when the site repo tracks its lockfile, and stops generated ones
 // from being swept into execution commits (and later blocking merges as
 // untracked files in the target checkout) when it doesn't.
-const REPO_EXCLUDES = ['node_modules/', '.astro/', 'dist/', '.DS_Store', 'package-lock.json'];
+// Framework artifacts (.astro/, dist/, …) come from the active site backend.
+const COMMON_EXCLUDES = ['node_modules/', '.DS_Store', 'package-lock.json'];
 const EXCLUDE_MARKER = '# cms-agent managed excludes';
 let excludesEnsured = false;
 
@@ -91,8 +93,9 @@ function ensureRepoExcludes(repoPath: string): void {
     const current = fs.existsSync(excludeFile) ? fs.readFileSync(excludeFile, 'utf8') : '';
     // Append entries individually — repos written by older versions already
     // carry the marker but may lack newer entries.
+    const repoExcludes = [...COMMON_EXCLUDES, ...activeBackend().extraExcludes];
     const lines = new Set(current.split('\n').map((l) => l.trim()));
-    const missing = REPO_EXCLUDES.filter((e) => !lines.has(e));
+    const missing = repoExcludes.filter((e) => !lines.has(e));
     if (missing.length === 0 && current.includes(EXCLUDE_MARKER)) return;
     fs.mkdirSync(path.dirname(excludeFile), { recursive: true });
     const head = current.includes(EXCLUDE_MARKER) ? '' : `${EXCLUDE_MARKER}\n`;

@@ -1,6 +1,6 @@
 /**
  * Code-structure tools — dependency-free, regex-based views of the target
- * Astro site so the agent orients itself without reading every file:
+ * site so the agent orients itself without reading every file:
  * site_structure (routes/components/layouts/content + dependency list),
  * code_outline (imports/exports/props/headings of one file),
  * find_symbol (definitions + usages of a name across the repo).
@@ -10,9 +10,11 @@ import path from 'node:path';
 import { z } from 'zod';
 import { jail } from './fsTools';
 import { registerTool, type ToolDef } from './registry';
+import { activeBackend } from '@/lib/site';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro', '.cms']);
-const CODE_EXT = new Set(['.astro', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.md', '.mdx']);
+// .html: pages of static sites (and valid under src/pages for Astro)
+const CODE_EXT = new Set(['.astro', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.md', '.mdx', '.html']);
 
 function* walk(dir: string, root: string): Generator<string> {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -102,7 +104,7 @@ const ALL_PHASES = ['plan', 'execute', 'preview', 'published'] as const;
 const siteStructureTool: ToolDef = {
   name: 'site_structure',
   description:
-    'Overview of the Astro site: pages with their routes, layouts, components (and where each is used), content collections, and dependencies. Start here to orient yourself.',
+    'Overview of the site: pages with their routes, layouts, components (and where each is used), content collections, and dependencies. Start here to orient yourself.',
   schema: z.object({}),
   phases: [...ALL_PHASES],
   async execute(_input, ctx) {
@@ -112,12 +114,10 @@ const siteStructureTool: ToolDef = {
     const pages: Array<{ file: string; route: string }> = [];
     const componentUsage = new Map<string, string[]>();
 
+    const backend = activeBackend();
     for (const f of files) {
-      if (f.startsWith('src/pages/')) {
-        const rel = f.replace(/^src\/pages\//, '').replace(/\.(astro|md|mdx|html)$/, '');
-        const route = rel === 'index' ? '/' : `/${rel.replace(/\/index$/, '')}/`;
-        pages.push({ file: f, route: route.includes('[') ? `${route} (dynamic)` : route });
-      }
+      const pr = backend.pageRoute(f);
+      if (pr) pages.push({ file: f, route: pr.dynamic ? `${pr.route} (dynamic)` : pr.route });
       if (f.endsWith('.astro') || f.endsWith('.tsx') || f.endsWith('.jsx')) {
         try {
           for (const used of outlineFile(root, f).componentsUsed ?? []) {
@@ -163,7 +163,7 @@ const siteStructureTool: ToolDef = {
 const codeOutlineTool: ToolDef = {
   name: 'code_outline',
   description:
-    'Structural outline of one file: imports, exports, functions, Astro props, components used, headings, frontmatter keys — cheaper than reading the whole file.',
+    'Structural outline of one file: imports, exports, functions, component props, components used, headings, frontmatter keys — cheaper than reading the whole file.',
   schema: z.object({ path: z.string() }),
   phases: [...ALL_PHASES],
   async execute(input, ctx) {
