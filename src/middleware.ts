@@ -4,7 +4,7 @@
  * API routes, including preview subdomains through Better Auth's shared cookie.
  */
 import { defineMiddleware } from 'astro:middleware';
-import { auth } from '@/lib/auth';
+import { auth, COOKIE_SCOPE_MARKER, sessionCookieMigrationHeaders } from '@/lib/auth';
 import { isEmailAllowed } from '@/lib/allowlist';
 import { BOOT_PATH_RE, cleanBootOrigin, handlePreviewBoot } from '@/lib/preview/bootPage';
 import { WAIT_PATH_RE, handlePreviewWait } from '@/lib/preview/waitStream';
@@ -53,6 +53,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return next();
   }
 
+  let cookieMigration: string[] | null = null;
   if (env().SKIP_AUTH) {
     // Development mode: no sign-in; identity from the seeded dev users,
     // switchable via the impersonation cookie (POST /api/dev/impersonate).
@@ -66,6 +67,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
       context.locals.user = session.user;
       context.locals.session = session.session;
       updateProxySession(session.session);
+      // Sessions from before crossSubDomainCookies have a host-only cookie
+      // that never reaches preview subdomains — migrate it once per browser.
+      if (context.cookies.get(COOKIE_SCOPE_MARKER)?.value !== '1') {
+        cookieMigration = sessionCookieMigrationHeaders(
+          session.session.token,
+          session.session.expiresAt,
+        );
+      }
     } else {
       context.locals.user = null;
       context.locals.session = null;
@@ -128,5 +137,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return context.redirect('/signin/');
   }
 
-  return next();
+  const response = await next();
+  if (cookieMigration) {
+    for (const header of cookieMigration) response.headers.append('Set-Cookie', header);
+  }
+  return response;
 });
