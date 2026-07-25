@@ -44,8 +44,9 @@ describe('plan card', () => {
       const button = page.locator('[data-action="ws-plan-open"]');
       expect(await header.evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
 
+      const firstStep = page.getByText('Step 1', { exact: true });
       await region.evaluate((el) => {
-        el.scrollTop = 600;
+        el.scrollTop = 160;
       });
       await expect.poll(() => button.isVisible()).toBe(true);
       await expect
@@ -54,8 +55,20 @@ describe('plan card', () => {
             region.boundingBox(),
             header.boundingBox(),
           ]);
-          const offset = (headerBox?.y ?? 0) - (regionBox?.y ?? 0);
-          return offset >= 0 && offset <= 32;
+          return Math.abs((headerBox?.y ?? 0) - (regionBox?.y ?? 0));
+        })
+        .toBeLessThanOrEqual(1);
+      await expect
+        .poll(async () => {
+          const [stepBox, headerBox] = await Promise.all([
+            firstStep.boundingBox(),
+            header.boundingBox(),
+          ]);
+          if (!stepBox || !headerBox || stepBox.y >= headerBox.y + headerBox.height) return false;
+          return page.evaluate(
+            ({ x, y }) => document.elementFromPoint(x, y)?.closest('.ws-card__header') !== null,
+            { x: stepBox.x + 2, y: Math.max(stepBox.y + 2, headerBox.y + 2) },
+          );
         })
         .toBe(true);
     } finally {

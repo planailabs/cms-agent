@@ -2010,10 +2010,11 @@ html.is-first-visit #app {
 
   [data-card="plan-approval"] .ws-card__header {
     position: sticky;
-    top: 0.5rem;
+    top: -1rem;
     z-index: 2;
-    padding: 0.35rem;
-    border-radius: 0.5rem;
+    margin: -0.7rem -0.8rem 0;
+    padding: 0.7rem 0.8rem 0.35rem;
+    border-radius: 0.75rem 0.75rem 0 0;
     background: var(--surface-elevated);
   }
 
