@@ -10,12 +10,14 @@ import {
 import { buildSystemPrompt } from '@/lib/agent/prompt';
 import { buildQuestionToolResults } from '@/lib/agent/toolLoop';
 import { registerClientTools } from '@/lib/agent/tools/clientTools';
+import { registerChatTools } from '@/lib/agent/tools/chatTools';
 import { registerFsTools } from '@/lib/agent/tools/fsTools';
 import { executeTool, isClientSideTool, toolsForPhase, type ToolContext } from '@/lib/agent/tools/registry';
 import { createMcpBridge } from '@/lib/agent/mcp';
 import type { StoredMessage, ToolCall } from '@/lib/agent/types';
 
 registerClientTools();
+registerChatTools();
 registerFsTools();
 
 const call = (id: string, name: string, args: object = {}): ToolCall => ({
@@ -118,6 +120,7 @@ describe('message conversion', () => {
       });
       expect(prompt).toContain('Approved workflow plan');
       expect(prompt).toContain('Keep this plan');
+      if (phase === 'execute') expect(prompt).toContain('return_to_plan');
     }
   });
 });
@@ -140,7 +143,9 @@ describe('phase gating', () => {
     expect(planTools).not.toContain('write_file');
     expect(execTools).toContain('write_file');
     expect(execTools).toContain('finish_execution');
+    expect(execTools).toContain('return_to_plan');
     expect(execTools).not.toContain('propose_plan');
+    expect(planTools).not.toContain('return_to_plan');
   });
 
   it('rejects a write tool executed during plan phase', async () => {

@@ -14,6 +14,7 @@ import { buildChatState, emitChatState } from '@/lib/agent/chatState';
 import { acquireTurnLock, releaseTurnLock } from '@/lib/agent/bus';
 import { GET as historyGet } from '@/pages/api/chat/history';
 import { loadChatRecord } from '@/lib/agent/persistence';
+import { executeTool, type ToolContext } from '@/lib/agent/tools/registry';
 
 let chatId: string;
 
@@ -207,6 +208,32 @@ describe('streamed chat state', () => {
       await approvePlan({ chatId: chat.id, actor });
       await expect.poll(() => events.length, { timeout: 5000 }).toBeGreaterThan(0);
       expect(lastSnapshot().workflowPhase).toBe('execute');
+      await expectParity();
+
+      const beforeReturn = events.length;
+      const toolContext: ToolContext = {
+        chatId: chat.id,
+        branchId: branch.id,
+        branchName: branch.name,
+        userId: actor.id,
+        workflowPhase: 'execute',
+        chatKind: 'workflow',
+        worktreePath: repo,
+        userContext: new Map(),
+        modifiedPaths: new Set(),
+      };
+      expect(
+        JSON.parse(
+          await executeTool(
+            'return_to_plan',
+            { reason: 'The approved structure needs revision' },
+            toolContext,
+          ),
+        ),
+      ).toMatchObject({ ok: true, phase: 'plan' });
+      expect(toolContext.workflowPhase).toBe('plan');
+      await expect.poll(() => events.length, { timeout: 5000 }).toBeGreaterThan(beforeReturn);
+      expect(lastSnapshot().workflowPhase).toBe('plan');
       await expectParity();
 
       // requestChanges is only legal from plan/preview — move to preview

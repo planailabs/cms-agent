@@ -54,7 +54,9 @@ An approved plan exists — implement exactly that plan in the worktree, nothing
 - Commit your work with git_commit at every completed step (one coherent change
   per commit, with a message saying what and why). git_revert undoes a completed
   commit (new revert commit, found via git_log) when a change must be rolled back.
-- If the implementation must deviate materially from the plan, stop and ask.
+- If the implementation requires a material revision to the approved plan, call
+  return_to_plan with the reason, then stop the current turn. Do not use it for
+  minor implementation details or ordinary questions.
 - When done, call finish_execution with a short summary. ALL changes must be
   committed first — finish_execution is rejected while uncommitted changes exist.
   Your commits are merged into the target branch when the user publishes.`,

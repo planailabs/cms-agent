@@ -136,6 +136,16 @@ export async function approvePlan(opts: TransitionOpts): Promise<void> {
   }
 }
 
+/** EXECUTE → PLAN without starting another turn or discarding worktree changes. */
+export async function returnToPlan(chatId: string): Promise<void> {
+  const chat = await loadChat(chatId);
+  if (chat.workflowPhase !== 'execute') {
+    throw new WorkflowError(`Cannot return to planning from the ${chat.workflowPhase} phase.`);
+  }
+  await updatePhase(chatId, chat.entityVersion, { workflowPhase: 'plan' });
+  emitPhase(chatId, 'plan');
+}
+
 /** PLAN/PREVIEW → PLAN with feedback (revision round on the same branch). */
 export async function requestChanges(opts: TransitionOpts & { feedback: string }): Promise<void> {
   const chat = await loadChat(opts.chatId);
