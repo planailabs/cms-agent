@@ -14,6 +14,7 @@ import { store } from '../chat/app/store';
 import { flushWindowSessionSave } from './windowSession';
 
 const POLL_MS = 60_000;
+const RELOADED_COMMIT_KEY = 'cmsagent-reloaded-commit';
 
 const serverCommit = async (): Promise<string | null> => {
   try {
@@ -32,16 +33,24 @@ const agentBusy = (): boolean => {
 };
 
 let ownCommit = '';
-let updated = false; // latched once a newer build is seen
+let updatedCommit = '';
 
 /** Check the deployed commit and reload (restoring the window) if it changed
  *  and the agent is idle. Safe to call any time — e.g. on SSE reconnect, which
  *  often means the server just restarted for a deploy. */
 export const checkAppVersion = async (): Promise<void> => {
   if (!ownCommit) return;
-  const commit = updated ? ownCommit : await serverCommit();
-  if (commit && commit !== ownCommit) updated = true;
-  if (updated && !agentBusy()) {
+  if (!updatedCommit) {
+    const commit = await serverCommit();
+    if (commit && commit !== ownCommit) updatedCommit = commit;
+  }
+  if (updatedCommit && !agentBusy()) {
+    // Stale HTML must not turn one deployment into an endless reload loop.
+    if (sessionStorage.getItem(RELOADED_COMMIT_KEY) === updatedCommit) {
+      updatedCommit = '';
+      return;
+    }
+    sessionStorage.setItem(RELOADED_COMMIT_KEY, updatedCommit);
     flushWindowSessionSave();
     location.reload();
   }
@@ -64,6 +73,6 @@ export const startUpdateWatcher = (): void => {
     if (document.visibilityState === 'visible') void checkAppVersion();
   });
   store.subscribe(() => {
-    if (updated && !agentBusy()) void checkAppVersion();
+    if (updatedCommit && !agentBusy()) void checkAppVersion();
   });
 };
