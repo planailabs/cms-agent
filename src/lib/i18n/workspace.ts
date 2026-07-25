@@ -301,7 +301,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.diff.networkError': 'Netzwerkfehler beim Laden des Diffs.',
     'workspace.diff.mode.sideBySide': 'Nebeneinander',
     'workspace.diff.mode.highlight': 'Hervorheben',
-    'workspace.diff.mode.onion': 'Onion',
+    'workspace.diff.mode.onion': 'Zwiebel',
     'workspace.diff.mode.scroll': 'Scrollen',
     'workspace.diff.renderingShot': 'Screenshot wird erstellt…',
     'workspace.diff.beforeBranch': 'Vorher ({branch})',
