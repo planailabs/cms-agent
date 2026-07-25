@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseRouteMappings, resolveChangedPages } from '@/lib/diff/routes';
+import { affectedGraphRoutes } from '@/lib/preview/routeGraph';
 
 describe('file → route mapping', () => {
   it('maps src/pages by Astro conventions', () => {
@@ -47,5 +48,36 @@ describe('file → route mapping', () => {
     expect(parseRouteMappings('not json')).toEqual([]);
     expect(parseRouteMappings('{"a":1}')).toEqual([]);
     expect(parseRouteMappings(undefined)).toEqual([]);
+  });
+
+  it('finds routes through before and after dependency graphs', () => {
+    const before = {
+      routes: [
+        {
+          route: '/old',
+          entrypoint: 'src/pages/old.astro',
+          sources: ['src/pages/old.astro', 'src/components/Removed.astro'],
+        },
+      ],
+    };
+    const after = {
+      routes: [
+        {
+          route: '/new/',
+          entrypoint: 'src/pages/new.astro',
+          sources: ['src/pages/new.astro', 'src/components/Added.astro'],
+        },
+      ],
+    };
+    const inferred = affectedGraphRoutes(
+      ['src/components/Removed.astro', 'src/components/Added.astro'],
+      [before, after],
+    );
+    const { pages } = resolveChangedPages([], [], [], inferred);
+
+    expect(pages).toEqual([
+      { route: '/old/', file: 'src/components/Removed.astro' },
+      { route: '/new/', file: 'src/components/Added.astro' },
+    ]);
   });
 });

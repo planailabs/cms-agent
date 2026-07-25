@@ -17,6 +17,7 @@ import {
   spawnSandboxed,
   type SandboxState,
 } from '@/lib/sandbox';
+import { prepareRouteGraphConfig } from './routeGraph';
 
 export interface PreviewInstance {
   branch: string;
@@ -266,12 +267,13 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     // alive and block startup forever. There is no managed instance for this
     // branch at this point, so remove only Astro's generated session record.
     fs.rmSync(path.join(worktree, '.astro', 'dev.json'), { force: true });
+    const graphConfig = prepareRouteGraphConfig(worktree);
 
     // REPO_DEV_COMMAND is split on whitespace (document: no shell quoting)
     const [cmd, ...args] = e.REPO_DEV_COMMAND.split(/\s+/);
     const child = spawnSandboxed(
       sb,
-      [cmd, ...args, '--port', String(port), '--host', e.HOST],
+      [cmd, ...args, '--config', graphConfig, '--port', String(port), '--host', e.HOST],
       {
         cwd: worktree,
         sessionKey: branch,

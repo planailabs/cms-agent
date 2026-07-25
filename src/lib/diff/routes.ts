@@ -72,6 +72,7 @@ export function resolveChangedPages(
   changedFiles: string[],
   plannedUrls: string[] = [],
   mappings: RouteMapping[] = parseRouteMappings(env().ROUTE_MAPPINGS),
+  inferredPages: ChangedPage[] = [],
 ): RouteResolution {
   const pages = new Map<string, ChangedPage>();
   const unresolved: string[] = [];
@@ -96,8 +97,12 @@ export function resolveChangedPages(
     } else if (file.startsWith('src/pages/') || file.startsWith('src/content/')) {
       unresolved.push(file);
     }
-    // other files (components, styles, config) affect pages indirectly —
-    // covered by plannedUrls or a full-site check, not per-file mapping
+    // Components and styles are resolved through the preview dependency graph;
+    // plannedUrls remain the fallback for data-driven effects it cannot see.
+  }
+
+  for (const page of inferredPages) {
+    if (!pages.has(page.route)) pages.set(page.route, page);
   }
 
   for (const url of plannedUrls) {

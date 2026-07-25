@@ -19,6 +19,21 @@ beforeAll(async () => {
   const repo = path.join(base, 'site');
   varDir = path.join(base, 'var');
   fs.cpSync(path.join(ROOT, 'examples', 'basic-site'), repo, { recursive: true });
+  fs.mkdirSync(path.join(repo, 'src', 'components'), { recursive: true });
+  fs.writeFileSync(
+    path.join(repo, 'src', 'components', 'Shared.astro'),
+    '<aside>Shared component</aside>',
+  );
+  for (const page of ['index.astro', 'about.astro']) {
+    const file = path.join(repo, 'src', 'pages', page);
+    fs.writeFileSync(
+      file,
+      fs
+        .readFileSync(file, 'utf8')
+        .replace('---\n', "---\nimport Shared from '../components/Shared.astro';\n")
+        .replace('</body>', '<Shared /></body>'),
+    );
+  }
 
   const git = simpleGit(repo);
   await git.init(['--initial-branch=main'] as never);
@@ -54,6 +69,16 @@ describe('preview manager', () => {
       fs.readFileSync(path.join(varDir, 'proxy-routes.json'), 'utf8'),
     ) as { cms: string; previews: Record<string, string> };
     expect(routes.previews.main).toBe(`127.0.0.1:${instance.port}`);
+
+    const { ensureWorktree } = await import('@/lib/git/engine');
+    const { readRouteGraph } = await import('@/lib/preview/routeGraph');
+    const graph = readRouteGraph(await ensureWorktree('main'));
+    expect(
+      graph?.routes
+        .filter((route) => route.sources.includes('src/components/Shared.astro'))
+        .map((route) => route.route)
+        .sort(),
+    ).toEqual(['/', '/about']);
 
     // idempotent ensure returns the same instance
     const again = await manager.ensureInstance('main');
