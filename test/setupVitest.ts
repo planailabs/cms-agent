@@ -19,7 +19,6 @@ const TEST_ENV_DEFAULTS: Record<string, string> = {
   OPENAI_API_KEY: 'sk-test',
   OPENAI_MODEL: 'gpt-test',
   BASE_DOMAIN: 'cms.example.com',
-  PREVIEW_COOKIE_SECRET: 'preview-secret-preview-secret',
   REPO_PATH: path.join(os.tmpdir(), 'cms-agent-unset-repo'),
   VAR_DIR: path.join(os.tmpdir(), 'cms-agent-unset-var'),
 };

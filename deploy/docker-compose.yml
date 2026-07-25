@@ -52,7 +52,6 @@ services:
       PUBLIC_SCHEME: https
       BETTER_AUTH_URL: https://${BASE_DOMAIN}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
-      PREVIEW_COOKIE_SECRET: ${PREVIEW_COOKIE_SECRET:?set PREVIEW_COOKIE_SECRET}
       # OIDC (e.g. Google): redirect URI https://<domain>/api/auth/oauth2/callback/oidc
       OIDC_ISSUER: ${OIDC_ISSUER:-https://accounts.google.com}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID}

@@ -17,6 +17,15 @@ export const OIDC_PROVIDER_ID = 'oidc';
 export const auth = betterAuth({
   baseURL: e.BETTER_AUTH_URL,
   secret: e.BETTER_AUTH_SECRET,
+  advanced:
+    e.BASE_DOMAIN === 'localhost'
+      ? undefined
+      : {
+          crossSubDomainCookies: {
+            enabled: true,
+            domain: e.BASE_DOMAIN,
+          },
+        },
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   user: {
     additionalFields: {

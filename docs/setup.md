@@ -30,8 +30,8 @@
 | `DEFAULT_COMMUNICATION_MODE` | no | `non-technical` (default) or `technical`; used when a user selects “Default” |
 | `BASE_DOMAIN` | yes | CMS domain; previews live at `<branch>.BASE_DOMAIN` |
 | `HOST` / `PORT` | no | Internal CMS bind (default 127.0.0.1:4321) |
-| `PREVIEW_COOKIE_SECRET` | yes | HMAC secret shared with the proxy sidecar |
 | `FIRECRAWL_NATIVE_PATH` | outside Nix | Path to the Firecrawl napi-rs `.node` addon; Nix packages set it automatically |
+| `PROXY_NATIVE_PATH` | outside Nix | Path to the embedded Pingora `.node` addon; Nix packages set it automatically |
 | `REPO_PATH` | yes | Path to the managed Astro site git repo |
 | `REPO_DEV_COMMAND` | no | Default `npx astro dev` (split on spaces, no shell) |
 | `REPO_BUILD_COMMAND` | no | Default `npx astro build` |
@@ -47,15 +47,13 @@
 | `PREVIEW_IDLE_TIMEOUT_MS` | no | Stop idle previews (default 10 min) |
 | `PREVIEW_MAX_INSTANCES` | no | LRU cap on running previews (default 5) |
 
-Proxy sidecar (own process, `proxy/`): `PROXY_LISTEN` (default `0.0.0.0:8080`),
-`BASE_DOMAIN`, `VAR_DIR` (same as the CMS), `PREVIEW_COOKIE_SECRET`,
-`PREVIEW_REQUIRE_AUTH` (default true; set `false` for `localhost`, where
-domain cookies don't work), `PUBLIC_SCHEME`, `CMS_UPSTREAM` — see
-`proxy/README.md`.
+Embedded proxy: `PROXY_LISTEN` (default `0.0.0.0:8080`), optional
+`PREVIEW_REQUIRE_AUTH` (defaults off with `SKIP_AUTH`), `PUBLIC_SCHEME`, and
+`CMS_UPSTREAM` — see `proxy/README.md`.
 
 ## DNS
 
-Point `BASE_DOMAIN` **and** `*.BASE_DOMAIN` at the proxy sidecar. The CMS
+Point `BASE_DOMAIN` **and** `*.BASE_DOMAIN` at the proxy listener. The CMS
 itself should only listen on localhost.
 
 ## First user / admin
@@ -74,9 +72,8 @@ path without `.git` (git would otherwise walk up into a parent repo).
 
 ## Running in development
 
-Inside `nix develop`, `overmind start` runs both Procfile processes (the CMS
-dev server and the proxy sidecar with localhost-friendly settings). overmind
-sources `.env` into both.
+Inside `nix develop`, `overmind start` runs the CMS dev server with its embedded
+proxy at `127.0.0.1:8080`. overmind sources `.env` into the process.
 
 The Procfile enables **SKIP_AUTH** (development only): no sign-in, every
 request runs as `admin@localhost`, and `user@localhost` / `user2@localhost`

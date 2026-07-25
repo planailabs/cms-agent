@@ -1,4 +1,4 @@
-//! cms-agent-proxy: stable public entrypoint for the CMS.
+//! Native Pingora public entrypoint for cms-agent.
 //!
 //! Routes by Host header:
 //! - BASE_DOMAIN            -> CMS upstream (routes file `cms`, fallback CMS_UPSTREAM)
@@ -7,25 +7,39 @@
 //! - <valid>.BASE_DOMAIN    -> CMS upstream at /__preview/boot/<branch> (boot page)
 //! - anything else          -> 404
 //!
-//! Preview hosts are gated by the HMAC-signed `cms_preview` cookie, and HTML
+//! Preview hosts require a valid Better Auth database session, and HTML
 //! responses from running previews get the overlay script injected.
 
 mod access;
 mod auth;
 mod inject;
 mod routes;
-mod sse;
+mod sessions;
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use pingora::http::ResponseHeader;
 use pingora::prelude::*;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+
+use napi_derive::napi;
 
 use access::AccessTracker;
 use routes::{RouteDecision, Routes, RoutesStore};
+use sessions::{ActiveSession, SessionStore};
+
+static STATE: OnceLock<Arc<ProxyState>> = OnceLock::new();
+
+fn ensure_listen_available(listen: &str) -> std::io::Result<()> {
+    std::net::TcpListener::bind(listen).map(drop)
+}
+
+struct ProxyState {
+    routes: Arc<RoutesStore>,
+    sessions: Arc<SessionStore>,
+}
 
 /// HTML bodies larger than this are passed through without overlay injection.
 const MAX_INJECT_BYTES: usize = 4 * 1024 * 1024;
@@ -35,50 +49,50 @@ struct Config {
     base_domain: String,
     var_dir: PathBuf,
     require_auth: bool,
-    cookie_secret: Vec<u8>,
+    auth_secret: Vec<u8>,
     public_scheme: String,
     cms_upstream: String,
 }
 
 impl Config {
-    fn from_env() -> Config {
-        fn required(name: &str) -> String {
-            std::env::var(name).unwrap_or_else(|_| {
-                eprintln!("cms-agent-proxy: missing required env var {name}");
-                std::process::exit(1);
-            })
+    fn from_env() -> Result<Config, String> {
+        fn required(name: &str) -> Result<String, String> {
+            std::env::var(name).map_err(|_| format!("missing required env var {name}"))
         }
         fn or_default(name: &str, default: &str) -> String {
             std::env::var(name).unwrap_or_else(|_| default.to_string())
         }
 
-        let require_auth = or_default("PREVIEW_REQUIRE_AUTH", "true") != "false";
-        let cookie_secret = if require_auth {
-            required("PREVIEW_COOKIE_SECRET").into_bytes()
+        let require_auth = std::env::var("PREVIEW_REQUIRE_AUTH")
+            .map(|v| v != "false")
+            .unwrap_or_else(|_| !matches!(or_default("SKIP_AUTH", "false").as_str(), "true" | "1"));
+        let auth_secret = if require_auth {
+            required("BETTER_AUTH_SECRET")?.into_bytes()
         } else {
-            std::env::var("PREVIEW_COOKIE_SECRET")
+            std::env::var("BETTER_AUTH_SECRET")
                 .unwrap_or_default()
                 .into_bytes()
         };
-        Config {
+        Ok(Config {
             listen: or_default("PROXY_LISTEN", "0.0.0.0:8080"),
-            base_domain: required("BASE_DOMAIN"),
-            var_dir: PathBuf::from(required("VAR_DIR")),
+            base_domain: required("BASE_DOMAIN")?,
+            var_dir: PathBuf::from(required("VAR_DIR")?),
             require_auth,
-            cookie_secret,
+            auth_secret,
             public_scheme: or_default("PUBLIC_SCHEME", "http"),
             cms_upstream: or_default("CMS_UPSTREAM", "127.0.0.1:4321"),
-        }
+        })
     }
 }
 
 struct CmsProxy {
     base_domain: String,
     require_auth: bool,
-    cookie_secret: Vec<u8>,
+    auth_secret: Vec<u8>,
     signin_url: String,
     overlay_tag: String,
     routes: Arc<RoutesStore>,
+    sessions: Arc<SessionStore>,
     access: Arc<AccessTracker>,
 }
 
@@ -101,9 +115,16 @@ impl CmsProxy {
         let now = auth::now_ms();
         for value in session.req_header().headers.get_all(http::header::COOKIE) {
             if let Ok(s) = value.to_str() {
-                if let Some(cookie) = auth::cookie_value(s, "cms_preview") {
-                    if auth::verify_preview_cookie(cookie, &self.cookie_secret, now).is_ok() {
-                        return true;
+                for name in [
+                    "__Secure-better-auth.session_token",
+                    "better-auth.session_token",
+                ] {
+                    if let Some(cookie) = auth::cookie_value(s, name) {
+                        if let Ok(token) = auth::verify_session_cookie(cookie, &self.auth_secret) {
+                            if self.sessions.is_active(&token, now) {
+                                return true;
+                            }
+                        }
                     }
                 }
             }
@@ -317,18 +338,13 @@ impl ProxyHttp for CmsProxy {
     }
 }
 
-fn main() {
+fn run_proxy(cfg: Config, state: Arc<ProxyState>) {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
-    let cfg = Config::from_env();
-
     let routes_path = cfg.var_dir.join("proxy-routes.json");
     let access_path = cfg.var_dir.join("proxy-access.json");
 
-    // Boot fallback from the routes file; everything after that arrives live
-    // over the token-authenticated SSE subscription to the CMS.
-    let store = Arc::new(RoutesStore::new(Routes::fallback(&cfg.cms_upstream)));
-    store.try_reload(&routes_path);
-    sse::spawn_sse_client(store.clone(), cfg.var_dir.join("internal-token"));
+    // The file is only a boot fallback. Live updates arrive through N-API.
+    state.routes.try_reload(&routes_path);
 
     let access = AccessTracker::new();
     access::spawn_flusher(access.clone(), access_path);
@@ -341,8 +357,9 @@ fn main() {
         )),
         base_domain: cfg.base_domain,
         require_auth: cfg.require_auth,
-        cookie_secret: cfg.cookie_secret,
-        routes: store,
+        auth_secret: cfg.auth_secret,
+        routes: state.routes.clone(),
+        sessions: state.sessions.clone(),
         access,
     };
 
@@ -359,4 +376,68 @@ fn main() {
     server.add_service(service);
     log::info!("cms-agent-proxy listening on {}", cfg.listen);
     server.run_forever();
+}
+
+#[napi(js_name = "startProxy")]
+pub fn start_proxy() -> napi::Result<()> {
+    let cfg = Config::from_env().map_err(napi::Error::from_reason)?;
+    ensure_listen_available(&cfg.listen).map_err(|error| {
+        napi::Error::from_reason(format!("cannot bind {}: {error}", cfg.listen))
+    })?;
+    let state = Arc::new(ProxyState {
+        routes: Arc::new(RoutesStore::new(Routes::fallback(&cfg.cms_upstream))),
+        sessions: Arc::new(SessionStore::default()),
+    });
+    STATE
+        .set(state.clone())
+        .map_err(|_| napi::Error::from_reason("proxy already started"))?;
+    std::thread::Builder::new()
+        .name("cms-agent-proxy".into())
+        .spawn(move || run_proxy(cfg, state))
+        .map_err(|e| napi::Error::from_reason(format!("failed to start proxy: {e}")))?;
+    Ok(())
+}
+
+#[napi(js_name = "setProxyRoutes")]
+pub fn set_proxy_routes(routes_json: String) -> napi::Result<()> {
+    let routes = routes::parse_routes(&routes_json)
+        .map_err(|e| napi::Error::from_reason(format!("invalid routes: {e}")))?;
+    STATE
+        .get()
+        .ok_or_else(|| napi::Error::from_reason("proxy is not started"))?
+        .routes
+        .set(routes);
+    Ok(())
+}
+
+#[napi(js_name = "setProxySessions")]
+pub fn set_proxy_sessions(sessions: Vec<ActiveSession>) -> napi::Result<()> {
+    STATE
+        .get()
+        .ok_or_else(|| napi::Error::from_reason("proxy is not started"))?
+        .sessions
+        .replace(sessions);
+    Ok(())
+}
+
+#[napi(js_name = "upsertProxySession")]
+pub fn upsert_proxy_session(session: ActiveSession) -> napi::Result<()> {
+    STATE
+        .get()
+        .ok_or_else(|| napi::Error::from_reason("proxy is not started"))?
+        .sessions
+        .upsert(session);
+    Ok(())
+}
+
+#[cfg(test)]
+mod native_tests {
+    use super::ensure_listen_available;
+
+    #[test]
+    fn listener_preflight_rejects_an_occupied_port() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        assert!(ensure_listen_available(&address.to_string()).is_err());
+    }
 }

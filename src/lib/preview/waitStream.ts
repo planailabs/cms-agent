@@ -1,7 +1,7 @@
 /**
  * SSE wait stream for the preview boot page — served from middleware for the
  * same reason as the boot page (underscore paths are excluded from Astro
- * routing). The sidecar passes /__preview/* through unrewritten on unrouted
+ * routing). The proxy passes /__preview/* through unrewritten on unrouted
  * preview hosts, so the boot page can subscribe same-origin.
  *
  * Events: `phase` (deps|server, install/start progress), `ready` (route

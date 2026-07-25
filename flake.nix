@@ -1,5 +1,5 @@
 {
-  description = "cms-agent — chat-agent CMS for Astro sites (Astro SSR app + pingora proxy sidecar)";
+  description = "cms-agent — chat-agent CMS for Astro sites with embedded Pingora";
 
   inputs = {
     # nixpkgs-unstable, pinned to a rev known to carry prisma-engines_7 7.8.0
@@ -125,19 +125,9 @@
 
           # Pass the commit in explicitly — the fileset source in the store has
           # no .git for the build to ask. dirtyShortRev carries a -dirty suffix.
-          cms-agent = pkgs.callPackage ./package.nix {
-            gitCommit = self.shortRev or self.dirtyShortRev or null;
-            agentPlugins = (agentPluginsFor pkgs).dir;
-            firecrawlNative = firecrawl-native;
-          };
-
-          # Codebase-memory MCP binary — lives in the SANDBOX env (the agent's
-          # MCP server runs jailed with only the worktree visible).
-          cbm = cbmFor pkgs;
-
-          # Rust pingora reverse-proxy sidecar (public entrypoint).
-          proxy = pkgs.rustPlatform.buildRustPackage {
-            pname = "cms-agent-proxy";
+          # Complete Pingora server as a Node native addon.
+          proxy-native = pkgs.rustPlatform.buildRustPackage {
+            pname = "cms-agent-proxy-native";
             version = "0.1.0";
 
             src = ./proxy;
@@ -148,13 +138,29 @@
             # the usual -sys crates.
             nativeBuildInputs = with pkgs; [ cmake perl pkg-config ];
 
-            # `cargo test` runs as the default checkPhase.
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/lib
+              cp $(find target -type f -name 'libcms_agent_proxy.so' | head -n1) \
+                $out/lib/cms-agent-proxy.node
+              runHook postInstall
+            '';
 
             meta = {
-              description = "Reverse-proxy sidecar for the CMS: routes by Host header, gates previews, injects the preview overlay";
-              mainProgram = "cms-agent-proxy";
+              description = "Embedded Pingora reverse proxy for cms-agent";
             };
           };
+
+          cms-agent = pkgs.callPackage ./package.nix {
+            gitCommit = self.shortRev or self.dirtyShortRev or null;
+            agentPlugins = (agentPluginsFor pkgs).dir;
+            firecrawlNative = firecrawl-native;
+            proxyNative = proxy-native;
+          };
+
+          # Codebase-memory MCP binary — lives in the SANDBOX env (the agent's
+          # MCP server runs jailed with only the worktree visible).
+          cbm = cbmFor pkgs;
 
           # ── Sandbox environments (one per supported node major) ─────────────
           # Each is a buildEnv (node + coreutils/bash + grep/awk/ripgrep) whose full
@@ -214,14 +220,14 @@
             fontDirectories = [ pkgs.dejavu_fonts pkgs.liberation_ttf ];
           };
 
-          # Single-container entrypoint: run migrations, then both processes;
-          # exit (and let the runtime restart the container) when either dies.
+          # Single-container entrypoint: migrations, then the Node process that
+          # owns both Astro and the embedded Pingora listener.
           # git + node must be on PATH: the CMS shells into the managed repo
           # via simple-git and spawns REPO_DEV_COMMAND (default `npx astro
           # dev`) for branch previews.
           dockerEntrypoint = pkgs.writeShellApplication {
             name = "cms-agent-container";
-            runtimeInputs = [ cms-agent proxy pkgs.git pkgs.nodejs_26 pkgs.coreutils pkgs.openssh ];
+            runtimeInputs = [ cms-agent pkgs.git pkgs.nodejs_26 pkgs.coreutils pkgs.openssh ];
             text = ''
               for required in DATABASE_URL BASE_DOMAIN; do
                 if [ -z "''${!required:-}" ]; then
@@ -244,25 +250,13 @@
 
               cms-agent-prisma migrate deploy
 
-              cms-agent &
-              cms_pid=$!
-              cms-agent-proxy &
-              proxy_pid=$!
-
-              trap 'kill -TERM "$cms_pid" "$proxy_pid" 2>/dev/null || true' TERM INT
-
-              # First exit wins; take the whole container down with its status.
-              status=0
-              wait -n "$cms_pid" "$proxy_pid" || status=$?
-              kill -TERM "$cms_pid" "$proxy_pid" 2>/dev/null || true
-              wait "$cms_pid" "$proxy_pid" 2>/dev/null || true
-              exit "$status"
+              exec cms-agent
             '';
           };
         in
         {
           default = cms-agent;
-          proxy = proxy;
+          proxy-native = proxy-native;
           firecrawl-native = firecrawl-native;
         }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
@@ -279,7 +273,7 @@
             tag = "latest";
             contents = [
               cms-agent
-              proxy
+              proxy-native
               dockerEntrypoint
               pkgs.git
               # ssh for git remotes (git-push/github-ci deploy flows)
@@ -307,8 +301,7 @@
               WorkingDir = "/data";
               Env = [
                 # Required (no sane defaults): DATABASE_URL, BASE_DOMAIN,
-                # BETTER_AUTH_SECRET/URL, OIDC_*, OPENAI_*,
-                # PREVIEW_COOKIE_SECRET.
+                # BETTER_AUTH_SECRET/URL, OIDC_*, OPENAI_*.
                 "HOST=127.0.0.1"
                 "PORT=4321"
                 "CMS_UPSTREAM=127.0.0.1:4321"
@@ -404,6 +397,7 @@
             export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
             export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
             export FIRECRAWL_NATIVE_PATH=${self.packages.${pkgs.stdenv.hostPlatform.system}.firecrawl-native}/lib/firecrawl-rs.node
+            export PROXY_NATIVE_PATH=${self.packages.${pkgs.stdenv.hostPlatform.system}.proxy-native}/lib/cms-agent-proxy.node
 
             # Agent plugins for dev: same store dirs the image ships (plugins/
             # is gitignored; ponytail + codebase-memory come from flake inputs).
@@ -428,7 +422,7 @@
         in
         {
           package = self.packages.${system}.default;
-          proxy = self.packages.${system}.proxy;
+          proxy-native = self.packages.${system}.proxy-native;
         }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           # Evaluate the NixOS module with a minimal config.
@@ -451,17 +445,14 @@
                 ];
               };
               cms = eval.config.systemd.services.cms-agent.serviceConfig;
-              proxy = eval.config.systemd.services.cms-agent-proxy.serviceConfig;
             in
             pkgs.runCommand "cms-agent-module-eval"
               {
                 cmsExecStart = cms.ExecStart;
                 cmsExecStartPre = cms.ExecStartPre;
-                proxyExecStart = proxy.ExecStart;
               } ''
               test -n "$cmsExecStart"
               test -n "$cmsExecStartPre"
-              test -n "$proxyExecStart"
               touch $out
             '';
         });
@@ -472,10 +463,7 @@
 
       nixosModules.default = { pkgs, lib, ... }: {
         imports = [ ./module.nix ];
-        services.cms-agent = {
-          package = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
-          proxyPackage = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.proxy;
-        };
+        services.cms-agent.package = lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.default;
       };
     };
 }

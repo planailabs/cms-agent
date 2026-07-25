@@ -49,13 +49,13 @@ cargo test --manifest-path proxy/Cargo.toml
 src/lib/agent/     session loop (OpenAI streaming), tools + in-process MCP,
                    workflow phases, locks, persistence
 src/lib/git/       branches, worktrees, single-commit executions, revert/restore
-src/lib/preview/   on-demand astro dev instances + sidecar routes file
+src/lib/preview/   on-demand astro dev instances + native proxy routes
 src/lib/diff/      changed-page mapping + Playwright/pixelmatch screenshot diffs
 src/lib/publish/   DeployFlow registry (git-push, web-agency, github-ci,
                    cloudflare-pages) + sealed artifacts
 src/lib/content/   ContentAdapter port (collections + JobPosting adapters)
 src/lib/validate/  pre-commit + pre-publish validators
 src/components/    vanilla-TS UI (chat extracted from plan.ai-chat + workspace)
-proxy/             Rust Pingora reverse-proxy sidecar
+proxy/             complete Rust Pingora server exposed through N-API
 examples/          sample target sites used by tests and docs
 ```

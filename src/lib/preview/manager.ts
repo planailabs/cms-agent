@@ -1,7 +1,7 @@
 /**
  * Preview manager — one `astro dev` instance per branch worktree, spawned on
  * demand, stopped when idle. Publishes the routing table for the Pingora
- * sidecar (VAR_DIR/proxy-routes.json) and reads its access timestamps
+ * embedded proxy (VAR_DIR/proxy-routes.json) and reads its access timestamps
  * (VAR_DIR/proxy-access.json) to stop idle instances. Plan §5.
  */
 import { type ChildProcess } from 'node:child_process';
@@ -18,6 +18,7 @@ import {
   type SandboxState,
 } from '@/lib/sandbox';
 import { prepareRouteGraphConfig } from './routeGraph';
+import { updateProxyRoutes } from '@/lib/proxyNative';
 
 export interface PreviewInstance {
   branch: string;
@@ -32,8 +33,8 @@ interface ManagerState {
   instances: Map<string, { info: PreviewInstance; child: ChildProcess }>;
   sweeper: ReturnType<typeof setInterval> | null;
   starting: Map<string, Promise<PreviewInstance>>;
-  /** SSE subscribers (proxy connections) notified on every routes change. */
-  routesListeners: Set<(routesJson: string) => void>;
+  /** Boot-page wait streams notified when preview availability changes. */
+  routesListeners: Set<() => void>;
   /** Last failed start per branch, surfaced on the boot page. */
   startErrors: Map<string, { message: string; at: number }>;
   /** Current phase of an in-flight start, streamed to the boot page. */
@@ -52,9 +53,9 @@ const state: ManagerState =
     startErrors: new Map(),
     startPhases: new Map(),
   });
-state.routesListeners ??= new Set(); // fields added after older HMR state
 state.startErrors ??= new Map();
 state.startPhases ??= new Map();
+state.routesListeners ??= new Set();
 
 export function getStartError(branch: string): { message: string; at: number } | null {
   return state.startErrors.get(branch) ?? null;
@@ -92,35 +93,27 @@ function buildRoutes(): { cms: string; previews: Record<string, string> } {
   return { cms: hostPort(e.HOST, e.PORT), previews };
 }
 
-/** Current routing table as single-line JSON (SSE `routes` event payload). */
+/** Current routing table as single-line JSON for the embedded proxy. */
 export function currentRoutesJson(): string {
   return JSON.stringify(buildRoutes());
 }
 
-/** Subscribe to routes changes; returns the unsubscribe function. */
-export function subscribeRoutes(fn: (routesJson: string) => void): () => void {
-  state.routesListeners.add(fn);
-  return () => state.routesListeners.delete(fn);
+export function subscribeRoutes(listener: () => void): () => void {
+  state.routesListeners.add(listener);
+  return () => state.routesListeners.delete(listener);
 }
 
 function writeRoutesFile(): void {
   const routes = buildRoutes();
-  // The file stays as boot fallback: the proxy loads it once at startup and
-  // gets everything after that over SSE.
+  // The file stays as a boot/crash fallback; live state is sent over N-API.
   const payload = JSON.stringify(routes, null, 2);
   fs.mkdirSync(path.dirname(routesFile()), { recursive: true });
   const tmp = routesFile() + '.tmp';
   fs.writeFileSync(tmp, payload);
   fs.renameSync(tmp, routesFile());
 
-  const line = JSON.stringify(routes);
-  for (const listener of state.routesListeners) {
-    try {
-      listener(line);
-    } catch {
-      /* a dead SSE connection must not break preview management */
-    }
-  }
+  updateProxyRoutes(JSON.stringify(routes));
+  for (const listener of state.routesListeners) listener();
 }
 
 function freePort(): Promise<number> {
@@ -390,7 +383,7 @@ export async function shutdownAll(): Promise<void> {
   }
 }
 
-/** Initialize the routes file at boot so the sidecar can route the CMS host. */
+/** Initialize the fallback routes file before the embedded proxy starts. */
 export function initRoutesFile(): void {
   try {
     writeRoutesFile();

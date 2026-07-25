@@ -1,7 +1,7 @@
 # NixOS deployment
 
-The flake provides `packages.default` (the CMS), `packages.proxy` (the
-Pingora sidecar), and `nixosModules.default`.
+The flake provides `packages.default` (CMS plus embedded Pingora),
+`packages.proxy-native`, and `nixosModules.default`.
 
 ```nix
 {
@@ -13,21 +13,17 @@ Pingora sidecar), and `nixosModules.default`.
   services.cms-agent = {
     enable = true;
     baseDomain = "cms.example.com";
-    listen = "0.0.0.0:443";        # front with your usual TLS termination,
-                                   # or terminate before the sidecar
+    listen = "0.0.0.0:8080";       # terminate TLS in front of this listener
     repoPath = "/var/lib/sites/my-astro-site";
     environmentFile = "/run/secrets/cms-agent.env";  # OIDC_*, OPENAI_*,
-                                                     # BETTER_AUTH_SECRET,
-                                                     # PREVIEW_COOKIE_SECRET, …
+                                                     # BETTER_AUTH_SECRET, …
     database.createLocally = true; # local postgres + unix-socket DATABASE_URL
   };
 }
 ```
 
-Two systemd units run: `cms-agent.service` (node app, runs
-`prisma migrate deploy` before start) and `cms-agent-proxy.service` (public
-listener). They share `/var/lib/cms-agent` for the routes/access files,
-worktrees, artifacts, and uploads.
+One `cms-agent.service` runs migrations, Astro, and the embedded public proxy.
+`/var/lib/cms-agent` contains routes/access files, worktrees, artifacts, and uploads.
 
 Requirements on the host:
 

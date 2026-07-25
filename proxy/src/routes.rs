@@ -195,7 +195,10 @@ mod tests {
     #[test]
     fn garbage_hosts_are_not_found() {
         let r = routes();
-        assert_eq!(decide("evil.com", "cms.example.com", &r), RouteDecision::NotFound);
+        assert_eq!(
+            decide("evil.com", "cms.example.com", &r),
+            RouteDecision::NotFound
+        );
         assert_eq!(decide("", "cms.example.com", &r), RouteDecision::NotFound);
         // nested label is not a single branch label
         assert_eq!(
@@ -266,10 +269,9 @@ mod tests {
 
     #[test]
     fn parse_routes_valid() {
-        let r = parse_routes(
-            r#"{"cms":"127.0.0.1:4321","previews":{"my-branch":"127.0.0.1:43211"}}"#,
-        )
-        .unwrap();
+        let r =
+            parse_routes(r#"{"cms":"127.0.0.1:4321","previews":{"my-branch":"127.0.0.1:43211"}}"#)
+                .unwrap();
         assert_eq!(r, routes());
         // previews may be omitted
         let r = parse_routes(r#"{"cms":"127.0.0.1:4321"}"#).unwrap();
@@ -295,8 +297,11 @@ mod tests {
         assert_eq!(store.get().cms, "127.0.0.1:4321");
 
         // good file -> loaded
-        std::fs::write(&path, r#"{"cms":"127.0.0.1:9999","previews":{"b":"127.0.0.1:1"}}"#)
-            .unwrap();
+        std::fs::write(
+            &path,
+            r#"{"cms":"127.0.0.1:9999","previews":{"b":"127.0.0.1:1"}}"#,
+        )
+        .unwrap();
         assert!(store.try_reload(&path));
         assert_eq!(store.get().cms, "127.0.0.1:9999");
         assert_eq!(store.get().previews["b"], "127.0.0.1:1");

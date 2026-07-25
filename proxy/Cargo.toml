@@ -2,21 +2,24 @@
 name = "cms-agent-proxy"
 version = "0.1.0"
 edition = "2021"
-description = "Reverse-proxy sidecar for the CMS: routes by Host header, gates previews, injects the preview overlay"
+description = "Embedded Pingora server for the CMS"
 publish = false
+
+[lib]
+name = "cms_agent_proxy"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pingora = { version = "0.6", features = ["proxy"] }
 async-trait = "0.1"
 bytes = "1"
 http = "1"
-# SSE routes subscription from the CMS (plain HTTP to localhost — no TLS)
-reqwest = { version = "0.12", default-features = false, features = ["stream"] }
-futures-util = { version = "0.3", default-features = false, features = ["std"] }
-tokio = { version = "1", features = ["rt", "time"] }
 hmac = "0.12"
 sha2 = "0.10"
 base64 = "0.22"
+urlencoding = "2"
+napi = "3"
+napi-derive = "3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
@@ -24,3 +27,6 @@ env_logger = "0.11"
 
 [dev-dependencies]
 tempfile = "3"
+
+[build-dependencies]
+napi-build = "2"

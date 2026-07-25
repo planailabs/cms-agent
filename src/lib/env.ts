@@ -46,8 +46,8 @@ const schema = z.object({
   PUBLIC_SCHEME: z.enum(['http', 'https']).optional(),
   HOST: z.string().default('127.0.0.1'),
   PORT: z.coerce.number().int().default(4321),
-  PREVIEW_COOKIE_SECRET: z.string().min(16),
   FIRECRAWL_NATIVE_PATH: z.string().optional(),
+  PROXY_NATIVE_PATH: z.string().optional(),
 
   // Managed target repo
   REPO_PATH: z.string().min(1),

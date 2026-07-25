@@ -1,7 +1,7 @@
 /**
  * Production entry — plain Astro standalone server.
- * The public entrypoint is the Pingora sidecar (proxy/); this server only
- * listens on the internal CMS port and never proxies preview traffic itself.
+ * The middleware starts the native Pingora public listener; this HTTP server
+ * remains the internal Astro upstream.
  */
 import { createServer } from 'node:http';
 
@@ -15,7 +15,7 @@ const PORT = Number(process.env.PORT ?? 4321);
 
 const httpServer = createServer(handler);
 
-// HOST must match what the sidecar dials (routes-file `cms` mirrors HOST):
+// HOST must match what the embedded proxy dials (routes-file `cms` mirrors HOST):
 // e.g. HOST=::1 in dev where astro dev also binds IPv6.
 httpServer.listen(PORT, HOST, () => {
   console.log(`cms-agent running on http://${HOST}:${PORT}`);

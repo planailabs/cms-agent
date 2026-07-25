@@ -48,10 +48,10 @@ has been tested.
 ## Security checklist (verify before going live)
 
 - [ ] OIDC allowlist (`ALLOWED_EMAILS`/`ALLOWED_EMAIL_DOMAIN`) configured
-- [ ] CMS bound to localhost; only the sidecar is public; `*.BASE_DOMAIN`
-      DNS points at the sidecar
-- [ ] `PREVIEW_REQUIRE_AUTH=true` in production (preview hosts gated by the
-      HMAC cookie)
+- [ ] Astro is bound to localhost; only the embedded proxy port is public;
+      `*.BASE_DOMAIN` DNS points at it
+- [ ] `PREVIEW_REQUIRE_AUTH=true` in production (preview hosts require a valid
+      Better Auth database session)
 - [ ] Deploy credentials (`GITHUB_TOKEN`, `CLOUDFLARE_*`, publish script
       secrets) only in the service environment — the agent's tools have no
       access to env vars, and the model never sees them

@@ -12,7 +12,6 @@ const BASE_ENV = {
   OPENAI_API_KEY: 'sk-test',
   OPENAI_MODEL: 'gpt-test',
   BASE_DOMAIN: 'cms.example.com',
-  PREVIEW_COOKIE_SECRET: 'preview-secret-preview-secret',
   REPO_PATH: '/tmp/repo',
   VAR_DIR: '/tmp/var',
 };
@@ -46,22 +45,5 @@ describe('isEmailAllowed', () => {
     const { isEmailAllowed } = await import('@/lib/allowlist');
     expect(isEmailAllowed('carol@example.com')).toBe(true);
     expect(isEmailAllowed('carol@evil.com')).toBe(false);
-  });
-});
-
-describe('preview cookie', () => {
-  it('round-trips and rejects tampering/expiry', async () => {
-    const { issuePreviewCookie, verifyPreviewCookie } = await import('@/lib/previewCookie');
-    const { value } = issuePreviewCookie('user-1');
-    expect(verifyPreviewCookie(value)).toEqual({ userId: 'user-1' });
-
-    // tampered signature
-    expect(verifyPreviewCookie(value.slice(0, -2) + 'xx')).toBeNull();
-    // tampered user
-    const [, exp, sig] = value.split('.');
-    expect(verifyPreviewCookie(`other.${exp}.${sig}`)).toBeNull();
-    // expired
-    const past = Date.now() - 1000;
-    expect(verifyPreviewCookie(`user-1.${past}.${sig}`)).toBeNull();
   });
 });

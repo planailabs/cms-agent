@@ -2,8 +2,8 @@
 
 ```
                  ┌────────────────────────────────────────────────────┐
- Browser ───────►│ proxy/ — Rust Pingora side-car (stable entrypoint) │
-                 │   host routing from VAR_DIR/proxy-routes.json      │
+ Browser ───────►│ Node process + native Pingora public listener      │
+                 │   host routing updated directly through N-API      │
   domain.tld ───►│   ├─► CMS: node server.mjs (Astro SSR + API + SSE) │
   <branch>.d.tld►│   ├─► known branch → its astro dev instance        │
                  │   │     (HTTP + WS/HMR upgrade passthrough,        │
@@ -21,7 +21,7 @@
    Git engine               branch = subdomain = draft; worktrees under
                             VAR_DIR; one commit per execution; revert/restore
    Preview manager          astro dev per branch, on demand, idle-stopped;
-                            writes the sidecar routing table
+                            updates the native proxy routing table
    Visual diff              Playwright screenshots of main vs branch +
                             pixelmatch region highlighting
    DeployFlow registry      git-push | web-agency | github-ci | cloudflare-pages
@@ -41,10 +41,9 @@
 - **Chats ≠ branches.** A target branch has many chats; all users see all
   chats. Turn execution locks per chat; worktree mutation locks per work
   branch.
-- **The proxy is a dumb, stable sidecar.** All lifecycle intelligence lives
-  in TypeScript; the contract is two JSON files in VAR_DIR
-  (`proxy-routes.json` written by the CMS, `proxy-access.json` written by the
-  sidecar for idle detection).
+- **The full proxy runs as a native addon.** TypeScript owns lifecycle and
+  sends routes and active sessions through N-API. JSON files remain only for
+  startup fallback and idle-access timestamps.
 - **Phase gating is server-side.** The tool registry for a turn is built from
   the chat's persisted workflow phase; a disallowed tool call is rejected in
   the executor, not merely hidden from the model.

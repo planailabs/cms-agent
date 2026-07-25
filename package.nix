@@ -18,6 +18,7 @@
   # from its inputs; shipped to $out/share/cms-agent/plugins.
   agentPlugins ? null,
   firecrawlNative ? null,
+  proxyNative ? null,
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -42,7 +43,7 @@ stdenv.mkDerivation (finalAttrs: {
           ./flake.nix
           ./package.nix
           ./module.nix
-          ./proxy # packaged separately (flake.nix packages.proxy)
+          ./proxy # packaged as a native addon by the flake
         ]
       )
     );
@@ -114,7 +115,6 @@ stdenv.mkDerivation (finalAttrs: {
     OPENAI_API_KEY = "build-only";
     OPENAI_MODEL = "build-only";
     BASE_DOMAIN = "build.invalid";
-    PREVIEW_COOKIE_SECRET = "build-only-build-only-build-only";
     REPO_PATH = "/build/source";
     VAR_DIR = "/build/build-var";
   } // lib.optionalAttrs (gitCommit != null) {
@@ -187,7 +187,8 @@ stdenv.mkDerivation (finalAttrs: {
       --add-flags "$out/share/cms-agent/server.mjs" \
       --set-default PRISMA_SCHEMA_ENGINE_BINARY "${prisma-engines_7}/bin/schema-engine" \
       --set-default CMS_PLUGINS_ROOT "$out/share/cms-agent" \
-      ${lib.optionalString (firecrawlNative != null) ''--set-default FIRECRAWL_NATIVE_PATH "${firecrawlNative}/lib/firecrawl-rs.node"''}
+      ${lib.optionalString (firecrawlNative != null) ''--set-default FIRECRAWL_NATIVE_PATH "${firecrawlNative}/lib/firecrawl-rs.node"''} \
+      ${lib.optionalString (proxyNative != null) ''--set-default PROXY_NATIVE_PATH "${proxyNative}/lib/cms-agent-proxy.node"''}
 
     # Prisma CLI against the packaged schema/migrations, e.g.:
     #   cms-agent-prisma migrate deploy

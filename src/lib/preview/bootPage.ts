@@ -1,12 +1,12 @@
 /**
  * Boot page for preview hosts, served from MIDDLEWARE — the URL contract
- * with the Pingora sidecar is /__preview/boot/<branch>, and underscore-
+ * with the Pingora proxy is /__preview/boot/<branch>, and underscore-
  * prefixed paths under src/pages are excluded from Astro routing, so this
  * cannot be a page file.
  *
- * The sidecar rewrites requests for unknown/stopped <branch>.BASE_DOMAIN
+ * The proxy rewrites requests for unknown/stopped <branch>.BASE_DOMAIN
  * hosts here; we trigger the instance start and let the browser refresh
- * until the sidecar picks up the new route.
+ * until the proxy picks up the new route.
  */
 import { prisma } from '@/lib/db';
 import { ensureBranch } from '@/lib/git/engine';
@@ -24,7 +24,7 @@ const FALLBACK_REFRESH_SECONDS = 15;
 
 /**
  * Redirect target after a retry: the visitor's original path+query (from the
- * sidecar's x-cms-boot-origin header) minus the retry param. Falls back to /
+ * proxy's x-cms-boot-origin header) minus the retry param. Falls back to /
  * for missing/forged values — must be a same-origin path, never the internal
  * boot path itself (parked there, the browser would 404 into the dev server
  * once the route exists).
@@ -99,7 +99,7 @@ export async function handlePreviewBoot(
     ? `<div class="state"><span class="badge badge--error" aria-hidden="true">✕</span>` +
       `<p>${t(locale, 'pages.preview.failed', strong)}</p>` +
       `<pre>${escapeHtml(startError.message)}</pre>` +
-      // Relative link: stays on the visitor's URL; the sidecar forwards the
+      // Relative link: stays on the visitor's URL; the proxy forwards the
       // query to the boot endpoint, so /__preview/boot is never exposed.
       `<p><a href="?retry=1">${t(locale, 'pages.preview.retry')}</a></p></div>`
     : bootable
@@ -110,7 +110,7 @@ export async function handlePreviewBoot(
 
   // Live wait: the SSE stream pushes install/start phases into #boot-msg and
   // reloads the instant the route exists (or a failure is recorded — the
-  // reload then renders the error state). The tiny delay lets the sidecar
+  // reload then renders the error state). The tiny delay lets the proxy
   // apply the routes update that raced the ready event.
   const phases = {
     deps: t(locale, 'pages.preview.installing'),

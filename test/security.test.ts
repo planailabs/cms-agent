@@ -1,6 +1,6 @@
 /**
  * Security fixtures: injected instructions in content must not gain
- * privileges; the alt-text and memory deny gates hold; the sidecar cookie
+ * privileges; the alt-text and memory deny gates hold; proxy session-cookie
  * gates previews (cookie tests live in auth-helpers.test.ts).
  */
 import fs from 'node:fs';

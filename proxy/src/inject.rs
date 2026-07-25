@@ -62,7 +62,10 @@ mod tests {
         let s = String::from_utf8(out).unwrap();
         assert_eq!(
             s,
-            format!("<html><head><title>t</title>{}</head><body>hi</body></html>", tag())
+            format!(
+                "<html><head><title>t</title>{}</head><body>hi</body></html>",
+                tag()
+            )
         );
     }
 

@@ -1,6 +1,6 @@
 /**
  * Preview manager integration: boots a real `astro dev` for a copy of
- * examples/basic-site, verifies HTTP readiness, the sidecar routes file
+ * examples/basic-site, verifies HTTP readiness, the proxy routes file
  * contract, and idle/explicit stop. No LLM or DB required.
  */
 import fs from 'node:fs';
