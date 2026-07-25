@@ -31,6 +31,7 @@ import { registerAutomatismTools } from './tools/automatismTools';
 import { registerConflictTools } from './tools/conflictTools';
 import { registerSkillTools } from './tools/skillTools';
 import { registerImageTools } from './tools/imageTools';
+import { registerFirecrawlTools } from './tools/firecrawlTools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
@@ -59,6 +60,7 @@ registerAutomatismTools();
 registerConflictTools();
 registerSkillTools();
 registerImageTools();
+registerFirecrawlTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
