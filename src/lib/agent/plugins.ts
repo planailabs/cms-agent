@@ -137,6 +137,26 @@ export function loadAdminRules(): PluginRule[] {
   }
 }
 
+/** Global and site-repository AGENTS.md files, read fresh for every turn. */
+export function loadAgentsRules(worktreePath?: string): PluginRule[] {
+  const rules: PluginRule[] = [];
+  try {
+    const globalFile = path.join(path.resolve(env().VAR_DIR), 'AGENTS.md');
+    if (fs.existsSync(globalFile)) {
+      rules.push({ plugin: 'global', text: fs.readFileSync(globalFile, 'utf8').trim() });
+    }
+  } catch {
+    // unconfigured env (e.g. astro build) — no global rule
+  }
+  if (worktreePath) {
+    const repoFile = path.join(worktreePath, 'AGENTS.md');
+    if (fs.existsSync(repoFile)) {
+      rules.push({ plugin: 'site repo', text: fs.readFileSync(repoFile, 'utf8').trim() });
+    }
+  }
+  return rules;
+}
+
 const loadRules = (plugin: string, dir: string, rulesRef?: string): PluginRule[] => {
   const candidates: string[] = [];
   if (rulesRef) {
@@ -207,7 +227,11 @@ export function skillsForChat(worktreePath?: string): PluginSkill[] {
 /** System-prompt section: always-on rules (plugins + VAR_DIR/rules) and the
  *  on-demand skill list. */
 export function pluginPromptSection(worktreePath?: string): string {
-  const rules = [...loadPluginRegistry().rules, ...loadAdminRules()];
+  const rules = [
+    ...loadPluginRegistry().rules,
+    ...loadAdminRules(),
+    ...loadAgentsRules(worktreePath),
+  ];
   const skills = skillsForChat(worktreePath);
   const parts: string[] = [];
   if (rules.length > 0) {

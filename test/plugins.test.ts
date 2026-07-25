@@ -9,6 +9,7 @@ import path from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   loadBranchSkills,
+  loadAgentsRules,
   loadPluginRegistry,
   parseFrontmatter,
   pluginPromptSection,
@@ -174,6 +175,30 @@ describe('agent plugins', () => {
       const { loadAdminRules } = await import('@/lib/agent/plugins');
       expect(loadAdminRules()).toEqual([{ plugin: 'admin', text: 'Always be terse.' }]);
       expect(pluginPromptSection(undefined)).toContain('[admin]\nAlways be terse.');
+    } finally {
+      process.env.VAR_DIR = prevVarDir;
+      resetEnvCache();
+    }
+  });
+
+  it('loads global and repository AGENTS.md rules on every prompt', async () => {
+    process.env.CMS_PLUGINS_ROOT = root;
+    const varDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-global-agents-'));
+    const worktree = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-repo-agents-'));
+    fs.writeFileSync(path.join(varDir, 'AGENTS.md'), 'Global instructions.\n');
+    fs.writeFileSync(path.join(worktree, 'AGENTS.md'), 'Repository instructions.\n');
+    const prevVarDir = process.env.VAR_DIR;
+    process.env.VAR_DIR = varDir;
+    const { resetEnvCache } = await import('@/lib/env');
+    resetEnvCache();
+    try {
+      expect(loadAgentsRules(worktree)).toEqual([
+        { plugin: 'global', text: 'Global instructions.' },
+        { plugin: 'site repo', text: 'Repository instructions.' },
+      ]);
+      const section = pluginPromptSection(worktree);
+      expect(section).toContain('[global]\nGlobal instructions.');
+      expect(section).toContain('[site repo]\nRepository instructions.');
     } finally {
       process.env.VAR_DIR = prevVarDir;
       resetEnvCache();
