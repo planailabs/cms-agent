@@ -9,6 +9,7 @@ import {
 } from '@/lib/agent/messageUtils';
 import { buildSystemPrompt } from '@/lib/agent/prompt';
 import { buildQuestionToolResults } from '@/lib/agent/toolLoop';
+import { addConnection } from '@/lib/agent/bus';
 import { registerClientTools } from '@/lib/agent/tools/clientTools';
 import { registerChatTools } from '@/lib/agent/tools/chatTools';
 import { registerFsTools } from '@/lib/agent/tools/fsTools';
@@ -136,6 +137,18 @@ describe('message conversion', () => {
     );
   });
 
+  it('uses the latest human message language and requests a transient UI switch', () => {
+    const prompt = buildSystemPrompt({
+      phase: 'plan',
+      branchName: 'draft',
+      locale: 'en',
+    });
+    expect(prompt).toContain('latest message actually written by the human user');
+    expect(prompt).toContain('user_ui_change_language before replying');
+    expect(prompt).toContain('quoted, pasted, or uploaded content');
+    expect(prompt).not.toContain('Respond ONLY in English');
+  });
+
   it('requires pasted and uploaded content to be transferred verbatim', () => {
     const prompt = buildSystemPrompt({
       phase: 'execute',
@@ -166,8 +179,31 @@ describe('phase gating', () => {
     expect(execTools).toContain('write_file');
     expect(execTools).toContain('finish_execution');
     expect(execTools).toContain('return_to_plan');
+    expect(planTools).toContain('user_ui_change_language');
+    expect(execTools).toContain('user_ui_change_language');
     expect(execTools).not.toContain('propose_plan');
     expect(planTools).not.toContain('return_to_plan');
+  });
+
+  it('broadcasts language changes only to the live SSE connection', async () => {
+    const events: Array<{ event: string; data: unknown }> = [];
+    const remove = addConnection('c1', {
+      write: (event, data) => events.push({ event, data }),
+      end: () => {},
+    });
+    try {
+      const result = await executeTool(
+        'user_ui_change_language',
+        { locale: 'de' },
+        makeCtx(),
+      );
+      expect(JSON.parse(result)).toEqual({ ok: true, locale: 'de', persisted: false });
+      expect(events).toEqual([
+        { event: 'ui_language', data: { locale: 'de', userId: 'u1' } },
+      ]);
+    } finally {
+      remove();
+    }
   });
 
   it('rejects a write tool executed during plan phase', async () => {

@@ -93,7 +93,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return json({ error: 'A conversation turn is already in progress' }, 409);
   }
 
-  const locale = user.language ?? 'en';
+  // Request-only UI locale follows live SSE language changes without changing
+  // the saved profile preference or any chat/history state.
+  const locale =
+    body.uiLocale === 'en' || body.uiLocale === 'de' ? body.uiLocale : (user.language ?? 'en');
 
   void (async () => {
     let turnOk = false;

@@ -43,7 +43,7 @@ export const postMessage = async (payload: {
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ chatId, ...payload }),
+    body: JSON.stringify({ chatId, uiLocale: store.state.localeKey, ...payload }),
   });
 
   if (res.status === 409) {
@@ -117,7 +117,7 @@ export const connectEvents = (): Promise<void> => {
         'compaction_start', 'compaction',
         'question', 'phase_changed', 'done', 'error',
         // Workspace events (execution/publish lifecycle, chat meta)
-        'state', 'execution_committed', 'execution_reverted', 'publish_log', 'publish_done',
+        'state', 'ui_language', 'execution_committed', 'execution_reverted', 'publish_log', 'publish_done',
         'chat_renamed', 'tabs_updated', 'automatism', 'automatism_state', 'chat_archived',
       ];
       for (const type of eventTypes) {

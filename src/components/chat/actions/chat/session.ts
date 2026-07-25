@@ -406,7 +406,12 @@ export const continueChatSession = async (): Promise<void> => {
     const res = await fetch('/api/chat/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId, type: 'continue', text: '' }),
+      body: JSON.stringify({
+        chatId,
+        type: 'continue',
+        text: '',
+        uiLocale: store.state.localeKey,
+      }),
     });
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { error?: string };

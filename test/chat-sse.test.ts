@@ -41,6 +41,25 @@ describe("chat SSE", () => {
     await connectEvents();
 
     expect(eventTypes).toContain("state");
+    expect(eventTypes).toContain("ui_language");
     disconnectEvents();
+  });
+
+  it("sends the current transient UI locale with each message", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { store } = await import("@/components/chat/app/store");
+    store.state.activeChatId = "language-chat";
+    store.state.localeKey = "de";
+    const { postMessage } = await import("@/components/chat/actions/chat/sse");
+    await postMessage({ type: "message", text: "Hallo" });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
+      chatId: "language-chat",
+      type: "message",
+      text: "Hallo",
+      uiLocale: "de",
+    });
   });
 });

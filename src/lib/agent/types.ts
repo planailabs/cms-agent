@@ -76,6 +76,8 @@ export interface IncomingChatMessage {
   /** 'continue' resumes an interrupted/failed turn from stored state. */
   type: 'message' | 'answer' | 'continue';
   text: string;
+  /** Current browser locale for this request only; never persisted. */
+  uiLocale?: 'en' | 'de';
   pageContext?: PageContext;
   /** Ids of uploads (chat-scoped) attached to this message. */
   attachmentIds?: string[];

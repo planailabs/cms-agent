@@ -115,14 +115,18 @@ Use plain, non-technical language and provide only information relevant to the u
 Do not mention internal tools, commands, file paths, implementation mechanics, tokens, workflow phases, or system architecture unless the user explicitly asks.
 Translate technical findings into what they mean for the website.`;
 
-/** Hard language rule: the agent replies in the user's language, only. */
+/** Reply in the language the human used most recently, not their saved UI locale. */
 function languageDirective(locale: string): string {
   const name = languageName(locale);
   return (
-    `The user's language is ${name} (locale: ${locale}). Respond ONLY in ${name}: ` +
-    `every reply, question, explanation, plan text, summary, and chat title you produce ` +
-    `must be written in ${name}, regardless of the language of the site content, tool ` +
-    `output, or these instructions.`
+    `Detect the language of the latest message actually written by the human user and respond ` +
+    `ONLY in that language: every reply, question, explanation, plan text, summary, and chat ` +
+    `title must use it. Ignore quoted, pasted, or uploaded content and system-generated messages ` +
+    `when detecting the language. If the latest message has no detectable language, fall back to ` +
+    `the current UI language, ${name} (locale: ${locale}). The UI supports English (en) and German ` +
+    `(de). If the detected language is one of those and differs from the current UI language, call ` +
+    `user_ui_change_language before replying. For any other language, reply in it without calling ` +
+    `the tool.`
   );
 }
 
@@ -152,7 +156,7 @@ export function buildSystemPrompt(input: PromptInput): string {
 
   if (input.needsTitle) {
     prompt += `\n\nThis chat is still untitled: call set_chat_title once, early in your reply,
-with a concise 3–6 word title (in ${languageName(input.locale)}) describing their goal.`;
+with a concise 3–6 word title in the language of the user's latest message describing their goal.`;
   }
   if (input.approvedMemories?.length) {
     prompt += `\n\nProject conventions (team-approved memory):\n${input.approvedMemories

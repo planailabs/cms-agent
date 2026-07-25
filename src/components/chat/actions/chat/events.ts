@@ -7,6 +7,7 @@ import { t, uiLocale, type TranslatedMessage } from '@/lib/i18n';
 import { cacheAIChatMessages } from './cache';
 import { transition } from './stateMachine';
 import { publishCardReducer } from '../../../workspace/publishCard';
+import { applyTransientUiLanguage } from './transientLocale';
 
 /**
  * Handles workspace-level events (execution/publish lifecycle). These don't
@@ -30,6 +31,11 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
       }
       return true;
     }
+
+    case 'ui_language':
+      // Deliberate SSE-only exception: do not cache, persist, or add to chat state.
+      applyTransientUiLanguage(data.locale, data.userId);
+      return true;
 
     case 'execution_committed': {
       // Transcript-anchor event: the card's chronological place in the LIVE
