@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const file = form.get('file');
   if (!(file instanceof File)) return json({ error: '"file" field required' }, 400);
 
-  // Optional chat scoping: a chat attachment restricts to text + image.
+  // Optional chat scoping applies the attachment type allow-list.
   const chatIdRaw = form.get('chatId');
   const chatId = typeof chatIdRaw === 'string' && chatIdRaw ? chatIdRaw : null;
   if (chatId) {

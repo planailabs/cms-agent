@@ -14,13 +14,17 @@ import { escapeHtml } from '../../utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AttachmentDisplay } from './cache';
 
-// ponytail: mirrors the server allow-list in src/lib/uploads.ts (text + image);
+// ponytail: mirrors the server allow-list in src/lib/uploads.ts;
 // the server is the gate, this only filters the file picker / drop.
 export const ATTACHMENT_ACCEPT =
-  '.txt,.md,.markdown,.png,.jpg,.jpeg,.webp,.gif,' +
-  'text/plain,text/markdown,image/png,image/jpeg,image/webp,image/gif';
+  '.txt,.md,.markdown,.pdf,.doc,.docx,.rtf,.odt,.xlsx,.png,.jpg,.jpeg,.webp,.gif,' +
+  'text/plain,text/markdown,application/pdf,application/msword,application/rtf,text/rtf,' +
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document,' +
+  'application/vnd.oasis.opendocument.text,' +
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,' +
+  'image/png,image/jpeg,image/webp,image/gif';
 
-const ALLOWED_EXT = /\.(txt|md|markdown|png|jpe?g|webp|gif)$/i;
+const ALLOWED_EXT = /\.(txt|md|markdown|pdf|docx?|rtf|odt|xlsx|png|jpe?g|webp|gif)$/i;
 
 export interface StagedAttachment {
   localId: string;
