@@ -135,6 +135,16 @@ describe('message conversion', () => {
       'speaking with a website owner',
     );
   });
+
+  it('requires pasted and uploaded content to be transferred verbatim', () => {
+    const prompt = buildSystemPrompt({
+      phase: 'execute',
+      branchName: 'draft',
+      locale: 'en',
+    });
+    expect(prompt).toContain('preserve it verbatim');
+    expect(prompt).toMatch(/unless the user\s+explicitly asks you to/);
+  });
 });
 
 describe('question tool results', () => {
