@@ -270,17 +270,23 @@ const editFileTool: ToolDef = {
   },
 };
 
-const deleteFileTool: ToolDef = {
-  name: 'delete_file',
-  description: 'Delete a file from the repository.',
-  schema: z.object({ path: z.string() }),
+const removeFileTool: ToolDef = {
+  name: 'remove_file',
+  description: 'Remove a file or, when recursive is true, a directory from the repository.',
+  schema: z.object({
+    path: z.string(),
+    recursive: z.boolean().default(false).describe('Required to remove directories and their contents'),
+  }),
   phases: ['execute'],
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const p = jail(ctx, input.path);
-    fs.rmSync(p);
+    if (p === fs.realpathSync(ctx.worktreePath)) {
+      return JSON.stringify({ error: 'Cannot remove the repository root' });
+    }
+    fs.rmSync(p, { recursive: input.recursive });
     ctx.modifiedPaths.add(input.path);
-    return JSON.stringify({ success: true, deleted: input.path });
+    return JSON.stringify({ success: true, removed: input.path });
   },
 };
 
@@ -311,6 +317,6 @@ export function registerFsTools(): void {
   registerTool(gitBranchesTool);
   registerTool(writeFileTool);
   registerTool(editFileTool);
-  registerTool(deleteFileTool);
+  registerTool(removeFileTool);
   registerTool(getUserContextTool);
 }

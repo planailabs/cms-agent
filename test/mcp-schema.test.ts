@@ -35,6 +35,9 @@ describe('mcp → openai tool schemas', () => {
       const editFile = byName.edit_file as { properties?: Record<string, unknown> };
       expect(editFile?.properties).toHaveProperty('oldText');
 
+      const removeFile = byName.remove_file as { properties?: Record<string, unknown> };
+      expect(removeFile?.properties).toHaveProperty('recursive');
+
       // Every tool with a non-empty zod object must expose properties
       const empty = tools.filter((t) => {
         const p = t.function.parameters as { properties?: Record<string, unknown> } | undefined;

@@ -182,6 +182,8 @@ describe('phase gating', () => {
     expect(planTools).toContain('propose_plan');
     expect(planTools).not.toContain('write_file');
     expect(execTools).toContain('write_file');
+    expect(planTools).not.toContain('remove_file');
+    expect(execTools).toContain('remove_file');
     expect(execTools).toContain('finish_execution');
     expect(execTools).toContain('return_to_plan');
     expect(planTools).toContain('user_ui_change_language');
@@ -224,6 +226,28 @@ describe('phase gating', () => {
 });
 
 describe('path jail', () => {
+  it('removes files and requires recursive mode for directories', async () => {
+    const dir = path.join(tmpRepo, 'remove-me');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, 'nested.txt'), 'nested');
+    const ctx = makeCtx({ workflowPhase: 'execute' });
+
+    const refused = await executeTool('remove_file', { path: 'remove-me' }, ctx);
+    expect(JSON.parse(refused).error).toBeTruthy();
+    expect(fs.existsSync(dir)).toBe(true);
+
+    const removed = await executeTool(
+      'remove_file',
+      { path: 'remove-me', recursive: true },
+      ctx,
+    );
+    expect(JSON.parse(removed)).toEqual({ success: true, removed: 'remove-me' });
+    expect(fs.existsSync(dir)).toBe(false);
+    expect(JSON.parse(await executeTool('remove_file', { path: '.' }, ctx)).error).toMatch(
+      /repository root/,
+    );
+  });
+
   it('reads inside the worktree and rejects escapes', async () => {
     const ok = await executeTool('read_file', { path: 'src/pages/index.astro' }, makeCtx());
     expect(ok).toContain('Hello');

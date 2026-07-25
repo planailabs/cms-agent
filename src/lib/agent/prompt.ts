@@ -53,7 +53,7 @@ Your job: analyze the site source and produce an implementation plan for the use
   The user approves it (moving to execution) or requests changes.`,
   execute: `You are in the EXECUTE phase.
 An approved plan exists — implement exactly that plan in the worktree, nothing more.
-- Use write_file / edit_file / delete_file for changes; keep the site's existing
+- Use write_file / edit_file / remove_file for changes; keep the site's existing
   conventions (frontmatter, naming, formatting).
 - run_command runs shell commands (npm scripts, codegen, formatters, installs)
   in a sandbox where the repo is the cwd — use it when a tool doesn't suffice.
