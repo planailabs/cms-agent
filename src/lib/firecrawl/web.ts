@@ -66,6 +66,17 @@ function parseBing(html: string, limit: number): SearchResult[] {
   return results;
 }
 
+function parseBrave(html: string, limit: number): SearchResult[] {
+  const results: SearchResult[] = [];
+  const pattern = /data-type="web"[\s\S]*?<a href="(https?:[^"#]+)"[^>]+class="[^"]*\bl1\b[^"]*"[\s\S]*?<div class="title search-snippet-title[^"]*"[^>]*>([\s\S]*?)<\/div><\/a>[\s\S]*?<div class="generic-snippet[^"]*"[\s\S]*?<div class="content[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+  for (const match of html.matchAll(pattern)) {
+    if (results.some((item) => item.url === match[1])) continue;
+    results.push({ url: match[1].replace(/&amp;/g, '&'), title: text(match[2]), description: text(match[3]) });
+    if (results.length >= limit) break;
+  }
+  return results;
+}
+
 export async function searchWeb(options: {
   query: string;
   limit?: number;
@@ -84,9 +95,15 @@ export async function searchWeb(options: {
     kp: '1',
     kl: `${options.country ?? 'us'}-${options.language ?? 'en'}`.toLowerCase(),
   });
-  const { html } = await scrapeInBrowser(`https://html.duckduckgo.com/html?${params}`, {
-    timeout: options.timeout ?? 15_000,
-  });
+  const searchHeaders = {
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml',
+    'Accept-Language': `${options.language ?? 'en'},en;q=0.5`,
+  };
+  const html = (await fetchPublic(`https://html.duckduckgo.com/html?${params}`, {
+    headers: searchHeaders,
+    timeoutMs: options.timeout ?? 15_000,
+  })).body.toString('utf8');
 
   const results: SearchResult[] = [];
   const blocks = html.includes('anomaly-modal__modal')
@@ -104,11 +121,20 @@ export async function searchWeb(options: {
   }
   if (results.length) return results;
 
-  const bing = new URLSearchParams({ q: `${options.query} ${domainQuery}`.trim(), count: String(options.limit ?? 5) });
-  const fallback = await scrapeInBrowser(`https://www.bing.com/search?${bing}`, {
-    timeout: options.timeout ?? 15_000,
+  const fallbackQuery = `${options.query} ${domainQuery}`.trim();
+  const brave = await fetchPublic(`https://search.brave.com/search?${new URLSearchParams({ q: fallbackQuery, source: 'web' })}`, {
+    headers: searchHeaders,
+    timeoutMs: options.timeout ?? 15_000,
   });
-  return parseBing(fallback.html, options.limit ?? 5);
+  const braveResults = parseBrave(brave.body.toString('utf8'), options.limit ?? 5);
+  if (braveResults.length) return braveResults;
+
+  const bing = new URLSearchParams({ q: fallbackQuery, count: String(options.limit ?? 5) });
+  const fallback = await fetchPublic(`https://www.bing.com/search?${bing}`, {
+    headers: searchHeaders,
+    timeoutMs: options.timeout ?? 15_000,
+  });
+  return parseBing(fallback.body.toString('utf8'), options.limit ?? 5);
 }
 
 interface TraverseOptions extends ScrapeOptions {

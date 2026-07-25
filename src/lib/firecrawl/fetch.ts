@@ -1,37 +1,26 @@
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import http from 'node:http';
+import https from 'node:https';
+import { BlockList, isIP } from 'node:net';
 
 export const MAX_FETCH_BYTES = 25 * 1024 * 1024;
 
-function isBlockedIp(address: string): boolean {
-  if (isIP(address) === 4) {
-    const [a, b] = address.split('.').map(Number);
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      a >= 224
-    );
-  }
-  const ip = address.toLowerCase();
-  return (
-    ip === '::' ||
-    ip === '::1' ||
-    ip.startsWith('fc') ||
-    ip.startsWith('fd') ||
-    /^fe[89ab]/.test(ip) ||
-    ip.startsWith('ff') ||
-    ip.startsWith('::ffff:127.') ||
-    ip.startsWith('::ffff:10.') ||
-    ip.startsWith('::ffff:192.168.')
-  );
-}
+const blocked = new BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
+  ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24],
+  ['224.0.0.0', 4], ['240.0.0.0', 4],
+] as const) blocked.addSubnet(network, prefix, 'ipv4');
+for (const [network, prefix] of [
+  ['::', 128], ['::1', 128], ['::ffff:0:0', 96], ['64:ff9b::', 96], ['100::', 64],
+  ['2001::', 23], ['2001:db8::', 32], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8],
+] as const) blocked.addSubnet(network, prefix, 'ipv6');
 
-export async function assertPublicUrl(value: string): Promise<URL> {
+const isBlockedIp = (address: string): boolean =>
+  blocked.check(address, isIP(address) === 6 ? 'ipv6' : 'ipv4');
+
+async function resolvePublicUrl(value: string): Promise<{ url: URL; address: string }> {
   const url = new URL(value);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
     throw new Error('Only public HTTP(S) URLs without credentials are allowed');
@@ -43,7 +32,11 @@ export async function assertPublicUrl(value: string): Promise<URL> {
   if (!addresses.length || addresses.some(({ address }) => isBlockedIp(address))) {
     throw new Error('Private, local, and special-purpose network addresses are not allowed');
   }
-  return url;
+  return { url, address: addresses[0].address };
+}
+
+export async function assertPublicUrl(value: string): Promise<URL> {
+  return (await resolvePublicUrl(value)).url;
 }
 
 export interface FetchResult {
@@ -55,39 +48,71 @@ export interface FetchResult {
 
 export async function fetchPublic(
   value: string,
-  options: { headers?: Record<string, string>; maxBytes?: number; timeoutMs?: number } = {},
+  options: {
+    headers?: Record<string, string>;
+    maxBytes?: number;
+    timeoutMs?: number;
+    method?: string;
+    body?: Buffer;
+  } = {},
 ): Promise<FetchResult> {
-  let url = await assertPublicUrl(value);
+  let target = await resolvePublicUrl(value);
   const maxBytes = Math.min(options.maxBytes ?? MAX_FETCH_BYTES, MAX_FETCH_BYTES);
+  let method = options.method ?? 'GET';
+  let body = options.body;
 
   for (let redirects = 0; redirects <= 5; redirects++) {
-    const response = await fetch(url, {
-      headers: options.headers,
-      redirect: 'manual',
-      signal: AbortSignal.timeout(options.timeoutMs ?? 30_000),
+    const fetched = await new Promise<FetchResult>((resolve, reject) => {
+      const transport = target.url.protocol === 'https:' ? https : http;
+      const headers = { ...options.headers };
+      for (const name of ['host', 'connection', 'transfer-encoding', 'content-length']) {
+        for (const key of Object.keys(headers)) if (key.toLowerCase() === name) delete headers[key];
+      }
+      headers.Host = target.url.host;
+      headers['Accept-Encoding'] = 'identity';
+      if (body) headers['Content-Length'] = String(body.length);
+
+      const request = transport.request({
+        protocol: target.url.protocol,
+        hostname: target.address,
+        port: target.url.port || undefined,
+        path: `${target.url.pathname}${target.url.search}`,
+        method,
+        headers,
+        servername: target.url.hostname,
+      }, (response) => {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        response.on('data', (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > maxBytes) request.destroy(new Error(`Response exceeds ${maxBytes} bytes`));
+          else chunks.push(Buffer.from(chunk));
+        });
+        response.on('end', () => resolve({
+          body: Buffer.concat(chunks),
+          status: response.statusCode ?? 0,
+          url: target.url.href,
+          headers: Object.fromEntries(
+            Object.entries(response.headers).map(([key, val]) => [key, Array.isArray(val) ? val.join(', ') : val ?? '']),
+          ),
+        }));
+      });
+      request.setTimeout(options.timeoutMs ?? 30_000, () => request.destroy(new Error('Request timed out')));
+      request.on('error', reject);
+      if (body) request.write(body);
+      request.end();
     });
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (!location) throw new Error(`Redirect ${response.status} has no Location header`);
-      url = await assertPublicUrl(new URL(location, url).href);
+    if (fetched.status >= 300 && fetched.status < 400) {
+      const location = fetched.headers.location;
+      if (!location) throw new Error(`Redirect ${fetched.status} has no Location header`);
+      target = await resolvePublicUrl(new URL(location, target.url).href);
+      if (fetched.status === 303 || ((fetched.status === 301 || fetched.status === 302) && method === 'POST')) {
+        method = 'GET';
+        body = undefined;
+      }
       continue;
     }
-    if (!response.body) throw new Error('Response has no body');
-
-    const chunks: Buffer[] = [];
-    let size = 0;
-    for await (const chunk of response.body) {
-      const buffer = Buffer.from(chunk);
-      size += buffer.length;
-      if (size > maxBytes) throw new Error(`Response exceeds ${maxBytes} bytes`);
-      chunks.push(buffer);
-    }
-    return {
-      body: Buffer.concat(chunks),
-      status: response.status,
-      url: url.href,
-      headers: Object.fromEntries(response.headers.entries()),
-    };
+    return fetched;
   }
   throw new Error('Too many redirects');
 }

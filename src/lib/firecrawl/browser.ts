@@ -1,4 +1,5 @@
 import { assertPublicUrl } from './fetch';
+import { fetchPublic } from './fetch';
 
 type Browser = import('playwright').Browser;
 
@@ -63,24 +64,27 @@ export async function scrapeInBrowser(
     extraHTTPHeaders: options.headers,
     isMobile: options.mobile,
     userAgent: options.userAgent ?? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    serviceWorkers: 'block',
     viewport: options.mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 },
   });
   try {
-    const checkedHosts = new Set<string>();
     await context.route('**/*', async (route) => {
       const url = route.request().url();
       if (/^(data|blob|about):/.test(url)) return route.continue();
       try {
-        const parsed = new URL(url);
-        if (!checkedHosts.has(parsed.host)) {
-          await assertPublicUrl(url);
-          checkedHosts.add(parsed.host);
-        }
-        await route.continue();
+        const request = route.request();
+        const fetched = await fetchPublic(url, {
+          method: request.method(),
+          headers: await request.allHeaders(),
+          body: request.postDataBuffer() ?? undefined,
+          timeoutMs: options.timeout,
+        });
+        await route.fulfill({ status: fetched.status, headers: fetched.headers, body: fetched.body });
       } catch {
         await route.abort('blockedbyclient');
       }
     });
+    await context.routeWebSocket('**/*', (socket) => socket.close());
     const page = await context.newPage();
     const response = await page.goto(initial.href, {
       waitUntil: 'domcontentloaded',
