@@ -15,9 +15,10 @@ const MAX_SNIPPET_CHARS = 4000;
 let cbFileLoadSeq = 0;
 const cbDirLoadSeq = new Map<string, number>();
 
-const api = (path: string): string => {
+const api = (path: string, mode?: 'raw' | 'download'): string => {
   const chatId = store.state.activeChatId!;
-  return `/api/files/${encodeURIComponent(chatId)}?path=${encodeURIComponent(path)}`;
+  const url = `/api/files/${encodeURIComponent(chatId)}?path=${encodeURIComponent(path)}`;
+  return mode ? `${url}&mode=${mode}` : url;
 };
 
 export const openCodeBrowser = (): void => {
@@ -199,6 +200,21 @@ export const addCodeContext = (): void => {
   store.notify();
 };
 
+export const copyOpenFile = async (): Promise<boolean> => {
+  const cb = store.state.workspace.codeBrowser;
+  if (!cb.filePath) return false;
+  try {
+    const res = await fetch(api(cb.filePath, 'raw'));
+    if (!res.ok) throw new Error(`Copy failed (${res.status})`);
+    await navigator.clipboard.writeText(await res.text());
+    return true;
+  } catch (err) {
+    cb.error = err instanceof Error ? err.message : String(err);
+    store.notify();
+    return false;
+  }
+};
+
 const workBranchName = (state: AppState): string | undefined => {
   for (const branch of state.branches) {
     const chat = branch.chats.find((c) => c.id === state.activeChatId);
@@ -299,6 +315,10 @@ export const renderCodeBrowser = (state: AppState): string => {
             ${cb.filePath ? `<span class="ws-mono ws-cb-path">${escapeHtml(cb.filePath)}${hasSel ? `:${cb.selStart}${cb.selEnd > cb.selStart ? `-${cb.selEnd}` : ''}` : ''}</span>` : ''}
           </div>
           <div class="ws-git__head-left">
+            ${cb.filePath ? `<button type="button" class="ws-mini-button" data-action="ws-cb-copy"
+              title="${escapeHtml(t(locale, 'workspace.code.copyTitle'))}">${escapeHtml(t(locale, 'workspace.code.copy'))}</button>
+            <a class="ws-mini-button" href="${escapeHtml(api(cb.filePath, 'download'))}" download
+              title="${escapeHtml(t(locale, 'workspace.code.downloadTitle'))}">${escapeHtml(t(locale, 'workspace.code.download'))}</a>` : ''}
             <button type="button" class="ws-mini-button ws-mini-button--primary" data-action="ws-cb-add"
               ${hasSel ? '' : 'disabled'} title="${escapeHtml(t(locale, 'workspace.code.addTitle'))}">${escapeHtml(t(locale, 'workspace.code.add'))}</button>
             <button type="button" class="ws-mini-button" data-action="ws-cb-modal-close"

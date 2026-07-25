@@ -20,6 +20,14 @@ const get = async (p: string) => {
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 };
 
+const getMode = (p: string, mode: string) =>
+  GET({
+    params: { chatId },
+    url: new URL(
+      `http://localhost/api/files/${chatId}?path=${encodeURIComponent(p)}&mode=${mode}`,
+    ),
+  } as never);
+
 beforeAll(async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-files-'));
   const repo = path.join(tmp, 'site');
@@ -94,6 +102,16 @@ describe('files API', () => {
     const { body } = await get('blob.bin');
     expect(body.binary).toBe(true);
     expect(body.content).toBeUndefined();
+  });
+
+  it('returns full raw and downloadable file responses', async () => {
+    const raw = await getMode('index.md', 'raw');
+    expect(await raw.text()).toBe('# Home\nline two\nline three\n');
+    const download = await getMode('blob.bin', 'download');
+    expect(download.headers.get('content-disposition')).toContain("filename*=UTF-8''blob.bin");
+    expect(new Uint8Array(await download.arrayBuffer())).toEqual(
+      new Uint8Array([0x89, 0x50, 0x00, 0x01]),
+    );
   });
 
   it('rejects escapes (relative and absolute)', async () => {

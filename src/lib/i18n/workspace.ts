@@ -174,6 +174,10 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.code.add': 'Add as chat context',
     'workspace.code.addTitle':
       'Attach the selected lines to your next chat message (like a picked element)',
+    'workspace.code.copy': 'Copy',
+    'workspace.code.copyTitle': 'Copy the full file to the clipboard',
+    'workspace.code.download': 'Download',
+    'workspace.code.downloadTitle': 'Download the full file',
     'workspace.code.binary': 'Binary file — no preview.',
     'workspace.code.truncated': 'File truncated for display.',
     'workspace.code.empty': 'No files.',
@@ -371,6 +375,10 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.code.add': 'Als Chat-Kontext anhängen',
     'workspace.code.addTitle':
       'Ausgewählte Zeilen an die nächste Chat-Nachricht anhängen (wie ein ausgewähltes Element)',
+    'workspace.code.copy': 'Kopieren',
+    'workspace.code.copyTitle': 'Vollständige Datei in die Zwischenablage kopieren',
+    'workspace.code.download': 'Herunterladen',
+    'workspace.code.downloadTitle': 'Vollständige Datei herunterladen',
     'workspace.code.binary': 'Binärdatei — keine Vorschau.',
     'workspace.code.truncated': 'Datei für die Anzeige gekürzt.',
     'workspace.code.empty': 'Keine Dateien.',

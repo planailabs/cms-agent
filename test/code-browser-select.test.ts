@@ -7,6 +7,7 @@ import { store } from '@/components/chat/app/store';
 import { createInitialWorkspaceState } from '@/components/workspace/state';
 import {
   beginLineSelect,
+  copyOpenFile,
   dragLineSelect,
   endLineSelect,
   openCodeBrowser,
@@ -59,6 +60,18 @@ describe('code browser line selection', () => {
     });
     expect(workFileTarget('https://example.com/file.ts')).toBeNull();
     expect(workFileTarget('/work/%ZZ')).toBeNull();
+  });
+
+  it('copies the full file from the raw endpoint', async () => {
+    store.state.activeChatId = 'chat';
+    store.state.workspace.codeBrowser.filePath = 'src/file.ts';
+    const writeText = vi.fn();
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('full file contents')));
+
+    expect(await copyOpenFile()).toBe(true);
+    expect(writeText).toHaveBeenCalledWith('full file contents');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toContain('mode=raw');
   });
 
   it('drags a multi-line range (and supports dragging upwards)', () => {

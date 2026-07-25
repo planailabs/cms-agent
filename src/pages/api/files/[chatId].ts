@@ -69,6 +69,7 @@ const json = (data: unknown, status = 200) =>
 
 export const GET: APIRoute = async ({ params, url }) => {
   const relPath = url.searchParams.get('path') ?? '.';
+  const mode = url.searchParams.get('mode');
 
   const chat = await prisma.chat.findUnique({
     where: { id: params.chatId! },
@@ -103,8 +104,20 @@ export const GET: APIRoute = async ({ params, url }) => {
   }
 
   const buf = fs.readFileSync(resolved);
+  if (mode === 'download') {
+    return new Response(buf, {
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(resolved))}`,
+      },
+    });
+  }
   if (buf.subarray(0, 8000).includes(0)) {
+    if (mode === 'raw') return json({ error: 'Binary files cannot be copied as text' }, 415);
     return json({ file: relPath, binary: true, size: stat.size });
+  }
+  if (mode === 'raw') {
+    return new Response(buf, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   }
   const text = buf.toString('utf8');
   const content = text.slice(0, MAX_FILE_CHARS);

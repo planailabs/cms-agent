@@ -57,6 +57,7 @@ import {
   addCodeContext,
   beginLineSelect,
   closeCodeBrowser,
+  copyOpenFile,
   dragLineSelect,
   endLineSelect,
   openCodeBrowser,
@@ -384,6 +385,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
   window.addEventListener('pointerup', () => endLineSelect());
   delegateEvent(app, 'click', '[data-action="ws-cb-add"]', () => addCodeContext());
+  delegateEvent(app, 'click', '[data-action="ws-cb-copy"]', () => void copyOpenFile());
   delegateEvent(app, 'click', '[data-action="ws-wsn-restore"]', (_e, target) => {
     if (target.dataset.id) void adoptWindowSession(target.dataset.id);
   });
