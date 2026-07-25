@@ -2008,6 +2008,15 @@ html.is-first-visit #app {
     gap: 0.5rem;
   }
 
+  [data-card="plan-approval"] .ws-card__header {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 2;
+    padding: 0.35rem;
+    border-radius: 0.5rem;
+    background: var(--surface-elevated);
+  }
+
   .ws-card__title {
     font-weight: 600;
     color: var(--text-primary);
