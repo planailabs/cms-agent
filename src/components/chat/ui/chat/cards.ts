@@ -187,7 +187,9 @@ export const renderContextChip = (state: AppState): string => {
     label = `${c.path.split('/').pop()}:${c.startLine}${c.endLine > c.startLine ? `-${c.endLine}` : ''}`;
   } else if (chip.context.element) {
     const el = chip.context.element;
-    label = `<${el.tag}${el.id ? `#${el.id}` : ''}>`;
+    const tag = `<${el.tag}${el.id ? `#${el.id}` : ''}>`;
+    const text = el.text?.trim();
+    label = text ? `“${text.length > 60 ? `${text.slice(0, 60)}…` : text}” ${tag}` : tag;
   } else {
     label = chip.context.route ?? chip.context.url;
   }

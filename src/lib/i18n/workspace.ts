@@ -133,6 +133,8 @@ export const workspaceCatalogs: AreaCatalogs = {
 
     // ── Injected preview overlay ──
     'workspace.injected.chatAboutThis': '💬 Chat about this',
+    'workspace.injected.pickInstruction':
+      'Click the element you want to discuss. Press Esc to cancel.',
 
     'workspace.archive.viewTitle': 'Open this chat read-only',
 
@@ -328,6 +330,8 @@ export const workspaceCatalogs: AreaCatalogs = {
 
     // ── Injiziertes Vorschau-Overlay ──
     'workspace.injected.chatAboutThis': '💬 Darüber chatten',
+    'workspace.injected.pickInstruction':
+      'Klicke auf das Element, über das du sprechen möchtest. Mit Esc abbrechen.',
 
     'workspace.archive.viewTitle': 'Diesen Chat schreibgeschützt öffnen',
 

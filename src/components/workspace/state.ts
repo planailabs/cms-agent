@@ -21,6 +21,7 @@ export interface PageContextSelection {
 
 export interface PageContextElement {
   tag: string;
+  text?: string;
   id?: string;
   classes?: string[];
   headingPath?: string[];

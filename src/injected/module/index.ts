@@ -25,6 +25,9 @@ const STYLE =
   '.cms-ov-btn:hover{background:#2a2a2a}' +
   '.cms-ov-btn.cms-ov-light{background:#fff;color:#222;box-shadow:0 4px 14px rgba(0,0,0,.18)}' +
   '.cms-ov-btn.cms-ov-light:hover{background:#f3f0ff}' +
+  '.cms-ov-pick-help{position:fixed;z-index:2147483646;top:16px;left:50%;transform:translateX(-50%);' +
+  'max-width:calc(100vw - 32px);padding:8px 14px;border-radius:999px;background:#1e1e1e;color:#fff;' +
+  'font:600 13px/1.4 system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.4);pointer-events:none}' +
   '.cms-ov-hl{position:fixed;z-index:2147483645;pointer-events:none;' +
   'outline:2px solid #7852ee;outline-offset:-1px;background:rgba(120,82,238,.12);border-radius:2px}';
 

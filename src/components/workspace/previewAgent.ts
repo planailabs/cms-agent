@@ -121,7 +121,10 @@ const pushConfig = (): void => {
     type: 'cms:config',
     theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
     locale,
-    labels: { chatAboutThis: t(locale, 'workspace.injected.chatAboutThis') },
+    labels: {
+      chatAboutThis: t(locale, 'workspace.injected.chatAboutThis'),
+      pickInstruction: t(locale, 'workspace.injected.pickInstruction'),
+    },
   };
   for (const iframe of getPreviewIframes()) postToPreview(msg, iframe);
 };

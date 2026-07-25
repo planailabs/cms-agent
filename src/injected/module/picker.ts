@@ -5,6 +5,7 @@
  * cms:pick-cancel so the workspace can un-arm its toolbar button.
  */
 import type { AgentApi } from '../protocol';
+import { cfg } from './config';
 import { isOurs } from './dom';
 
 const headingPathFor = (el: Element): string[] => {
@@ -25,6 +26,15 @@ const headingPathFor = (el: Element): string[] => {
 
 const elementInfo = (el: Element): Record<string, unknown> => {
   const info: Record<string, unknown> = { tag: el.tagName.toLowerCase() };
+  const text = (
+    (el as HTMLElement).innerText ||
+    el.getAttribute('aria-label') ||
+    el.getAttribute('alt') ||
+    ''
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text) info.text = text.slice(0, 160);
   if (el.id) info.id = el.id;
   try {
     const classes = Array.from(el.classList).slice(0, 5);
@@ -46,6 +56,7 @@ const elementInfo = (el: Element): Record<string, unknown> => {
 export const initPicker = (agent: AgentApi): void => {
   let picking = false;
   let hlBox: HTMLDivElement | null = null;
+  let help: HTMLDivElement | null = null;
 
   const ensureHlBox = (): HTMLDivElement => {
     if (!hlBox) {
@@ -101,6 +112,8 @@ export const initPicker = (agent: AgentApi): void => {
     picking = false;
     hlBox?.remove();
     hlBox = null;
+    help?.remove();
+    help = null;
     document.removeEventListener('mousemove', onPickMove, true);
     document.removeEventListener('click', onPickClick, true);
     document.removeEventListener('keydown', onPickKey, true);
@@ -114,6 +127,11 @@ export const initPicker = (agent: AgentApi): void => {
       if (picking) return;
       picking = true;
       ensureHlBox();
+      help = document.createElement('div');
+      help.className = 'cms-ov-pick-help';
+      help.setAttribute('data-cms-overlay', '');
+      help.textContent = cfg.labels.pickInstruction;
+      document.body.appendChild(help);
       document.addEventListener('mousemove', onPickMove, true);
       document.addEventListener('click', onPickClick, true);
       document.addEventListener('keydown', onPickKey, true);
