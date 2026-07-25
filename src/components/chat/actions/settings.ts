@@ -6,7 +6,7 @@
  */
 
 import { store } from '../app/store';
-import type { ThemeMode } from '../app/state';
+import type { CommunicationModePreference, ThemeMode } from '../app/state';
 import type { LocaleKey } from '../content';
 
 // ─── Settings Persistence ────────────────────────────────────────────────────
@@ -18,6 +18,7 @@ import type { LocaleKey } from '../content';
 export const persistUserSettings = async (settings: {
   theme?: ThemeMode;
   language?: LocaleKey;
+  communicationMode?: CommunicationModePreference;
 }): Promise<void> => {
   if (!store.state.user) return;
   const res = await fetch('/api/me', {
@@ -27,6 +28,21 @@ export const persistUserSettings = async (settings: {
   });
   if (!res.ok) {
     throw new Error(`PATCH /api/me failed with ${res.status}`);
+  }
+};
+
+export const setCommunicationMode = async (
+  communicationMode: CommunicationModePreference,
+): Promise<void> => {
+  const previous = store.state.communicationMode;
+  store.state.communicationMode = communicationMode;
+  store.notify();
+  try {
+    await persistUserSettings({ communicationMode });
+  } catch (error) {
+    store.state.communicationMode = previous;
+    store.notify();
+    console.error('[settings] Failed to persist communication mode', error);
   }
 };
 

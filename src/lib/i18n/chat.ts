@@ -68,6 +68,13 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.settings.notSignedIn': 'Not signed in',
     'chat.settings.closeOverlay': 'Close overlay',
     'chat.settings.close': 'Close',
+    'chat.settings.mode.title': 'Conversation style',
+    'chat.settings.mode.description':
+      'Choose whether the assistant focuses only on website outcomes or also shows implementation details.',
+    'chat.settings.mode.label': 'Mode',
+    'chat.settings.mode.default': 'Default ({mode})',
+    'chat.settings.mode.nonTechnical': 'Non-technical',
+    'chat.settings.mode.technical': 'Technical',
   },
   de: {
     'chat.automatismHead': 'Automatismus',
@@ -132,5 +139,12 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.settings.notSignedIn': 'Nicht angemeldet',
     'chat.settings.closeOverlay': 'Overlay schließen',
     'chat.settings.close': 'Schließen',
+    'chat.settings.mode.title': 'Gesprächsstil',
+    'chat.settings.mode.description':
+      'Wähle, ob der Assistent nur die Auswirkungen auf die Website oder auch technische Details zeigt.',
+    'chat.settings.mode.label': 'Modus',
+    'chat.settings.mode.default': 'Standard ({mode})',
+    'chat.settings.mode.nonTechnical': 'Nicht technisch',
+    'chat.settings.mode.technical': 'Technisch',
   },
 };

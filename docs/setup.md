@@ -25,7 +25,9 @@
 | `OPENAI_BASE_URL` | yes | OpenAI-compatible API base (e.g. `https://api.openai.com/v1`) |
 | `OPENAI_API_KEY` | yes | API key for that endpoint |
 | `OPENAI_MODEL` | yes | Model name |
+| `OPENAI_IMAGE_MODEL` | no | Image generation model (default `gpt-image-1`) |
 | `OPENAI_MAX_TOKENS` | no | Response cap (default 4096) |
+| `DEFAULT_COMMUNICATION_MODE` | no | `non-technical` (default) or `technical`; used when a user selects “Default” |
 | `BASE_DOMAIN` | yes | CMS domain; previews live at `<branch>.BASE_DOMAIN` |
 | `HOST` / `PORT` | no | Internal CMS bind (default 127.0.0.1:4321) |
 | `PREVIEW_COOKIE_SECRET` | yes | HMAC secret shared with the proxy sidecar |

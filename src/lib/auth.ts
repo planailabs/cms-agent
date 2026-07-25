@@ -23,6 +23,7 @@ export const auth = betterAuth({
       role: { type: 'string', defaultValue: 'editor', input: false },
       theme: { type: 'string', defaultValue: 'system', input: false },
       language: { type: 'string', defaultValue: 'en', input: false },
+      communicationMode: { type: 'string', defaultValue: 'default', input: false },
     },
   },
   databaseHooks: {

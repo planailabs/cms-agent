@@ -63,6 +63,8 @@ services:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-sol}
+      OPENAI_IMAGE_MODEL: ${OPENAI_IMAGE_MODEL:-gpt-image-1}
+      DEFAULT_COMMUNICATION_MODE: ${DEFAULT_COMMUNICATION_MODE:-non-technical}
       # Optional: attach the Context7 docs MCP (mcp.context7.com) to agent
       # chats — key from context7.com/dashboard
       # CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}

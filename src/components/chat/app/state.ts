@@ -30,6 +30,8 @@ import {
 
 /** Theme mode preference */
 export type ThemeMode = 'system' | 'light' | 'dark';
+export type CommunicationModePreference = 'default' | 'technical' | 'non-technical';
+export type CommunicationMode = Exclude<CommunicationModePreference, 'default'>;
 
 /** Workflow phase of a chat (plan → execute → preview → published) */
 export type WorkflowPhase = 'plan' | 'execute' | 'preview' | 'published';
@@ -128,6 +130,9 @@ export interface AppState {
   themeMode: ThemeMode;
   /** Admin setting: cap message attachments to one (from GET /api/me). */
   attachmentsOnePerMessage: boolean;
+  /** User choice and server fallback for agent language/tool visibility. */
+  communicationMode: CommunicationModePreference;
+  defaultCommunicationMode: CommunicationMode;
 
   // ─── UI State ──────────────────────────────────────────────────────────────
   /** Whether the language dropdown is open */
@@ -296,6 +301,8 @@ export const createInitialState = (): AppState => {
     localeKey: readDocumentLocale() ?? readStoredLocale() ?? detectBrowserLocale(),
     themeMode: 'system', // Initial default, will be updated by initTheme
     attachmentsOnePerMessage: false,
+    communicationMode: 'default',
+    defaultCommunicationMode: 'non-technical',
     isLanguageMenuOpen: false,
     isAuthMenuOpen: false,
     isSettingsOverlayOpen: false,

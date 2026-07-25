@@ -123,6 +123,18 @@ describe('message conversion', () => {
       if (phase === 'execute') expect(prompt).toContain('return_to_plan');
     }
   });
+
+  it('uses plain website language by default but not in technical mode', () => {
+    const input = {
+      phase: 'plan' as const,
+      branchName: 'draft',
+      locale: 'en',
+    };
+    expect(buildSystemPrompt(input)).toContain('speaking with a website owner');
+    expect(buildSystemPrompt({ ...input, communicationMode: 'technical' })).not.toContain(
+      'speaking with a website owner',
+    );
+  });
 });
 
 describe('question tool results', () => {

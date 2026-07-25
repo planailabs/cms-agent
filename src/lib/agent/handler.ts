@@ -30,9 +30,11 @@ import { registerCommandTools } from './tools/commandTools';
 import { registerAutomatismTools } from './tools/automatismTools';
 import { registerConflictTools } from './tools/conflictTools';
 import { registerSkillTools } from './tools/skillTools';
+import { registerImageTools } from './tools/imageTools';
 import { getApprovedMemories } from '@/lib/memory';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
+import { communicationModeForUser } from '@/lib/communicationMode';
 import type {
   ClientToolPrompt,
   IncomingChatMessage,
@@ -56,6 +58,7 @@ registerCommandTools();
 registerAutomatismTools();
 registerConflictTools();
 registerSkillTools();
+registerImageTools();
 
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
@@ -248,11 +251,12 @@ export async function handleChatMessage(
     modifiedPaths: new Set(),
   };
 
-  const [extension, approvedMemories] = opts.skipPersistence
-    ? [undefined, undefined]
+  const [extension, approvedMemories, communicationMode] = opts.skipPersistence
+    ? [undefined, undefined, 'non-technical' as const]
     : await Promise.all([
         prisma.systemPromptExtension.findUnique({ where: { userId } }).then((r) => r?.content),
         getApprovedMemories(),
+        communicationModeForUser(userId),
       ]);
 
   await runToolLoop({
@@ -272,6 +276,7 @@ export async function handleChatMessage(
       needsTitle,
       worktreePath,
       hasAttachments: messages.some((m) => m.role === 'user' && !!m.attachments?.length),
+      communicationMode,
     },
     setPhase,
     appendMsg,

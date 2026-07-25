@@ -32,10 +32,12 @@ const schema = z.object({
   OPENAI_BASE_URL: z.string().url(),
   OPENAI_API_KEY: z.string().min(1),
   OPENAI_MODEL: z.string().min(1),
+  OPENAI_IMAGE_MODEL: z.string().min(1).default('gpt-image-1'),
   // Vision-capable model for turns whose context contains an image attachment;
   // falls back to OPENAI_MODEL when unset.
   OPENAI_VISION_MODEL: z.string().min(1).optional(),
   OPENAI_MAX_TOKENS: z.coerce.number().int().positive().default(4096),
+  DEFAULT_COMMUNICATION_MODE: z.enum(['technical', 'non-technical']).default('non-technical'),
 
   // Domains / networking
   BASE_DOMAIN: z.string().min(1), // e.g. cms.example.com or localhost

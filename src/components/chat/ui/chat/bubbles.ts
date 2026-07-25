@@ -35,11 +35,15 @@ const renderToolCall = (msg: AiChat['messages'][number]): string => {
     `;
 };
 
-export const renderMessageBubbles = (mc: AiChat, executions: ExecutionCard[] = []): string =>
+export const renderMessageBubbles = (
+  mc: AiChat,
+  executions: ExecutionCard[] = [],
+  showToolCalls = false,
+): string =>
   mc.messages
     .map((msg) => {
       if (msg.role === 'tool' && msg.tool) {
-        return renderToolCall(msg);
+        return showToolCalls ? renderToolCall(msg) : '';
       }
       if (msg.role === 'execution') {
         // Inline committed-execution card; live state (busy/reverted) comes

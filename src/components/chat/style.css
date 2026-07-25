@@ -979,6 +979,28 @@ html.is-first-visit #app {
     line-height: 1.4;
   }
 
+  .settings-field {
+    display: grid;
+    gap: 0.45rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+  }
+
+  .settings-select {
+    width: 100%;
+    border: 1px solid var(--border-muted);
+    border-radius: 0.75rem;
+    background: var(--surface-base);
+    color: var(--text-primary);
+    padding: 0.65rem 0.8rem;
+    font: inherit;
+  }
+
+  .settings-select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   .settings-actions {
     display: flex;
     justify-content: flex-end;

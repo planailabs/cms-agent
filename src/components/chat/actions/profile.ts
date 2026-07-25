@@ -11,6 +11,7 @@ import { setThemeMode } from './theme';
 import { persistUserSettings } from './settings';
 import { cacheUserState, persistLocaleSelection } from '../app/state';
 import type { ThemeMode } from '../app/state';
+import type { CommunicationMode, CommunicationModePreference } from '../app/state';
 import { supportedLocales, type LocaleKey } from '../content';
 
 // ─── Load Profile ───────────────────────────────────────────────────────────
@@ -39,11 +40,26 @@ export const loadProfile = (): Promise<void> => {
         theme?: string | null;
         language?: string | null;
         attachmentsOnePerMessage?: boolean;
+        communicationMode?: CommunicationModePreference;
+        defaultCommunicationMode?: CommunicationMode;
       };
 
       const state = store.state;
       state.user = { id: me.id, email: me.email, name: me.name, role: me.role };
       state.attachmentsOnePerMessage = !!me.attachmentsOnePerMessage;
+      if (
+        me.communicationMode === 'default' ||
+        me.communicationMode === 'technical' ||
+        me.communicationMode === 'non-technical'
+      ) {
+        state.communicationMode = me.communicationMode;
+      }
+      if (
+        me.defaultCommunicationMode === 'technical' ||
+        me.defaultCommunicationMode === 'non-technical'
+      ) {
+        state.defaultCommunicationMode = me.defaultCommunicationMode;
+      }
 
       // Cache user state for instant header render on reload
       cacheUserState(state.user);

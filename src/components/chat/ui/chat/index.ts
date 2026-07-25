@@ -65,7 +65,15 @@ export const renderChatSection = (
   if (mc) {
     const modeLocale = locale.chatMode;
 
-    const messageBubbles = renderMessageBubbles(mc, state.workspace.executions);
+    const effectiveCommunicationMode =
+      state.communicationMode === 'default'
+        ? state.defaultCommunicationMode
+        : state.communicationMode;
+    const messageBubbles = renderMessageBubbles(
+      mc,
+      state.workspace.executions,
+      effectiveCommunicationMode === 'technical',
+    );
     const streamingBubble = renderStreamingBubble(mc);
     const thinkingIndicator = renderThinkingIndicator(mc);
     const compactionIndicator = renderCompactionIndicator(mc);

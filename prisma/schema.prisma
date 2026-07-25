@@ -28,6 +28,7 @@ model User {
   role     String @default("editor") // 'admin' | 'editor'
   theme    String @default("system") // 'light' | 'dark' | 'system'
   language String @default("en")
+  communicationMode String @default("default") // 'default' | 'technical' | 'non-technical'
 
   sessions               Session[]
   accounts               Account[]
