@@ -15,9 +15,16 @@
     # source tree; codebase-memory-mcp is a proper flake (static C binary).
     ponytail = { url = "github:DietrichGebert/ponytail"; flake = false; };
     codebase-memory-mcp.url = "github:DeusData/codebase-memory-mcp";
+
+    # Firecrawl's Node addon is not published independently from its pnpm
+    # workspace. Pin its source and build the napi-rs crate directly.
+    firecrawl = {
+      url = "github:firecrawl/firecrawl/4f8c82f0762ccd9614ef45de80c74457b21b24f8";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, gitlab-incus-image, xzar, ponytail, codebase-memory-mcp }:
+  outputs = { self, nixpkgs, gitlab-incus-image, xzar, ponytail, codebase-memory-mcp, firecrawl }:
     let
       lib = nixpkgs.lib;
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
@@ -90,11 +97,38 @@
     {
       packages = forAllSystems (pkgs:
         let
+          firecrawl-native = pkgs.rustPlatform.buildRustPackage {
+            pname = "firecrawl-native";
+            version = "0.1.0-${builtins.substring 0 8 (firecrawl.rev or "source")}";
+            src = pkgs.runCommand "firecrawl-native-source" { } ''
+              cp -r ${firecrawl}/apps/api/native $out
+              chmod -R u+w $out
+              cp ${./nix/firecrawl-native.Cargo.lock} $out/Cargo.lock
+            '';
+
+            cargoLock = {
+              lockFile = ./nix/firecrawl-native.Cargo.lock;
+              outputHashes = {
+                "calamine-0.34.0" = "sha256-LdO0GtnBN2aJlw/Coy0/aYkzOGtt9vnJf0Vj3EyUvO0=";
+                "nodesig-1.0.0" = "sha256-5n3SSEVqtRU5IyISk82jrQ9R1vRZFeBjfhP/GPL+5G4=";
+              };
+            };
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/lib
+              cp $(find target -type f -name 'libfirecrawl_rs.*' | head -n1) \
+                $out/lib/firecrawl-rs.node
+              runHook postInstall
+            '';
+          };
+
           # Pass the commit in explicitly — the fileset source in the store has
           # no .git for the build to ask. dirtyShortRev carries a -dirty suffix.
           cms-agent = pkgs.callPackage ./package.nix {
             gitCommit = self.shortRev or self.dirtyShortRev or null;
             agentPlugins = (agentPluginsFor pkgs).dir;
+            firecrawlNative = firecrawl-native;
           };
 
           # Codebase-memory MCP binary — lives in the SANDBOX env (the agent's
@@ -229,6 +263,7 @@
         {
           default = cms-agent;
           proxy = proxy;
+          firecrawl-native = firecrawl-native;
         }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           # Combined sandbox squashfs dir — `nix build .#sandbox`.
@@ -368,6 +403,7 @@
 
             export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
             export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
+            export FIRECRAWL_NATIVE_PATH=${self.packages.${pkgs.stdenv.hostPlatform.system}.firecrawl-native}/lib/firecrawl-rs.node
 
             # Agent plugins for dev: same store dirs the image ships (plugins/
             # is gitignored; ponytail + codebase-memory come from flake inputs).

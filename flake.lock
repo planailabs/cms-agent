@@ -18,6 +18,23 @@
         "type": "github"
       }
     },
+    "firecrawl": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784884881,
+        "narHash": "sha256-S9yKcAC4BYPjsd2B6V4eZCgcB5S7nN8jNR50Clxtuh0=",
+        "owner": "firecrawl",
+        "repo": "firecrawl",
+        "rev": "4f8c82f0762ccd9614ef45de80c74457b21b24f8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "firecrawl",
+        "repo": "firecrawl",
+        "rev": "4f8c82f0762ccd9614ef45de80c74457b21b24f8",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -102,6 +119,7 @@
     "root": {
       "inputs": {
         "codebase-memory-mcp": "codebase-memory-mcp",
+        "firecrawl": "firecrawl",
         "gitlab-incus-image": "gitlab-incus-image",
         "nixpkgs": "nixpkgs_2",
         "ponytail": "ponytail",

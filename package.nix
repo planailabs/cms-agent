@@ -17,6 +17,7 @@
   # Agent plugin dirs (ponytail, codebase-memory, …) assembled by the flake
   # from its inputs; shipped to $out/share/cms-agent/plugins.
   agentPlugins ? null,
+  firecrawlNative ? null,
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -185,7 +186,8 @@ stdenv.mkDerivation (finalAttrs: {
     makeWrapper ${lib.getExe nodejs_26} $out/bin/cms-agent \
       --add-flags "$out/share/cms-agent/server.mjs" \
       --set-default PRISMA_SCHEMA_ENGINE_BINARY "${prisma-engines_7}/bin/schema-engine" \
-      --set-default CMS_PLUGINS_ROOT "$out/share/cms-agent"
+      --set-default CMS_PLUGINS_ROOT "$out/share/cms-agent" \
+      ${lib.optionalString (firecrawlNative != null) ''--set-default FIRECRAWL_NATIVE_PATH "${firecrawlNative}/lib/firecrawl-rs.node"''}
 
     # Prisma CLI against the packaged schema/migrations, e.g.:
     #   cms-agent-prisma migrate deploy
