@@ -18,7 +18,13 @@ import { env } from '@/lib/env';
 // during astro build).
 if (process.env.VAR_DIR) {
   initRoutesFile();
-  startEmbeddedProxy(currentRoutesJson());
+  const proxyStartedByServer = Boolean(
+    (globalThis as typeof globalThis & { __nativeProxy?: { started?: boolean } }).__nativeProxy
+      ?.started,
+  );
+  if (proxyStartedByServer || (import.meta.env.DEV && !process.env.VITEST)) {
+    startEmbeddedProxy(currentRoutesJson());
+  }
   void import('@/lib/automatism')
     .then(({ recoverAutomatisms }) => recoverAutomatisms())
     .catch((err) => console.error('[automatism] boot recovery failed:', err));

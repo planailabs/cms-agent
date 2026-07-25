@@ -4,6 +4,16 @@
  * remains the internal Astro upstream.
  */
 import { createServer } from 'node:http';
+import { createRequire } from 'node:module';
+
+// The public listener must exist before Astro middleware is first requested;
+// standalone middleware is lazy-loaded through the internal upstream.
+if (!process.env.PROXY_NATIVE_PATH) {
+  throw new Error('PROXY_NATIVE_PATH is required');
+}
+const proxyAddon = createRequire(import.meta.url)(process.env.PROXY_NATIVE_PATH);
+proxyAddon.startProxy();
+globalThis.__nativeProxy = { addon: proxyAddon, started: true, sessionTimer: null };
 
 // Must be set before the import below: in standalone mode the Astro entry
 // autostarts its own listener on HOST:PORT unless this is disabled → EADDRINUSE.

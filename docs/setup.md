@@ -31,7 +31,7 @@
 | `BASE_DOMAIN` | yes | CMS domain; previews live at `<branch>.BASE_DOMAIN` |
 | `HOST` / `PORT` | no | Internal CMS bind (default 127.0.0.1:4321) |
 | `FIRECRAWL_NATIVE_PATH` | outside Nix | Path to the Firecrawl napi-rs `.node` addon; Nix packages set it automatically |
-| `PROXY_NATIVE_PATH` | outside Nix | Path to the embedded Pingora `.node` addon; Nix packages set it automatically |
+| `PROXY_NATIVE_PATH` | outside Nix | Required path to the embedded Pingora `.node` addon; Nix packages set it automatically |
 | `REPO_PATH` | yes | Path to the managed Astro site git repo |
 | `REPO_DEV_COMMAND` | no | Default `npx astro dev` (split on spaces, no shell) |
 | `REPO_BUILD_COMMAND` | no | Default `npx astro build` |

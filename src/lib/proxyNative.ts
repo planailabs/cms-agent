@@ -24,10 +24,10 @@ const state =
     sessionTimer: null,
   });
 
-function addon(): NativeProxy | null {
+function addon(): NativeProxy {
   if (state.addon) return state.addon;
   const nativePath = process.env.PROXY_NATIVE_PATH;
-  if (!nativePath) return null;
+  if (!nativePath) throw new Error('PROXY_NATIVE_PATH is required');
   state.addon = createRequire(import.meta.url)(nativePath) as NativeProxy;
   return state.addon;
 }
@@ -54,13 +54,16 @@ async function refreshSessions(): Promise<void> {
 
 export function startEmbeddedProxy(initialRoutesJson: string): void {
   const native = addon();
-  if (!native || state.started) return;
-  native.startProxy();
-  state.started = true;
+  if (!state.started) {
+    native.startProxy();
+    state.started = true;
+  }
   native.setProxyRoutes(initialRoutesJson);
-  void refreshSessions();
-  state.sessionTimer = setInterval(() => void refreshSessions(), 5_000);
-  state.sessionTimer.unref();
+  if (!state.sessionTimer) {
+    void refreshSessions();
+    state.sessionTimer = setInterval(() => void refreshSessions(), 5_000);
+    state.sessionTimer.unref();
+  }
 }
 
 export function updateProxyRoutes(routesJson: string): void {
