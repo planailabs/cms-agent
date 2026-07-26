@@ -36,7 +36,18 @@ const STYLE =
   '.cms-ov-edit-input.cms-ov-light{background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.18)}' +
   '.cms-ov-edit-input input{width:220px;border:0;outline:0;background:transparent;' +
   'color:#eee;font:13px/1.4 system-ui,sans-serif}' +
-  '.cms-ov-edit-input.cms-ov-light input{color:#222}';
+  '.cms-ov-edit-input.cms-ov-light input{color:#222}' +
+  '.cms-ov-bubble{position:absolute;z-index:2147483646;max-width:280px;padding:6px 10px;' +
+  'border-radius:8px;background:#1e1e1e;color:#eee;font:12px/1.5 system-ui,sans-serif;' +
+  'box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;white-space:pre-wrap}' +
+  '.cms-ov-bubble.cms-ov-light{background:#fff;color:#222;box-shadow:0 4px 14px rgba(0,0,0,.18)}' +
+  '.cms-ov-ring{position:absolute;z-index:2147483645;pointer-events:none;' +
+  'border:2px solid #e5484d;border-radius:4px;box-shadow:0 0 0 2px rgba(255,255,255,.6)}' +
+  '.cms-ov-ring--pin{border-radius:50%}' +
+  '.cms-ov-bin{position:absolute;z-index:2147483646;width:26px;height:26px;padding:0;' +
+  'border-radius:50%;border:1px solid #e5484d;background:#1e1e1e;font:13px/24px system-ui,sans-serif;' +
+  'text-align:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35)}' +
+  '.cms-ov-bin:hover{background:#3a1d1f}';
 
 export default function cmsAgentModule(agent: AgentApi): void {
   const style = document.createElement('style');

@@ -66,6 +66,107 @@ export const emptyAnnotations = (url = '', route = '/'): EditAnnotations => ({
 export const annotationCount = (a: EditAnnotations): number =>
   a.moves.length + a.strokes.length + a.comments.length;
 
+// ── Selection / hit-testing (pure — shared by edit mode and tests) ──────────
+
+export interface AnnotationSelection {
+  kind: 'move' | 'stroke' | 'comment';
+  index: number;
+}
+
+export const strokeBbox = (stroke: Stroke): { x: number; y: number; w: number; h: number } => {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of stroke.points) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  return {
+    x: Math.round(minX),
+    y: Math.round(minY),
+    w: Math.round(maxX - minX),
+    h: Math.round(maxY - minY),
+  };
+};
+
+const distToSegment = (
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number => {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+};
+
+export const PIN_HIT_RADIUS = 14;
+export const STROKE_HIT_TOLERANCE = 8;
+
+/** Topmost stroke whose polyline passes within `tol` of (x, y), or -1. */
+export const strokeHitIndex = (
+  strokes: Stroke[],
+  x: number,
+  y: number,
+  tol = STROKE_HIT_TOLERANCE,
+): number => {
+  for (let i = strokes.length - 1; i >= 0; i--) {
+    const pts = strokes[i].points;
+    if (pts.length === 1) {
+      if (Math.hypot(x - pts[0][0], y - pts[0][1]) <= tol) return i;
+      continue;
+    }
+    for (let s = 0; s < pts.length - 1; s++) {
+      if (distToSegment(x, y, pts[s][0], pts[s][1], pts[s + 1][0], pts[s + 1][1]) <= tol) return i;
+    }
+  }
+  return -1;
+};
+
+/** Document-coordinate hit test: comment pins, then strokes, then moved
+ *  elements (at their translated rect). Null on a miss. */
+export const hitTestAnnotations = (
+  a: EditAnnotations,
+  x: number,
+  y: number,
+): AnnotationSelection | null => {
+  for (let i = a.comments.length - 1; i >= 0; i--) {
+    const c = a.comments[i];
+    if (Math.hypot(x - c.x, y - c.y) <= PIN_HIT_RADIUS) return { kind: 'comment', index: i };
+  }
+  const stroke = strokeHitIndex(a.strokes, x, y);
+  if (stroke >= 0) return { kind: 'stroke', index: stroke };
+  for (let i = a.moves.length - 1; i >= 0; i--) {
+    const m = a.moves[i];
+    const rx = m.rect.x + m.dx;
+    const ry = m.rect.y + m.dy;
+    if (x >= rx && x <= rx + m.rect.w && y >= ry && y <= ry + m.rect.h) {
+      return { kind: 'move', index: i };
+    }
+  }
+  return null;
+};
+
+/** Delete one annotation; comment pins are renumbered to stay 1..N (the pin
+ *  number is the screenshot ↔ JSON link, so it must have no gaps). */
+export const removeAnnotation = (a: EditAnnotations, sel: AnnotationSelection): void => {
+  if (sel.kind === 'move') a.moves.splice(sel.index, 1);
+  else if (sel.kind === 'stroke') a.strokes.splice(sel.index, 1);
+  else {
+    a.comments.splice(sel.index, 1);
+    a.comments.forEach((c, i) => {
+      c.n = i + 1;
+    });
+  }
+};
+
 /** Nodes created by the renderer (removed wholesale by clearAnnotations). */
 const NODE_ATTR = 'data-cms-annotate';
 /** Page elements the renderer styled in place (translate + outline reset). */

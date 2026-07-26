@@ -4,7 +4,7 @@
  * is the client-side source of the shape).
  */
 import { z } from 'zod';
-import type { EditAnnotations, Stroke } from '@/injected/annotate';
+import { strokeBbox, type EditAnnotations } from '@/injected/annotate';
 
 const coord = z.number().finite().min(-1_000_000).max(1_000_000);
 
@@ -56,20 +56,6 @@ export const editAnnotationsSchema = z.object({
 });
 
 const round = Math.round;
-
-const strokeBbox = (stroke: Stroke): { x: number; y: number; w: number; h: number } => {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const [x, y] of stroke.points) {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
-  }
-  return { x: round(minX), y: round(minY), w: round(maxX - minX), h: round(maxY - minY) };
-};
 
 /**
  * Compact JSON for the LLM: moves keep their anchors and deltas, strokes

@@ -5,6 +5,12 @@
  * annotation renderer (../annotate.ts) so the live view matches the server's
  * handoff screenshot replay exactly.
  *
+ * Interactions on existing annotations work in EVERY tool via coordinate
+ * hit-testing (hitTestAnnotations — no pointer-events juggling): hovering a
+ * pin shows its comment in a bubble, clicking any annotation selects it and
+ * offers a 🗑 button; clicking away from an open comment input commits it.
+ * Undo is a snapshot stack (arbitrary deletes make positional undo fragile).
+ *
  * The parent is the source of truth: every mutation posts the FULL annotation
  * set as cms:edit-changed, and cms:edit-start accepts a prior set back (an
  * iframe reload mid-edit restores seamlessly).
@@ -20,7 +26,11 @@ import {
   clearAnnotations,
   emptyAnnotations,
   ensureOverlayCanvas,
+  hitTestAnnotations,
+  removeAnnotation,
+  strokeBbox,
   type AnnotatedElement,
+  type AnnotationSelection,
   type EditAnnotations,
   type EditTool,
   type ElementMove,
@@ -33,20 +43,141 @@ import { elementInfo } from './picker';
 const TOOLS: EditTool[] = ['move', 'draw', 'comment'];
 const MIN_DRAG_PX = 3;
 
-type UndoEntry =
-  | { kind: 'stroke' }
-  | { kind: 'comment' }
-  | { kind: 'move'; selector: string; prev: ElementMove | null };
-
 export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   let active = false;
   let tool: EditTool = 'move';
   let ann: EditAnnotations = emptyAnnotations();
-  const undoStack: UndoEntry[] = [];
+  /** Snapshot undo stack — one deep copy per mutation. */
+  const history: EditAnnotations[] = [];
+  let selected: AnnotationSelection | null = null;
 
   let banner: HTMLDivElement | null = null;
   let hlBox: HTMLDivElement | null = null;
-  let commentBox: HTMLDivElement | null = null;
+
+  const snapshot = (): void => {
+    history.push(JSON.parse(JSON.stringify(ann)) as EditAnnotations);
+  };
+
+  // ── Overlay chrome (module-owned; survives renderer re-renders) ───────────
+
+  const chromeNode = <K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    className: string,
+  ): HTMLElementTagNameMap[K] => {
+    const el = document.createElement(tag);
+    el.className = className;
+    el.setAttribute('data-cms-overlay', '');
+    return el;
+  };
+
+  let bubble: HTMLDivElement | null = null;
+  const hideBubble = (): void => {
+    bubble?.remove();
+    bubble = null;
+  };
+  const showBubble = (index: number): void => {
+    const comment = ann.comments[index];
+    if (!comment) {
+      hideBubble();
+      return;
+    }
+    if (!bubble) {
+      bubble = chromeNode('div', 'cms-ov-bubble');
+      document.body.appendChild(bubble);
+    }
+    bubble.textContent = `${comment.n}. ${comment.text}`;
+    bubble.classList.toggle('cms-ov-light', cfg.theme === 'light');
+    bubble.style.left = `${comment.x + 16}px`;
+    bubble.style.top = `${comment.y + 14}px`;
+  };
+
+  let bin: HTMLButtonElement | null = null;
+  let ring: HTMLDivElement | null = null;
+  const hideSelectionChrome = (): void => {
+    bin?.remove();
+    bin = null;
+    ring?.remove();
+    ring = null;
+  };
+
+  const deleteSelected = (): void => {
+    if (!selected) return;
+    snapshot();
+    removeAnnotation(ann, selected);
+    selected = null;
+    hideBubble();
+    render();
+  };
+
+  /** Ring highlight + 🗑 button next to the selected annotation. */
+  const showSelectionChrome = (): void => {
+    hideSelectionChrome();
+    if (!selected) return;
+    let binX = 0;
+    let binY = 0;
+    if (selected.kind === 'comment') {
+      const c = ann.comments[selected.index];
+      if (!c) return;
+      ring = chromeNode('div', 'cms-ov-ring cms-ov-ring--pin');
+      ring.style.left = `${c.x - 15}px`;
+      ring.style.top = `${c.y - 15}px`;
+      ring.style.width = '30px';
+      ring.style.height = '30px';
+      binX = c.x + 16;
+      binY = c.y - 30;
+      showBubble(selected.index);
+    } else if (selected.kind === 'stroke') {
+      const s = ann.strokes[selected.index];
+      if (!s) return;
+      const box = strokeBbox(s);
+      ring = chromeNode('div', 'cms-ov-ring');
+      ring.style.left = `${box.x - 6}px`;
+      ring.style.top = `${box.y - 6}px`;
+      ring.style.width = `${box.w + 12}px`;
+      ring.style.height = `${box.h + 12}px`;
+      binX = box.x + box.w + 8;
+      binY = box.y - 30;
+    } else {
+      const m = ann.moves[selected.index];
+      if (!m) return;
+      ring = chromeNode('div', 'cms-ov-ring');
+      ring.style.left = `${m.rect.x + m.dx - 4}px`;
+      ring.style.top = `${m.rect.y + m.dy - 4}px`;
+      ring.style.width = `${m.rect.w + 8}px`;
+      ring.style.height = `${m.rect.h + 8}px`;
+      binX = m.rect.x + m.dx + m.rect.w + 8;
+      binY = m.rect.y + m.dy - 30;
+    }
+    document.body.appendChild(ring);
+    bin = chromeNode('button', 'cms-ov-bin');
+    bin.type = 'button';
+    bin.textContent = '🗑';
+    bin.style.left = `${Math.max(4, binX)}px`;
+    bin.style.top = `${Math.max(4, binY)}px`;
+    bin.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+    });
+    bin.addEventListener(
+      'click',
+      agent.safe((ev: Event) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        deleteSelected();
+      }) as EventListener,
+    );
+    document.body.appendChild(bin);
+  };
+
+  const hideBubbleUnlessSelected = (): void => {
+    if (selected?.kind !== 'comment') hideBubble();
+  };
+
+  const select = (sel: AnnotationSelection | null): void => {
+    selected = sel;
+    showSelectionChrome();
+    hideBubbleUnlessSelected();
+  };
 
   // ── Rendering ──────────────────────────────────────────────────────────────
 
@@ -62,6 +193,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ann.viewport = { width: window.innerWidth, height: window.innerHeight };
     applyAnnotations(document, ann);
     syncCanvasMode();
+    showSelectionChrome();
     if (post) agent.post({ type: 'cms:edit-changed', annotations: ann });
   };
 
@@ -101,12 +233,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ann.moves.find((m) => m.selector === selector);
 
   const commitMove = (d: Drag, dx: number, dy: number): void => {
+    snapshot();
     const existing = moveEntry(d.selector);
-    undoStack.push({
-      kind: 'move',
-      selector: d.selector,
-      prev: existing ? { ...existing } : null,
-    });
     if (existing) {
       existing.dx = dx;
       existing.dy = dy;
@@ -138,16 +266,42 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
 
   // ── Comment tool ───────────────────────────────────────────────────────────
 
+  interface PendingComment {
+    x: number;
+    y: number;
+    target: Element | null;
+    box: HTMLDivElement;
+    input: HTMLInputElement;
+  }
+  let pending: PendingComment | null = null;
+
   const closeCommentBox = (): void => {
-    commentBox?.remove();
-    commentBox = null;
+    pending?.box.remove();
+    pending = null;
   };
+
+  /** Commit the open comment input (click-away, Enter): text → comment,
+   *  empty → just close. */
+  const commitPendingComment = agent.safe((): void => {
+    if (!pending) return;
+    const { x, y, target, input } = pending;
+    const text = input.value.trim();
+    closeCommentBox();
+    if (!text) return;
+    snapshot();
+    const n = ann.comments.length + 1;
+    const comment: EditAnnotations['comments'][number] = { n, x, y, text };
+    if (target && !isOurs(target)) {
+      comment.selector = cssPath(target);
+      comment.element = elementInfo(target) as unknown as AnnotatedElement;
+    }
+    ann.comments.push(comment);
+    render();
+  }) as () => void;
 
   const openCommentBox = (x: number, y: number, target: Element | null): void => {
     closeCommentBox();
-    const box = document.createElement('div');
-    box.className = `cms-ov-edit-input${cfg.theme === 'light' ? ' cms-ov-light' : ''}`;
-    box.setAttribute('data-cms-overlay', '');
+    const box = chromeNode('div', `cms-ov-edit-input${cfg.theme === 'light' ? ' cms-ov-light' : ''}`);
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = cfg.labels.commentPlaceholder;
@@ -156,23 +310,9 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     box.style.left = `${Math.max(4, x)}px`;
     box.style.top = `${Math.max(4, y + 8)}px`;
 
-    const commit = agent.safe(() => {
-      const text = input.value.trim();
-      closeCommentBox();
-      if (!text) return;
-      const n = ann.comments.reduce((max, c) => Math.max(max, c.n), 0) + 1;
-      const comment: EditAnnotations['comments'][number] = { n, x, y, text };
-      if (target && !isOurs(target)) {
-        comment.selector = cssPath(target);
-        comment.element = elementInfo(target) as unknown as AnnotatedElement;
-      }
-      ann.comments.push(comment);
-      undoStack.push({ kind: 'comment' });
-      render();
-    });
     input.addEventListener('keydown', (ev) => {
       ev.stopPropagation();
-      if (ev.key === 'Enter') commit();
+      if (ev.key === 'Enter') commitPendingComment();
       else if (ev.key === 'Escape') closeCommentBox();
     });
     // Keep page handlers away from clicks inside the box
@@ -180,32 +320,26 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     box.addEventListener('click', (ev) => ev.stopPropagation());
 
     document.body.appendChild(box);
-    commentBox = box;
+    pending = { x, y, target, box, input };
     input.focus();
   };
 
   // ── Undo / clear ───────────────────────────────────────────────────────────
 
   const undo = (): void => {
-    const entry = undoStack.pop();
-    if (!entry) return;
-    if (entry.kind === 'stroke') ann.strokes.pop();
-    else if (entry.kind === 'comment') ann.comments.pop();
-    else {
-      const idx = ann.moves.findIndex((m) => m.selector === entry.selector);
-      if (idx >= 0) {
-        if (entry.prev) ann.moves[idx] = entry.prev;
-        else ann.moves.splice(idx, 1);
-      }
-    }
+    const prev = history.pop();
+    if (!prev) return;
+    ann = prev;
+    select(null);
     render();
   };
 
   const clear = (): void => {
+    snapshot();
     ann.moves = [];
     ann.strokes = [];
     ann.comments = [];
-    undoStack.length = 0;
+    select(null);
     render();
   };
 
@@ -216,7 +350,10 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     active = false;
     drag = null;
     stroke = null;
+    selected = null;
     hideHl();
+    hideBubble();
+    hideSelectionChrome();
     closeCommentBox();
     banner?.remove();
     banner = null;
@@ -234,7 +371,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
         : emptyAnnotations();
     ann.url = location.href;
     ann.route = location.pathname;
-    undoStack.length = 0;
+    history.length = 0;
+    selected = null;
     if (!banner) {
       banner = document.createElement('div');
       banner.className = 'cms-ov-pick-help';
@@ -247,9 +385,9 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
 
   onConfigChange(() => {
     if (banner) banner.textContent = cfg.labels.editInstruction;
-    if (commentBox) {
-      commentBox.classList.toggle('cms-ov-light', cfg.theme === 'light');
-      commentBox.querySelector('input')?.setAttribute('placeholder', cfg.labels.commentPlaceholder);
+    if (pending) {
+      pending.box.classList.toggle('cms-ov-light', cfg.theme === 'light');
+      pending.input.placeholder = cfg.labels.commentPlaceholder;
     }
   });
 
@@ -258,6 +396,9 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   const onPointerDown = agent.safe((ev: PointerEvent) => {
     if (!active) return;
     const target = ev.target as Element | null;
+    // Click-away from an open comment input CREATES the comment (the box
+    // stops propagation on its own pointerdown, so reaching here is "away").
+    if (pending) commitPendingComment();
     if (tool === 'draw') {
       // The canvas is ours (pointer-events:auto while drawing)
       if (!(target instanceof HTMLCanvasElement)) return;
@@ -270,6 +411,9 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ev.preventDefault();
     ev.stopPropagation();
     if (tool === 'move' && target instanceof HTMLElement) {
+      // A click on an existing annotation selects it (handled on click);
+      // don't start a drag from a pin/stroke position.
+      if (hitTestAnnotations(ann, ev.pageX, ev.pageY)?.kind === 'comment') return;
       const selector = cssPath(target);
       const existing = moveEntry(selector);
       drag = {
@@ -293,6 +437,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       if (drag.moved) {
         drag.el.style.translate = `${drag.baseDx + dx}px ${drag.baseDy + dy}px`;
         hideHl();
+        hideBubble();
       }
       return;
     }
@@ -312,6 +457,10 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       stroke.push([ev.pageX, ev.pageY]);
       return;
     }
+    // Hovering a pin reveals its comment (every tool)
+    const hit = hitTestAnnotations(ann, ev.pageX, ev.pageY);
+    if (hit?.kind === 'comment') showBubble(hit.index);
+    else hideBubbleUnlessSelected();
     // Hover highlight for the move tool
     if (tool !== 'move') return;
     const el = ev.target as Element | null;
@@ -332,8 +481,13 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     if (stroke) {
       const s = stroke;
       stroke = null;
+      if (s.length < 2) {
+        // A click, not a stroke — select whatever annotation is under it
+        select(hitTestAnnotations(ann, ev.pageX, ev.pageY));
+        return;
+      }
+      snapshot();
       ann.strokes.push({ points: s });
-      undoStack.push({ kind: 'stroke' });
       render();
     }
   }) as EventListener;
@@ -345,6 +499,16 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     // Edit mode owns the page: no navigation / native click behavior
     ev.preventDefault();
     ev.stopPropagation();
+    if (tool === 'draw') return; // selection handled on pointerup
+    const hit = hitTestAnnotations(ann, ev.pageX, ev.pageY);
+    if (hit) {
+      select(hit);
+      return;
+    }
+    if (selected) {
+      select(null);
+      return;
+    }
     if (tool === 'comment') openCommentBox(ev.pageX, ev.pageY, target);
   }) as EventListener;
 
@@ -352,7 +516,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     if (!active || ev.key !== 'Escape') return;
     ev.preventDefault();
     ev.stopPropagation();
-    if (commentBox) closeCommentBox();
+    if (pending) closeCommentBox();
+    else if (selected) select(null);
     else stop(true);
   }) as EventListener;
 
@@ -373,6 +538,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       tool = data.tool as EditTool;
       hideHl();
       closeCommentBox();
+      select(null);
       if (active) syncCanvasMode();
     }),
   );
