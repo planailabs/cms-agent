@@ -224,7 +224,7 @@ export interface ElementEditState {
 
 export const createInitialElementEditState = (): ElementEditState => ({
   active: false,
-  tool: 'move',
+  tool: 'cursor',
   annotations: null,
   busy: false,
 });

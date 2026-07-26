@@ -40,12 +40,12 @@ import { cfg, onConfigChange } from './config';
 import { cssPath, isOurs, type Listen } from './dom';
 import { elementInfo } from './picker';
 
-const TOOLS: EditTool[] = ['move', 'draw', 'comment'];
+const TOOLS: EditTool[] = ['cursor', 'move', 'draw', 'comment'];
 const MIN_DRAG_PX = 3;
 
 export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   let active = false;
-  let tool: EditTool = 'move';
+  let tool: EditTool = 'cursor';
   let ann: EditAnnotations = emptyAnnotations();
   /** Snapshot undo stack — one deep copy per mutation. */
   const history: EditAnnotations[] = [];
@@ -100,13 +100,65 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ring = null;
   };
 
-  const deleteSelected = (): void => {
-    if (!selected) return;
+  const deleteAt = (sel: AnnotationSelection): void => {
     snapshot();
-    removeAnnotation(ann, selected);
+    removeAnnotation(ann, sel);
     selected = null;
     hideBubble();
     render();
+  };
+
+  /** 🗑 button that deletes the given annotation (indices are regenerated on
+   *  every render, so the captured selection stays valid until then). */
+  const makeBin = (x: number, y: number, sel: AnnotationSelection): HTMLButtonElement => {
+    const b = chromeNode('button', 'cms-ov-bin');
+    b.type = 'button';
+    b.textContent = '🗑';
+    b.style.left = `${Math.max(4, x)}px`;
+    b.style.top = `${Math.max(4, y)}px`;
+    b.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+    });
+    b.addEventListener(
+      'click',
+      agent.safe((ev: Event) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        deleteAt(sel);
+      }) as EventListener,
+    );
+    document.body.appendChild(b);
+    return b;
+  };
+
+  /** Cursor mode: every comment bubble and every annotation's 🗑, no clicks
+   *  needed. */
+  let allChrome: HTMLElement[] = [];
+  const hideAllChrome = (): void => {
+    for (const el of allChrome) el.remove();
+    allChrome = [];
+  };
+  const showAllChrome = (): void => {
+    hideAllChrome();
+    ann.comments.forEach((c, i) => {
+      const bub = chromeNode('div', 'cms-ov-bubble');
+      bub.textContent = `${c.n}. ${c.text}`;
+      bub.classList.toggle('cms-ov-light', cfg.theme === 'light');
+      bub.style.left = `${c.x + 16}px`;
+      bub.style.top = `${c.y + 14}px`;
+      document.body.appendChild(bub);
+      allChrome.push(bub, makeBin(c.x + 16, c.y - 30, { kind: 'comment', index: i }));
+    });
+    ann.strokes.forEach((s, i) => {
+      const box = strokeBbox(s);
+      allChrome.push(makeBin(box.x + box.w + 8, box.y - 30, { kind: 'stroke', index: i }));
+    });
+    ann.moves.forEach((m, i) => {
+      allChrome.push(
+        makeBin(m.rect.x + m.dx + m.rect.w + 8, m.rect.y + m.dy - 30, { kind: 'move', index: i }),
+      );
+    });
   };
 
   /** Ring highlight + 🗑 button next to the selected annotation. */
@@ -149,24 +201,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       binY = m.rect.y + m.dy - 30;
     }
     document.body.appendChild(ring);
-    bin = chromeNode('button', 'cms-ov-bin');
-    bin.type = 'button';
-    bin.textContent = '🗑';
-    bin.style.left = `${Math.max(4, binX)}px`;
-    bin.style.top = `${Math.max(4, binY)}px`;
-    bin.addEventListener('pointerdown', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-    });
-    bin.addEventListener(
-      'click',
-      agent.safe((ev: Event) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        deleteSelected();
-      }) as EventListener,
-    );
-    document.body.appendChild(bin);
+    bin = makeBin(binX, binY, selected);
   };
 
   const hideBubbleUnlessSelected = (): void => {
@@ -193,7 +228,13 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ann.viewport = { width: window.innerWidth, height: window.innerHeight };
     applyAnnotations(document, ann);
     syncCanvasMode();
-    showSelectionChrome();
+    if (tool === 'cursor') {
+      hideSelectionChrome();
+      showAllChrome();
+    } else {
+      hideAllChrome();
+      showSelectionChrome();
+    }
     if (post) agent.post({ type: 'cms:edit-changed', annotations: ann });
   };
 
@@ -354,6 +395,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     hideHl();
     hideBubble();
     hideSelectionChrome();
+    hideAllChrome();
     closeCommentBox();
     banner?.remove();
     banner = null;
@@ -363,7 +405,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
 
   const start = (data: Record<string, unknown>): void => {
     active = true;
-    tool = TOOLS.includes(data.tool as EditTool) ? (data.tool as EditTool) : 'move';
+    tool = TOOLS.includes(data.tool as EditTool) ? (data.tool as EditTool) : 'cursor';
     const prior = data.annotations as EditAnnotations | undefined;
     ann =
       prior && Array.isArray(prior.moves)
@@ -457,10 +499,12 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       stroke.push([ev.pageX, ev.pageY]);
       return;
     }
-    // Hovering a pin reveals its comment (every tool)
-    const hit = hitTestAnnotations(ann, ev.pageX, ev.pageY);
-    if (hit?.kind === 'comment') showBubble(hit.index);
-    else hideBubbleUnlessSelected();
+    // Hovering a pin reveals its comment (cursor mode shows them all already)
+    if (tool !== 'cursor') {
+      const hit = hitTestAnnotations(ann, ev.pageX, ev.pageY);
+      if (hit?.kind === 'comment') showBubble(hit.index);
+      else hideBubbleUnlessSelected();
+    }
     // Hover highlight for the move tool
     if (tool !== 'move') return;
     const el = ev.target as Element | null;
@@ -500,6 +544,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ev.preventDefault();
     ev.stopPropagation();
     if (tool === 'draw') return; // selection handled on pointerup
+    if (tool === 'cursor') return; // passive: all bubbles + bins already shown
     const hit = hitTestAnnotations(ann, ev.pageX, ev.pageY);
     if (hit) {
       select(hit);
@@ -539,7 +584,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       hideHl();
       closeCommentBox();
       select(null);
-      if (active) syncCanvasMode();
+      if (active) render(false); // chrome + canvas mode follow the tool
     }),
   );
   agent.on('cms:edit-undo', agent.safe(() => active && undo()));

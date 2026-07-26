@@ -73,7 +73,7 @@ export const canEnterEditMode = (state: AppState): boolean => {
 const renderEditToolbar = (state: AppState): string => {
   const locale = uiLocale();
   const ee = state.workspace.elementEdit;
-  const tools = (['move', 'draw', 'comment'] as const)
+  const tools = (['cursor', 'move', 'draw', 'comment'] as const)
     .map(
       (tool) => `<button type="button" class="ws-mini-button ${ee.tool === tool ? 'is-active' : ''}"
         data-action="ws-edit-tool" data-tool="${tool}">${escapeHtml(t(locale, `workspace.preview.tool.${tool}`))}</button>`,

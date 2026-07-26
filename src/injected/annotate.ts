@@ -52,7 +52,7 @@ export interface EditAnnotations {
   comments: EditComment[];
 }
 
-export type EditTool = 'move' | 'draw' | 'comment';
+export type EditTool = 'cursor' | 'move' | 'draw' | 'comment';
 
 export const emptyAnnotations = (url = '', route = '/'): EditAnnotations => ({
   url,

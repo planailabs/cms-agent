@@ -468,7 +468,9 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-edit-exit"]', () => stopEditMode());
   delegateEvent(app, 'click', '[data-action="ws-edit-tool"]', (_e, target) => {
     const tool = target.getAttribute('data-tool') as EditTool | null;
-    if (tool === 'move' || tool === 'draw' || tool === 'comment') setEditTool(tool);
+    if (tool === 'cursor' || tool === 'move' || tool === 'draw' || tool === 'comment') {
+      setEditTool(tool);
+    }
   });
   delegateEvent(app, 'click', '[data-action="ws-edit-undo"]', () => postEditUndo());
   delegateEvent(app, 'click', '[data-action="ws-edit-clear"]', () => postEditClear());
