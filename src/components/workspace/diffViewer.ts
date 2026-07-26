@@ -142,6 +142,8 @@ export const renderDiffViewer = (state: AppState): string => {
   const header = `<div class="ws-toolbar">
       <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.diff.reviewChanges'))}</span>
       <span class="ws-toolbar__spacer"></span>
+      <button type="button" class="ws-mini-button" data-action="ws-edit-mode"
+        title="${escapeHtml(t(locale, 'workspace.preview.editModeTitle'))}">${escapeHtml(t(locale, 'workspace.preview.editMode'))}</button>
       <button type="button" class="ws-mini-button" data-action="ws-bc-open"
         title="${escapeHtml(t(locale, 'workspace.preview.browsersTitle'))}">${escapeHtml(t(locale, 'workspace.preview.browsers'))}</button>
       <button type="button" class="ws-mini-button ws-mono" data-action="ws-cb-modal-open"

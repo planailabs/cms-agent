@@ -13,8 +13,10 @@
  * origin (we are shipping evaluatable code — never post it to '*').
  */
 
+import type { EditTool } from '@/injected/annotate';
 import type { AgentEnvelope } from '@/injected/protocol';
 import { t, uiLocale } from '@/lib/i18n';
+import { store } from '../chat/app/store';
 import { getPreviewIframe, getPreviewIframes } from './previewFrames';
 
 export { getPreviewIframe } from './previewFrames';
@@ -105,7 +107,14 @@ const fetchModuleSource = (): Promise<string> => {
 const pushModule = (iframe: HTMLIFrameElement): void => {
   void fetchModuleSource()
     .then((source) => request({ type: 'cms:load-module', source }, iframe))
-    .then(() => pushConfig())
+    .then(() => {
+      pushConfig();
+      // An iframe (re)load during an active edit session gets the session
+      // back — the parent holds the latest annotation set (cms:edit-changed).
+      if (store.state.workspace.elementEdit.active && iframe === getPreviewIframe()) {
+        postEditStart();
+      }
+    })
     .catch((err) => {
       console.error('[preview-agent] module load failed:', err);
     });
@@ -124,6 +133,8 @@ const pushConfig = (): void => {
     labels: {
       chatAboutThis: t(locale, 'workspace.injected.chatAboutThis'),
       pickInstruction: t(locale, 'workspace.injected.pickInstruction'),
+      editInstruction: t(locale, 'workspace.injected.editInstruction'),
+      commentPlaceholder: t(locale, 'workspace.injected.commentPlaceholder'),
     },
   };
   for (const iframe of getPreviewIframes()) postToPreview(msg, iframe);
@@ -137,6 +148,32 @@ export const startElementPick = (): void => {
 
 export const cancelElementPick = (): void => {
   postToPreview({ type: 'cms:cancel-element-pick' });
+};
+
+/** Arm edit mode in the active tab, restoring the parent-held annotations. */
+export const postEditStart = (): void => {
+  const ee = store.state.workspace.elementEdit;
+  postToPreview({
+    type: 'cms:edit-start',
+    tool: ee.tool,
+    annotations: ee.annotations ?? undefined,
+  });
+};
+
+export const postEditStop = (): void => {
+  postToPreview({ type: 'cms:edit-stop' });
+};
+
+export const postEditTool = (tool: EditTool): void => {
+  postToPreview({ type: 'cms:edit-tool', tool });
+};
+
+export const postEditUndo = (): void => {
+  postToPreview({ type: 'cms:edit-undo' });
+};
+
+export const postEditClear = (): void => {
+  postToPreview({ type: 'cms:edit-clear' });
 };
 
 // ── Event routing (module → workspace) ───────────────────────────────────────

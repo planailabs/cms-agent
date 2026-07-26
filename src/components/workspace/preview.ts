@@ -6,6 +6,7 @@
 
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
+import { annotationCount } from '@/injected/annotate';
 import type { AppState, ChatSummary } from '../chat/app/state';
 import { branchPreviewUrl } from './config';
 
@@ -62,13 +63,51 @@ const renderTabStrip = (ws: AppState['workspace']): string => {
     </div>`;
 };
 
+/** True when the edit-mode entry button shows: a workflow chat, not published. */
+export const canEnterEditMode = (state: AppState): boolean => {
+  const chat = activeChatSummary(state);
+  return !!chat && (chat.kind ?? 'workflow') === 'workflow' && state.workflowPhase !== 'published';
+};
+
+/** Toolbar while edit mode is active: tools, undo/clear, handoff, exit. */
+const renderEditToolbar = (state: AppState): string => {
+  const locale = uiLocale();
+  const ee = state.workspace.elementEdit;
+  const tools = (['move', 'draw', 'comment'] as const)
+    .map(
+      (tool) => `<button type="button" class="ws-mini-button ${ee.tool === tool ? 'is-active' : ''}"
+        data-action="ws-edit-tool" data-tool="${tool}">${escapeHtml(t(locale, `workspace.preview.tool.${tool}`))}</button>`,
+    )
+    .join('');
+  const canHandoff = !!ee.annotations && annotationCount(ee.annotations) > 0 && !ee.busy;
+  return `<div class="ws-toolbar">
+      <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.preview.editMode'))}</span>
+      <span class="ws-toolbar__spacer"></span>
+      ${tools}
+      <button type="button" class="ws-mini-button" data-action="ws-edit-undo">${escapeHtml(t(locale, 'workspace.preview.editUndo'))}</button>
+      <button type="button" class="ws-mini-button" data-action="ws-edit-clear">${escapeHtml(t(locale, 'workspace.preview.editClear'))}</button>
+      <button type="button" class="ws-mini-button is-active" data-action="ws-edit-handoff"
+        title="${escapeHtml(t(locale, 'workspace.preview.handoffTitle'))}" ${canHandoff ? '' : 'disabled aria-disabled="true"'}>
+        ${escapeHtml(t(locale, 'workspace.preview.handoff'))}${ee.busy ? '…' : ''}
+      </button>
+      <button type="button" class="ws-mini-button" data-action="ws-edit-exit"
+        title="${escapeHtml(t(locale, 'workspace.preview.exitEdit'))}" aria-label="${escapeHtml(t(locale, 'workspace.preview.exitEdit'))}">✕</button>
+    </div>`;
+};
+
 export const renderPreviewToolbar = (state: AppState): string => {
   const locale = uiLocale();
   const target = activeBranchName(state);
   const branch = previewBranchName(state);
   const ws = state.workspace;
+  if (ws.elementEdit.active) return `${renderTabStrip(ws)}${renderEditToolbar(state)}`;
   const label =
     branch === target ? `⎇ ${escapeHtml(target)}` : `⎇ ${escapeHtml(branch)} → ${escapeHtml(target)}`;
+
+  const editButton = canEnterEditMode(state)
+    ? `<button type="button" class="ws-mini-button" data-action="ws-edit-mode"
+        title="${escapeHtml(t(locale, 'workspace.preview.editModeTitle'))}">${escapeHtml(t(locale, 'workspace.preview.editMode'))}</button>`
+    : '';
 
   return `${renderTabStrip(ws)}
       <div class="ws-toolbar">
@@ -78,6 +117,7 @@ export const renderPreviewToolbar = (state: AppState): string => {
             autocomplete="off" value="${escapeHtml(ws.previewRoute)}" aria-label="${escapeHtml(t(locale, 'workspace.preview.addressLabel'))}" />
         </form>
         <span class="ws-toolbar__spacer"></span>
+        ${editButton}
         <button type="button" class="ws-mini-button ${ws.pickerActive ? 'is-active' : ''}"
           data-action="ws-element-pick" title="${escapeHtml(t(locale, 'workspace.preview.pickTitle'))}">
           ${escapeHtml(t(locale, ws.pickerActive ? 'workspace.preview.picking' : 'workspace.preview.elementPicker'))}

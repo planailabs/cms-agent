@@ -30,6 +30,11 @@ import {
   newPreviewTab,
   attachContextChip,
   removeContextChip,
+  startEditMode,
+  stopEditMode,
+  setEditTool,
+  onEditChanged,
+  handoffEditAction,
   openBrowserCompare,
   closeBrowserCompare,
   toggleBrowserCompareOverlay,
@@ -41,6 +46,8 @@ import {
   onPreviewAgentEvent,
   startElementPick,
   cancelElementPick,
+  postEditUndo,
+  postEditClear,
 } from './previewAgent';
 import { openArchive, closeArchive, deleteArchivedChat, openArchivedChat } from './archive';
 import { openGitModal, closeGitModal, loadGitCommits, selectGitCommit, backToGitList } from './gitModal';
@@ -65,6 +72,7 @@ import {
   toggleDir,
   workFileTarget,
 } from './codeBrowser';
+import type { EditAnnotations, EditTool } from '@/injected/annotate';
 import type { DiffViewMode, PageContextElement, PageContextSelection } from './state';
 
 const SIDEBAR_MIN_WIDTH = 300;
@@ -103,6 +111,16 @@ const registerAgentEvents = (): void => {
       store.state.workspace.pickerActive = false;
       store.notify();
     }
+  });
+
+  onPreviewAgentEvent('cms:edit-changed', (data) => {
+    const annotations = data.annotations as EditAnnotations | undefined;
+    if (annotations && Array.isArray(annotations.moves)) onEditChanged(annotations);
+  });
+
+  onPreviewAgentEvent('cms:edit-stopped', () => {
+    // Esc inside the page — the module already tore its overlay down
+    stopEditMode({ notifyIframe: false });
   });
 
   registerPreviewAgent();
@@ -239,6 +257,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
       [ws.planModalOpen, closePlanModal],
       [ws.windowPicker !== null, closeWindowPicker],
       [ws.browserCompare.open, closeBrowserCompare],
+      [ws.elementEdit.active, () => stopEditMode()],
     ];
     const hit = closers.find(([open]) => open);
     if (hit) {
@@ -268,8 +287,9 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     target.setAttribute('data-empty', String(empty));
     const send = document.querySelector<HTMLButtonElement>('[data-action="ws-modal-send"]');
     if (send) {
-      send.disabled = empty;
-      send.setAttribute('aria-disabled', String(empty));
+      const disabled = empty && !store.state.workspace.inputModal?.allowEmpty;
+      send.disabled = disabled;
+      send.setAttribute('aria-disabled', String(disabled));
     }
   });
   delegateEvent<KeyboardEvent>(app, 'keydown', '[data-action="ws-modal-input"]', (event) => {
@@ -442,6 +462,27 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     }
     store.notify();
   });
+
+  // Element-edit mode (annotate the preview → handoff to the agent)
+  delegateEvent(app, 'click', '[data-action="ws-edit-mode"]', () => startEditMode());
+  delegateEvent(app, 'click', '[data-action="ws-edit-exit"]', () => stopEditMode());
+  delegateEvent(app, 'click', '[data-action="ws-edit-tool"]', (_e, target) => {
+    const tool = target.getAttribute('data-tool') as EditTool | null;
+    if (tool === 'move' || tool === 'draw' || tool === 'comment') setEditTool(tool);
+  });
+  delegateEvent(app, 'click', '[data-action="ws-edit-undo"]', () => postEditUndo());
+  delegateEvent(app, 'click', '[data-action="ws-edit-clear"]', () => postEditClear());
+  delegateEvent(app, 'click', '[data-action="ws-edit-handoff"]', () =>
+    openInputModal(
+      {
+        title: t(uiLocale(), 'workspace.handoff.title'),
+        hint: t(uiLocale(), 'workspace.handoff.hint'),
+        placeholder: t(uiLocale(), 'workspace.handoff.placeholder'),
+        allowEmpty: true,
+      },
+      (note) => void handoffEditAction(note),
+    ),
+  );
 
   // Retry a failed turn / continue an interrupted session
   delegateEvent(app, 'click', '[data-action="chat-continue"]', () => void continueChatSession());

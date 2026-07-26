@@ -8,11 +8,18 @@
 
 import { store } from '../chat/app/store';
 import { t, uiLocale } from '@/lib/i18n';
+import { annotationCount, type EditAnnotations, type EditTool } from '@/injected/annotate';
 import { transition } from '../chat/actions/chat/stateMachine';
 import { createChat, switchChat, createBranch, loadBranches } from '../chat/actions/chat';
+import { postEditStart, postEditStop, postEditTool } from './previewAgent';
 import { publishCardReducer } from './publishCard';
 import { loadPreviewRoute, scheduleTabsSave } from './tabsSync';
-import type { BrowserName, ContextChip, DiffPage } from './state';
+import {
+  createInitialElementEditState,
+  type BrowserName,
+  type ContextChip,
+  type DiffPage,
+} from './state';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -278,6 +285,11 @@ const flushBeacon = (): void => {
 /** cms:navigation → remember the route + throttled context beacon (1/s). */
 export const onPreviewNavigation = (url: string, route: string): void => {
   const ws = store.state.workspace;
+  // The page changed under an active edit session — its annotations refer to
+  // the old page; drop them (same-route reloads keep the session instead).
+  if (ws.elementEdit.active && ws.previewRoute !== route) {
+    ws.elementEdit = createInitialElementEditState();
+  }
   if (ws.previewRoute !== route) {
     ws.previewRoute = route;
     ws.previewTabs[ws.activeTabIndex] = route;
@@ -317,6 +329,7 @@ const normalizeRoute = (raw: string): string => {
 };
 
 export const navigatePreviewTo = (raw: string): void => {
+  stopEditMode();
   const ws = store.state.workspace;
   const route = normalizeRoute(raw);
   ws.previewRoute = route;
@@ -333,6 +346,7 @@ export const navigatePreviewTo = (raw: string): void => {
 export const switchPreviewTab = (index: number): void => {
   const ws = store.state.workspace;
   if (index === ws.activeTabIndex || index < 0 || index >= ws.previewTabs.length) return;
+  stopEditMode(); // edit sessions are per-page
   ws.activeTabIndex = index;
   ws.previewRoute = ws.previewTabs[index];
   store.notify();
@@ -342,6 +356,7 @@ export const switchPreviewTab = (index: number): void => {
 export const closePreviewTab = (index: number): void => {
   const ws = store.state.workspace;
   if (ws.previewTabs.length <= 1 || index < 0 || index >= ws.previewTabs.length) return;
+  if (index === ws.activeTabIndex) stopEditMode();
   ws.previewTabs.splice(index, 1);
   ws.previewTabIds.splice(index, 1);
   if (ws.activeTabIndex >= ws.previewTabs.length) ws.activeTabIndex = ws.previewTabs.length - 1;
@@ -352,6 +367,7 @@ export const closePreviewTab = (index: number): void => {
 };
 
 export const newPreviewTab = (): void => {
+  stopEditMode();
   const ws = store.state.workspace;
   ws.previewTabs.push('/');
   ws.previewTabIds.push(crypto.randomUUID());
@@ -401,4 +417,65 @@ export const toggleBrowserCompareOverlay = (): void => {
 export const removeContextChip = (): void => {
   store.state.workspace.contextChip = null;
   store.notify();
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Element-edit mode (annotate the preview → handoff to the agent)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const startEditMode = (): void => {
+  const ws = store.state.workspace;
+  ws.elementEdit = createInitialElementEditState();
+  ws.elementEdit.active = true;
+  ws.pickerActive = false;
+  // Mounts the live preview frames first when entering from the diff viewer;
+  // if the iframe is still loading, the module push re-arms edit mode.
+  store.notify();
+  postEditStart();
+};
+
+export const stopEditMode = (opts: { notifyIframe?: boolean } = {}): void => {
+  const ws = store.state.workspace;
+  if (!ws.elementEdit.active) return;
+  if (opts.notifyIframe !== false) postEditStop();
+  ws.elementEdit = createInitialElementEditState();
+  store.notify();
+};
+
+export const setEditTool = (tool: EditTool): void => {
+  const ws = store.state.workspace;
+  if (!ws.elementEdit.active) return;
+  ws.elementEdit.tool = tool;
+  store.notify();
+  postEditTool(tool);
+};
+
+/** cms:edit-changed — the module posts the full set after every mutation. */
+export const onEditChanged = (annotations: EditAnnotations): void => {
+  const ws = store.state.workspace;
+  if (!ws.elementEdit.active) return;
+  ws.elementEdit.annotations = annotations;
+  store.notify();
+};
+
+/** Handoff: annotated screenshot is rendered server-side from this set. */
+export const handoffEditAction = async (note: string): Promise<void> => {
+  const ws = store.state.workspace;
+  const chatId = store.state.activeChatId;
+  const annotations = ws.elementEdit.annotations;
+  if (!chatId || !annotations || annotationCount(annotations) === 0 || ws.elementEdit.busy) return;
+  ws.elementEdit.busy = true;
+  store.notify();
+  const res = await postJson('/api/chat/element-handoff', {
+    chatId,
+    note: note.trim(),
+    annotations,
+  });
+  ws.elementEdit.busy = false;
+  if (res.ok) {
+    stopEditMode();
+    enterWaiting();
+  } else {
+    store.notify();
+  }
 };

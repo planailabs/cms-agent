@@ -14,6 +14,8 @@ export interface InputModalConfig {
   hint?: string;
   /** Shown inside the empty composer (aria-label). */
   placeholder: string;
+  /** Allow submitting with no text (e.g. an optional handoff note). */
+  allowEmpty?: boolean;
 }
 
 let onSubmit: ((text: string) => void) | null = null;
@@ -37,7 +39,7 @@ export const closeInputModal = (): void => {
 export const submitInputModal = (): void => {
   const input = document.querySelector<HTMLElement>('[data-action="ws-modal-input"]');
   const text = input?.textContent?.trim() ?? '';
-  if (!text) return;
+  if (!text && !store.state.workspace.inputModal?.allowEmpty) return;
   const cb = onSubmit;
   closeInputModal();
   cb?.(text);
@@ -72,7 +74,7 @@ export const renderInputModal = (state: AppState): string => {
               class="composer-send-button"
               data-action="ws-modal-send"
               aria-label="${escapeHtml(t(uiLocale(), 'workspace.modal.submit'))}"
-              aria-disabled="true" disabled>
+              ${modal.allowEmpty ? '' : 'aria-disabled="true" disabled'}>
               ${SEND_ICON_SVG}
             </button>
           </div>

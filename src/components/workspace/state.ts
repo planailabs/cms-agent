@@ -6,6 +6,7 @@
  * import in app/state.ts.
  */
 
+import type { EditAnnotations, EditTool } from '@/injected/annotate';
 import type { PublishCardState } from './publishCard';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -210,6 +211,24 @@ export interface ArchiveState {
   busyId: string | null;
 }
 
+/** Element-edit mode — drag/draw/comment on the preview, hand off to agent. */
+export interface ElementEditState {
+  active: boolean;
+  tool: EditTool;
+  /** Latest full annotation set (cms:edit-changed) — the handoff payload.
+   *  Kept in the parent so an iframe reload mid-edit restores it. */
+  annotations: EditAnnotations | null;
+  /** Handoff POST in flight. */
+  busy: boolean;
+}
+
+export const createInitialElementEditState = (): ElementEditState => ({
+  active: false,
+  tool: 'move',
+  annotations: null,
+  busy: false,
+});
+
 export interface DiffState {
   /** Chat the pages were loaded for (guards stale loads). */
   forChatId: string | null;
@@ -249,6 +268,8 @@ export interface WorkspaceState {
   activeTabIndex: number;
   /** Element picker armed (waiting for a click inside the preview). */
   pickerActive: boolean;
+  /** Element-edit mode (annotate the preview, then hand off to the agent). */
+  elementEdit: ElementEditState;
 
   /** Approved plan (chat.planJson from history / captured on approval) —
    *  viewable in every phase, archived chats included. */
@@ -296,7 +317,7 @@ export interface WorkspaceState {
   automatism: AutomatismProgress | null;
 
   /** Generic composer-style input modal (null = closed). */
-  inputModal: { title: string; hint?: string; placeholder: string } | null;
+  inputModal: { title: string; hint?: string; placeholder: string; allowEmpty?: boolean } | null;
 
   /** Target branch has commits the work branch lacks (Sync button shows). */
   targetAhead: boolean;
@@ -335,6 +356,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   previewTabIds: [crypto.randomUUID()],
   activeTabIndex: 0,
   pickerActive: false,
+  elementEdit: createInitialElementEditState(),
   plan: null,
   planModalOpen: false,
   // Height is the predictable default; content alignment remains opt-in and
@@ -405,5 +427,6 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.automatism = null;
   ws.targetAhead = false;
   ws.pickerActive = false;
+  ws.elementEdit = createInitialElementEditState();
   ws.inputModal = null;
 };

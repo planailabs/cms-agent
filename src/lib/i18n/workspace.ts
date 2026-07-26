@@ -79,6 +79,21 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.preview.browsers': '⧉ Browsers',
     'workspace.preview.openNewTab': 'Open preview in a new tab',
     'workspace.preview.frameTitle': 'Preview of {branch}',
+    'workspace.preview.editMode': '✏️ Edit page',
+    'workspace.preview.editModeTitle': 'Annotate the page and hand it off to the agent',
+    'workspace.preview.tool.move': '⇱ Move',
+    'workspace.preview.tool.draw': '✎ Draw',
+    'workspace.preview.tool.comment': '💬 Comment',
+    'workspace.preview.editUndo': '↩ Undo',
+    'workspace.preview.editClear': 'Clear',
+    'workspace.preview.handoff': '🤝 Handoff to agent',
+    'workspace.preview.handoffTitle':
+      'Send a screenshot + your annotations to the agent to plan the change',
+    'workspace.preview.exitEdit': 'Exit edit mode',
+    'workspace.handoff.title': 'Handoff to agent',
+    'workspace.handoff.hint':
+      'Optional note for the agent — it also gets the annotated screenshot and metadata.',
+    'workspace.handoff.placeholder': 'Anything to add? (optional)',
 
     // ── generic input modal + its callers ──
     'workspace.modal.close': 'Close',
@@ -135,6 +150,9 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.injected.chatAboutThis': '💬 Chat about this',
     'workspace.injected.pickInstruction':
       'Click the element you want to discuss. Press Esc to cancel.',
+    'workspace.injected.editInstruction':
+      'Drag elements, draw, or click to comment. Press Esc to finish.',
+    'workspace.injected.commentPlaceholder': 'Comment…',
 
     'workspace.archive.viewTitle': 'Open this chat read-only',
 
@@ -279,6 +297,21 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.preview.browsers': '⧉ Browser',
     'workspace.preview.openNewTab': 'Vorschau in neuem Tab öffnen',
     'workspace.preview.frameTitle': 'Vorschau von {branch}',
+    'workspace.preview.editMode': '✏️ Seite bearbeiten',
+    'workspace.preview.editModeTitle': 'Seite annotieren und an den Agenten übergeben',
+    'workspace.preview.tool.move': '⇱ Verschieben',
+    'workspace.preview.tool.draw': '✎ Zeichnen',
+    'workspace.preview.tool.comment': '💬 Kommentar',
+    'workspace.preview.editUndo': '↩ Rückgängig',
+    'workspace.preview.editClear': 'Leeren',
+    'workspace.preview.handoff': '🤝 An Agent übergeben',
+    'workspace.preview.handoffTitle':
+      'Screenshot + Annotationen an den Agenten senden, damit er die Änderung plant',
+    'workspace.preview.exitEdit': 'Bearbeitungsmodus beenden',
+    'workspace.handoff.title': 'An Agent übergeben',
+    'workspace.handoff.hint':
+      'Optionale Notiz für den Agenten — er erhält außerdem den annotierten Screenshot und die Metadaten.',
+    'workspace.handoff.placeholder': 'Noch etwas dazu? (optional)',
 
     // ── Eingabe-Dialog + Aufrufer ──
     'workspace.modal.close': 'Schließen',
@@ -336,6 +369,9 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.injected.chatAboutThis': '💬 Darüber chatten',
     'workspace.injected.pickInstruction':
       'Klicke auf das Element, über das du sprechen möchtest. Mit Esc abbrechen.',
+    'workspace.injected.editInstruction':
+      'Ziehe Elemente, zeichne oder klicke für einen Kommentar. Esc beendet.',
+    'workspace.injected.commentPlaceholder': 'Kommentar…',
 
     'workspace.archive.viewTitle': 'Diesen Chat schreibgeschützt öffnen',
 
