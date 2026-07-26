@@ -39,8 +39,12 @@ afterAll(async () => {
 
 describe('ui flows', () => {
   it('workspace boots with sidebar, composer, and example prompts', async () => {
+    // The branch list lives in the expandable panel; the collapsed header
+    // shows the active chat, which varies with earlier scenarios' data.
+    await openBranchPanel(s.page);
     const sidebarText = await s.page.locator('#sidebar-region').innerText();
-    ok('sidebar shows the main branch', sidebarText.toLowerCase().includes('main'));
+    ok('branch panel lists the main branch', sidebarText.toLowerCase().includes('main'));
+    await dataAction(s.page, 'ws-branch-list-toggle').first().click();
     const prompts = await dataAction(s.page, 'chat-example-prompt').count();
     ok('example prompts render on the empty chat', prompts > 0, `${prompts} prompts`);
   });
