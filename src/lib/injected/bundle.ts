@@ -9,7 +9,9 @@
  * the old "self-contained function" contract is gone.
  */
 import { build } from 'esbuild';
+import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const ENTRIES = {
   /** The engine script the proxy injects into preview pages (runs on load). */
@@ -57,4 +59,32 @@ export async function bundleInjected(entry: InjectedEntry): Promise<string> {
   const source = result.outputFiles[0].text;
   cache.set(entry, source);
   return source;
+}
+
+let annotateSourceCache: string | null = null;
+
+/**
+ * The annotate bundle for SERVER-side use (Playwright screenshot replay).
+ * In dev/tests the source tree exists and esbuild bundles it; the production
+ * image ships only dist/ + node_modules, so fall back to the static file the
+ * prerendered /injected-annotate.js endpoint emitted into dist/client (walk
+ * up from this compiled chunk — cwd is the data volume, not the app dir).
+ */
+export async function annotateRuntimeSource(): Promise<string> {
+  if (annotateSourceCache) return annotateSourceCache;
+  try {
+    annotateSourceCache = await bundleInjected('annotate');
+  } catch (bundleErr) {
+    let dir = path.dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 6; i++) {
+      const candidate = path.join(dir, 'client', 'injected-annotate.js');
+      if (fs.existsSync(candidate)) {
+        annotateSourceCache = fs.readFileSync(candidate, 'utf8');
+        return annotateSourceCache;
+      }
+      dir = path.dirname(dir);
+    }
+    throw bundleErr;
+  }
+  return annotateSourceCache;
 }

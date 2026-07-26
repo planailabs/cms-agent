@@ -6,7 +6,12 @@
  * scope (as the engine's cms:load-module does) yields the factory.
  */
 import { describe, it, expect } from 'vitest';
-import { ANNOTATE_GLOBAL, bundleInjected, MODULE_GLOBAL } from '@/lib/injected/bundle';
+import {
+  ANNOTATE_GLOBAL,
+  annotateRuntimeSource,
+  bundleInjected,
+  MODULE_GLOBAL,
+} from '@/lib/injected/bundle';
 
 describe('injected agent bundles', () => {
   it('bootstrap bundles to parseable standalone JS', async () => {
@@ -28,6 +33,9 @@ describe('injected agent bundles', () => {
   });
 
   it('annotate bundle exposes apply() via its global name', async () => {
+    // The runtime accessor (dev path = esbuild; prod falls back to the
+    // prerendered dist/client file) must serve the same bundle.
+    expect(await annotateRuntimeSource()).toBe(await bundleInjected('annotate'));
     const src = await bundleInjected('annotate');
     const exported = new Function(
       `"use strict";${src}

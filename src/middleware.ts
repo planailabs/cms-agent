@@ -49,6 +49,7 @@ const PUBLIC_PATHS = [
 const SELF_AUTHENTICATING_PATHS = [
   /^\/injected-cms-agent\.js$/,
   /^\/injected-agent-module\.js$/,
+  /^\/injected-annotate\.js$/,
 ];
 
 export const onRequest = defineMiddleware(async (context, next) => {

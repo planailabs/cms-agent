@@ -163,8 +163,8 @@ export async function captureAnnotatedRoute(
   route: string,
   annotations: import("@/injected/annotate").EditAnnotations,
 ): Promise<{ buffer: Buffer; status: number | null }> {
-  const { ANNOTATE_GLOBAL, bundleInjected } = await import("@/lib/injected/bundle");
-  const source = await bundleInjected("annotate");
+  const { ANNOTATE_GLOBAL, annotateRuntimeSource } = await import("@/lib/injected/bundle");
+  const source = await annotateRuntimeSource();
   const viewport = {
     width: Math.min(3840, Math.max(320, annotations.viewport.width || VIEWPORT.width)),
     height: Math.min(2400, Math.max(320, annotations.viewport.height || VIEWPORT.height)),
