@@ -18,6 +18,7 @@
     "bench:e2e": "node testbench/launcher.mjs --group e2e",
     "bench:admin": "node testbench/launcher.mjs --group admin",
     "bench:proxy": "node testbench/launcher.mjs --group proxy",
+    "bench:recovery": "node testbench/launcher.mjs --group recovery",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },

@@ -27,6 +27,7 @@ const GROUPS = {
   e2e: 'testbench/scenarios/03-e2e-agent.test.ts',
   admin: 'testbench/scenarios/04-admin.test.ts',
   proxy: 'testbench/scenarios/05-preview-proxy.test.ts',
+  recovery: 'testbench/scenarios/06-recovery.test.ts',
 };
 
 // ── args ─────────────────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ const grep = opt('--grep');
 const groups = [];
 let g;
 while ((g = opt('--group'))) {
-  if (!GROUPS[g]) fail(`unknown group '${g}' (api|ui|e2e|admin|proxy)`);
+  if (!GROUPS[g]) fail(`unknown group '${g}' (api|ui|e2e|admin|proxy|recovery)`);
   groups.push(GROUPS[g]);
 }
 

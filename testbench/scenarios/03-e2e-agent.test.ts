@@ -6,19 +6,18 @@
  */
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { BenchClient, turnText, type SseEvent } from '../lib/client';
+import { BenchClient, turnText } from '../lib/client';
 import { benchRun } from '../lib/env';
 import { judgeStep, recordAssert } from '../lib/judge';
 import { saveJourney } from '../lib/journey';
+import {
+  chatState as flowChatState,
+  driveToPlan as flowDriveToPlan,
+  noError,
+} from '../lib/agentFlow';
 
 const SCENARIO = '03-e2e';
 const client = new BenchClient();
-
-interface ChatState {
-  workflowPhase: string;
-  turnPhase: string;
-  pendingQuestion: { toolName: string; input: Record<string, unknown> } | null;
-}
 
 const J: {
   branchId?: string;
@@ -35,36 +34,9 @@ const ok = (name: string, pass: boolean, detail = '') => {
   expect(pass, `${name}: ${detail}`).toBe(true);
 };
 
-const chatState = async (chatId: string): Promise<ChatState> =>
-  ((await client.get(`/api/chat/history?chatId=${chatId}`)).json as { state: ChatState }).state;
-
-const noError = (events: SseEvent[]): boolean => !events.some((e) => e.event === 'error');
-
-/** Drive a chat until the agent pauses on propose_plan (answering any
- *  ask_question rounds along the way). Returns the plan input. */
-async function driveToPlan(
-  chatId: string,
-  firstPrompt: string,
-): Promise<Record<string, unknown>> {
-  let text = firstPrompt;
-  let type: 'message' | 'answer' = 'message';
-  for (let round = 0; round < 4; round++) {
-    const events = await client.sendMessageAndCollect(chatId, text, { type, timeoutMs: 420_000 });
-    ok(`turn ${round + 1} streams without error`, noError(events));
-    const st = await chatState(chatId);
-    if (st.turnPhase === 'waiting_for_answer' && st.pendingQuestion?.toolName === 'propose_plan') {
-      return st.pendingQuestion.input;
-    }
-    if (st.turnPhase === 'waiting_for_answer') {
-      text = 'No preferences — please proceed and propose the plan now.';
-      type = 'answer';
-    } else {
-      text = 'Please propose the plan now using your propose_plan tool.';
-      type = 'message';
-    }
-  }
-  throw new Error('agent never proposed a plan');
-}
+const chatState = (chatId: string) => flowChatState(client, chatId);
+const driveToPlan = (chatId: string, firstPrompt: string) =>
+  flowDriveToPlan(client, SCENARIO, chatId, firstPrompt);
 
 describe('e2e agent journey', () => {
   it('agent proposes a plan for the About headline change', async () => {

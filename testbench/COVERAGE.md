@@ -17,7 +17,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `POST /api/chats/[id]/to-preview` | 03 | ✅ |
 | `POST /api/chats/[id]/publish` (+repeat guard) | 03 | ✅ |
 | `POST /api/chats/[id]/sync` (pull automatism) | 03 (journey B) | ✅ |
-| `POST /api/chats/[id]/resume-automatism` | — | ⛔ needs a paused automatism (conflict/deploy error) — not deterministically reproducible |
+| `POST /api/chats/[id]/resume-automatism` | 06 (pull-conflict + deploy-failure pauses; user-resume or self-resume + 404 guard) | ✅ |
 | `GET /api/chats/archived` | 01, 03 (archive-on-done) | ✅ |
 | `DELETE /api/chats/archived` | 05 (final destructive probe) | ✅ |
 | `GET /api/chat/events` (SSE event stream) | 01/03 (collector), 02 (live UI) | ✅ |
@@ -29,7 +29,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `GET/POST /api/branches` (+name validation) | 01 | ✅ |
 | `GET /api/branches/[id]/history` | 03 | ✅ |
 | `POST /api/branches/[id]/restore` | 03 (roundtrip) | ✅ |
-| `POST /api/branches/[id]/revert` | 03 | 🟡 guard only — a real revert would undo the published journey |
+| `POST /api/branches/[id]/revert` | 03 (guards), 06 (positive revert on its own journey) | ✅ |
 | `GET /api/git/commits` / `GET /api/git/commit` | 02 (UI), 03 (API) | ✅ |
 | `GET /api/diff/[chatId]/pages` | 03 | ✅ |
 | `GET /api/diff/[chatId]/shot` (after/diff/meta) | 03 | 🟡 kinds before/aligned/markers not probed |
@@ -69,7 +69,9 @@ locally booted production build (see `launcher.mjs`). Status legend:
 ## Agent tool paths (implicit via e2e prompts)
 
 Read tools + write_file/edit_file + git commit (03 journey), propose_plan /
-ask_question / finish_execution client tools (03), screenshot/diff pipeline
-(03/05). Web tools, generate_image, run_command, use_skill, propose_memory:
-⛔ not deterministically triggerable — would need prompt-engineering the agent
-into specific tools; revisit with dedicated prompts if coverage is wanted.
+ask_question / finish_execution client tools (03), conflict tools +
+resume_automatism (06 pull-conflict resolution turn), screenshot/diff
+pipeline (03/05). Web tools, generate_image, run_command, use_skill,
+propose_memory: ⛔ not deterministically triggerable — would need
+prompt-engineering the agent into specific tools; revisit with dedicated
+prompts if coverage is wanted.
