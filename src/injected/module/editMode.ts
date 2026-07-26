@@ -132,6 +132,22 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     return b;
   };
 
+  const makeRing = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    extraClass = '',
+  ): HTMLDivElement => {
+    const r = chromeNode('div', `cms-ov-ring${extraClass ? ` ${extraClass}` : ''}`);
+    r.style.left = `${x}px`;
+    r.style.top = `${y}px`;
+    r.style.width = `${w}px`;
+    r.style.height = `${h}px`;
+    document.body.appendChild(r);
+    return r;
+  };
+
   /** Cursor mode: every comment bubble and every annotation's 🗑, no clicks
    *  needed. */
   let allChrome: HTMLElement[] = [];
@@ -155,7 +171,10 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       allChrome.push(makeBin(box.x + box.w + 8, box.y - 30, { kind: 'stroke', index: i }));
     });
     ann.moves.forEach((m, i) => {
+      // The red ring stays visible on moves — the dashed outline alone is
+      // easy to miss next to a floating 🗑.
       allChrome.push(
+        makeRing(m.rect.x + m.dx - 4, m.rect.y + m.dy - 4, m.rect.w + 8, m.rect.h + 8),
         makeBin(m.rect.x + m.dx + m.rect.w + 8, m.rect.y + m.dy - 30, { kind: 'move', index: i }),
       );
     });
@@ -170,11 +189,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     if (selected.kind === 'comment') {
       const c = ann.comments[selected.index];
       if (!c) return;
-      ring = chromeNode('div', 'cms-ov-ring cms-ov-ring--pin');
-      ring.style.left = `${c.x - 15}px`;
-      ring.style.top = `${c.y - 15}px`;
-      ring.style.width = '30px';
-      ring.style.height = '30px';
+      ring = makeRing(c.x - 15, c.y - 15, 30, 30, 'cms-ov-ring--pin');
       binX = c.x + 16;
       binY = c.y - 30;
       showBubble(selected.index);
@@ -182,25 +197,16 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       const s = ann.strokes[selected.index];
       if (!s) return;
       const box = strokeBbox(s);
-      ring = chromeNode('div', 'cms-ov-ring');
-      ring.style.left = `${box.x - 6}px`;
-      ring.style.top = `${box.y - 6}px`;
-      ring.style.width = `${box.w + 12}px`;
-      ring.style.height = `${box.h + 12}px`;
+      ring = makeRing(box.x - 6, box.y - 6, box.w + 12, box.h + 12);
       binX = box.x + box.w + 8;
       binY = box.y - 30;
     } else {
       const m = ann.moves[selected.index];
       if (!m) return;
-      ring = chromeNode('div', 'cms-ov-ring');
-      ring.style.left = `${m.rect.x + m.dx - 4}px`;
-      ring.style.top = `${m.rect.y + m.dy - 4}px`;
-      ring.style.width = `${m.rect.w + 8}px`;
-      ring.style.height = `${m.rect.h + 8}px`;
+      ring = makeRing(m.rect.x + m.dx - 4, m.rect.y + m.dy - 4, m.rect.w + 8, m.rect.h + 8);
       binX = m.rect.x + m.dx + m.rect.w + 8;
       binY = m.rect.y + m.dy - 30;
     }
-    document.body.appendChild(ring);
     bin = makeBin(binX, binY, selected);
   };
 
