@@ -141,6 +141,12 @@ describe('git engine', () => {
     expect(conflicted.conflicts).toEqual(['shared.txt']);
     expect(await engine.rebaseInProgress(wtR)).toBe(true);
 
+    // Continuing with the markers still in the file must refuse (a blind
+    // add -A would commit the markers and "succeed")
+    const premature = await engine.continueRebase('rebase-branch', AUTHOR);
+    expect(premature.conflicts).toEqual(['shared.txt']);
+    expect(await engine.rebaseInProgress(wtR)).toBe(true);
+
     // Both branch commits touch shared.txt → the rebase pauses once per
     // replayed commit; resolve each round until it completes.
     let done = { conflicts: ['shared.txt'] } as Awaited<ReturnType<typeof engine.continueRebase>>;

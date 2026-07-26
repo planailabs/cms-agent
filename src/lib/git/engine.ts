@@ -392,10 +392,24 @@ export async function rebaseOnto(
   return { sha: (await git.revparse(['HEAD'])).trim() };
 }
 
+/** Both marker kinds present = the conflict hunks are still in the file
+ *  (`=======` alone would false-positive on markdown H1 underlines). */
+const hasConflictMarkers = (content: string): boolean =>
+  /^<{7}( |$)/m.test(content) && /^>{7}( |$)/m.test(content);
+
 /** Stage everything and continue an in-progress rebase (next conflict or done). */
 export async function continueRebase(branch: string, author: GitIdentity): Promise<RebaseResult> {
   const dir = await ensureWorktree(branch);
   const git = gitAs(dir, author);
+  // A blind add -A would stage files that still contain conflict markers and
+  // the rebase would "succeed" with the markers committed — refuse those.
+  const pre = await git.status();
+  const unresolved: string[] = [];
+  for (const f of pre.conflicted) {
+    const content = await fs.promises.readFile(path.join(dir, f), 'utf8').catch(() => '');
+    if (hasConflictMarkers(content)) unresolved.push(f);
+  }
+  if (unresolved.length > 0) return { conflicts: unresolved };
   await git.add(['-A']);
   try {
     await git.rebase(['--continue']);
