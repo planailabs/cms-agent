@@ -13,6 +13,16 @@ export default defineConfig({
     // chat/ is the reference app we extracted from — its suite is not ours;
     // examples/ are target-site fixtures; plugins/ are vendored submodules
     // with their own (foreign) test suites.
-    exclude: ['**/node_modules/**', 'chat/**', 'examples/**', 'proxy/**', 'dist/**', 'plugins/**'],
+    // testbench/ has its own config + a launcher-booted server; without the
+    // exclude the default include would collect it under the fake test env.
+    exclude: [
+      '**/node_modules/**',
+      'chat/**',
+      'examples/**',
+      'proxy/**',
+      'dist/**',
+      'plugins/**',
+      'testbench/**',
+    ],
   },
 });

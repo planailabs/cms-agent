@@ -61,3 +61,4 @@ result*
 # scratch browser-verification scripts (ui-verify skill)
 *.local.mjs
 /plugins/
+testbench/results/
