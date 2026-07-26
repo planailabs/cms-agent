@@ -36,6 +36,9 @@ const schema = z.object({
   // Vision-capable model for turns whose context contains an image attachment;
   // falls back to OPENAI_MODEL when unset.
   OPENAI_VISION_MODEL: z.string().min(1).optional(),
+  // Smaller model the testbench judge grades results with; call sites fall
+  // back to OPENAI_MODEL when unset.
+  JUDGE_MODEL: z.string().min(1).optional(),
   OPENAI_MAX_TOKENS: z.coerce.number().int().positive().default(4096),
   DEFAULT_COMMUNICATION_MODE: z.enum(['technical', 'non-technical']).default('non-technical'),
 
