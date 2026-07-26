@@ -6,7 +6,7 @@
  * scope (as the engine's cms:load-module does) yields the factory.
  */
 import { describe, it, expect } from 'vitest';
-import { bundleInjected, MODULE_GLOBAL } from '@/lib/injected/bundle';
+import { ANNOTATE_GLOBAL, bundleInjected, MODULE_GLOBAL } from '@/lib/injected/bundle';
 
 describe('injected agent bundles', () => {
   it('bootstrap bundles to parseable standalone JS', async () => {
@@ -25,5 +25,14 @@ describe('injected agent bundles', () => {
     const factory = typeof exported === 'function' ? exported : exported?.default;
     expect(typeof factory).toBe('function');
     expect((factory as (agent: unknown) => void).length).toBe(1);
+  });
+
+  it('annotate bundle exposes apply() via its global name', async () => {
+    const src = await bundleInjected('annotate');
+    const exported = new Function(
+      `"use strict";${src}
+      return typeof ${ANNOTATE_GLOBAL} !== "undefined" ? ${ANNOTATE_GLOBAL} : undefined;`,
+    )() as { apply?: unknown } | undefined;
+    expect(typeof exported?.apply).toBe('function');
   });
 });

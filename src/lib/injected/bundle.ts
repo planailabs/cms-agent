@@ -20,11 +20,22 @@ const ENTRIES = {
    * evaluating the text in a function scope (no page-global pollution).
    */
   module: 'src/injected/module/index.ts',
+  /**
+   * Annotation replay for handoff screenshots — evaluated by Playwright in a
+   * fresh preview page (never served over HTTP). Exposes apply(annotations).
+   */
+  annotate: 'src/injected/annotateEntry.ts',
 } as const;
 
 export type InjectedEntry = keyof typeof ENTRIES;
 
 export const MODULE_GLOBAL = '__cmsAgentModule';
+export const ANNOTATE_GLOBAL = '__cmsAnnotate';
+
+const GLOBAL_NAMES: Partial<Record<InjectedEntry, string>> = {
+  module: MODULE_GLOBAL,
+  annotate: ANNOTATE_GLOBAL,
+};
 
 const cache = new Map<InjectedEntry, string>();
 
@@ -38,7 +49,7 @@ export async function bundleInjected(entry: InjectedEntry): Promise<string> {
     bundle: true,
     write: false,
     format: 'iife',
-    globalName: entry === 'module' ? MODULE_GLOBAL : undefined,
+    globalName: GLOBAL_NAMES[entry],
     platform: 'browser',
     target: 'es2020',
     legalComments: 'none',
