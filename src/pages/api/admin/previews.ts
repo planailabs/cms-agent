@@ -14,7 +14,7 @@ import {
   listStartErrors,
   stopInstance,
 } from '@/lib/preview/manager';
-import { validateBranchName } from '@/lib/git/engine';
+import { isBranchShaped } from '@/lib/git/engine';
 import { requireAdmin } from '@/lib/adminGuard';
 
 const json = (data: unknown, status = 200) =>
@@ -43,8 +43,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const parsed = actionSchema.safeParse(raw);
   if (!parsed.success) return json({ error: parsed.error.message }, 400);
   const { branch, action } = parsed.data;
-  const invalid = validateBranchName(branch);
-  if (invalid) return json({ error: invalid }, 400);
+  // Shape check only — creation rules would reject 'main' and the c-/v-
+  // system instances, which are exactly what admins manage here.
+  if (!isBranchShaped(branch)) return json({ error: 'Invalid branch name' }, 400);
 
   await stopInstance(branch);
   clearStartError(branch);

@@ -40,6 +40,13 @@ function gitAs(dir: string, id: GitIdentity): SimpleGit {
   });
 }
 
+/** Shape-only check for names of EXISTING branches/instances — accepts the
+ *  reserved names (main) and the v-/c- system prefixes that
+ *  validateBranchName (a creation gate) rejects. */
+export function isBranchShaped(name: string): boolean {
+  return BRANCH_RE.test(name);
+}
+
 /** DNS-safe label usable as subdomain AND git branch (plan §5). */
 export function validateBranchName(name: string): string | null {
   if (!BRANCH_RE.test(name)) {

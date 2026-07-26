@@ -23,6 +23,9 @@ const ok = (name: string, pass: boolean, detail = '') => {
 
 describe('admin surface', () => {
   it('branches, chats, previews reflect the run', async () => {
+    // Branch sync (and the seeded per-branch Deployments chat) happens on the
+    // user-facing listing — the workspace always calls it first.
+    await admin.get('/api/branches');
     const branches = (await admin.get('/api/admin/branches')).json as {
       branches?: { name: string }[];
     };

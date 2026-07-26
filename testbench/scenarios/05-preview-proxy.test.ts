@@ -17,8 +17,9 @@ const ok = (name: string, pass: boolean, detail = '') => {
   expect(pass, `${name}: ${detail}`).toBe(true);
 };
 
-/** Fetch a preview route until the dev server actually serves it (the boot
- *  page responds while deps install / the server starts). */
+/** Fetch a preview route until the dev server actually serves it — the boot
+ *  page is also 200 HTML ("Starting preview…"), so a site-specific marker is
+ *  required. */
 async function waitForPreview(url: string, marker: RegExp, timeoutMs = 420_000): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   let last = '';
@@ -26,7 +27,7 @@ async function waitForPreview(url: string, marker: RegExp, timeoutMs = 420_000):
     try {
       const res = await fetch(url, { headers: client.headers() });
       last = await res.text();
-      if (res.status === 200 && marker.test(last)) return last;
+      if (res.status === 200 && marker.test(last) && !/Starting preview/i.test(last)) return last;
     } catch {
       /* proxy hiccup while instance restarts */
     }
@@ -37,7 +38,7 @@ async function waitForPreview(url: string, marker: RegExp, timeoutMs = 420_000):
 
 describe('preview + proxy', () => {
   it('main preview boots on demand and carries the injected bootstrap', async () => {
-    const html = await waitForPreview(previewUrl('main'), /<html/i);
+    const html = await waitForPreview(previewUrl('main'), /Acme Consulting/);
     ok('preview serves the site through the proxy', true);
     ok(
       'preview HTML carries the injected agent script',
@@ -67,9 +68,10 @@ describe('preview + proxy', () => {
       `${res.status} ${location}`,
     );
 
-    // SSE wait stream: instance is up → expect a `ready` frame quickly
+    // SSE wait stream on the CMS host (a ROUTED preview host forwards
+    // /__preview/* to the site server). Instance is up → immediate `ready`.
     const controller = new AbortController();
-    const stream = await fetch(`${benchRun().baseUrl.replace('localhost', 'main.localhost')}/__preview/wait/main`, {
+    const stream = await fetch(`${benchRun().baseUrl}/__preview/wait/main`, {
       headers: client.headers(),
       signal: controller.signal,
     });
@@ -83,12 +85,11 @@ describe('preview + proxy', () => {
         const { value, done } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
-        if (/event: (ready|phase)/.test(buf)) sawReady = /event: ready/.test(buf) || sawReady;
-        if (/event: ready/.test(buf)) sawReady = true;
+        sawReady = /event: ready/.test(buf);
       }
     }
     controller.abort();
-    ok('wait stream announces readiness', sawReady);
+    ok('wait stream announces readiness', sawReady, `http ${stream.status}`);
   }, 300_000);
 
   it('unknown preview hosts fall back safely', async () => {
