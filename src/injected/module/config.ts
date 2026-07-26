@@ -21,7 +21,7 @@ export const cfg: OverlayConfig = {
   labels: {
     chatAboutThis: '💬 Chat about this',
     pickInstruction: 'Click the element you want to discuss. Press Esc to cancel.',
-    editInstruction: 'Drag elements, draw, or click to comment. Esc finishes.',
+    editInstruction: 'Drag elements, draw, or click to comment. Esc discards your annotations and exits.',
     commentPlaceholder: 'Comment…',
   },
 };

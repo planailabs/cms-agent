@@ -151,7 +151,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.injected.pickInstruction':
       'Click the element you want to discuss. Press Esc to cancel.',
     'workspace.injected.editInstruction':
-      'Drag elements, draw, or click to comment. Press Esc to finish.',
+      'Drag elements, draw, or click to comment. Esc discards your annotations and exits.',
     'workspace.injected.commentPlaceholder': 'Comment…',
 
     'workspace.archive.viewTitle': 'Open this chat read-only',
@@ -370,7 +370,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.injected.pickInstruction':
       'Klicke auf das Element, über das du sprechen möchtest. Mit Esc abbrechen.',
     'workspace.injected.editInstruction':
-      'Ziehe Elemente, zeichne oder klicke für einen Kommentar. Esc beendet.',
+      'Ziehe Elemente, zeichne oder klicke für einen Kommentar. Esc verwirft die Annotationen und beendet.',
     'workspace.injected.commentPlaceholder': 'Kommentar…',
 
     'workspace.archive.viewTitle': 'Diesen Chat schreibgeschützt öffnen',
