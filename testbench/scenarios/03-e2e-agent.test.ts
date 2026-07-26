@@ -122,12 +122,12 @@ describe('e2e agent journey', () => {
 
   it('diff endpoints show the change on the About page', async () => {
     const pages = (await client.get(`/api/diff/${J.chatId}/pages`)).json as {
-      pages?: { url: string }[];
+      pages?: { route: string }[];
       changedFiles?: string[];
     };
     ok(
       'diff pages include /about',
-      (pages.pages ?? []).some((p) => p.url.includes('about')),
+      (pages.pages ?? []).some((p) => p.route.includes('about')),
       JSON.stringify(pages.pages),
     );
 
