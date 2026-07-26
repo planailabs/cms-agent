@@ -40,14 +40,14 @@ beforeAll(() => {
 });
 
 describe('generate_image', () => {
-  it('is execute-only, rejects escapes before generation, and writes the image', async () => {
+  it('is scratch-gated outside execute, rejects escapes before generation, and writes the image', async () => {
     const input = {
       prompt: 'A quiet editorial desk in warm morning light',
       path: 'src/assets/hero.png',
       altText: 'An editorial desk in warm morning light',
     };
     expect(JSON.parse(await executeTool('generate_image', input, ctx('plan'))).error).toMatch(
-      /not allowed in the plan phase/,
+      /Only \.scratch\/ is writable/,
     );
     expect(
       JSON.parse(await executeTool('generate_image', { ...input, path: '../hero.png' }, ctx())).error,

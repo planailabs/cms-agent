@@ -16,7 +16,6 @@ import {
   validateBranchName,
 } from '@/lib/git/engine';
 import { listInstances, stopInstance, clearStartError } from '@/lib/preview/manager';
-import { removeScratchpad } from '@/lib/agent/tools/scratchTools';
 import { requireAdmin } from '@/lib/adminGuard';
 
 const json = (data: unknown, status = 200) =>
@@ -89,7 +88,6 @@ export const DELETE: APIRoute = async ({ url, locals }) => {
     await removeWorktree(b);
     await deleteBranch(b);
   }
-  for (const c of branch?.chats ?? []) removeScratchpad(c.id);
   if (branch) await prisma.branch.delete({ where: { id: branch.id } });
   return json({ ok: true });
 };

@@ -177,15 +177,18 @@ describe('question tool results', () => {
 });
 
 describe('phase gating', () => {
-  it('exposes write tools only in execute phase', () => {
+  it('exposes write tools in every phase (scratch-gated outside execute)', () => {
     const planTools = toolsForPhase('plan').map((t) => t.name);
     const execTools = toolsForPhase('execute').map((t) => t.name);
     expect(planTools).toContain('read_file');
     expect(planTools).toContain('propose_plan');
-    expect(planTools).not.toContain('write_file');
+    // Write tools are listed in all phases; outside execute they only accept
+    // .scratch/ paths (enforced inside execute()).
+    expect(planTools).toContain('write_file');
     expect(execTools).toContain('write_file');
-    expect(planTools).not.toContain('remove_file');
+    expect(planTools).toContain('remove_file');
     expect(execTools).toContain('remove_file');
+    expect(execTools).toContain('move_file');
     expect(execTools).toContain('finish_execution');
     expect(execTools).toContain('return_to_plan');
     expect(planTools).toContain('user_ui_change_language');
@@ -215,9 +218,9 @@ describe('phase gating', () => {
     }
   });
 
-  it('rejects a write tool executed during plan phase', async () => {
+  it('rejects a site write executed during plan phase', async () => {
     const res = await executeTool('write_file', { path: 'x.md', content: 'y' }, makeCtx());
-    expect(JSON.parse(res).error).toMatch(/not allowed in the plan phase/);
+    expect(JSON.parse(res).error).toMatch(/Only \.scratch\/ is writable/);
   });
 
   it('identifies client-side tools', () => {
@@ -275,7 +278,7 @@ describe('mcp bridge', () => {
     const names = tools.map((t) => t.function.name);
     expect(names).toContain('read_file');
     expect(names).toContain('ask_question');
-    expect(names).not.toContain('write_file');
+    expect(names).toContain('write_file'); // all phases; scratch-gated in plan
     expect(tools.find((t) => t.function.name === 'read_file')?.function.parameters).toHaveProperty(
       'properties',
     );

@@ -75,7 +75,7 @@ describe('prompt-injection fixtures', () => {
       { path: 'src/pages/hacked.astro', content: 'x' },
       ctx('plan'),
     );
-    expect(JSON.parse(write).error).toMatch(/not allowed in the plan phase/);
+    expect(JSON.parse(write).error).toMatch(/Only \.scratch\/ is writable/);
   });
 
   it('injected content cannot become approved memory', () => {

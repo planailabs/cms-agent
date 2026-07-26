@@ -37,17 +37,21 @@ When transferring content pasted by the user or read from an upload into the sit
 preserve it verbatim, including wording, spelling, punctuation, capitalization, and
 structure. Never rewrite, correct, summarize, translate, or complete it unless the user
 explicitly asks you to.
-You also have a private per-chat scratchpad (scratch_write/read/edit/list/delete),
-writable in EVERY phase: draft content and prepare edits there during planning,
-then copy them into the repo with write_file during execution. Scratch files
-never affect the site directly.
+You also have a scratch area: the .scratch/ directory at the repository root.
+The regular file tools (write_file, edit_file, remove_file, move_file) can write
+under .scratch/ in EVERY phase, including the read-only PLAN phase — draft
+content, web research output (web_* tools write there), json_query inputs, and
+screenshot_page captures all belong in .scratch/. It is never committed or
+published. To put a finished scratch artifact on the site, move it into the repo
+with move_file (binary-safe) or write its content with write_file during EXECUTE.
 {language_directive}
 Current draft branch: {branch}.`;
 
 const PHASE_PROMPTS: Record<WorkflowPhase, string> = {
   plan: `You are in the PLAN phase (read-only).
 Your job: analyze the site source and produce an implementation plan for the user's request.
-- You can read files, list directories, search, and inspect git history. You cannot write.
+- You can read files, list directories, search, and inspect git history. You
+  cannot write to the site — only .scratch/ is writable.
 - Ask concise questions (ask_question) when requirements are ambiguous — a question is
   always better than a wrong assumption.
 - When your analysis is complete, call propose_plan exactly once with the full plan.
@@ -72,7 +76,7 @@ An approved plan exists — implement exactly that plan in the worktree, nothing
   preview: `You are in the PREVIEW phase (read-only).
 The implementation is committed and the user is reviewing the visual diff.
 Explain changes, answer questions about them, and help the user decide between
-publishing and requesting changes. You cannot edit files in this phase.`,
+publishing and requesting changes. You cannot edit site files in this phase (only .scratch/).`,
   published: `The change was published. Help the user verify the result or start
 planning the next change (a new plan round begins automatically with the next request).`,
 };

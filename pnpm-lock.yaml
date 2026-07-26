@@ -35,6 +35,9 @@ importers:
       dotenv:
         specifier: ^17.3.1
         version: 17.4.2
+      jq-wasm:
+        specifier: 3.0.0-jq-1.8.2
+        version: 3.0.0-jq-1.8.2
       marked:
         specifier: ^17.0.5
         version: 17.0.6
@@ -2392,6 +2395,10 @@ packages:
 
   jose@6.2.3:
     resolution: {integrity: sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==}
+
+  jq-wasm@3.0.0-jq-1.8.2:
+    resolution: {integrity: sha512-jgWSEBJSd0lYR4Q5Fw8333MxQS5jCRI+g9KwAGL7yK1spwzTJy8C5uOS08wbpKE0Gz8oQYLlRpNLE/W70Ksp2g==}
+    engines: {node: '>=20'}
 
   js-yaml@4.3.0:
     resolution: {integrity: sha512-1td788aAnnZ5qs7V2QIRl1owjtYpbKt749Y3xauqQgwIIGF/xXWz1wMTEBx5O3LK3lXLVuqXPdPxj2BoFHaW9Q==}
@@ -5971,6 +5978,8 @@ snapshots:
   jiti@2.7.0: {}
 
   jose@6.2.3: {}
+
+  jq-wasm@3.0.0-jq-1.8.2: {}
 
   js-yaml@4.3.0:
     dependencies:

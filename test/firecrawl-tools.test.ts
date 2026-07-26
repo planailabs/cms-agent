@@ -77,28 +77,47 @@ describe('Firecrawl agent tools', () => {
     }
   });
 
-  it('reads and writes by jailed paths without returning large content', async () => {
+  it('reads and writes by jailed .scratch paths without returning large content', async () => {
     const context = ctx('plan');
     const transformed = JSON.parse(await executeTool('firecrawl_transform_html', {
-      inputPath: 'input.html', outputPath: 'artifacts/clean.html', url: 'https://example.com/',
+      inputPath: 'input.html', outputPath: '.scratch/artifacts/clean.html', url: 'https://example.com/',
     }, context));
-    expect(transformed).toEqual({ path: 'artifacts/clean.html', bytes: 18 });
-    expect(fs.readFileSync(path.join(repo, 'artifacts/clean.html'), 'utf8')).toBe('<main>clean</main>');
-    expect(context.modifiedPaths).toContain('artifacts/clean.html');
+    expect(transformed).toEqual({ path: '.scratch/artifacts/clean.html', bytes: 18 });
+    expect(fs.readFileSync(path.join(repo, '.scratch/artifacts/clean.html'), 'utf8')).toBe('<main>clean</main>');
+    expect(context.modifiedPaths.size).toBe(0); // scratch output never marks site changes
     expect(JSON.parse(await executeTool('firecrawl_transform_html', {
-      inputPath: '../escape.html', outputPath: 'x', url: 'https://example.com/',
+      inputPath: '../escape.html', outputPath: '.scratch/x', url: 'https://example.com/',
     }, context)).error).toMatch(/escapes the repository/);
   });
 
-  it('writes browser scrape and search results to files', async () => {
+  it('rejects outputPath outside .scratch/ in every phase', async () => {
+    for (const phase of ['plan', 'execute', 'preview', 'published'] as const) {
+      const res = JSON.parse(await executeTool('web_search', {
+        query: 'example', outputPath: 'web/search.json',
+      }, ctx(phase)));
+      expect(res.error, phase).toMatch(/must be under \.scratch\//);
+    }
+  });
+
+  it('writes browser scrape and search results to scratch files', async () => {
     const context = ctx('published');
     expect(JSON.parse(await executeTool('web_scrape', {
-      url: 'https://example.com/', outputPath: 'web/page.html',
-    }, context))).toMatchObject({ path: 'web/page.html' });
+      url: 'https://example.com/', outputPath: '.scratch/web/page.html',
+    }, context))).toMatchObject({ path: '.scratch/web/page.html' });
     expect(JSON.parse(await executeTool('web_search', {
-      query: 'example', outputPath: 'web/search.json',
-    }, context))).toMatchObject({ path: 'web/search.json', count: 1 });
-    expect(fs.readFileSync(path.join(repo, 'web/page.html'), 'utf8')).toContain('page');
-    expect(JSON.parse(fs.readFileSync(path.join(repo, 'web/search.json'), 'utf8')).web).toHaveLength(1);
+      query: 'example', outputPath: '.scratch/web/search.json',
+    }, context))).toMatchObject({ path: '.scratch/web/search.json', count: 1 });
+    expect(fs.readFileSync(path.join(repo, '.scratch/web/page.html'), 'utf8')).toContain('page');
+    expect(JSON.parse(fs.readFileSync(path.join(repo, '.scratch/web/search.json'), 'utf8')).web).toHaveLength(1);
+    expect(context.modifiedPaths.size).toBe(0);
+  });
+
+  it('screenshot_page rejects non-scratch output before launching anything', async () => {
+    const { registerScreenshotTools } = await import('@/lib/agent/tools/screenshotTools');
+    registerScreenshotTools();
+    const res = JSON.parse(await executeTool('screenshot_page', {
+      route: '/', outputPath: 'src/assets/shot.png',
+    }, ctx('execute')));
+    expect(res.error).toMatch(/must be under \.scratch\//);
   });
 });

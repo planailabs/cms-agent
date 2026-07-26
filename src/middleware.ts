@@ -3,6 +3,8 @@
  * allowlist on every request (covers users removed after sign-up), guards
  * API routes, including preview subdomains through Better Auth's shared cookie.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { defineMiddleware } from 'astro:middleware';
 import { auth, COOKIE_SCOPE_MARKER, sessionCookieMigrationHeaders } from '@/lib/auth';
 import { isEmailAllowed } from '@/lib/allowlist';
@@ -18,6 +20,11 @@ import { env } from '@/lib/env';
 // during astro build).
 if (process.env.VAR_DIR) {
   initRoutesFile();
+  // Legacy scratchpad storage (pre-.scratch/-in-worktree) — drop it once.
+  fs.rmSync(path.join(path.resolve(process.env.VAR_DIR), 'scratch'), {
+    recursive: true,
+    force: true,
+  });
   const proxyStartedByServer = Boolean(
     (globalThis as typeof globalThis & { __nativeProxy?: { started?: boolean } }).__nativeProxy
       ?.started,

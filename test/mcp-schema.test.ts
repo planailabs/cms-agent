@@ -48,7 +48,7 @@ describe('mcp → openai tool schemas', () => {
       // test runs with a sandbox; its empty schema is upstream's.
       const legitimatelyEmpty = new Set([
         'list_pages', 'git_status', 'git_branches', 'get_user_context', 'list_conflicts',
-        'resume_automatism', 'git_rebase_continue', 'git_rebase_abort', 'scratch_list',
+        'resume_automatism', 'git_rebase_continue', 'git_rebase_abort',
         'list_uploads', 'content_inventory', 'site_structure', 'list_projects',
       ]);
       const unexpected = empty.map((t) => t.function.name).filter((n) => !legitimatelyEmpty.has(n));

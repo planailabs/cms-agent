@@ -81,7 +81,8 @@ function repoGit(): SimpleGit {
 // from being swept into execution commits (and later blocking merges as
 // untracked files in the target checkout) when it doesn't.
 // Framework artifacts (.astro/, dist/, …) come from the active site backend.
-const COMMON_EXCLUDES = ['node_modules/', '.DS_Store', 'package-lock.json'];
+// .scratch/: the agent's per-branch scratch area — never committed.
+const COMMON_EXCLUDES = ['node_modules/', '.DS_Store', 'package-lock.json', '.scratch/'];
 const EXCLUDE_MARKER = '# cms-agent managed excludes';
 let excludesEnsured = false;
 

@@ -12,7 +12,7 @@ import { jail } from './fsTools';
 import { registerTool, type ToolDef } from './registry';
 import { activeBackend } from '@/lib/site';
 
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro', '.cms']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro', '.cms', '.scratch']);
 // .html: pages of static sites (and valid under src/pages for Astro)
 const CODE_EXT = new Set(['.astro', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.md', '.mdx', '.html']);
 

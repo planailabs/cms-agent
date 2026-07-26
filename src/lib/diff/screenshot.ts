@@ -94,6 +94,64 @@ function shotFiles(
   };
 }
 
+/** Launch a browser and open one preview route; caller closes `launched`. */
+async function openPage(
+  port: number,
+  route: string,
+  browser: BrowserName,
+  viewport = VIEWPORT,
+): Promise<{
+  launched: import("playwright").Browser;
+  page: import("playwright").Page;
+  status: number | null;
+}> {
+  const playwright = await import("playwright");
+  // chromiumSandbox: false — chromium's own SUID/namespace sandbox is
+  // unreliable inside the container; the content is our own site preview.
+  const launched = await playwright[browser].launch(
+    browser === "chromium" ? { chromiumSandbox: false } : {},
+  );
+  try {
+    const page = await launched.newPage({ viewport });
+    // Connect on the host the dev server actually binds (HOST — ::1 in dev,
+    // 127.0.0.1 in prod); v6 needs brackets.
+    const host = env().HOST;
+    const h = host.includes(":") ? `[${host}]` : host;
+    const response = await page.goto(`http://${h}:${port}${route}`, {
+      waitUntil: "networkidle",
+      timeout: 30_000,
+    });
+    return { launched, page, status: response?.status() ?? null };
+  } catch (err) {
+    await launched.close();
+    throw err;
+  }
+}
+
+const MOBILE_VIEWPORT = { width: 390, height: 844 };
+
+/** Capture one route of a branch's live preview (boots the preview if needed). */
+export async function captureRoute(
+  branch: string,
+  route: string,
+  outFile: string,
+  opts: { browser?: BrowserName; mobile?: boolean } = {},
+): Promise<{ status: number | null }> {
+  const instance = await ensureInstance(branch);
+  const { launched, page, status } = await openPage(
+    instance.port,
+    route,
+    opts.browser ?? "chromium",
+    opts.mobile ? MOBILE_VIEWPORT : VIEWPORT,
+  );
+  try {
+    await page.screenshot({ path: outFile, fullPage: true });
+  } finally {
+    await launched.close();
+  }
+  return { status };
+}
+
 /** Raw shot: render the route, capture content markers next to it, screenshot. */
 async function screenshot(
   port: number,
@@ -101,23 +159,9 @@ async function screenshot(
   outFile: string,
   browser: BrowserName = "chromium",
 ): Promise<MarkerDoc | null> {
-  const playwright = await import("playwright");
-  // chromiumSandbox: false — chromium's own SUID/namespace sandbox is
-  // unreliable inside the container; the content is our own site preview.
-  const launched = await playwright[browser].launch(
-    browser === "chromium" ? { chromiumSandbox: false } : {},
-  );
+  const { launched, page } = await openPage(port, route, browser);
   let markers: MarkerDoc | null = null;
   try {
-    const page = await launched.newPage({ viewport: VIEWPORT });
-    // Connect on the host the dev server actually binds (HOST — ::1 in dev,
-    // 127.0.0.1 in prod); v6 needs brackets.
-    const host = env().HOST;
-    const h = host.includes(":") ? `[${host}]` : host;
-    await page.goto(`http://${h}:${port}${route}`, {
-      waitUntil: "networkidle",
-      timeout: 30_000,
-    });
     // Content markers next to the shot — also tags each element (data-cmsm) so
     // the aligned pass can re-select it. Captured BEFORE the shot: same layout.
     try {
@@ -165,17 +209,7 @@ async function openAligned(
   browser: BrowserName,
   spacers: Spacer[],
 ): Promise<AlignedPage> {
-  const playwright = await import("playwright");
-  const launched = await playwright[browser].launch(
-    browser === "chromium" ? { chromiumSandbox: false } : {},
-  );
-  const page = await launched.newPage({ viewport: VIEWPORT });
-  const host = env().HOST;
-  const h = host.includes(":") ? `[${host}]` : host;
-  await page.goto(`http://${h}:${port}${route}`, {
-    waitUntil: "networkidle",
-    timeout: 30_000,
-  });
+  const { launched, page } = await openPage(port, route, browser);
   await page.evaluate(COLLECT_MARKERS_JS); // assign data-cmsm the plan indexes by
   if (spacers.length) {
     await page.evaluate(

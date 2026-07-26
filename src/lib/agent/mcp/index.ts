@@ -97,12 +97,22 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
     async callTool(name, input) {
       const ext = externals.find((e) => e.toolNames.has(name));
       if (ext) return ext.callTool(name, input);
-      const result = await client.callTool({ name, arguments: input });
-      const content = (result.content ?? []) as Array<{ type: string; text?: string }>;
-      return content
-        .filter((c) => c.type === 'text' && typeof c.text === 'string')
-        .map((c) => c.text)
-        .join('\n');
+      try {
+        const result = await client.callTool({ name, arguments: input });
+        const content = (result.content ?? []) as Array<{ type: string; text?: string }>;
+        return content
+          .filter((c) => c.type === 'text' && typeof c.text === 'string')
+          .map((c) => c.text)
+          .join('\n');
+      } catch (err) {
+        // Unknown/removed tool names (e.g. scratch_* from pre-.scratch chat
+        // histories) must not abort the turn — return an error the model can
+        // act on instead.
+        const msg = err instanceof Error ? err.message : String(err);
+        return JSON.stringify({
+          error: `Unknown or failed tool "${name}": ${msg}. Scratch files live in the .scratch/ directory — use write_file/read_file/list_dir on .scratch/ paths.`,
+        });
+      }
     },
     async close() {
       await Promise.allSettled([client.close(), server.close(), ...externals.map((e) => e.close())]);

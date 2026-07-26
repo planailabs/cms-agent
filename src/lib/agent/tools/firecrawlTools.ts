@@ -7,21 +7,31 @@ import {
   firecrawlNative,
 } from '@/lib/firecrawl/native';
 import { crawlWeb, mapWeb, scrapeWeb, searchWeb } from '@/lib/firecrawl/web';
-import { jail } from './fsTools';
+import { isScratchPath, jail } from './fsTools';
 import { registerTool, type ToolContext, type ToolDef } from './registry';
 
 const ALL_PHASES = ['plan', 'execute', 'preview', 'published'] as const;
 const inputPathSchema = z.object({ inputPath: z.string() });
+const scratchOutputPath = z
+  .string()
+  .describe(
+    'Destination under .scratch/ — research output is never committed; promote a file into the site with move_file during EXECUTE',
+  );
 
 function readText(ctx: ToolContext, file: string): string {
   return fs.readFileSync(jail(ctx, file), 'utf8');
 }
 
 function write(ctx: ToolContext, file: string, data: string | Buffer): number {
+  // Web output is scratch-only in every phase; it never enters commits.
+  if (!isScratchPath(file)) {
+    throw new Error(
+      'outputPath must be under .scratch/ — promote files into the site with move_file during EXECUTE',
+    );
+  }
   const destination = jail(ctx, file);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.writeFileSync(destination, data);
-  ctx.modifiedPaths.add(file);
   return Buffer.byteLength(data);
 }
 
@@ -61,7 +71,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_transform_html',
     description: 'Clean an HTML file with Firecrawl and write the transformed HTML to a repo path.',
     schema: inputPathSchema.extend({
-      outputPath: z.string(),
+      outputPath: scratchOutputPath,
       url: z.string().url(),
       includeTags: z.array(z.string()).default([]),
       excludeTags: z.array(z.string()).default([]),
@@ -82,7 +92,7 @@ const nativeTools: ToolDef[] = [
   {
     name: 'firecrawl_get_inner_text',
     description: 'Extract body text from an HTML file and write it to a repo path.',
-    schema: inputPathSchema.extend({ outputPath: z.string() }),
+    schema: inputPathSchema.extend({ outputPath: scratchOutputPath }),
     phases: [...ALL_PHASES],
     async execute(input, ctx) {
       const text = await firecrawlNative().getInnerJson(readText(ctx, input.inputPath));
@@ -116,7 +126,7 @@ const nativeTools: ToolDef[] = [
   {
     name: 'firecrawl_post_process_markdown',
     description: 'Post-process a Markdown file with Firecrawl and write the result to a repo path.',
-    schema: inputPathSchema.extend({ outputPath: z.string() }),
+    schema: inputPathSchema.extend({ outputPath: scratchOutputPath }),
     phases: [...ALL_PHASES],
     async execute(input, ctx) {
       const markdown = await firecrawlNative().postProcessMarkdown(readText(ctx, input.inputPath));
@@ -193,7 +203,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_process_pdf',
     description: 'Extract a PDF to Markdown with Firecrawl, writing Markdown to a repo path.',
     schema: inputPathSchema.extend({
-      outputPath: z.string(),
+      outputPath: scratchOutputPath,
       maxPages: z.number().int().positive().optional(),
     }),
     phases: [...ALL_PHASES],
@@ -207,7 +217,7 @@ const nativeTools: ToolDef[] = [
   {
     name: 'firecrawl_convert_document',
     description: 'Convert a DOC, DOCX, RTF, ODT, or XLSX file to HTML and write it to a repo path.',
-    schema: inputPathSchema.extend({ outputPath: z.string() }),
+    schema: inputPathSchema.extend({ outputPath: scratchOutputPath }),
     phases: [...ALL_PHASES],
     async execute(input, ctx) {
       const extension = path.extname(input.inputPath).toLowerCase() as keyof typeof FIRECRAWL_DOCUMENT_TYPES;
@@ -225,7 +235,7 @@ const nativeTools: ToolDef[] = [
 
 const fetchSchema = z.object({
   url: z.string().url(),
-  outputPath: z.string(),
+  outputPath: scratchOutputPath,
   headers: z.record(z.string(), z.string()).optional(),
   maxBytes: z.number().int().positive().max(MAX_FETCH_BYTES).default(MAX_FETCH_BYTES),
 });
@@ -242,7 +252,7 @@ const scrapeOptionsSchema = z.object({
 
 const traverseSchema = z.object({
   url: z.string().url(),
-  outputPath: z.string(),
+  outputPath: scratchOutputPath,
   limit: z.number().int().positive().optional(),
   maxDiscoveryDepth: z.number().int().nonnegative().max(10).optional(),
   includePaths: z.array(z.string()).optional(),
@@ -258,7 +268,7 @@ const webTools: ToolDef[] = [
   {
     name: 'web_scrape',
     description: 'Render a public page in Chromium, clean it with Firecrawl, and write its HTML to a repo path.',
-    schema: scrapeOptionsSchema.extend({ url: z.string().url(), outputPath: z.string() }),
+    schema: scrapeOptionsSchema.extend({ url: z.string().url(), outputPath: scratchOutputPath }),
     phases: [...ALL_PHASES],
     async execute(input, ctx) {
       const document = await scrapeWeb(input.url, input);
@@ -275,7 +285,7 @@ const webTools: ToolDef[] = [
     description: 'Search the public web and write structured web results to a JSON file.',
     schema: z.object({
       query: z.string().min(1),
-      outputPath: z.string(),
+      outputPath: scratchOutputPath,
       limit: z.number().int().min(1).max(30).default(5),
       includeDomains: z.array(z.string()).optional(),
       excludeDomains: z.array(z.string()).optional(),

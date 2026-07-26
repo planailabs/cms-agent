@@ -1,5 +1,6 @@
 /**
- * Repo tools — read tools for all phases, write tools for EXECUTE only.
+ * Repo tools — read tools for all phases; write tools work on the site only
+ * in EXECUTE, but on the git-excluded .scratch/ area in every phase.
  * Every path is jailed to the chat's branch worktree; symlink escapes are
  * rejected via realpath containment.
  */
@@ -21,6 +22,27 @@ import { activeBackend } from '@/lib/site';
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro']);
 const MAX_FILE_CHARS = 50_000;
 const MAX_RESULTS = 200;
+
+/**
+ * The scratch area: a git-excluded directory at the repo root, writable in
+ * every phase. Never committed or published; part of the regular file tree.
+ */
+export const SCRATCH_DIR = '.scratch';
+
+/** True when a repo-relative path points into the scratch area. */
+export function isScratchPath(p: string): boolean {
+  // jail() independently guarantees worktree containment; normalize resolves
+  // "foo/../.scratch/x" → ".scratch/x" and ".scratch/../src/x" → "src/x".
+  const norm = path.posix.normalize(p.replaceAll('\\', '/'));
+  return norm === SCRATCH_DIR || norm.startsWith(`${SCRATCH_DIR}/`);
+}
+
+/** Writes outside EXECUTE are restricted to the scratch area. */
+export function assertWritable(ctx: ToolContext, ...paths: string[]): void {
+  if (ctx.workflowPhase === 'execute') return;
+  if (paths.every(isScratchPath)) return;
+  throw new Error('Only .scratch/ is writable outside the execute phase');
+}
 
 /** Resolve p inside the worktree; throws on escape (including via symlink). */
 export function jail(ctx: ToolContext, p: string): string {
@@ -139,7 +161,9 @@ const listPagesTool: ToolDef = {
   async execute(_input, ctx) {
     const root = jail(ctx, '.');
     const backend = activeBackend();
-    const files = [...walk(root, root)].filter((f) => backend.isSiteContent(f));
+    const files = [...walk(root, root)].filter(
+      (f) => backend.isSiteContent(f) && !isScratchPath(f),
+    );
     return files.join('\n') || '(no pages found)';
   },
 };
@@ -220,19 +244,21 @@ const gitBranchesTool: ToolDef = {
   },
 };
 
-// ─── Write tools (EXECUTE only) ──────────────────────────────────────────────
+// ─── Write tools (site in EXECUTE only; .scratch/ in every phase) ────────────
 
 const writeFileTool: ToolDef = {
   name: 'write_file',
-  description: 'Create or overwrite a file in the repository.',
+  description:
+    'Create or overwrite a file in the repository. Outside the EXECUTE phase only paths under .scratch/ (the uncommitted scratch area) are writable.',
   schema: z.object({ path: z.string(), content: z.string() }),
-  phases: ['execute'],
+  phases: [...ALL_PHASES],
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
+    assertWritable(ctx, input.path);
     const p = jail(ctx, input.path);
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, input.content);
-    ctx.modifiedPaths.add(input.path);
+    if (!isScratchPath(input.path)) ctx.modifiedPaths.add(input.path);
     return JSON.stringify({ success: true, path: input.path });
   },
 };
@@ -247,9 +273,10 @@ const editFileTool: ToolDef = {
     newText: z.string(),
     replaceAll: z.boolean().default(false),
   }),
-  phases: ['execute'],
+  phases: [...ALL_PHASES],
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
+    assertWritable(ctx, input.path);
     const p = jail(ctx, input.path);
     const content = fs.readFileSync(p, 'utf8');
     const occurrences = content.split(input.oldText).length - 1;
@@ -265,7 +292,7 @@ const editFileTool: ToolDef = {
         ? content.split(input.oldText).join(input.newText)
         : content.replace(input.oldText, input.newText),
     );
-    ctx.modifiedPaths.add(input.path);
+    if (!isScratchPath(input.path)) ctx.modifiedPaths.add(input.path);
     return JSON.stringify({ success: true, path: input.path });
   },
 };
@@ -277,16 +304,37 @@ const removeFileTool: ToolDef = {
     path: z.string(),
     recursive: z.boolean().default(false).describe('Required to remove directories and their contents'),
   }),
-  phases: ['execute'],
+  phases: [...ALL_PHASES],
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
+    assertWritable(ctx, input.path);
     const p = jail(ctx, input.path);
     if (p === fs.realpathSync(ctx.worktreePath)) {
       return JSON.stringify({ error: 'Cannot remove the repository root' });
     }
     fs.rmSync(p, { recursive: input.recursive });
-    ctx.modifiedPaths.add(input.path);
+    if (!isScratchPath(input.path)) ctx.modifiedPaths.add(input.path);
     return JSON.stringify({ success: true, removed: input.path });
+  },
+};
+
+const moveFileTool: ToolDef = {
+  name: 'move_file',
+  description:
+    'Move or rename a file or directory within the repository — binary-safe. Use it to promote finished .scratch/ artifacts (screenshots, downloads, drafts) into the site during EXECUTE. Outside the EXECUTE phase both source and destination must be under .scratch/.',
+  schema: z.object({ from: z.string(), to: z.string() }),
+  phases: [...ALL_PHASES],
+  kinds: [...REPO_KINDS],
+  async execute(input, ctx) {
+    // Gate the source too: moving a repo file during plan mutates the repo.
+    assertWritable(ctx, input.from, input.to);
+    const src = jail(ctx, input.from);
+    const dst = jail(ctx, input.to);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.renameSync(src, dst); // same filesystem (one worktree) — no EXDEV
+    if (!isScratchPath(input.from)) ctx.modifiedPaths.add(input.from);
+    if (!isScratchPath(input.to)) ctx.modifiedPaths.add(input.to);
+    return JSON.stringify({ success: true, from: input.from, to: input.to });
   },
 };
 
@@ -318,5 +366,6 @@ export function registerFsTools(): void {
   registerTool(writeFileTool);
   registerTool(editFileTool);
   registerTool(removeFileTool);
+  registerTool(moveFileTool);
   registerTool(getUserContextTool);
 }
