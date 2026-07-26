@@ -9,6 +9,7 @@
 import { store } from '../chat/app/store';
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
+import type { EditAnnotations, EditTool } from '@/injected/annotate';
 import type { AppState } from '../chat/app/state';
 import { ensureActiveChat, loadBranches, switchChat } from '../chat/actions/chat';
 import { openCodeBrowser, openFile } from './codeBrowser';
@@ -26,6 +27,9 @@ interface WindowViewState {
   sidebarCollapsed: boolean;
   codeBrowser: { open: boolean; filePath: string | null; expanded: string[] };
   browserCompare: { open: boolean; a: string; b: string; mode: string };
+  /** Active element-edit session — annotations survive reloads and server
+   *  restarts (the deploy update-watcher reloads every window). */
+  elementEdit?: { active: boolean; tool: EditTool; annotations: EditAnnotations | null };
 }
 
 export interface WindowSessionSummary {
@@ -55,6 +59,11 @@ const captureViewState = (state: AppState): WindowViewState => {
       b: ws.browserCompare.b,
       mode: ws.browserCompare.mode,
     },
+    elementEdit: {
+      active: ws.elementEdit.active,
+      tool: ws.elementEdit.tool,
+      annotations: ws.elementEdit.annotations,
+    },
   };
 };
 
@@ -82,6 +91,19 @@ const applyViewState = (blob: WindowViewState): void => {
     ws.codeBrowser.expanded = Array.isArray(cb.expanded) ? cb.expanded : ['.'];
     openCodeBrowser();
     if (cb.filePath) void openFile(cb.filePath);
+  }
+  const ee = blob.elementEdit;
+  if (ee?.active) {
+    // previewAgent re-arms the iframe module on load (cms:edit-start carries
+    // these annotations back into the page).
+    ws.elementEdit = {
+      active: true,
+      tool: (['cursor', 'move', 'draw', 'comment'] as EditTool[]).includes(ee.tool)
+        ? ee.tool
+        : 'cursor',
+      annotations: ee.annotations ?? null,
+      busy: false,
+    };
   }
   store.notify();
 };
