@@ -123,7 +123,9 @@ export const connectEvents = (): Promise<void> => {
       for (const type of eventTypes) {
         es.addEventListener(type, (event) => {
           try {
-            const data = JSON.parse((event as MessageEvent).data);
+            const raw = (event as MessageEvent).data as string | undefined;
+            // Payload-less broadcasts arrive as '' / 'undefined' — treat as {}.
+            const data = raw && raw !== 'undefined' ? JSON.parse(raw) : {};
             handleServerEvent(type, data);
           } catch (err) {
             console.error('[sse-client] Failed to parse event:', err);

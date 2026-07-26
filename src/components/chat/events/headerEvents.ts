@@ -34,11 +34,14 @@ export const registerHeaderEvents = (app: HTMLElement) => {
       const selectedLocale = target.getAttribute('data-locale') as LocaleKey;
       const state = store.state;
       if (selectedLocale && selectedLocale !== state.localeKey) {
+        // document lang FIRST — the setState render pass resolves uiLocale()
+        // from it (e.g. the preview toolbar); setting it afterwards leaves
+        // those regions in the previous language until an unrelated render.
+        persistLocaleSelection(selectedLocale);
         store.setState({
           localeKey: selectedLocale,
           isLanguageMenuOpen: false,
         });
-        persistLocaleSelection(selectedLocale);
         persistLanguagePreference(selectedLocale);
       } else {
         store.setState({ isLanguageMenuOpen: false });

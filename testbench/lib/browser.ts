@@ -30,10 +30,26 @@ export async function newSession(browser: Browser, email = 'admin@localhost'): P
 export const dataAction = (page: Page, name: string): Locator =>
   page.locator(`[data-action="${name}"]`);
 
-/** Load the workspace and wait until the chat composer is interactive. */
+/** Load the workspace and wait until the chat composer is interactive. A
+ *  fresh window may get the "continue where you left off?" offer first —
+ *  start fresh in that case. */
 export async function bootWorkspace(page: Page): Promise<void> {
   await page.goto(`${benchRun().baseUrl}/`, { waitUntil: 'domcontentloaded' });
-  await dataAction(page, 'machine-config-input').first().waitFor({ state: 'visible', timeout: 60_000 });
+  const composer = dataAction(page, 'machine-config-input').first();
+  const fresh = dataAction(page, 'ws-wsn-fresh').first();
+  await composer.or(fresh).waitFor({ state: 'visible', timeout: 60_000 });
+  if (await fresh.isVisible()) {
+    await fresh.click();
+    await composer.waitFor({ state: 'visible', timeout: 60_000 });
+  }
+}
+
+/** Expand the sidebar branch panel if collapsed (menu/new-chat live there). */
+export async function openBranchPanel(page: Page): Promise<void> {
+  if ((await dataAction(page, 'ws-branch-menu-toggle').count()) === 0) {
+    await dataAction(page, 'ws-branch-list-toggle').first().click();
+    await dataAction(page, 'ws-branch-menu-toggle').first().waitFor({ timeout: 10_000 });
+  }
 }
 
 /** Viewport screenshot as base64 (judge artifact). */

@@ -64,6 +64,16 @@ export class BenchClient {
     return this.req('GET', path);
   }
 
+  /** Binary GET (screenshots, downloads). */
+  async getBinary(path: string): Promise<{ status: number; buffer: Buffer; type: string }> {
+    const res = await fetch(`${this.baseUrl}${path}`, { headers: this.headers() });
+    return {
+      status: res.status,
+      buffer: Buffer.from(await res.arrayBuffer()),
+      type: res.headers.get('content-type') ?? '',
+    };
+  }
+
   async upload(filename: string, mime: string, data: Buffer, chatId?: string): Promise<ApiResponse> {
     const form = new FormData();
     form.set('file', new File([new Uint8Array(data)], filename, { type: mime }));

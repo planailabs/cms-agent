@@ -15,17 +15,29 @@ export async function judgeStep(opts: {
   step: string;
   criteria: string;
   artifacts?: JudgeArtifact[];
+  /** Odd vote count for majority judging of borderline/stochastic checks. */
+  votes?: number;
 }): Promise<EvalResult> {
   const { env } = benchRun();
   const artifacts = opts.artifacts ?? [];
   const saved = artifacts
     .filter((a) => a.kind === 'screenshot')
     .map((a) => saveArtifact(`${opts.scenario}-${a.label}`, Buffer.from(a.content, 'base64')));
-  const verdict = await evaluatorJudge(env, {
-    step: opts.step,
-    criteria: opts.criteria,
-    artifacts,
-  });
+  const votes = Math.max(1, opts.votes ?? 1);
+  const results: EvalResult[] = [];
+  for (let i = 0; i < votes; i++) {
+    results.push(
+      await evaluatorJudge(env, { step: opts.step, criteria: opts.criteria, artifacts }),
+    );
+  }
+  const passes = results.filter((r) => r.pass).length;
+  const verdict: EvalResult = {
+    pass: passes > votes / 2,
+    reasoning:
+      votes === 1
+        ? results[0].reasoning
+        : `${passes}/${votes} votes pass — ${results.map((r) => r.reasoning).join(' | ')}`,
+  };
   recordVerdict({
     scenario: opts.scenario,
     step: opts.step,
