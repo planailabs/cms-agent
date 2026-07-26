@@ -98,13 +98,19 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   };
 
   /** 🗑 button that deletes the given annotation (indices are regenerated on
-   *  every render, so the captured selection stays valid until then). */
+   *  every render, so the captured selection stays valid until then).
+   *  Clamped to the document on all sides — callers place it past the
+   *  annotation's right edge, which lands offscreen for full-width elements. */
   const makeBin = (x: number, y: number, sel: AnnotationSelection): HTMLButtonElement => {
+    const BIN = 26;
+    const doc = document.documentElement;
+    const maxX = Math.max(doc.scrollWidth, doc.clientWidth) - BIN - 4;
+    const maxY = Math.max(doc.scrollHeight, doc.clientHeight) - BIN - 4;
     const b = chromeNode('button', 'cms-ov-bin');
     b.type = 'button';
     b.textContent = '🗑';
-    b.style.left = `${Math.max(4, x)}px`;
-    b.style.top = `${Math.max(4, y)}px`;
+    b.style.left = `${Math.min(Math.max(4, x), maxX)}px`;
+    b.style.top = `${Math.min(Math.max(4, y), maxY)}px`;
     b.addEventListener('pointerdown', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -519,6 +525,15 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     if (pending) closeCommentBox();
     else stop(true);
   }) as EventListener;
+
+  // Reflow moves the doc edges the bin clamp depends on — reposition chrome.
+  listen(
+    window,
+    'resize',
+    agent.safe(() => {
+      if (active && tool === 'cursor') showAllChrome();
+    }) as EventListener,
+  );
 
   listen(document, 'pointerdown', onPointerDown, true);
   listen(document, 'pointermove', onPointerMove, true);
