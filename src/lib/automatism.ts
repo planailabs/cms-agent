@@ -221,10 +221,27 @@ async function invokeAgent(chatId: string, userId: string): Promise<void> {
     return;
   }
   try {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { language: true } });
+    const [user, chat] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { language: true } }),
+      prisma.chat.findUnique({ where: { id: chatId }, select: { turnPhase: true } }),
+    ]);
     // Dynamic import: handler → tools → resume_automatism → this module
     const { handleChatMessage } = await import('@/lib/agent/handler');
-    await handleChatMessage(userId, user?.language ?? 'en', { chatId, type: 'continue', text: '' });
+    // A pending client-tool question (e.g. the finish-execution card after a
+    // completed execution) makes a 'continue' turn refuse with "answer the
+    // pending question instead" — and the failure would then sit unhandled
+    // forever. Answer the question with the interruption so the turn runs.
+    const body =
+      chat?.turnPhase === 'waiting_for_answer'
+        ? {
+            chatId,
+            type: 'answer' as const,
+            text:
+              'An automatism step failed and needs attention — handle the failure described in ' +
+              'the messages above first; re-raise this question afterwards if it is still relevant.',
+          }
+        : { chatId, type: 'continue' as const, text: '' };
+    await handleChatMessage(userId, user?.language ?? 'en', body);
   } catch (err) {
     console.error('[automatism] agent invocation failed:', err);
     const message = err instanceof Error ? err.message : 'Internal error';

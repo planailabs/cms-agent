@@ -13,6 +13,7 @@ import { resetEnvCache } from '@/lib/env';
 vi.mock('@/lib/agent/handler', () => ({ handleChatMessage: vi.fn(async () => {}) }));
 
 import { prisma } from '@/lib/db';
+import { handleChatMessage } from '@/lib/agent/handler';
 import { resumeAutomatism } from '@/lib/automatism';
 
 let repo: string;
@@ -89,8 +90,17 @@ describe('pull automatism (Sync)', () => {
 
   it('pauses on conflicts in EXECUTE and resumes to done with phase restored', async () => {
     const branch = await prisma.branch.findUniqueOrThrow({ where: { name: 'main' } });
+    // A pending finish-execution card is the realistic sync-after-execution
+    // state — the failure invocation must answer it, not refuse the turn.
     const chat = await prisma.chat.create({
-      data: { branchId: branch.id, workBranch: 'c-pullconf', createdById: ACTOR.id, title: 'Conf' },
+      data: {
+        branchId: branch.id,
+        workBranch: 'c-pullconf',
+        createdById: ACTOR.id,
+        title: 'Conf',
+        turnPhase: 'waiting_for_answer',
+        pendingQuestion: { toolName: 'finish_execution', input: {} },
+      },
     });
     const wt = await engine.ensureWorktree('c-pullconf');
     fs.writeFileSync(path.join(wt, 'index.md'), 'draft version\n');
@@ -107,6 +117,11 @@ describe('pull automatism (Sync)', () => {
       (await prisma.chat.findUniqueOrThrow({ where: { id: chat.id } })).workflowPhase,
     ).toBe('execute');
     expect(await engine.rebaseInProgress(wt)).toBe(true);
+    expect(handleChatMessage).toHaveBeenCalledWith(
+      ACTOR.id,
+      expect.any(String),
+      expect.objectContaining({ chatId: chat.id, type: 'answer' }),
+    );
 
     // Agent resolves and finishes the rebase, then resumes
     fs.writeFileSync(path.join(wt, 'index.md'), 'resolved\n');
