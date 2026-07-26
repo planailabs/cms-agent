@@ -152,6 +152,44 @@ export async function captureRoute(
   return { status };
 }
 
+/**
+ * Handoff capture: render the route on the branch preview, replay the user's
+ * element-edit annotations with the shared renderer (bundled annotate entry,
+ * same code the live edit mode uses), and screenshot the annotated page.
+ * The annotation viewport is matched so document coordinates line up.
+ */
+export async function captureAnnotatedRoute(
+  branch: string,
+  route: string,
+  annotations: import("@/injected/annotate").EditAnnotations,
+): Promise<{ buffer: Buffer; status: number | null }> {
+  const { ANNOTATE_GLOBAL, bundleInjected } = await import("@/lib/injected/bundle");
+  const source = await bundleInjected("annotate");
+  const viewport = {
+    width: Math.min(3840, Math.max(320, annotations.viewport.width || VIEWPORT.width)),
+    height: Math.min(2400, Math.max(320, annotations.viewport.height || VIEWPORT.height)),
+  };
+  const instance = await ensureInstance(branch);
+  const { launched, page, status } = await openPage(
+    instance.port,
+    route,
+    "chromium",
+    viewport,
+  );
+  try {
+    if (status !== null && status < 400) {
+      await page.addScriptTag({ content: source });
+      await page.evaluate(
+        `${ANNOTATE_GLOBAL}.apply(${JSON.stringify(annotations)})`,
+      );
+    }
+    const buffer = await page.screenshot({ fullPage: true });
+    return { buffer, status };
+  } finally {
+    await launched.close();
+  }
+}
+
 /** Raw shot: render the route, capture content markers next to it, screenshot. */
 async function screenshot(
   port: number,
