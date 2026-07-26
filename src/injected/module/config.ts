@@ -8,7 +8,12 @@ import type { AgentApi } from '../protocol';
 
 export interface OverlayConfig {
   theme: 'light' | 'dark';
-  labels: { chatAboutThis: string; pickInstruction: string };
+  labels: {
+    chatAboutThis: string;
+    pickInstruction: string;
+    editInstruction: string;
+    commentPlaceholder: string;
+  };
 }
 
 export const cfg: OverlayConfig = {
@@ -16,6 +21,8 @@ export const cfg: OverlayConfig = {
   labels: {
     chatAboutThis: '💬 Chat about this',
     pickInstruction: 'Click the element you want to discuss. Press Esc to cancel.',
+    editInstruction: 'Drag elements, draw, or click to comment. Esc finishes.',
+    commentPlaceholder: 'Comment…',
   },
 };
 
@@ -31,11 +38,10 @@ export const initConfig = (agent: AgentApi): void => {
     agent.safe((data: Record<string, unknown>) => {
       if (data.theme === 'light' || data.theme === 'dark') cfg.theme = data.theme;
       const labels = data.labels as Record<string, unknown> | undefined;
-      if (labels && typeof labels.chatAboutThis === 'string') {
-        cfg.labels.chatAboutThis = labels.chatAboutThis;
-      }
-      if (labels && typeof labels.pickInstruction === 'string') {
-        cfg.labels.pickInstruction = labels.pickInstruction;
+      if (labels) {
+        for (const key of Object.keys(cfg.labels) as Array<keyof OverlayConfig['labels']>) {
+          if (typeof labels[key] === 'string') cfg.labels[key] = labels[key];
+        }
       }
       for (const fn of listeners) fn();
     }),

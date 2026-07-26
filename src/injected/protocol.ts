@@ -16,6 +16,13 @@
  *   parent → child  any other cms:* message → routed to module handlers (agent.on)
  *   child → parent  any other cms:* message → routed to workspace handlers
  *
+ * Element-edit mode (module/editMode.ts):
+ *   parent → child  {type:'cms:edit-start', annotations?, tool?}
+ *   parent → child  {type:'cms:edit-stop'|'cms:edit-undo'|'cms:edit-clear'}
+ *   parent → child  {type:'cms:edit-tool', tool:'move'|'draw'|'comment'}
+ *   child → parent  {type:'cms:edit-changed', annotations}   full set, every mutation
+ *   child → parent  {type:'cms:edit-stopped'}                Esc inside the page
+ *
  * Deliberately one-way eval: the parent evaluates code in the preview, never
  * the reverse — preview content is less trusted than the workspace.
  */

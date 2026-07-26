@@ -14,6 +14,7 @@
 import type { AgentApi } from '../protocol';
 import { initConfig } from './config';
 import { createListen } from './dom';
+import { initEditMode } from './editMode';
 import { initNavigation } from './navigation';
 import { initSelection } from './selection';
 import { initPicker } from './picker';
@@ -29,7 +30,13 @@ const STYLE =
   'max-width:calc(100vw - 32px);padding:8px 14px;border-radius:999px;background:#1e1e1e;color:#fff;' +
   'font:600 13px/1.4 system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.4);pointer-events:none}' +
   '.cms-ov-hl{position:fixed;z-index:2147483645;pointer-events:none;' +
-  'outline:2px solid #7852ee;outline-offset:-1px;background:rgba(120,82,238,.12);border-radius:2px}';
+  'outline:2px solid #7852ee;outline-offset:-1px;background:rgba(120,82,238,.12);border-radius:2px}' +
+  '.cms-ov-edit-input{position:absolute;z-index:2147483646;padding:6px;border-radius:8px;' +
+  'border:1px solid #e5484d;background:#1e1e1e;box-shadow:0 4px 14px rgba(0,0,0,.35)}' +
+  '.cms-ov-edit-input.cms-ov-light{background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.18)}' +
+  '.cms-ov-edit-input input{width:220px;border:0;outline:0;background:transparent;' +
+  'color:#eee;font:13px/1.4 system-ui,sans-serif}' +
+  '.cms-ov-edit-input.cms-ov-light input{color:#222}';
 
 export default function cmsAgentModule(agent: AgentApi): void {
   const style = document.createElement('style');
@@ -43,4 +50,5 @@ export default function cmsAgentModule(agent: AgentApi): void {
   initNavigation(agent, listen);
   initSelection(agent, listen);
   initPicker(agent);
+  initEditMode(agent, listen);
 }

@@ -24,7 +24,7 @@ const headingPathFor = (el: Element): string[] => {
   return headings.slice(-3);
 };
 
-const elementInfo = (el: Element): Record<string, unknown> => {
+export const elementInfo = (el: Element): Record<string, unknown> => {
   const info: Record<string, unknown> = { tag: el.tagName.toLowerCase() };
   const text = (
     (el as HTMLElement).innerText ||
