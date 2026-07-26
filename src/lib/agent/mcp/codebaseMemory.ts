@@ -10,6 +10,7 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { simpleGit } from 'simple-git';
 import { ensureSandbox, runSandboxed, sandboxCommand, sandboxHasBin } from '@/lib/sandbox';
 import { externalMcp, type ExternalMcp } from './external';
 import type { ToolContext } from '../tools/registry';
@@ -44,8 +45,31 @@ async function ensureAutoIndex(sb: Awaited<ReturnType<typeof ensureSandbox>>, ct
   else console.warn(`[codebase-memory] enabling auto_index failed: ${res.stderr || res.stdout}`);
 }
 
+interface CachedAttachment {
+  headSha: string;
+  attachment: Promise<ExternalMcp | null>;
+  client: Client | null;
+}
+
+// Cached per chat across turns (globalThis: survive Vite HMR reloads in dev,
+// same pattern as custom.ts). The server auto-refreshes its graph only on
+// START, so the cache key includes the worktree HEAD: a commit between turns
+// respawns (and thus reindexes); everything else reuses the live process.
+const g = globalThis as unknown as { __cbmCache?: Map<string, CachedAttachment> };
+const cache = (): Map<string, CachedAttachment> => (g.__cbmCache ??= new Map());
+const MAX_CACHED = 8;
+
+async function closeCached(state: CachedAttachment): Promise<void> {
+  try {
+    await state.attachment;
+    await state.client?.close();
+  } catch {
+    /* old server teardown must not affect the new one */
+  }
+}
+
 export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMcp | null> {
-  let sb;
+  let sb: Awaited<ReturnType<typeof ensureSandbox>>;
   try {
     sb = await ensureSandbox();
   } catch (err) {
@@ -57,7 +81,30 @@ export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMc
     return null;
   }
 
+  let headSha = '';
   try {
+    headSha = (await simpleGit(ctx.worktreePath).revparse(['HEAD'])).trim();
+  } catch {
+    // worktree gone/uninitialized — drop any cached server for this chat
+    const old = cache().get(ctx.chatId);
+    if (old) {
+      void closeCached(old);
+      cache().delete(ctx.chatId);
+    }
+    return null;
+  }
+
+  const cur = cache().get(ctx.chatId);
+  if (cur && cur.headSha === headSha) {
+    // Re-insert: Map order is the LRU order the eviction below relies on.
+    cache().delete(ctx.chatId);
+    cache().set(ctx.chatId, cur);
+    return cur.attachment;
+  }
+  if (cur) void closeCached(cur);
+
+  const state: CachedAttachment = { headSha, client: null, attachment: Promise.resolve(null) };
+  state.attachment = (async (): Promise<ExternalMcp | null> => {
     await ensureAutoIndex(sb, ctx);
     const { command, args } = sandboxCommand(sb, [BIN], {
       cwd: ctx.worktreePath,
@@ -66,7 +113,8 @@ export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMc
     const transport = new StdioClientTransport({ command, args });
     const client = new Client({ name: 'cms-agent-codebase-memory', version: '1.0.0' });
     await client.connect(transport);
-    return await externalMcp(
+    state.client = client;
+    const ext = await externalMcp(
       client,
       (d) =>
         `${d} (Codebase graph of this chat's branch — ` +
@@ -74,10 +122,23 @@ export async function attachCodebaseMemory(ctx: ToolContext): Promise<ExternalMc
       'Use the codebase-memory graph tools to query the syntax tree of the branch ' +
         '(symbols, call paths, dependencies, architecture) instead of grepping for structure.',
     );
-  } catch (err) {
+    // The server outlives the turn; the cache owns the real teardown.
+    return { ...ext, close: async () => {} };
+  })().catch((err: unknown) => {
     warnOnce(`connect failed (${err instanceof Error ? err.message : err})`);
+    cache().delete(ctx.chatId);
     return null;
+  });
+
+  cache().delete(ctx.chatId);
+  cache().set(ctx.chatId, state);
+  // Bounded: evict the least-recently attached chat's server.
+  while (cache().size > MAX_CACHED) {
+    const [oldestKey, oldest] = cache().entries().next().value as [string, CachedAttachment];
+    void closeCached(oldest);
+    cache().delete(oldestKey);
   }
+  return state.attachment;
 }
 
 /**

@@ -136,15 +136,23 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       select: { id: true, mime: true, storedPath: true },
     });
     const byId = new Map(ups.map((u) => [u.id, u]));
+    // toOpenAiMessages runs every round — memoize so each image is read and
+    // base64-encoded once per turn, not once per round.
+    const encoded = new Map<string, { mime: string; dataUrl: string } | null>();
     resolveImage = (uploadId) => {
+      if (encoded.has(uploadId)) return encoded.get(uploadId)!;
       const u = byId.get(uploadId);
-      if (!u) return null;
-      try {
-        const b = fs.readFileSync(u.storedPath);
-        return { mime: u.mime, dataUrl: `data:${u.mime};base64,${b.toString('base64')}` };
-      } catch {
-        return null;
+      let result: { mime: string; dataUrl: string } | null = null;
+      if (u) {
+        try {
+          const b = fs.readFileSync(u.storedPath);
+          result = { mime: u.mime, dataUrl: `data:${u.mime};base64,${b.toString('base64')}` };
+        } catch {
+          result = null;
+        }
       }
+      encoded.set(uploadId, result);
+      return result;
     };
   }
 
