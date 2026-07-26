@@ -168,7 +168,10 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     });
     ann.strokes.forEach((s, i) => {
       const box = strokeBbox(s);
-      allChrome.push(makeBin(box.x + box.w + 8, box.y - 30, { kind: 'stroke', index: i }));
+      allChrome.push(
+        makeRing(box.x - 6, box.y - 6, box.w + 12, box.h + 12),
+        makeBin(box.x + box.w + 8, box.y - 30, { kind: 'stroke', index: i }),
+      );
     });
     ann.moves.forEach((m, i) => {
       // The red ring stays visible on moves — the dashed outline alone is
@@ -460,12 +463,31 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ev.stopPropagation();
     if (tool === 'move' && target instanceof HTMLElement) {
       // A click on an existing annotation selects it (handled on click);
-      // don't start a drag from a pin/stroke position.
-      if (hitTestAnnotations(ann, ev.pageX, ev.pageY)?.kind === 'comment') return;
-      const selector = cssPath(target);
-      const existing = moveEntry(selector);
+      // don't start a drag from a pin position.
+      const hit = hitTestAnnotations(ann, ev.pageX, ev.pageY);
+      if (hit?.kind === 'comment') return;
+      let el = target;
+      let selector = cssPath(target);
+      let existing = moveEntry(selector);
+      if (!existing && hit?.kind === 'move') {
+        // Grabbed inside an already-moved element (often via a child node,
+        // which has its own selector) — re-drag the existing move instead of
+        // recording a second one for the child.
+        const m = ann.moves[hit.index];
+        let resolved: Element | null = null;
+        try {
+          resolved = document.querySelector(m.selector);
+        } catch {
+          /* keep the event target */
+        }
+        if (resolved instanceof HTMLElement) {
+          el = resolved;
+          selector = m.selector;
+          existing = m;
+        }
+      }
       drag = {
-        el: target,
+        el,
         selector,
         baseDx: existing?.dx ?? 0,
         baseDy: existing?.dy ?? 0,
