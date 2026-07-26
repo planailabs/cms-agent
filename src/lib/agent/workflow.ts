@@ -63,12 +63,22 @@ async function updatePhase(
 }
 
 /** Resume a paused turn by answering the pending client tool. */
-function resumeTurn(chatId: string, actor: TransitionOpts['actor'], text: string): void {
+function resumeTurn(
+  chatId: string,
+  actor: TransitionOpts['actor'],
+  text: string,
+  attachmentIds?: string[],
+): void {
   const lockId = acquireTurnLock(chatId);
   if (!lockId) return; // a turn is already running; the agent will see the new phase next turn
   void (async () => {
     try {
-      await handleChatMessage(actor.id, actor.language ?? 'en', { chatId, type: 'answer', text });
+      await handleChatMessage(actor.id, actor.language ?? 'en', {
+        chatId,
+        type: 'answer',
+        text,
+        attachmentIds,
+      });
     } catch (err) {
       console.error('[workflow] resume error:', err);
       broadcast(chatId, 'error', {
@@ -172,6 +182,44 @@ export async function requestChanges(opts: TransitionOpts & { feedback: string }
         .finally(() => releaseTurnLock(opts.chatId, lockId));
     }
   }
+}
+
+/**
+ * PLAN/EXECUTE/PREVIEW → PLAN with an element-edit handoff message (annotated
+ * screenshot attached). Modeled on requestChanges, but legal from every
+ * pre-publish phase and the message carries attachments.
+ */
+export async function handoffToPlan(
+  opts: TransitionOpts & { text: string; attachmentIds: string[] },
+): Promise<void> {
+  const chat = await loadChat(opts.chatId);
+  if (chat.workflowPhase === 'published') {
+    throw new WorkflowError('Cannot hand off to planning from the published phase.');
+  }
+  if (chat.workflowPhase !== 'plan') {
+    await updatePhase(opts.chatId, opts.expectedVersion ?? chat.entityVersion, {
+      workflowPhase: 'plan',
+    });
+    emitPhase(opts.chatId, 'plan');
+  }
+
+  if (chat.turnPhase === 'waiting_for_answer') {
+    resumeTurn(opts.chatId, opts.actor, opts.text, opts.attachmentIds);
+    return;
+  }
+  const lockId = acquireTurnLock(opts.chatId);
+  if (!lockId) {
+    // Unlike requestChanges, dropping the message would orphan the screenshot.
+    throw new WorkflowError('A conversation turn is already in progress');
+  }
+  void handleChatMessage(opts.actor.id, opts.actor.language ?? 'en', {
+    chatId: opts.chatId,
+    type: 'message',
+    text: opts.text,
+    attachmentIds: opts.attachmentIds,
+  })
+    .catch((err) => console.error('[workflow] handoff error:', err))
+    .finally(() => releaseTurnLock(opts.chatId, lockId));
 }
 
 /**
