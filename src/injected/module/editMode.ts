@@ -49,7 +49,6 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   let ann: EditAnnotations = emptyAnnotations();
   /** Snapshot undo stack — one deep copy per mutation. */
   const history: EditAnnotations[] = [];
-  let selected: AnnotationSelection | null = null;
 
   let banner: HTMLDivElement | null = null;
   let hlBox: HTMLDivElement | null = null;
@@ -91,19 +90,9 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     bubble.style.top = `${comment.y + 14}px`;
   };
 
-  let bin: HTMLButtonElement | null = null;
-  let ring: HTMLDivElement | null = null;
-  const hideSelectionChrome = (): void => {
-    bin?.remove();
-    bin = null;
-    ring?.remove();
-    ring = null;
-  };
-
   const deleteAt = (sel: AnnotationSelection): void => {
     snapshot();
     removeAnnotation(ann, sel);
-    selected = null;
     hideBubble();
     render();
   };
@@ -183,46 +172,6 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     });
   };
 
-  /** Ring highlight + 🗑 button next to the selected annotation. */
-  const showSelectionChrome = (): void => {
-    hideSelectionChrome();
-    if (!selected) return;
-    let binX = 0;
-    let binY = 0;
-    if (selected.kind === 'comment') {
-      const c = ann.comments[selected.index];
-      if (!c) return;
-      ring = makeRing(c.x - 15, c.y - 15, 30, 30, 'cms-ov-ring--pin');
-      binX = c.x + 16;
-      binY = c.y - 30;
-      showBubble(selected.index);
-    } else if (selected.kind === 'stroke') {
-      const s = ann.strokes[selected.index];
-      if (!s) return;
-      const box = strokeBbox(s);
-      ring = makeRing(box.x - 6, box.y - 6, box.w + 12, box.h + 12);
-      binX = box.x + box.w + 8;
-      binY = box.y - 30;
-    } else {
-      const m = ann.moves[selected.index];
-      if (!m) return;
-      ring = makeRing(m.rect.x + m.dx - 4, m.rect.y + m.dy - 4, m.rect.w + 8, m.rect.h + 8);
-      binX = m.rect.x + m.dx + m.rect.w + 8;
-      binY = m.rect.y + m.dy - 30;
-    }
-    bin = makeBin(binX, binY, selected);
-  };
-
-  const hideBubbleUnlessSelected = (): void => {
-    if (selected?.kind !== 'comment') hideBubble();
-  };
-
-  const select = (sel: AnnotationSelection | null): void => {
-    selected = sel;
-    showSelectionChrome();
-    hideBubbleUnlessSelected();
-  };
-
   // ── Rendering ──────────────────────────────────────────────────────────────
 
   /** Draw tool needs the (renderer-owned) canvas to take pointer events. */
@@ -237,13 +186,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ann.viewport = { width: window.innerWidth, height: window.innerHeight };
     applyAnnotations(document, ann);
     syncCanvasMode();
-    if (tool === 'cursor') {
-      hideSelectionChrome();
-      showAllChrome();
-    } else {
-      hideAllChrome();
-      showSelectionChrome();
-    }
+    if (tool === 'cursor') showAllChrome();
+    else hideAllChrome();
     if (post) agent.post({ type: 'cms:edit-changed', annotations: ann });
   };
 
@@ -380,7 +324,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     const prev = history.pop();
     if (!prev) return;
     ann = prev;
-    select(null);
+    hideBubble();
     render();
   };
 
@@ -389,7 +333,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ann.moves = [];
     ann.strokes = [];
     ann.comments = [];
-    select(null);
+    hideBubble();
     render();
   };
 
@@ -400,10 +344,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     active = false;
     drag = null;
     stroke = null;
-    selected = null;
     hideHl();
     hideBubble();
-    hideSelectionChrome();
     hideAllChrome();
     closeCommentBox();
     banner?.remove();
@@ -423,7 +365,6 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ann.url = location.href;
     ann.route = location.pathname;
     history.length = 0;
-    selected = null;
     if (!banner) {
       banner = document.createElement('div');
       banner.className = 'cms-ov-pick-help';
@@ -462,10 +403,9 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ev.preventDefault();
     ev.stopPropagation();
     if (tool === 'move' && target instanceof HTMLElement) {
-      // A click on an existing annotation selects it (handled on click);
-      // don't start a drag from a pin position.
+      // Annotation boundaries never block a drag — deletion/selection is
+      // cursor mode's job. The hit-test is only used for re-drag dedupe.
       const hit = hitTestAnnotations(ann, ev.pageX, ev.pageY);
-      if (hit?.kind === 'comment') return;
       let el = target;
       let selector = cssPath(target);
       let existing = moveEntry(selector);
@@ -531,7 +471,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     if (tool !== 'cursor') {
       const hit = hitTestAnnotations(ann, ev.pageX, ev.pageY);
       if (hit?.kind === 'comment') showBubble(hit.index);
-      else hideBubbleUnlessSelected();
+      else hideBubble();
     }
     // Hover highlight for the move tool
     if (tool !== 'move') return;
@@ -553,11 +493,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     if (stroke) {
       const s = stroke;
       stroke = null;
-      if (s.length < 2) {
-        // A click, not a stroke — select whatever annotation is under it
-        select(hitTestAnnotations(ann, ev.pageX, ev.pageY));
-        return;
-      }
+      if (s.length < 2) return; // a click, not a stroke
       snapshot();
       ann.strokes.push({ points: s });
       render();
@@ -571,17 +507,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     // Edit mode owns the page: no navigation / native click behavior
     ev.preventDefault();
     ev.stopPropagation();
-    if (tool === 'draw') return; // selection handled on pointerup
-    if (tool === 'cursor') return; // passive: all bubbles + bins already shown
-    const hit = hitTestAnnotations(ann, ev.pageX, ev.pageY);
-    if (hit) {
-      select(hit);
-      return;
-    }
-    if (selected) {
-      select(null);
-      return;
-    }
+    // Annotation boundaries never swallow clicks here — comments must be
+    // placeable anywhere; deletion lives in cursor mode.
     if (tool === 'comment') openCommentBox(ev.pageX, ev.pageY, target);
   }) as EventListener;
 
@@ -590,7 +517,6 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ev.preventDefault();
     ev.stopPropagation();
     if (pending) closeCommentBox();
-    else if (selected) select(null);
     else stop(true);
   }) as EventListener;
 
@@ -610,8 +536,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       if (!TOOLS.includes(data.tool as EditTool)) return;
       tool = data.tool as EditTool;
       hideHl();
+      hideBubble();
       closeCommentBox();
-      select(null);
       if (active) render(false); // chrome + canvas mode follow the tool
     }),
   );
