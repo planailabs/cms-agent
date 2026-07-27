@@ -111,6 +111,7 @@ export const renderPreviewToolbar = (state: AppState): string => {
 
   return `${renderTabStrip(ws)}
       <div class="ws-toolbar">
+        <span class="ws-chrome-dots" aria-hidden="true"><i></i><i></i></span>
         <span class="ws-toolbar__branch" title="${escapeHtml(t(locale, 'workspace.preview.branchTitle'))}">${label}</span>
         <form class="ws-address" data-action="ws-address-form" title="${escapeHtml(t(locale, 'workspace.preview.addressTitle'))}">
           <input class="ws-address__input ws-mono" type="text" spellcheck="false"

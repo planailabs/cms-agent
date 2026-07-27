@@ -183,6 +183,7 @@ export const renderDiffViewer = (state: AppState): string => {
   const publishing = state.workspace.publish?.status === 'running';
   const hasSha = Boolean(state.workspace.executionSha);
   const header = `<div class="ws-toolbar">
+      <span class="ws-chrome-dots" aria-hidden="true"><i></i><i></i></span>
       <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.diff.reviewChanges'))}</span>
       <span class="ws-toolbar__spacer"></span>
       <button type="button" class="ws-mini-button" data-action="ws-edit-mode"

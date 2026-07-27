@@ -1494,6 +1494,8 @@ html.is-first-visit #app {
     flex-direction: column;
     min-height: 0;
     background: var(--surface-base);
+    /* Redesign: the preview/diff renders as a framed stage card */
+    padding: 10px;
   }
 
   .ws-resize-handle {
@@ -1726,6 +1728,8 @@ html.is-first-visit #app {
     font-size: 0.85rem;
     color: var(--text-muted);
     flex-shrink: 0;
+    /* Chrome bar of the stage card (redesign) */
+    background: color-mix(in lab, var(--surface-elevated) 85%, var(--surface-base));
   }
 
   .ws-toolbar__branch {
@@ -1845,11 +1849,38 @@ html.is-first-visit #app {
     min-height: 0;
   }
 
+  /* Stage card: rounded bordered frame around preview + diff (redesign) */
+  .ws-preview,
+  .ws-diff {
+    border: 1px solid color-mix(in lab, var(--border-muted) 80%, transparent);
+    border-radius: 14px;
+    background: color-mix(in lab, var(--surface-elevated) 55%, var(--surface-base));
+    overflow: hidden;
+  }
+
+  .ws-chrome-dots {
+    display: inline-flex;
+    gap: 5px;
+    flex: none;
+    margin-right: 2px;
+  }
+
+  .ws-chrome-dots i {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: color-mix(in lab, var(--border-muted) 90%, transparent);
+  }
+
   .ws-preview__frame {
     position: relative;
     flex: 1;
     min-height: 0;
     background: #fff;
+    margin: 10px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid color-mix(in lab, var(--border-muted) 60%, transparent);
   }
 
   /* Per-tab iframes are stacked; inactive ones are only VISUALLY hidden
@@ -2407,14 +2438,23 @@ html.is-first-visit #app {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    /* Stage inset (redesign): panes float as rounded frames on the card */
+    padding: 10px;
+  }
+
+  .ws-diff-body > .ws-diff-highlight .ws-diff-highlight__stack,
+  .ws-diff-body > .ws-bc-scroll,
+  .ws-diff-body > .ws-onion {
+    border-radius: 8px;
+    border: 1px solid color-mix(in lab, var(--border-muted) 60%, transparent);
+    background: var(--surface-base);
   }
 
   .ws-diff-columns {
     display: flex;
     flex: 1;
     min-height: 0;
-    gap: 1px;
-    background: color-mix(in lab, var(--border-muted) 70%, transparent);
+    gap: 10px;
   }
 
   .ws-diff-col {
@@ -2423,6 +2463,9 @@ html.is-first-visit #app {
     display: flex;
     flex-direction: column;
     background: var(--surface-base);
+    border-radius: 8px;
+    border: 1px solid color-mix(in lab, var(--border-muted) 60%, transparent);
+    overflow: hidden;
   }
 
   .ws-diff-col__label {
