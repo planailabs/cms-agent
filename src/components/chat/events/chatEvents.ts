@@ -147,6 +147,11 @@ export const registerChatEvents = (app: HTMLElement) => {
     if (dragEvent.dataTransfer?.files.length) stageFiles(dragEvent.dataTransfer.files);
   });
 
+  // A drop that misses the dropzone (or arrives while no composer is
+  // rendered) must never navigate the workspace away to the file.
+  document.addEventListener('dragover', (event) => event.preventDefault());
+  document.addEventListener('drop', (event) => event.preventDefault());
+
   // Chat: Example-prompt chip (empty state) — fills the composer
   delegateEvent(
     app,
