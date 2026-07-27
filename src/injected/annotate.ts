@@ -28,6 +28,20 @@ export interface ElementMove {
   rect: { x: number; y: number; w: number; h: number };
 }
 
+/** One endpoint of a swap — enough to re-identify and re-rect the element. */
+export interface SwapEndpoint {
+  selector: string;
+  element: AnnotatedElement;
+  /** Bounding rect in document coords at annotation time. */
+  rect: { x: number; y: number; w: number; h: number };
+}
+
+/** Two elements exchanged by drag-and-drop (swap tool). */
+export interface ElementSwap {
+  a: SwapEndpoint;
+  b: SwapEndpoint;
+}
+
 export interface Stroke {
   /** Freehand polyline, downsampled; document coords. */
   points: Array<[number, number]>;
@@ -48,28 +62,31 @@ export interface EditAnnotations {
   route: string;
   viewport: { width: number; height: number };
   moves: ElementMove[];
+  /** Optional for annotation sets recorded before the swap tool existed. */
+  swaps?: ElementSwap[];
   strokes: Stroke[];
   comments: EditComment[];
 }
 
-export type EditTool = 'cursor' | 'move' | 'draw' | 'comment';
+export type EditTool = 'cursor' | 'move' | 'swap' | 'draw' | 'comment';
 
 export const emptyAnnotations = (url = '', route = '/'): EditAnnotations => ({
   url,
   route,
   viewport: { width: 0, height: 0 },
   moves: [],
+  swaps: [],
   strokes: [],
   comments: [],
 });
 
 export const annotationCount = (a: EditAnnotations): number =>
-  a.moves.length + a.strokes.length + a.comments.length;
+  a.moves.length + (a.swaps?.length ?? 0) + a.strokes.length + a.comments.length;
 
 // ── Selection / hit-testing (pure — shared by edit mode and tests) ──────────
 
 export interface AnnotationSelection {
-  kind: 'move' | 'stroke' | 'comment';
+  kind: 'move' | 'swap' | 'stroke' | 'comment';
   index: number;
 }
 
@@ -151,6 +168,15 @@ export const hitTestAnnotations = (
       return { kind: 'move', index: i };
     }
   }
+  const swaps = a.swaps ?? [];
+  for (let i = swaps.length - 1; i >= 0; i--) {
+    for (const end of [swaps[i].a, swaps[i].b]) {
+      const r = end.rect;
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+        return { kind: 'swap', index: i };
+      }
+    }
+  }
   return null;
 };
 
@@ -220,6 +246,7 @@ export const snapDelta = (
  *  number is the screenshot ↔ JSON link, so it must have no gaps). */
 export const removeAnnotation = (a: EditAnnotations, sel: AnnotationSelection): void => {
   if (sel.kind === 'move') a.moves.splice(sel.index, 1);
+  else if (sel.kind === 'swap') a.swaps?.splice(sel.index, 1);
   else if (sel.kind === 'stroke') a.strokes.splice(sel.index, 1);
   else {
     a.comments.splice(sel.index, 1);
@@ -236,6 +263,7 @@ const MOVED_ATTR = 'data-cms-annotate-moved';
 
 const ACCENT = '#e5484d'; // strokes + comment pins
 const MOVE_ACCENT = '#7852ee'; // moved elements (matches the overlay accent)
+const SWAP_ACCENT = '#12a594'; // swapped element pairs
 
 const docSize = (doc: Document): { w: number; h: number } => {
   const el = doc.documentElement;
@@ -314,11 +342,12 @@ const drawArrow = (
   y1: number,
   x2: number,
   y2: number,
+  color = MOVE_ACCENT,
 ): void => {
   const angle = Math.atan2(y2 - y1, x2 - x1);
   const head = 9;
-  ctx.strokeStyle = MOVE_ACCENT;
-  ctx.fillStyle = MOVE_ACCENT;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
   ctx.lineWidth = 2.5;
   ctx.lineCap = 'round';
   ctx.beginPath();
@@ -361,6 +390,43 @@ export const applyMove = (doc: Document, move: ElementMove): void => {
   }
 };
 
+/**
+ * Live swap preview: translate each element onto the other's center (when
+ * both selectors resolve) + teal outlines. Selector misses still get the
+ * canvas double-arrow from applyAnnotations, which carries the intent.
+ */
+export const applySwap = (doc: Document, swap: ElementSwap): void => {
+  const els = [swap.a, swap.b].map((end) => {
+    try {
+      return doc.querySelector(end.selector);
+    } catch {
+      return null;
+    }
+  });
+  const [ea, eb] = els;
+  if (ea instanceof HTMLElement && eb instanceof HTMLElement) {
+    const cx = (r: SwapEndpoint['rect']) => r.x + r.w / 2;
+    const cy = (r: SwapEndpoint['rect']) => r.y + r.h / 2;
+    ea.style.translate = `${cx(swap.b.rect) - cx(swap.a.rect)}px ${cy(swap.b.rect) - cy(swap.a.rect)}px`;
+    eb.style.translate = `${cx(swap.a.rect) - cx(swap.b.rect)}px ${cy(swap.a.rect) - cy(swap.b.rect)}px`;
+    for (const el of [ea, eb]) {
+      el.style.outline = `2px dashed ${SWAP_ACCENT}`;
+      el.style.outlineOffset = '-1px';
+      el.setAttribute(MOVED_ATTR, '');
+    }
+  } else {
+    for (const end of [swap.a, swap.b]) {
+      const ghost = annotationNode(doc, 'div');
+      ghost.style.cssText =
+        `position:absolute;left:${end.rect.x}px;top:${end.rect.y}px;` +
+        `width:${end.rect.w}px;height:${end.rect.h}px;` +
+        `border:2px dashed ${SWAP_ACCENT};border-radius:2px;opacity:.6;` +
+        'z-index:2147483642;pointer-events:none';
+      (doc.body || doc.documentElement).appendChild(ghost);
+    }
+  }
+};
+
 export const renderPin = (doc: Document, comment: EditComment): void => {
   const pin = annotationNode(doc, 'div');
   pin.textContent = String(comment.n);
@@ -373,10 +439,12 @@ export const renderPin = (doc: Document, comment: EditComment): void => {
   (doc.body || doc.documentElement).appendChild(pin);
 };
 
-/** Full render: clear, then moves (ghost+translate), strokes+arrows, pins. */
+/** Full render: clear, then moves/swaps (ghost+translate), strokes+arrows,
+ *  pins. */
 export const applyAnnotations = (doc: Document, a: EditAnnotations): void => {
   clearAnnotations(doc);
   for (const move of a.moves) applyMove(doc, move);
+  for (const swap of a.swaps ?? []) applySwap(doc, swap);
   const canvas = ensureOverlayCanvas(doc);
   const ctx = canvas.getContext('2d');
   if (ctx) {
@@ -386,6 +454,15 @@ export const applyAnnotations = (doc: Document, a: EditAnnotations): void => {
       const cx = move.rect.x + move.rect.w / 2;
       const cy = move.rect.y + move.rect.h / 2;
       drawArrow(ctx, cx, cy, cx + move.dx, cy + move.dy);
+    }
+    // Swaps: a double-headed arrow between the pair's centers
+    for (const swap of a.swaps ?? []) {
+      const ax = swap.a.rect.x + swap.a.rect.w / 2;
+      const ay = swap.a.rect.y + swap.a.rect.h / 2;
+      const bx = swap.b.rect.x + swap.b.rect.w / 2;
+      const by = swap.b.rect.y + swap.b.rect.h / 2;
+      drawArrow(ctx, ax, ay, bx, by, SWAP_ACCENT);
+      drawArrow(ctx, bx, by, ax, ay, SWAP_ACCENT);
     }
   }
   for (const comment of a.comments) renderPin(doc, comment);

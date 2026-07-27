@@ -38,6 +38,15 @@ export const editAnnotationsSchema = z.object({
       }),
     )
     .max(50),
+  swaps: z
+    .array(
+      z.object({
+        a: z.object({ selector: z.string().min(1).max(1000), element: elementSchema, rect: rectSchema }),
+        b: z.object({ selector: z.string().min(1).max(1000), element: elementSchema, rect: rectSchema }),
+      }),
+    )
+    .max(50)
+    .optional(),
   strokes: z
     .array(z.object({ points: z.array(z.tuple([coord, coord])).min(1).max(500) }))
     .max(100),
@@ -71,6 +80,10 @@ export const annotationSummaryForAgent = (a: EditAnnotations): Record<string, un
     from: { x: round(m.rect.x), y: round(m.rect.y), w: round(m.rect.w), h: round(m.rect.h) },
     moveBy: { dx: round(m.dx), dy: round(m.dy) },
   })),
+  swaps: (a.swaps ?? []).map((s) => ({
+    a: { selector: s.a.selector, element: s.a.element, rect: s.a.rect },
+    b: { selector: s.b.selector, element: s.b.element, rect: s.b.rect },
+  })),
   drawings: a.strokes.map((s) => ({ bbox: strokeBbox(s), points: s.points.length })),
   comments: a.comments.map((c) => ({
     n: c.n,
@@ -95,7 +108,7 @@ export const handoffMessageText = (opts: {
     (opts.note ? `\nNote: ${opts.note}` : '') +
     `\nThe user annotated the live preview in element-edit mode. Annotation metadata (JSON):\n${summary}` +
     `\nAn annotated screenshot of the page is attached as upload ${opts.uploadId} — call read_upload with that id to view it: ` +
-    `numbered pins = comments, red strokes = drawings, a dashed outline with an arrow = an element moved from its ghost (old position) to its new position.` +
+    `numbered pins = comments, red strokes = drawings, a dashed outline with an arrow = an element moved from its ghost (old position) to its new position, a teal double-headed arrow = two elements to swap with each other.` +
     `\nAnalyze the screenshot together with the metadata and call propose_plan with a plan that implements the intended changes.`
   );
 };

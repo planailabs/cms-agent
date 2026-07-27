@@ -103,6 +103,20 @@ describe('annotation schema + summary', () => {
     });
     expect(summary.comments[0]).toMatchObject({ n: 1, text: 'Make this bigger' });
   });
+
+  it('swaps: schema accepts pairs (and their absence), summary passes them through', () => {
+    const swap = {
+      a: { selector: 'main > .hero', element: { tag: 'div' }, rect: { x: 0, y: 0, w: 600, h: 200 } },
+      b: { selector: 'main > .cta', element: { tag: 'div' }, rect: { x: 0, y: 300, w: 600, h: 120 } },
+    };
+    expect(editAnnotationsSchema.safeParse(annotations()).success).toBe(true); // no swaps key
+    const withSwap = { ...annotations(), swaps: [swap] };
+    expect(editAnnotationsSchema.safeParse(withSwap).success).toBe(true);
+    const summary = annotationSummaryForAgent(withSwap as never) as {
+      swaps: Array<{ a: { selector: string }; b: { selector: string } }>;
+    };
+    expect(summary.swaps).toEqual([swap]);
+  });
 });
 
 describe('POST /api/chat/element-handoff', () => {

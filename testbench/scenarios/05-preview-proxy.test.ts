@@ -266,6 +266,34 @@ describe('preview + proxy', () => {
     }
   }, 300_000);
 
+  it('edit mode offers the swap tool (with cursor/move/draw/comment)', async () => {
+    const j = loadJourney();
+    if (!j?.chatB) {
+      recordAssert(SCENARIO, 'swap tool present', true, 'n/a — e2e group not run');
+      return;
+    }
+    const browser = await launchBrowser();
+    try {
+      const s = await newSession(browser);
+      await bootWorkspace(s.page);
+      await openBranchPanel(s.page);
+      await s.page
+        .locator(`[data-action="ws-open-chat"][data-chat-id="${j.chatB}"]`)
+        .first()
+        .click();
+      await s.page.locator('.ws-diff [data-action="ws-edit-mode"]').waitFor({ timeout: 60_000 });
+      await s.page.locator('.ws-diff [data-action="ws-edit-mode"]').click();
+      await s.page.locator('[data-action="ws-edit-tool"][data-tool="swap"]').waitFor({ timeout: 30_000 });
+      const tools = await s.page.locator('[data-action="ws-edit-tool"]').count();
+      ok('edit toolbar lists all five tools', tools === 5, `${tools} tools`);
+      await s.page.locator('[data-action="ws-edit-exit"]').click();
+      await s.page.locator('.ws-diff').first().waitFor({ timeout: 30_000 });
+      ok('exiting edit mode returns to the diff viewer', true);
+    } finally {
+      await browser.close();
+    }
+  }, 300_000);
+
   it('archived chat can be deleted permanently (final destructive probe)', async () => {
     const journey = loadJourney();
     if (!journey) {

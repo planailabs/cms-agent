@@ -1,6 +1,7 @@
 /** Pure element-edit helpers: hit-testing, stroke bbox, delete + renumber. */
 import { describe, expect, it } from 'vitest';
 import {
+  annotationCount,
   hitTestAnnotations,
   removeAnnotation,
   snapAnchorsFromRects,
@@ -101,5 +102,33 @@ describe('snap-to-align', () => {
   it('leaves the delta alone with no anchor in range', () => {
     const r = snapDelta({ x: 0, y: 0, w: 20, h: 20 }, 500, 500, anchors);
     expect(r).toEqual({ dx: 500, dy: 500, guideX: null, guideY: null });
+  });
+});
+
+describe('swap annotations', () => {
+  const withSwap = (): EditAnnotations => ({
+    ...base(),
+    swaps: [
+      {
+        a: { selector: '.hero', element: { tag: 'div' }, rect: { x: 900, y: 400, w: 100, h: 50 } },
+        b: { selector: '.cta', element: { tag: 'div' }, rect: { x: 900, y: 600, w: 100, h: 50 } },
+      },
+    ],
+  });
+
+  it('hit-tests either endpoint and deletes the pair', () => {
+    const a = withSwap();
+    expect(hitTestAnnotations(a, 950, 425)).toEqual({ kind: 'swap', index: 0 });
+    expect(hitTestAnnotations(a, 950, 625)).toEqual({ kind: 'swap', index: 0 });
+    removeAnnotation(a, { kind: 'swap', index: 0 });
+    expect(a.swaps).toEqual([]);
+  });
+
+  it('counts swaps and tolerates pre-swap annotation sets', () => {
+    expect(annotationCount(withSwap())).toBe(5); // 1 move + 1 swap + 1 stroke + 2 comments
+    const legacy = base();
+    delete legacy.swaps;
+    expect(annotationCount(legacy)).toBe(4);
+    expect(hitTestAnnotations(legacy, 950, 425)).toBeNull();
   });
 });

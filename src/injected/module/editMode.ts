@@ -45,7 +45,7 @@ import { cfg, onConfigChange } from './config';
 import { cssPath, isOurs, type Listen } from './dom';
 import { elementInfo } from './picker';
 
-const TOOLS: EditTool[] = ['cursor', 'move', 'draw', 'comment'];
+const TOOLS: EditTool[] = ['cursor', 'move', 'swap', 'draw', 'comment'];
 const MIN_DRAG_PX = 3;
 
 export const initEditMode = (agent: AgentApi, listen: Listen): void => {
@@ -179,6 +179,13 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       allChrome.push(
         makeRing(m.rect.x + m.dx - 4, m.rect.y + m.dy - 4, m.rect.w + 8, m.rect.h + 8),
         makeBin(m.rect.x + m.dx + m.rect.w + 8, m.rect.y + m.dy - 30, { kind: 'move', index: i }),
+      );
+    });
+    (ann.swaps ?? []).forEach((sw, i) => {
+      allChrome.push(
+        makeRing(sw.a.rect.x - 4, sw.a.rect.y - 4, sw.a.rect.w + 8, sw.a.rect.h + 8),
+        makeRing(sw.b.rect.x - 4, sw.b.rect.y - 4, sw.b.rect.w + 8, sw.b.rect.h + 8),
+        makeBin(sw.a.rect.x + sw.a.rect.w + 8, sw.a.rect.y - 30, { kind: 'swap', index: i }),
       );
     });
   };
@@ -315,6 +322,33 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     render();
   };
 
+  // ── Swap tool (drag element A onto element B → exchange them) ──────────────
+
+  interface SwapDrag {
+    el: HTMLElement;
+    selector: string;
+    rect: Rect;
+    moved: boolean;
+  }
+  let swapDrag: SwapDrag | null = null;
+
+  const endpointOf = (el: HTMLElement): { selector: string; element: AnnotatedElement; rect: Rect } => {
+    const r = el.getBoundingClientRect();
+    return {
+      selector: cssPath(el),
+      element: elementInfo(el) as unknown as AnnotatedElement,
+      rect: { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width, h: r.height },
+    };
+  };
+
+  const cancelSwapDrag = (): void => {
+    if (!swapDrag) return;
+    swapDrag.el.style.outline = '';
+    swapDrag.el.style.outlineOffset = '';
+    swapDrag = null;
+    hideHl();
+  };
+
   // ── Draw tool ──────────────────────────────────────────────────────────────
 
   let stroke: Array<[number, number]> | null = null;
@@ -407,6 +441,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     if (!active) return;
     active = false;
     drag = null;
+    cancelSwapDrag();
     stroke = null;
     hideGuides();
     hideHl();
@@ -509,6 +544,17 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
         snapDy: baseDy,
       };
     }
+    if (tool === 'swap' && target instanceof HTMLElement) {
+      const r = target.getBoundingClientRect();
+      swapDrag = {
+        el: target,
+        selector: cssPath(target),
+        rect: { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width, h: r.height },
+        moved: false,
+      };
+      target.style.outline = '2px dashed #12a594';
+      target.style.outlineOffset = '-1px';
+    }
   }) as EventListener;
 
   const onPointerMove = agent.safe((ev: PointerEvent) => {
@@ -550,8 +596,16 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       if (hit?.kind === 'comment') showBubble(hit.index);
       else hideBubble();
     }
-    // Hover highlight for the move tool
-    if (tool !== 'move') return;
+    // Swap drag: highlight the drop target under the pointer
+    if (swapDrag) {
+      swapDrag.moved = true;
+      const over = ev.target as Element | null;
+      if (over && over.nodeType === 1 && !isOurs(over) && over !== swapDrag.el) showHl(over);
+      else hideHl();
+      return;
+    }
+    // Hover highlight for the move and swap tools
+    if (tool !== 'move' && tool !== 'swap') return;
     const el = ev.target as Element | null;
     if (!el || el.nodeType !== 1 || isOurs(el)) return;
     showHl(el);
@@ -564,6 +618,28 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       drag = null;
       hideGuides();
       if (d.moved) commitMove(d, d.snapDx, d.snapDy);
+      return;
+    }
+    if (swapDrag) {
+      const sd = swapDrag;
+      const over = ev.target as Element | null;
+      cancelSwapDrag();
+      if (
+        sd.moved &&
+        over instanceof HTMLElement &&
+        !isOurs(over) &&
+        over !== sd.el &&
+        !sd.el.contains(over) &&
+        !over.contains(sd.el)
+      ) {
+        snapshot();
+        ann.swaps ??= [];
+        ann.swaps.push({
+          a: { selector: sd.selector, element: elementInfo(sd.el) as unknown as AnnotatedElement, rect: sd.rect },
+          b: endpointOf(over),
+        });
+        render();
+      }
       return;
     }
     if (stroke) {

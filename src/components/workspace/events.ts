@@ -473,7 +473,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-edit-exit"]', () => stopEditMode());
   delegateEvent(app, 'click', '[data-action="ws-edit-tool"]', (_e, target) => {
     const tool = target.getAttribute('data-tool') as EditTool | null;
-    if (tool === 'cursor' || tool === 'move' || tool === 'draw' || tool === 'comment') {
+    if (tool === 'cursor' || tool === 'move' || tool === 'swap' || tool === 'draw' || tool === 'comment') {
       setEditTool(tool);
     }
   });
