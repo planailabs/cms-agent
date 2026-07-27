@@ -168,6 +168,9 @@ Object.assign(serverEnv, {
   PROXY_LISTEN: `127.0.0.1:${proxyPort}`,
   CMS_UPSTREAM: `127.0.0.1:${cmsPort}`,
   PUBLIC_SCHEME: 'http',
+  // Preview URLs carry the proxy port (same as the dev Procfile) — without
+  // it the workspace iframes point at <branch>.localhost:80 and never load.
+  DEV_PORT_CARRY: '1',
   DEPLOY_FLOW: 'git-push',
   DEPLOY_GIT_REMOTE: 'origin',
   BETTER_AUTH_URL: baseUrl,

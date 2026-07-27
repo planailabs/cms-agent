@@ -78,6 +78,79 @@ describe('ui flows', () => {
     recordAssert(SCENARIO, 'theme toggle persists via PATCH /api/me', true);
   });
 
+  it('preview page follows the workspace theme', async () => {
+    // The workspace opens no preview tab by default — create one (and leave
+    // it open: it warms the preview instance for later scenarios).
+    await dataAction(s.page, 'ws-tab-new').first().click();
+    const iframe = s.page.locator('#preview-frame-region iframe.is-active');
+    await iframe.waitFor({ state: 'attached', timeout: 30_000 });
+    const effective = async (): Promise<string> =>
+      (await s.page.evaluate(() => document.documentElement.getAttribute('data-theme'))) === 'light'
+        ? 'light'
+        : 'dark';
+    // The site page inside the active preview frame — any *.localhost preview
+    // host (the active chat decides the branch); the boot page reports null
+    // until the site + injected module are up.
+    const frameScheme = async (): Promise<string | null> => {
+      const frame = s.page.frames().find((f) => /https?:\/\/[^/]*\.localhost:/.test(f.url()));
+      if (!frame) return null;
+      try {
+        return await frame.evaluate(() => document.documentElement.style.colorScheme || null);
+      } catch {
+        return null;
+      }
+    };
+    // First boot of the site preview may install its deps — be generous.
+    try {
+      await expect.poll(frameScheme, { timeout: 300_000 }).toBe(await effective());
+    } catch (err) {
+      const urls = s.page.frames().map((f) => f.url());
+      throw new Error(`${String(err)} — frames: ${JSON.stringify(urls)}`);
+    }
+    ok('preview colorScheme matches the workspace theme', true);
+
+    // Live flip: cms:config re-broadcast reaches the page without a reload
+    await dataAction(s.page, 'theme-toggle').first().click();
+    await expect.poll(frameScheme, { timeout: 30_000 }).toBe(await effective());
+    ok('preview theme flips live with the workspace toggle', true);
+    // Restore for the rest of the suite
+    await dataAction(s.page, 'theme-toggle').first().click();
+    await expect.poll(frameScheme, { timeout: 30_000 }).toBe(await effective());
+  });
+
+  it('element-picker hint banner is closeable and stays dismissed', async () => {
+    // The picker banner only appears in the ACTIVE tab's iframe — hidden
+    // tabs' frames also match a URL filter, so resolve via the DOM.
+    const frame = async () => {
+      const el = await s.page.$('#preview-frame-region iframe.is-active');
+      return (await el?.contentFrame()) ?? null;
+    };
+    const bannerCount = async () =>
+      (await (await frame())?.locator('.cms-ov-pick-help').count()) ?? 0;
+    let arms = 0;
+    const pick = async () => {
+      arms++;
+      await dataAction(s.page, 'ws-element-pick').first().click();
+    };
+
+    try {
+      await pick(); // arm
+      await expect.poll(bannerCount, { timeout: 15_000 }).toBeGreaterThan(0);
+      await (await frame())!.locator('.cms-ov-pick-help__close').click();
+      await expect.poll(bannerCount, { timeout: 10_000 }).toBe(0);
+      ok('hint banner closes via its ×', true);
+
+      await pick(); // un-arm
+      await pick(); // re-arm — dismissal is remembered for this page load
+      await s.page.waitForTimeout(800);
+      ok('dismissed hint stays hidden on re-arm', (await bannerCount()) === 0);
+    } finally {
+      // A failure mid-test must not leave the picker (and its banner) armed
+      // for the following tests.
+      if (arms % 2 === 1) await pick();
+    }
+  });
+
   it('language switch to German localizes the chrome', async () => {
     try {
       await dataAction(s.page, 'language-toggle').first().click();
@@ -90,7 +163,9 @@ describe('ui flows', () => {
           'App-rendered chrome (buttons, menus, toolbar labels, placeholders) is in German. ' +
           'FAIL only for clearly English sentences/labels rendered by the app. Ignore user data: ' +
           'chat titles (e.g. "New chat", "Deployments" created earlier), branch names like "main", ' +
-          'routes/URLs, and code. German anglicisms ("Browser", "Tab", "Element-Picker") count as German.',
+          'routes/URLs, and code. German anglicisms ("Browser", "Tab", "Element-Picker") count as German. ' +
+          'These exact strings are NEVER grounds to fail, wherever they appear: "CMS Agent" ' +
+          '(the product name), "New chat", "Deployments", "main".',
         artifacts: [{ kind: 'screenshot', label: 'german-ui', content: await shot(s.page) }],
         votes: 3,
       });

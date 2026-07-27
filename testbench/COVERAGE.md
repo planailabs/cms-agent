@@ -59,6 +59,8 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Chat composer + example prompts | 02 | ✅ |
 | New branch-panel chat | 02 | ✅ |
 | Theme toggle (persisted) | 02 | ✅ |
+| Preview page follows the workspace theme (live flip) | 02 | ✅ |
+| Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
 | Language switch en↔de (judged screenshot) | 02 | ✅ |
 | Git modal / capabilities / archive / window sessions | 02 | ✅ |
 | Code browser (tree, open file — judged) | 02 | ✅ |
