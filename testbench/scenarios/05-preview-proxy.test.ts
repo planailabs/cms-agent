@@ -4,6 +4,7 @@
  * finishes with the destructive archived-chat delete.
  */
 import { describe, expect, it } from 'vitest';
+import { bootWorkspace, launchBrowser, newSession, openBranchPanel } from '../lib/browser';
 import { BenchClient } from '../lib/client';
 import { benchRun, previewUrl } from '../lib/env';
 import { recordAssert } from '../lib/judge';
@@ -109,6 +110,68 @@ describe('preview + proxy', () => {
     );
     ok('browsers-shot meta JSON', meta.status === 200);
   }, 500_000);
+
+  it('diff viewer: browsing one pane syncs the other + tabs; address free-browses', async () => {
+    const j = loadJourney();
+    if (!j?.chatB) {
+      recordAssert(SCENARIO, 'diff browse sync', true, 'n/a — e2e group not run');
+      return;
+    }
+    const browser = await launchBrowser();
+    try {
+      const s = await newSession(browser);
+      await bootWorkspace(s.page);
+      await openBranchPanel(s.page);
+      await s.page
+        .locator(`[data-action="ws-open-chat"][data-chat-id="${j.chatB}"]`)
+        .first()
+        .click();
+
+      // Frames are recreated on every route change — always re-query.
+      const paneFrame = async (id: string) => {
+        const el = await s.page.$(`#${id}`);
+        return el ? await el.contentFrame() : null;
+      };
+      // Trailing-slash-insensitive (sites may serve either form)
+      const pathnameOf = async (id: string): Promise<string | null> => {
+        const frame = await paneFrame(id);
+        if (!frame) return null;
+        try {
+          return new URL(frame.url()).pathname.replace(/\/+$/, '') || '/';
+        } catch {
+          return null;
+        }
+      };
+      // Side-by-side is the default mode; wait until the AFTER pane serves
+      // the real site (boot page has no nav links; worktree deps may install).
+      await s.page.locator('#ws-diff-after').waitFor({ state: 'attached', timeout: 60_000 });
+      const aboutLink = async () =>
+        (await (await paneFrame('ws-diff-after'))?.locator('a[href^="/about"]').count()) ?? 0;
+      await expect.poll(aboutLink, { timeout: 300_000 }).toBeGreaterThan(0);
+      ok('diff panes render the site side-by-side', true);
+
+      // Browse inside the AFTER pane → the other pane + page tabs follow
+      await (await paneFrame('ws-diff-after'))!.locator('a[href^="/about"]').first().click();
+      await expect.poll(() => pathnameOf('ws-diff-before'), { timeout: 60_000 }).toBe('/about');
+      ok('browsing one pane navigates the other to the same route', true);
+      await expect
+        .poll(() => s.page.locator('.ws-diff-tab.is-active[data-route^="/about"]').count(), {
+          timeout: 10_000,
+        })
+        .toBeGreaterThan(0);
+      ok('browsed off-list route shows as the active tab', true);
+
+      // Address input free-browses both panes back to a changed page
+      const addr = s.page.locator('[data-action="ws-diff-address-form"] .ws-address__input');
+      await addr.fill('/');
+      await addr.press('Enter');
+      await expect.poll(() => pathnameOf('ws-diff-after'), { timeout: 60_000 }).toBe('/');
+      await expect.poll(() => pathnameOf('ws-diff-before'), { timeout: 60_000 }).toBe('/');
+      ok('diff address input navigates both panes', true);
+    } finally {
+      await browser.close();
+    }
+  }, 600_000);
 
   it('archived chat can be deleted permanently (final destructive probe)', async () => {
     const journey = loadJourney();

@@ -14,6 +14,9 @@ export interface JourneyData {
   previewSha: string;
   publicationId: string;
   deployChatId: string;
+  /** Journey B: executed but unpublished — rests in the PREVIEW phase
+   *  (05 drives the diff-viewer UI on it). */
+  chatB?: string;
 }
 
 const file = (): string => path.join(benchRun().work, 'journey.json');

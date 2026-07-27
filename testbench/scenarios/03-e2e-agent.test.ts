@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { BenchClient, turnText } from '../lib/client';
 import { benchRun } from '../lib/env';
 import { judgeStep, recordAssert } from '../lib/judge';
-import { saveJourney } from '../lib/journey';
+import { loadJourney, saveJourney } from '../lib/journey';
 import {
   chatState as flowChatState,
   driveToPlan as flowDriveToPlan,
@@ -209,6 +209,8 @@ describe('e2e agent journey', () => {
       ],
     });
     expect(verdict.pass, verdict.reasoning).toBe(true);
+    // Chat B keeps its pending plan — the element-edit handoff test below
+    // answers it (and re-plans); approval happens after that.
   }, 900_000);
 
   it('ask_question pauses the turn; concurrent message hits the turn lock', async () => {
@@ -302,6 +304,33 @@ describe('e2e agent journey', () => {
       ],
     });
     expect(verdict.pass, verdict.reasoning).toBe(true);
+  }, 900_000);
+
+  it('journey B: approve after handoff → executes and rests in preview (for 05)', async () => {
+    let st = await chatState(J.chatB!);
+    if (st.pendingQuestion?.toolName !== 'propose_plan') {
+      // The handoff turn answered without re-proposing — ask for the plan.
+      await driveToPlan(J.chatB!, 'Please propose the updated plan now.');
+      st = await chatState(J.chatB!);
+    }
+    ok('a plan is pending after the handoff', st.pendingQuestion?.toolName === 'propose_plan');
+    const exec = await client.collectEvents(
+      J.chatB!,
+      async () => {
+        const res = await client.req('POST', `/api/chats/${J.chatB}/approve-plan`, {});
+        if (res.status !== 200) throw new Error(`approve-plan B: ${res.status} ${res.text}`);
+      },
+      ['question', 'done', 'error'],
+      600_000,
+    );
+    ok('journey B execution streams without error', noError(exec));
+    const prev = await client.req('POST', `/api/chats/${J.chatB}/to-preview`, {
+      summary: 'Bench journey B: annotated tagline change',
+    });
+    ok('chat B to-preview accepted', prev.status === 200, String(prev.status));
+    // Unpublished on purpose: 05 drives the diff-viewer UI on this chat.
+    ok('chat B rests in the preview phase', (await chatState(J.chatB!)).workflowPhase === 'preview');
+    saveJourney({ ...loadJourney()!, chatB: J.chatB! });
   }, 900_000);
 
   it('post-journey probes: history, restore roundtrip, guards', async () => {
