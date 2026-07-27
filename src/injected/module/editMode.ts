@@ -36,6 +36,7 @@ import {
   type ElementMove,
 } from '../annotate';
 import type { AgentApi } from '../protocol';
+import { createHelpBanner, type HelpBanner } from './banner';
 import { cfg, onConfigChange } from './config';
 import { cssPath, isOurs, type Listen } from './dom';
 import { elementInfo } from './picker';
@@ -50,7 +51,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   /** Snapshot undo stack — one deep copy per mutation. */
   const history: EditAnnotations[] = [];
 
-  let banner: HTMLDivElement | null = null;
+  let banner: HelpBanner | null = null;
   let hlBox: HTMLDivElement | null = null;
 
   const snapshot = (): void => {
@@ -371,18 +372,13 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ann.url = location.href;
     ann.route = location.pathname;
     history.length = 0;
-    if (!banner) {
-      banner = document.createElement('div');
-      banner.className = 'cms-ov-pick-help';
-      banner.setAttribute('data-cms-overlay', '');
-      document.body.appendChild(banner);
-    }
-    banner.textContent = cfg.labels.editInstruction;
+    banner?.remove();
+    banner = createHelpBanner('edit', cfg.labels.editInstruction);
     render(false);
   };
 
   onConfigChange(() => {
-    if (banner) banner.textContent = cfg.labels.editInstruction;
+    banner?.setText(cfg.labels.editInstruction);
     if (pending) {
       pending.box.classList.toggle('cms-ov-light', cfg.theme === 'light');
       pending.input.placeholder = cfg.labels.commentPlaceholder;

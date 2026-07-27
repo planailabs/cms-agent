@@ -5,6 +5,7 @@
  * cms:pick-cancel so the workspace can un-arm its toolbar button.
  */
 import type { AgentApi } from '../protocol';
+import { createHelpBanner, type HelpBanner } from './banner';
 import { cfg } from './config';
 import { isOurs } from './dom';
 
@@ -56,7 +57,7 @@ export const elementInfo = (el: Element): Record<string, unknown> => {
 export const initPicker = (agent: AgentApi): void => {
   let picking = false;
   let hlBox: HTMLDivElement | null = null;
-  let help: HTMLDivElement | null = null;
+  let help: HelpBanner | null = null;
 
   const ensureHlBox = (): HTMLDivElement => {
     if (!hlBox) {
@@ -87,10 +88,12 @@ export const initPicker = (agent: AgentApi): void => {
 
   const onPickClick = agent.safe((ev: Event) => {
     if (!picking) return;
+    const el = ev.target as Element | null;
+    // Ours-check BEFORE swallowing the event — a capture-phase
+    // stopPropagation would keep the banner's × from ever firing.
+    if (!el || el.nodeType !== 1 || isOurs(el)) return;
     ev.preventDefault();
     ev.stopPropagation();
-    const el = ev.target as Element | null;
-    if (!el || el.nodeType !== 1 || isOurs(el)) return;
     agent.post({
       type: 'cms:element',
       element: elementInfo(el),
@@ -127,11 +130,7 @@ export const initPicker = (agent: AgentApi): void => {
       if (picking) return;
       picking = true;
       ensureHlBox();
-      help = document.createElement('div');
-      help.className = 'cms-ov-pick-help';
-      help.setAttribute('data-cms-overlay', '');
-      help.textContent = cfg.labels.pickInstruction;
-      document.body.appendChild(help);
+      help = createHelpBanner('pick', cfg.labels.pickInstruction);
       document.addEventListener('mousemove', onPickMove, true);
       document.addEventListener('click', onPickClick, true);
       document.addEventListener('keydown', onPickKey, true);

@@ -29,7 +29,11 @@ const STYLE =
   '.cms-ov-btn.cms-ov-light:hover{background:#f3f0ff}' +
   '.cms-ov-pick-help{position:fixed;z-index:2147483646;top:16px;left:50%;transform:translateX(-50%);' +
   'max-width:calc(100vw - 32px);padding:8px 14px;border-radius:999px;background:#1e1e1e;color:#fff;' +
-  'font:600 13px/1.4 system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.4);pointer-events:none}' +
+  'font:600 13px/1.4 system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.4);pointer-events:none;' +
+  'display:flex;align-items:center;gap:10px}' +
+  '.cms-ov-pick-help__close{pointer-events:auto;border:0;background:transparent;color:inherit;' +
+  'font:inherit;font-size:16px;line-height:1;cursor:pointer;padding:0 2px;opacity:.7}' +
+  '.cms-ov-pick-help__close:hover{opacity:1}' +
   '.cms-ov-hl{position:fixed;z-index:2147483645;pointer-events:none;' +
   'outline:2px solid #7852ee;outline-offset:-1px;background:rgba(120,82,238,.12);border-radius:2px}' +
   '.cms-ov-edit-input{position:absolute;z-index:2147483646;padding:6px;border-radius:8px;' +
