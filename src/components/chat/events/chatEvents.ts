@@ -88,6 +88,32 @@ export const registerChatEvents = (app: HTMLElement) => {
     },
   );
 
+  // Chat: paste into the composer — files (ctrl+v or the context menu both
+  // fire 'paste') become attachments; very long text becomes a text
+  // attachment instead of flooding the input (Claude-style).
+  const PASTE_AS_ATTACHMENT_CHARS = 4000;
+  delegateEvent(
+    app,
+    'paste',
+    '[data-action="machine-config-input"]',
+    (event) => {
+      const clip = (event as ClipboardEvent).clipboardData;
+      if (!clip) return;
+      if (clip.files.length > 0) {
+        event.preventDefault();
+        stageFiles(clip.files);
+        return;
+      }
+      const text = clip.getData('text/plain');
+      if (text.length > PASTE_AS_ATTACHMENT_CHARS) {
+        event.preventDefault();
+        stageFiles([
+          new File([text], 'pasted-text.txt', { type: 'text/plain' }),
+        ]);
+      }
+    },
+  );
+
   // Chat: open the file picker
   delegateEvent(app, 'click', '[data-action="chat-attach"]', () => {
     app.querySelector<HTMLInputElement>('[data-action="chat-attach-input"]')?.click();

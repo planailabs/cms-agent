@@ -76,6 +76,46 @@ describe('ui flows', () => {
     ok('one-click chat created on the active branch', true);
   });
 
+  it('paste and drop stage attachments (image file, long text, dropzone)', async () => {
+    const input = dataAction(s.page, 'machine-config-input').first();
+    await input.waitFor({ timeout: 15_000 });
+    const chipCount = () => s.page.locator('[data-attach-chips] .composer-chip').count();
+
+    // 1) ctrl+v with an image file on the clipboard
+    await input.evaluate((el) => {
+      const bytes = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+      const buf = Uint8Array.from(bytes, (c) => c.charCodeAt(0));
+      const dt = new DataTransfer();
+      dt.items.add(new File([buf], 'pasted.png', { type: 'image/png' }));
+      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    });
+    await expect.poll(chipCount, { timeout: 15_000 }).toBe(1);
+    ok('pasted image becomes an attachment chip', true);
+
+    // 2) pasting very long text becomes a text attachment, short text does not
+    await input.evaluate((el) => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', 'x'.repeat(5000));
+      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    });
+    await expect.poll(chipCount, { timeout: 15_000 }).toBe(2);
+    const composerText = await input.evaluate((el) => el.textContent ?? '');
+    ok('long paste becomes a chip, not composer text', !composerText.includes('xxxx'), composerText.slice(0, 40));
+
+    // 3) drop on the composer dropzone (the drag-and-drop upload path)
+    await s.page.locator('[data-action="chat-dropzone"]').first().evaluate((el) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['dropped'], 'dropped.txt', { type: 'text/plain' }));
+      el.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    });
+    await expect.poll(chipCount, { timeout: 15_000 }).toBe(3);
+    ok('dropped file becomes an attachment chip', true);
+
+    // Clean the composer state for the tests that follow
+    const removes = s.page.locator('[data-action="chat-attach-remove"]');
+    while ((await removes.count()) > 0) await removes.first().click();
+  });
+
   it('theme toggle persists to the profile', async () => {
     const before = ((await (await s.context.request.get(`${benchRun().baseUrl}/api/me`)).json()) as {
       theme?: string;
