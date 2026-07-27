@@ -15,6 +15,7 @@ import { chatAccessDenied } from '@/lib/chatAccess';
 import { ensureWorktree } from '@/lib/git/engine';
 import { jail } from '@/lib/agent/tools/fsTools';
 import type { ToolContext } from '@/lib/agent/tools/registry';
+import { IMAGE_MIME } from '@/lib/imageMime';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro']);
 const MAX_FILE_CHARS = 100_000;
@@ -113,6 +114,14 @@ export const GET: APIRoute = async ({ params, url, locals }) => {
         'Content-Type': 'application/octet-stream',
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(resolved))}`,
       },
+    });
+  }
+  const imageMime = IMAGE_MIME[path.extname(resolved).slice(1).toLowerCase()];
+  if (mode === 'raw' && imageMime) {
+    // Inline preview for the code browser's <img>. CSP sandbox neuters
+    // scripts if a repo SVG is opened directly on the API origin.
+    return new Response(buf, {
+      headers: { 'Content-Type': imageMime, 'Content-Security-Policy': 'sandbox' },
     });
   }
   if (buf.subarray(0, 8000).includes(0)) {

@@ -74,6 +74,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Language switch en↔de (judged screenshot) | 02 | ✅ |
 | Commits / capabilities / archive / sessions windows (rail-opened, stage-swapped, chat stays, close returns to preview) | 02 | ✅ |
 | Code browser (tree, open file — judged) | 02 | ✅ |
+| Code browser image preview (svg renders inline, naturalWidth > 0) | 02 | ✅ |
 | Preview tabs new/switch/close | 02 | ✅ |
 | Sidebar collapse/resize | 02 | 🟡 collapse only; drag-resize not simulated |
 | Plan/execution/publish cards | — | 🟡 exercised via API in 03; card DOM not driven (approve via endpoint, not button) |

@@ -9,6 +9,7 @@ import { store } from '../chat/app/store';
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState } from '../chat/app/state';
+import { isImagePath } from '@/lib/imageMime';
 import { closeWindow, openWindow, registerWindow } from './window';
 
 const MAX_SNIPPET_CHARS = 4000;
@@ -90,6 +91,14 @@ export const openFile = async (path: string, line = 0): Promise<void> => {
   cb.selStart = line;
   cb.selEnd = line;
   cb.error = null;
+  if (isImagePath(path)) {
+    // No text to fetch — renderFile shows an <img> straight off the raw endpoint.
+    cb.loading = false;
+    cb.selStart = 0;
+    cb.selEnd = 0;
+    store.notify();
+    return;
+  }
   store.notify();
   try {
     const res = await fetch(api(path));
@@ -280,6 +289,9 @@ const renderFile = (state: AppState): string => {
   if (!cb.filePath) {
     return `<span class="ws-empty-note">${escapeHtml(t(locale, 'workspace.code.pickFile'))}</span>`;
   }
+  if (isImagePath(cb.filePath)) {
+    return `<div class="ws-cb-image"><img src="${escapeHtml(api(cb.filePath, 'raw'))}" alt="${escapeHtml(cb.filePath)}"></div>`;
+  }
   const lines = cb.fileLines
     .map((line, i) => {
       const n = i + 1;
@@ -306,8 +318,8 @@ export const renderCodeBrowser = (state: AppState): string => {
             ${cb.filePath ? `<span class="ws-mono ws-cb-path">${escapeHtml(cb.filePath)}${hasSel ? `:${cb.selStart}${cb.selEnd > cb.selStart ? `-${cb.selEnd}` : ''}` : ''}</span>` : ''}
           </div>
           <div class="ws-git__head-left">
-            ${cb.filePath ? `<button type="button" class="ws-mini-button" data-action="ws-cb-copy"
-              title="${escapeHtml(t(locale, 'workspace.code.copyTitle'))}">${escapeHtml(t(locale, 'workspace.code.copy'))}</button>
+            ${cb.filePath ? `${isImagePath(cb.filePath) ? '' : `<button type="button" class="ws-mini-button" data-action="ws-cb-copy"
+              title="${escapeHtml(t(locale, 'workspace.code.copyTitle'))}">${escapeHtml(t(locale, 'workspace.code.copy'))}</button>`}
             <a class="ws-mini-button" href="${escapeHtml(api(cb.filePath, 'download'))}" download
               title="${escapeHtml(t(locale, 'workspace.code.downloadTitle'))}">${escapeHtml(t(locale, 'workspace.code.download'))}</a>` : ''}
             <button type="button" class="ws-mini-button ws-mini-button--primary" data-action="ws-cb-add"

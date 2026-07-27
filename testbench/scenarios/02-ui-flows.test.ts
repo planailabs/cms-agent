@@ -343,6 +343,20 @@ describe('ui flows', () => {
       artifacts: [{ kind: 'screenshot', label: 'code-browser', content: await shot(s.page) }],
     });
     expect(verdict.pass, verdict.reasoning).toBe(true);
+
+    // Image preview: expand public/ and open the seeded favicon.svg
+    await s.page.locator('[data-action="ws-cb-dir"][data-path="public"]').click();
+    await s.page.locator('[data-action="ws-cb-file"][data-path="public/favicon.svg"]').click();
+    await s.page.locator('.ws-cb-image img').waitFor({ timeout: 15_000 });
+    await expect
+      .poll(() =>
+        s.page.evaluate(() => {
+          const el = document.querySelector<HTMLImageElement>('.ws-cb-image img');
+          return Boolean(el && el.complete && el.naturalWidth > 0);
+        }),
+      )
+      .toBe(true);
+    ok('image file renders an inline preview', true);
     await dataAction(s.page, 'ws-cb-modal-close').first().click();
   });
 

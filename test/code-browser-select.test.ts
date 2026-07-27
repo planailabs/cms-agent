@@ -12,6 +12,7 @@ import {
   endLineSelect,
   openCodeBrowser,
   openFile,
+  renderCodeBrowser,
   workFileTarget,
 } from '@/components/workspace/codeBrowser';
 
@@ -51,6 +52,23 @@ describe('code browser line selection', () => {
 
     expect(store.state.workspace.codeBrowser.dirs.src).toBeDefined();
     expect(store.state.workspace.codeBrowser.fileLines).toEqual(['const loaded = true;']);
+  });
+
+  it('previews images inline instead of fetching text', async () => {
+    store.state.activeChatId = 'chat';
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openFile('public/logo.png', 7);
+
+    const cb = store.state.workspace.codeBrowser;
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(cb.loading).toBe(false);
+    expect([cb.selStart, cb.selEnd]).toEqual([0, 0]);
+    const html = renderCodeBrowser(store.state);
+    expect(html).toContain('ws-cb-image');
+    expect(html).toContain('mode=raw');
+    expect(html).not.toContain('ws-cb-copy'); // no text to copy
   });
 
   it('parses sandbox file links and their line numbers', () => {

@@ -3866,6 +3866,24 @@ html.is-first-visit #app {
   line-height: 1.45;
 }
 
+.ws-cb-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 1.5rem;
+}
+
+.ws-cb-image img {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 8px;
+  /* checkerboard so transparent regions read as such on the dark pane */
+  background:
+    repeating-conic-gradient(#30363d 0% 25%, #161b22 0% 50%)
+    0 0 / 16px 16px;
+}
+
 .ws-cb-line {
   display: flex;
   cursor: pointer;
