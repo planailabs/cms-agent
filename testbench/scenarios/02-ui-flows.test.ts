@@ -95,6 +95,19 @@ describe('ui flows', () => {
     await s.page.locator('.avatar-initials').waitFor({ timeout: 15_000 });
     const initials = (await s.page.locator('.avatar-initials').innerText()).trim();
     ok('avatar shows user initials', /^\S{1,2}$/.test(initials), initials);
+
+    // Composer hosts its own element-picker button (arms + disarms)
+    const composerPick = s.page.locator('.composer-pick-button');
+    ok('composer has the element-picker button', (await composerPick.count()) > 0);
+    await composerPick.first().click();
+    await expect
+      .poll(() => s.page.locator('.composer-pick-button.is-active').count(), { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    await composerPick.first().click();
+    await expect
+      .poll(() => s.page.locator('.composer-pick-button.is-active').count(), { timeout: 10_000 })
+      .toBe(0);
+    ok('composer picker button arms and disarms', true);
   });
 
   it('paste and drop stage attachments (image file, long text, dropzone)', async () => {

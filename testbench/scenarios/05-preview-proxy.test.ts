@@ -185,6 +185,14 @@ describe('preview + proxy', () => {
         await expect.poll(() => pathnameOf('ws-diff-after'), { timeout: 60_000 }).toBe(want);
         ok('route pick navigates the panes', true);
       }
+
+      // Review verdicts live under the composer (redesign action row)
+      const publish = s.page.locator('.chat-actions-row [data-action="ws-publish"]');
+      ok('publish renders in the composer action row', (await publish.count()) > 0);
+      ok(
+        'request-changes renders in the composer action row',
+        (await s.page.locator('.chat-actions-row [data-action="ws-request-changes"]').count()) > 0,
+      );
     } finally {
       await browser.close();
     }

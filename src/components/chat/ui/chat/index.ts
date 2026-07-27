@@ -22,7 +22,7 @@ import {
   renderToolIndicator,
 } from './indicators';
 import { renderQuestionUI } from './prompts';
-import { renderChatComposer, renderEmptyState } from './composer';
+import { renderChatActionRow, renderChatComposer, renderEmptyState } from './composer';
 import { renderWorkflowCards, renderContextChip } from './cards';
 
 export const renderChatSection = (
@@ -112,6 +112,7 @@ export const renderChatSection = (
         ${questionButtons}
         ${contextChip}
         ${inputField}
+        ${state.activeChatArchived || automatismRunning ? '' : renderChatActionRow(state)}
       </section>
     `;
   }

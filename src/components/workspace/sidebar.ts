@@ -201,20 +201,9 @@ export const renderPhaseBar = (state: AppState): string => {
     ? `<button type="button" class="ws-mini-button" data-action="ws-plan-open"
         title="${escapeHtml(t(locale, 'chat.plan.view'))}">${escapeHtml(t(locale, 'chat.plan.viewButton'))}</button>`
     : '';
-  let actions = `<div class="ws-phase-actions">${planButton}${syncButton}</div>`;
-  if (current === 'preview') {
-    const publishing = state.workspace.publish?.status === 'running';
-    const hasSha = Boolean(state.workspace.executionSha);
-    actions = `<div class="ws-phase-actions">
-        ${planButton}${syncButton}
-        <button type="button" class="ws-mini-button ws-mini-button--primary" data-action="ws-publish"
-          ${!hasSha || publishing ? 'disabled' : ''}
-          title="${hasSha ? escapeHtml(t(locale, 'workspace.phase.publishSha', { sha: state.workspace.executionSha!.slice(0, 8) })) : escapeHtml(t(locale, 'workspace.phase.waitingForCommit'))}">
-          ${escapeHtml(t(locale, publishing ? 'workspace.phase.publishing' : 'workspace.phase.publish'))}
-        </button>
-        <button type="button" class="ws-mini-button" data-action="ws-request-changes">${escapeHtml(t(locale, 'workspace.phase.requestChanges'))}</button>
-      </div>`;
-  }
+  // Publish / request-changes moved to the action row under the composer
+  // (chat/ui/chat/composer.ts) — the phase bar keeps plan + sync only.
+  const actions = `<div class="ws-phase-actions">${planButton}${syncButton}</div>`;
 
   // A running/paused automatism on THIS chat (e.g. a sync) shows its own
   // step bar below the workflow phases — incl. the ▶ Resume button.

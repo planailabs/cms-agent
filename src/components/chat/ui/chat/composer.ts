@@ -13,7 +13,7 @@ import {
 } from '../../actions/chat/attachments';
 
 import type { LocaleContent, ChatModeLocale } from '../../content';
-import type { ChatState } from '../../app/state';
+import type { AppState, ChatState } from '../../app/state';
 
 type AiChat = NonNullable<ChatState['aiChat']>;
 
@@ -52,6 +52,7 @@ export const renderChatComposer = (
 
   const multiple = store.state.attachmentsOnePerMessage ? '' : ' multiple';
   const attachLabel = escapeHtml(t(uiLocale(), 'chat.attach.add'));
+  const pickLabel = escapeHtml(t(uiLocale(), 'workspace.preview.pickTitle'));
   // Attachments live in the module, not the store — seed from there so a full
   // re-render reflects staged files; live updates patch the container in place.
   const sendDisabled = composerHasContent('') ? '' : ' aria-disabled="true" disabled';
@@ -73,6 +74,12 @@ export const renderChatComposer = (
               data-action="chat-attach"
               aria-label="${attachLabel}"
               title="${attachLabel}">📎</button>
+            <button
+              type="button"
+              class="composer-attach-button composer-pick-button ${store.state.workspace.pickerActive ? 'is-active' : ''}"
+              data-action="ws-element-pick"
+              aria-label="${pickLabel}"
+              title="${pickLabel}">⌖</button>
             <input
               type="file"
               class="composer-attach-input"
@@ -100,6 +107,32 @@ export const renderChatComposer = (
           </div>
         </div>`
     : '';
+};
+
+// ── Review action row (below the composer, PREVIEW phase) ───────────────
+
+/** Publish / request-changes verdicts for the reviewed draft — they live
+ *  here (single place, mockup layout) instead of the phase bar/diff header. */
+export const renderChatActionRow = (state: AppState): string => {
+  if (
+    state.activeChatKind !== 'workflow' ||
+    state.workflowPhase !== 'preview' ||
+    !state.activeChatId ||
+    state.activeChatArchived
+  ) {
+    return '';
+  }
+  const locale = uiLocale();
+  const publishing = state.workspace.publish?.status === 'running';
+  const hasSha = Boolean(state.workspace.executionSha);
+  return `<div class="chat-actions-row">
+      <button type="button" class="ws-mini-button ws-mini-button--primary chat-actions-row__publish"
+        data-action="ws-publish" ${!hasSha || publishing ? 'disabled' : ''}
+        title="${hasSha ? escapeHtml(t(locale, 'workspace.phase.publishSha', { sha: state.workspace.executionSha!.slice(0, 8) })) : escapeHtml(t(locale, 'workspace.phase.waitingForCommit'))}">
+        ${escapeHtml(t(locale, publishing ? 'workspace.phase.publishing' : 'workspace.phase.publish'))}
+      </button>
+      <button type="button" class="ws-mini-button" data-action="ws-request-changes">${escapeHtml(t(locale, 'workspace.phase.requestChanges'))}</button>
+    </div>`;
 };
 
 // ── Empty state (sidebar first-run view, before any message) ────────────

@@ -189,17 +189,12 @@ export const renderDiffViewer = (state: AppState): string => {
       </div>`;
   }
 
-  const publishing = state.workspace.publish?.status === 'running';
-  const hasSha = Boolean(state.workspace.executionSha);
-  // Tool entry points (edit mode, picker, browsers, code) live in the icon
-  // rail (rail.ts) — the chrome bar keeps the review verdict actions.
+  // Tool entry points live in the icon rail; publish/request-changes in the
+  // action row under the composer — the chrome bar is a plain title bar.
   const header = `<div class="ws-toolbar">
       <span class="ws-chrome-dots" aria-hidden="true"><i></i><i></i></span>
       <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.diff.reviewChanges'))}</span>
       <span class="ws-toolbar__spacer"></span>
-      <button type="button" class="ws-mini-button ws-mini-button--primary" data-action="ws-publish"
-        ${!hasSha || publishing ? 'disabled' : ''}>${escapeHtml(t(locale, publishing ? 'workspace.phase.publishing' : 'workspace.phase.publish'))}</button>
-      <button type="button" class="ws-mini-button" data-action="ws-request-changes">${escapeHtml(t(locale, 'workspace.phase.requestChanges'))}</button>
     </div>`;
 
   if (diff.pages.length === 0) {

@@ -397,6 +397,33 @@ html.is-first-visit #app {
       0 0 0 1px color-mix(in lab, var(--accent) 15%, transparent);
   }
 
+  /* Armed element picker highlights its composer button */
+  .composer-pick-button.is-active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in lab, var(--accent) 12%, transparent);
+  }
+
+  /* Review verdicts under the composer (PREVIEW phase) */
+  .chat-actions-row {
+    display: flex;
+    gap: 0.5rem;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+  }
+
+  .chat-actions-row .ws-mini-button {
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+    border-radius: 10px;
+  }
+
+  .chat-actions-row__publish {
+    flex: 1;
+    justify-content: center;
+  }
+
   .composer-card--resume {
     display: grid;
     grid-template-columns: 1fr auto;
