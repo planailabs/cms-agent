@@ -45,7 +45,8 @@ describe('communication mode UI', () => {
       expect(await selector.inputValue()).toBe('default');
       expect(await selector.locator('option').count()).toBe(3);
       expect(await page.locator('#non-technical details').count()).toBe(0);
-      await expect.poll(() => page.locator('#technical details').isVisible()).toBe(true);
+      // Tool calls render as a group <details> wrapping per-call <details>
+      await expect.poll(() => page.locator('#technical details.chat-tools').isVisible()).toBe(true);
       await expect.poll(() => page.locator('#technical code').textContent()).toBe('read_file');
     } finally {
       await page.close();
