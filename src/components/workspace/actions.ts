@@ -386,6 +386,7 @@ export const attachContextChip = (chip: ContextChip): void => {
   chip.context.branch = branch?.name;
   ws.contextChip = chip;
   ws.pickerActive = false;
+  ws.sidebarCollapsed = false; // the chip lands in the composer — show it
   store.notify();
 };
 

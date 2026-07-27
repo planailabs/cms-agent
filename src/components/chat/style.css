@@ -3752,6 +3752,13 @@ html.is-first-visit #app {
   gap: 0;
 }
 
+/* The body is a column flex container with a fixed height; its children
+   (commit rows, diff file cards — overflow:hidden kills their automatic
+   min-height floor) must never be compressed to fit, or nothing scrolls. */
+.ws-git__body > * {
+  flex-shrink: 0;
+}
+
 /* ── Browser-compare side-by-side scroll mode ── */
 /* One scroll container, two shot columns; the content-align enhancer can
    stretch matched sections so both columns scroll in lockstep. Unlayered:

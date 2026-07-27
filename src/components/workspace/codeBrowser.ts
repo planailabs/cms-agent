@@ -187,6 +187,7 @@ export const addCodeContext = (): void => {
       code: { path: cb.filePath, startLine: cb.selStart, endLine: cb.selEnd, snippet },
     },
   };
+  ws.sidebarCollapsed = false; // the chip lands in the composer — show it
   closeWindow();
   store.notify();
 };
