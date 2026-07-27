@@ -5,7 +5,16 @@
  * server and 03's journey feeds 04/05).
  */
 import { defineConfig } from 'vitest/config';
+import { BaseSequencer, type TestSpecification } from 'vitest/node';
 import path from 'node:path';
+
+/** The default sequencer reorders by cached duration — scenarios are data-
+ *  dependent (03's journey feeds 04/05/06), so pin filename order. */
+class FilenameOrder extends BaseSequencer {
+  async sort(files: TestSpecification[]): Promise<TestSpecification[]> {
+    return [...files].sort((a, b) => a.moduleId.localeCompare(b.moduleId));
+  }
+}
 
 export default defineConfig({
   resolve: {
@@ -18,6 +27,6 @@ export default defineConfig({
     testTimeout: 600_000,
     hookTimeout: 120_000,
     fileParallelism: false,
-    sequence: { concurrent: false },
+    sequence: { concurrent: false, sequencer: FilenameOrder },
   },
 });

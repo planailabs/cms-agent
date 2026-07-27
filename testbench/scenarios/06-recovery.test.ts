@@ -128,13 +128,24 @@ describe('recovery paths', () => {
         'Simple content change — propose your plan right away without asking questions.',
     );
 
-    // …then main moves underneath it: restore the oldest version (original
-    // About headline) as a new commit → both sides changed the same lines.
+    // …then main moves underneath it: restore the OLDEST version of exactly
+    // the files the agent touched → the main-side commit overlaps the work
+    // branch's change whatever file the agent actually edited.
+    const changed = ((await client.get(`/api/diff/${chatId}/pages`)).json as {
+      changedFiles?: string[];
+    }).changedFiles ?? [];
+    ok('conflict execution changed files', changed.length > 0, JSON.stringify(changed));
     const commits = await history();
     const restore = await client.req('POST', `/api/branches/${bid}/restore`, {
       sha: commits[commits.length - 1].sha,
+      paths: changed,
     });
-    ok('conflicting main-side restore commit', restore.status === 200);
+    const restoreSha = (restore.json as { restoreSha?: string | null }).restoreSha;
+    ok(
+      'conflicting main-side restore commit',
+      restore.status === 200 && !!restoreSha,
+      `${restore.status} restoreSha=${restoreSha}`,
+    );
 
     const sync = await client.req('POST', `/api/chats/${chatId}/sync`, {});
     ok('sync accepted', sync.status === 202);
