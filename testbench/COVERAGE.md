@@ -58,9 +58,11 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Workspace boot, window-picker offer, silent restore | 02 | ✅ |
 | Chat composer + example prompts | 02 | ✅ |
 | New branch-panel chat | 02 | ✅ |
+| One-click new chat from the switcher header | 02 | ✅ |
 | Theme toggle (persisted) | 02 | ✅ |
 | Preview page follows the workspace theme (live flip) | 02 | ✅ |
 | Diff viewer: pane browsing syncs other pane + tabs, address free-browse | 05 | ✅ |
+| Chat transcript scroll preserved across rerenders (tool-use jump fix) | 05 | ✅ |
 | Chat visibility setting (restricted hides foreign chats, admin bypass) | 07 | ✅ |
 | Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
 | Language switch en↔de (judged screenshot) | 02 | ✅ |

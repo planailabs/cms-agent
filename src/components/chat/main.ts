@@ -147,16 +147,20 @@ const initApp = () => {
           <div id="chat-scroll-region" class="ws-chat-region">
             ${renderChatSection(locale, state)}
           </div>`;
+        // innerHTML replacement resets scroll — preserve it across renders:
+        // pinned-to-bottom viewers follow new content (every phase, tool use
+        // included); scrolled-up viewers keep their reading position.
+        const prevChat = sidebarRegion.querySelector<HTMLElement>('#chat-scroll-region');
+        const prevTop = prevChat?.scrollTop ?? 0;
+        const wasPinned =
+          !prevChat ||
+          prevChat.scrollHeight - prevChat.scrollTop - prevChat.clientHeight < 40;
         sidebarRegion.innerHTML = sidebarHtml;
         LAST_HTML.delete(sidebarRegion);
 
-        // Auto-scroll the chat during streaming/waiting/etc.
         const chatRegion = sidebarRegion.querySelector<HTMLElement>('#chat-scroll-region');
-        const mc = state.chat?.aiChat;
-        if (chatRegion && (mc?.phase === 'streaming' || mc?.phase === 'waiting'
-          || mc?.phase === 'compacting'
-          || mc?.phase === 'idle' || mc?.phase === 'question')) {
-          chatRegion.scrollTop = chatRegion.scrollHeight;
+        if (chatRegion) {
+          chatRegion.scrollTop = wasPinned ? chatRegion.scrollHeight : prevTop;
         }
       }
     }

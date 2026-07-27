@@ -173,6 +173,53 @@ describe('preview + proxy', () => {
     }
   }, 600_000);
 
+  it('chat transcript keeps scroll position across rerenders', async () => {
+    const j = loadJourney();
+    if (!j?.chatB) {
+      recordAssert(SCENARIO, 'chat scroll preserve', true, 'n/a — e2e group not run');
+      return;
+    }
+    const browser = await launchBrowser();
+    try {
+      const s = await newSession(browser);
+      await bootWorkspace(s.page);
+      await openBranchPanel(s.page);
+      await s.page
+        .locator(`[data-action="ws-open-chat"][data-chat-id="${j.chatB}"]`)
+        .first()
+        .click();
+      const region = s.page.locator('#chat-scroll-region');
+      await region.waitFor({ timeout: 30_000 });
+      await s.page.waitForTimeout(1000);
+      const overflows = await region.evaluate((el) => el.scrollHeight > el.clientHeight + 100);
+      if (!overflows) {
+        recordAssert(SCENARIO, 'chat scroll preserve', true, 'n/a — transcript too short');
+        return;
+      }
+      // Scroll up, force a full workspace rerender (theme toggle), position
+      // must survive — the old renderer jumped on every SSE/tool event.
+      await region.evaluate((el) => {
+        el.scrollTop = 5;
+      });
+      await s.page.locator('[data-action="theme-toggle"]').first().click();
+      await s.page.waitForTimeout(500);
+      const topAfter = await region.evaluate((el) => el.scrollTop);
+      ok('scrolled-up position survives a rerender', topAfter < 100, `scrollTop ${topAfter}`);
+      // Pinned to the bottom → rerender keeps following the tail.
+      await region.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      await s.page.locator('[data-action="theme-toggle"]').first().click();
+      await s.page.waitForTimeout(500);
+      const pinned = await region.evaluate(
+        (el) => el.scrollHeight - el.scrollTop - el.clientHeight < 60,
+      );
+      ok('pinned-to-bottom follows after a rerender', pinned);
+    } finally {
+      await browser.close();
+    }
+  }, 300_000);
+
   it('archived chat can be deleted permanently (final destructive probe)', async () => {
     const journey = loadJourney();
     if (!journey) {
