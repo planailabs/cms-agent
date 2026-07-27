@@ -106,6 +106,14 @@ export const renderBranchSwitcher = (state: AppState): string => {
       </div>`
     : '';
 
+  // One-click chat creation on the active branch — the panel's per-branch
+  // "+ chat" buttons stay for other branches.
+  const newChat = activeBranch
+    ? `<button type="button" class="ws-switcher__new" data-action="ws-new-chat"
+        data-branch-id="${escapeHtml(activeBranch.id)}"
+        title="${escapeHtml(t(locale, 'workspace.sidebar.newChatOn', { branch: activeBranch.name }))}"
+        aria-label="${escapeHtml(t(locale, 'workspace.sidebar.newChatOn', { branch: activeBranch.name }))}">＋</button>`
+    : '';
   return `<div class="ws-switcher">
       <button type="button" class="ws-switcher__toggle" data-action="ws-branch-list-toggle"
         aria-expanded="${state.workspace.branchListOpen}">
@@ -113,6 +121,7 @@ export const renderBranchSwitcher = (state: AppState): string => {
         <span class="ws-switcher__chat">${escapeHtml(activeChat?.title ?? state.activeChatTitle ?? '')}</span>
         <span class="ws-switcher__caret">${state.workspace.branchListOpen ? '▴' : '▾'}</span>
       </button>
+      ${newChat}
       ${panel}
     </div>`;
 };

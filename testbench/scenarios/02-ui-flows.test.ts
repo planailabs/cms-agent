@@ -61,6 +61,21 @@ describe('ui flows', () => {
     ok('new chat created from the sidebar', true);
   });
 
+  it('one-click new chat from the collapsed switcher header', async () => {
+    const base = benchRun().baseUrl;
+    const chatCount = async () =>
+      ((await (await s.context.request.get(`${base}/api/branches`)).json()) as {
+        branches: { chats: unknown[] }[];
+      }).branches.reduce((n, b) => n + b.chats.length, 0);
+    const before = await chatCount();
+    const plus = s.page.locator('.ws-switcher__new');
+    ok('switcher + button visible without opening the panel', await plus.isVisible());
+    await plus.click();
+    await dataAction(s.page, 'machine-config-input').first().waitFor({ timeout: 30_000 });
+    await expect.poll(chatCount, { timeout: 15_000 }).toBe(before + 1);
+    ok('one-click chat created on the active branch', true);
+  });
+
   it('theme toggle persists to the profile', async () => {
     const before = ((await (await s.context.request.get(`${benchRun().baseUrl}/api/me`)).json()) as {
       theme?: string;

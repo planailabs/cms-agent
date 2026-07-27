@@ -1752,9 +1752,28 @@ html.is-first-visit #app {
     position: relative;
     flex: 1;
     min-width: 0;
+    display: flex;
+    align-items: stretch;
+    gap: 0.4rem;
+  }
+
+  .ws-switcher__new {
+    flex: none;
+    padding: 0.45rem 0.65rem;
+    border-radius: 0.75rem;
+    border: 1px solid color-mix(in lab, var(--border-muted) 80%, transparent);
+    background: color-mix(in lab, var(--surface-elevated) 90%, transparent);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+
+  .ws-switcher__new:hover {
+    background: color-mix(in lab, var(--surface-elevated) 70%, var(--accent) 30%);
   }
 
   .ws-switcher__toggle {
+    flex: 1;
     display: flex;
     align-items: center;
     gap: 0.5rem;
