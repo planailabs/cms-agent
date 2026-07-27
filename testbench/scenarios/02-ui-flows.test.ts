@@ -81,10 +81,19 @@ describe('ui flows', () => {
     const railButtons = await s.page.locator('.ws-rail .ws-rail__btn').count();
     ok('icon rail renders all nine tools', railButtons === 9, `${railButtons} buttons`);
     await s.page.locator('.ws-rail [data-action="settings-link"]').click();
-    await s.page.locator('.settings-panel').waitFor({ timeout: 10_000 });
-    ok('rail settings button opens the settings overlay', true);
-    await dataAction(s.page, 'close-settings').first().click();
-    await s.page.locator('.settings-panel').waitFor({ state: 'detached', timeout: 10_000 });
+    try {
+      await s.page.locator('.settings-panel').waitFor({ timeout: 10_000 });
+      ok('rail settings button opens the settings overlay', true);
+    } finally {
+      // NOT dataAction('close-settings').first() — that resolves to the
+      // fullscreen backdrop, whose click point the panel itself covers. A
+      // still-open overlay would intercept every later click in the suite.
+      await s.page
+        .locator('.settings-close-button')
+        .click({ timeout: 5_000 })
+        .catch(() => s.page.keyboard.press('Escape'));
+      await s.page.locator('.settings-panel').waitFor({ state: 'detached', timeout: 10_000 });
+    }
 
     // Compact header: branch pill, version chip, initials avatar
     await s.page.locator('.app-header__branch').waitFor({ timeout: 15_000 });
