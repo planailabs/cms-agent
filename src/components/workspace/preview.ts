@@ -86,7 +86,7 @@ const renderEditToolbar = (state: AppState): string => {
       ${tools}
       <button type="button" class="ws-mini-button" data-action="ws-edit-undo">${escapeHtml(t(locale, 'workspace.preview.editUndo'))}</button>
       <button type="button" class="ws-mini-button" data-action="ws-edit-clear">${escapeHtml(t(locale, 'workspace.preview.editClear'))}</button>
-      <button type="button" class="ws-mini-button is-active" data-action="ws-edit-handoff"
+      <button type="button" class="ws-mini-button ws-mini-button--handoff" data-action="ws-edit-handoff"
         title="${escapeHtml(t(locale, 'workspace.preview.handoffTitle'))}" ${canHandoff ? '' : 'disabled aria-disabled="true"'}>
         ${escapeHtml(t(locale, 'workspace.preview.handoff'))}${ee.busy ? '…' : ''}
       </button>

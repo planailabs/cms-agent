@@ -40,6 +40,7 @@
   --text-primary: #dadada;
   --text-muted: #9a9a9a;
   --accent: #a882ff;
+  --accent-2: #2ad4c0;
   --accent-strong: #53dfdd;
   --accent-danger: #fb464c;
 }
@@ -53,6 +54,7 @@
   --text-primary: #222222;
   --text-muted: #5a5a5a;
   --accent: #7852ee;
+  --accent-2: #12a594;
   --accent-strong: #08b94e;
   --accent-danger: #e93147;
 }
@@ -1708,6 +1710,18 @@ html.is-first-visit #app {
   .ws-mini-button--primary {
     border-color: var(--accent);
     background: color-mix(in lab, var(--accent) 18%, transparent);
+  }
+
+  /* Handoff-to-agent — the secondary accent marks "user suggestion" actions
+     (same family as the swap/annotation teal). */
+  .ws-mini-button--handoff {
+    border-color: var(--accent-2);
+    color: var(--accent-2);
+    background: color-mix(in lab, var(--accent-2) 14%, transparent);
+  }
+
+  .ws-mini-button--handoff:hover:not([disabled]) {
+    background: color-mix(in lab, var(--accent-2) 26%, transparent);
   }
 
   .ws-mini-button[disabled] {

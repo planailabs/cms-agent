@@ -286,6 +286,10 @@ describe('preview + proxy', () => {
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="swap"]').waitFor({ timeout: 30_000 });
       const tools = await s.page.locator('[data-action="ws-edit-tool"]').count();
       ok('edit toolbar lists all five tools', tools === 5, `${tools} tools`);
+      const handoffSecondary = await s.page
+        .locator('.ws-mini-button--handoff[data-action="ws-edit-handoff"]')
+        .count();
+      ok('handoff button carries the secondary accent style', handoffSecondary === 1);
       await s.page.locator('[data-action="ws-edit-exit"]').click();
       await s.page.locator('.ws-diff').first().waitFor({ timeout: 30_000 });
       ok('exiting edit mode returns to the diff viewer', true);
