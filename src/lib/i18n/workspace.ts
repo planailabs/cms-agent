@@ -137,6 +137,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.diff.reviewChanges': 'Review changes',
     'workspace.diff.noChangedPages': 'No changed pages were detected on this branch.',
     'workspace.diff.unresolvedNote': 'Changed files without a resolvable page route:',
+    'workspace.diff.browsedPage': 'Browsed page (not in the changed pages)',
 
     // ── cross-browser comparison overlay ──
     'workspace.bc.renderingShot': 'Rendering {name}…',
@@ -357,6 +358,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.diff.reviewChanges': 'Änderungen prüfen',
     'workspace.diff.noChangedPages': 'Auf diesem Branch wurden keine geänderten Seiten gefunden.',
     'workspace.diff.unresolvedNote': 'Geänderte Dateien ohne zuordenbare Seiten-Route:',
+    'workspace.diff.browsedPage': 'Besuchte Seite (nicht in den geänderten Seiten)',
 
     // ── Browser-Vergleich ──
     'workspace.bc.renderingShot': '{name} wird gerendert…',

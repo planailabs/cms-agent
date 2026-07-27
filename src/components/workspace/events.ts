@@ -10,6 +10,7 @@ import { delegateEvent } from '../chat/utils/dom';
 import { switchChat } from '../chat/actions/chat';
 import { continueChatSession } from '../chat/actions/chat/session';
 import { registerDiffScrollSync } from './diffScroll';
+import { navigateDiffTo } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
 import {
   approvePlanAction,
@@ -496,10 +497,12 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-diff-reload"]', () => void loadDiffPages());
   delegateEvent(app, 'click', '[data-action="ws-diff-select-route"]', (_e, target) => {
     const route = target.getAttribute('data-route');
-    if (route) {
-      store.state.workspace.diff.selectedRoute = route;
-      store.notify();
-    }
+    if (route) navigateDiffTo(route);
+  });
+  delegateEvent(app, 'submit', '[data-action="ws-diff-address-form"]', (event, target) => {
+    event.preventDefault();
+    const input = target.querySelector<HTMLInputElement>('.ws-address__input');
+    if (input?.value) navigateDiffTo(input.value);
   });
   delegateEvent(app, 'click', '[data-action="ws-diff-mode"]', (_e, target) => {
     const mode = target.getAttribute('data-mode') as DiffViewMode | null;

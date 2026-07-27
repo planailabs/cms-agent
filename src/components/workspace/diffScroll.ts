@@ -31,6 +31,7 @@ import {
 } from "@/lib/compare/inject";
 import { store } from "../chat/app/store";
 import type { AppState } from "../chat/app/state";
+import { onDiffFrameNavigated } from "./diffViewer";
 
 /** Marker docs per iframe id (repopulated on every document load). */
 const markerDocs = new Map<string, MarkerDoc>();
@@ -283,6 +284,7 @@ export const registerDiffScrollSync = (): void => {
       error?: string;
       frac?: number;
       top?: number;
+      route?: string;
       doc?: MarkerDoc;
     } | null;
     if (!data || typeof data.type !== "string") return;
@@ -291,6 +293,8 @@ export const registerDiffScrollSync = (): void => {
       markerDocs.delete(src.id); // new document — old markers are stale
       anchorCache = new Map();
       readySrc.set(src.id, src.src);
+      // The user browsed inside this pane → tabs + the other pane follow.
+      if (typeof data.route === "string") onDiffFrameNavigated(data.route);
       if (appliedSig && currentSig() !== appliedSig) appliedSig = null;
       if (correctiveSkipSig && currentSig() !== correctiveSkipSig)
         correctiveSkipSig = null;

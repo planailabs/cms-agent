@@ -8,9 +8,52 @@
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState } from '../chat/app/state';
-import type { DiffViewMode } from './state';
+import type { DiffPage, DiffState, DiffViewMode } from './state';
 import { branchPreviewUrl } from './config';
 import { activeBranchName, previewBranchName } from './preview';
+import { store } from '../chat/app/store';
+
+/** Route-shaped pathname: leading '/', query/hash dropped. The trailing
+ *  slash is PRESERVED — sites may require it (Astro trailingSlash). */
+export const normalizeDiffRoute = (input: string): string => {
+  let r = input.trim().replace(/[?#].*$/, '');
+  if (!r.startsWith('/')) r = `/${r}`;
+  return r || '/';
+};
+
+/** Trailing-slash-insensitive identity: '/blog/x/' and '/blog/x' are the
+ *  same page (else browsing a slash variant would spawn a duplicate tab). */
+export const routeKey = (route: string): string => route.replace(/\/+$/, '') || '/';
+
+/** Canonical form for a browsed route: the existing changed-page route when
+ *  it is the same page, else the browsed pathname itself. */
+export const canonicalDiffRoute = (pages: DiffPage[], input: string): string => {
+  const raw = normalizeDiffRoute(input);
+  return pages.find((p) => routeKey(p.route) === routeKey(raw))?.route ?? raw;
+};
+
+/** The route the diff view shows: the selected one, else the first changed
+ *  page. Free browsing may select routes outside the changed-pages list. */
+export const resolveDiffRoute = (diff: DiffState): string | null =>
+  diff.selectedRoute ?? diff.pages[0]?.route ?? null;
+
+/** Navigate the diff view (page tabs + both panes follow). */
+export const navigateDiffTo = (input: string): void => {
+  const diff = store.state.workspace.diff;
+  const route = canonicalDiffRoute(diff.pages, input);
+  const current = resolveDiffRoute(diff);
+  if (!diff.loaded || (current !== null && routeKey(current) === routeKey(route))) return;
+  diff.selectedRoute = route;
+  store.notify();
+};
+
+/** cms:agent-ready from a diff pane → the user browsed inside it: sync the
+ *  page tabs and the other pane to the new route. */
+export const onDiffFrameNavigated = (route: string): void => {
+  const state = store.state;
+  if (state.workflowPhase !== 'preview' || state.workspace.elementEdit.active) return;
+  navigateDiffTo(route);
+};
 
 /** Catalog keys only — labels resolve at render time. */
 const MODES: Array<{ key: DiffViewMode; labelKey: string }> = [
@@ -163,14 +206,22 @@ export const renderDiffViewer = (state: AppState): string => {
       </div>`;
   }
 
+  const route = resolveDiffRoute(diff) ?? diff.pages[0]!.route;
   const tabs = diff.pages
     .map(
       (p) => `<button type="button"
-        class="ws-diff-tab ${p.route === diff.selectedRoute ? 'is-active' : ''}"
+        class="ws-diff-tab ${routeKey(p.route) === routeKey(route) ? 'is-active' : ''}"
         data-action="ws-diff-select-route" data-route="${escapeHtml(p.route)}"
         title="${escapeHtml(p.file)}">${escapeHtml(p.route)}</button>`,
     )
     .join('');
+  // Free browsing (links inside a pane or the address input) may leave the
+  // changed-pages list — show where the user is as a transient active tab.
+  const freeTab = diff.pages.some((p) => routeKey(p.route) === routeKey(route))
+    ? ''
+    : `<button type="button" class="ws-diff-tab is-active"
+        data-action="ws-diff-select-route" data-route="${escapeHtml(route)}"
+        title="${escapeHtml(t(locale, 'workspace.diff.browsedPage'))}">${escapeHtml(route)}</button>`;
 
   const modes = MODES.map(
     (m) => `<button type="button"
@@ -183,17 +234,22 @@ export const renderDiffViewer = (state: AppState): string => {
       data-action="ws-compare-align" title="${escapeHtml(t(locale, 'workspace.compare.title'))}">
       ${escapeHtml(t(locale, contentMode ? 'workspace.compare.content' : 'workspace.compare.height'))}</button>`;
 
-  const route = diff.selectedRoute ?? diff.pages[0]!.route;
   let body = '';
   if (diff.mode === 'side-by-side') body = renderSideBySide(state, route);
   else if (diff.mode === 'scroll') body = renderScroll(state, route);
   else if (diff.mode === 'highlight') body = renderHighlight(state, route);
   else body = renderOnion(state, route);
 
+  const address = `<form class="ws-address" data-action="ws-diff-address-form"
+      title="${escapeHtml(t(locale, 'workspace.preview.addressTitle'))}">
+      <input class="ws-address__input ws-mono" type="text" spellcheck="false"
+        autocomplete="off" value="${escapeHtml(route)}" aria-label="${escapeHtml(t(locale, 'workspace.preview.addressLabel'))}" />
+    </form>`;
+
   return `<div class="ws-diff">
       ${header}
-      <div class="ws-diff-tabs">${tabs}</div>
-      <div class="ws-diff-modes">${modes}<span class="ws-toolbar__spacer"></span>${alignToggle}</div>
+      <div class="ws-diff-tabs">${tabs}${freeTab}</div>
+      <div class="ws-diff-modes">${modes}${address}<span class="ws-toolbar__spacer"></span>${alignToggle}</div>
       ${diff.unresolved.length ? unresolvedNote(diff.unresolved) : ''}
       <div class="ws-diff-body">${body}</div>
     </div>`;
