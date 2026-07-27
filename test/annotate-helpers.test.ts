@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   hitTestAnnotations,
   removeAnnotation,
+  snapAnchorsFromRects,
+  snapDelta,
   strokeBbox,
   strokeHitIndex,
   type EditAnnotations,
@@ -66,5 +68,38 @@ describe('strokeBbox + removeAnnotation', () => {
     expect(a.moves).toHaveLength(0);
     removeAnnotation(a, { kind: 'stroke', index: 0 });
     expect(a.strokes).toHaveLength(0);
+  });
+});
+
+describe('snap-to-align', () => {
+  const anchors = snapAnchorsFromRects([{ x: 100, y: 200, w: 50, h: 30 }]);
+
+  it('collects edge + center axes from rects', () => {
+    expect(anchors.xs).toEqual([100, 125, 150]);
+    expect(anchors.ys).toEqual([200, 215, 230]);
+  });
+
+  it('snaps within tolerance and reports the guide axis', () => {
+    // Dragged left edge at 96 (rect.x 0 + dx 96) — 4px from anchor 100
+    const r = snapDelta({ x: 0, y: 0, w: 20, h: 20 }, 96, 300, anchors);
+    expect(r.dx).toBe(100);
+    expect(r.guideX).toBe(100);
+    expect(r.dy).toBe(300); // no y anchor within 6px
+    expect(r.guideY).toBeNull();
+  });
+
+  it('prefers the nearest anchor across edges and centers', () => {
+    // x: center edge 124 is 1px from anchor 125 (beats everything else)
+    // y: bottom edge 228 is 2px from 230; middle 218 is 3px from 215 → bottom wins
+    const r = snapDelta({ x: 0, y: 0, w: 20, h: 20 }, 114, 208, anchors);
+    expect(r.dx).toBe(115);
+    expect(r.guideX).toBe(125);
+    expect(r.dy).toBe(210);
+    expect(r.guideY).toBe(230);
+  });
+
+  it('leaves the delta alone with no anchor in range', () => {
+    const r = snapDelta({ x: 0, y: 0, w: 20, h: 20 }, 500, 500, anchors);
+    expect(r).toEqual({ dx: 500, dy: 500, guideX: null, guideY: null });
   });
 });

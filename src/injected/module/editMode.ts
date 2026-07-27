@@ -28,12 +28,16 @@ import {
   ensureOverlayCanvas,
   hitTestAnnotations,
   removeAnnotation,
+  snapAnchorsFromRects,
+  snapDelta,
   strokeBbox,
   type AnnotatedElement,
   type AnnotationSelection,
   type EditAnnotations,
   type EditTool,
   type ElementMove,
+  type Rect,
+  type SnapAnchors,
 } from '../annotate';
 import type { AgentApi } from '../protocol';
 import { createHelpBanner, type HelpBanner } from './banner';
@@ -227,8 +231,67 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     startX: number;
     startY: number;
     moved: boolean;
+    /** Original (untranslated) doc rect — snap edges are computed from it. */
+    rect: Rect;
+    /** Alignment axes of parent/siblings + the original position. */
+    anchors: SnapAnchors;
+    /** Last applied (snapped) translate — what pointerup commits. */
+    snapDx: number;
+    snapDy: number;
   }
   let drag: Drag | null = null;
+
+  // ── Alignment guides (Google-Drawings-style snap lines) ────────────────────
+
+  let guideV: HTMLDivElement | null = null;
+  let guideH: HTMLDivElement | null = null;
+  const guideLine = (vertical: boolean): HTMLDivElement => {
+    const g = chromeNode('div', 'cms-ov-guide');
+    const doc = document.documentElement;
+    g.style.cssText =
+      'position:absolute;z-index:2147483645;pointer-events:none;background:#7852ee;' +
+      (vertical
+        ? `top:0;width:1px;height:${Math.max(doc.scrollHeight, doc.clientHeight)}px`
+        : `left:0;height:1px;width:${Math.max(doc.scrollWidth, doc.clientWidth)}px`);
+    document.body.appendChild(g);
+    return g;
+  };
+  const showGuides = (x: number | null, y: number | null): void => {
+    if (x !== null) {
+      guideV ??= guideLine(true);
+      guideV.style.left = `${x}px`;
+      guideV.style.display = '';
+    } else if (guideV) guideV.style.display = 'none';
+    if (y !== null) {
+      guideH ??= guideLine(false);
+      guideH.style.top = `${y}px`;
+      guideH.style.display = '';
+    } else if (guideH) guideH.style.display = 'none';
+  };
+  const hideGuides = (): void => {
+    guideV?.remove();
+    guideH?.remove();
+    guideV = null;
+    guideH = null;
+  };
+
+  /** Doc rects worth aligning to: the element's original spot, its parent
+   *  and visible siblings. */
+  const collectAnchors = (el: HTMLElement, original: Rect): SnapAnchors => {
+    const rects: Rect[] = [original];
+    const parent = el.parentElement;
+    if (parent && parent !== document.body && parent !== document.documentElement) {
+      const pr = parent.getBoundingClientRect();
+      rects.push({ x: pr.left + window.scrollX, y: pr.top + window.scrollY, w: pr.width, h: pr.height });
+    }
+    for (const sib of Array.from(parent?.children ?? [])) {
+      if (sib === el || isOurs(sib) || rects.length >= 40) continue;
+      const r = sib.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      rects.push({ x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width, h: r.height });
+    }
+    return snapAnchorsFromRects(rects);
+  };
 
   const moveEntry = (selector: string): ElementMove | undefined =>
     ann.moves.find((m) => m.selector === selector);
@@ -240,19 +303,13 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       existing.dx = dx;
       existing.dy = dy;
     } else {
-      const r = d.el.getBoundingClientRect();
       ann.moves.push({
         selector: d.selector,
         element: elementInfo(d.el) as unknown as AnnotatedElement,
         dx,
         dy,
-        // Original rect = current rect minus the base translate at drag start
-        rect: {
-          x: r.left + window.scrollX - d.baseDx,
-          y: r.top + window.scrollY - d.baseDy,
-          w: r.width,
-          h: r.height,
-        },
+        // Original rect, captured at drag start (before any live translate)
+        rect: d.rect,
       });
     }
     render();
@@ -351,6 +408,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     active = false;
     drag = null;
     stroke = null;
+    hideGuides();
     hideHl();
     hideBubble();
     hideAllChrome();
@@ -428,14 +486,27 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
           existing = m;
         }
       }
+      const baseDx = existing?.dx ?? 0;
+      const baseDy = existing?.dy ?? 0;
+      const r = el.getBoundingClientRect();
+      const rect: Rect = {
+        x: r.left + window.scrollX - baseDx,
+        y: r.top + window.scrollY - baseDy,
+        w: r.width,
+        h: r.height,
+      };
       drag = {
         el,
         selector,
-        baseDx: existing?.dx ?? 0,
-        baseDy: existing?.dy ?? 0,
+        baseDx,
+        baseDy,
         startX: ev.pageX,
         startY: ev.pageY,
         moved: false,
+        rect,
+        anchors: collectAnchors(el, rect),
+        snapDx: baseDx,
+        snapDy: baseDy,
       };
     }
   }) as EventListener;
@@ -447,7 +518,11 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       const dy = ev.pageY - drag.startY;
       if (Math.abs(dx) + Math.abs(dy) >= MIN_DRAG_PX) drag.moved = true;
       if (drag.moved) {
-        drag.el.style.translate = `${drag.baseDx + dx}px ${drag.baseDy + dy}px`;
+        const snapped = snapDelta(drag.rect, drag.baseDx + dx, drag.baseDy + dy, drag.anchors);
+        drag.snapDx = snapped.dx;
+        drag.snapDy = snapped.dy;
+        drag.el.style.translate = `${snapped.dx}px ${snapped.dy}px`;
+        showGuides(snapped.guideX, snapped.guideY);
         hideHl();
         hideBubble();
       }
@@ -487,9 +562,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     if (drag) {
       const d = drag;
       drag = null;
-      const dx = ev.pageX - d.startX;
-      const dy = ev.pageY - d.startY;
-      if (d.moved) commitMove(d, d.baseDx + dx, d.baseDy + dy);
+      hideGuides();
+      if (d.moved) commitMove(d, d.snapDx, d.snapDy);
       return;
     }
     if (stroke) {
@@ -546,6 +620,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     agent.safe((data: Record<string, unknown>) => {
       if (!TOOLS.includes(data.tool as EditTool)) return;
       tool = data.tool as EditTool;
+      hideGuides();
       hideHl();
       hideBubble();
       closeCommentBox();

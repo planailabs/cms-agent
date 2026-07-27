@@ -154,6 +154,68 @@ export const hitTestAnnotations = (
   return null;
 };
 
+// ── Snap-to-align (pure — used by the move tool's drag loop) ────────────────
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface SnapAnchors {
+  xs: number[];
+  ys: number[];
+}
+
+export const SNAP_PX = 6;
+
+/** Alignment anchors from candidate rects: every rect contributes its
+ *  left/center/right (xs) and top/middle/bottom (ys). */
+export const snapAnchorsFromRects = (rects: Rect[]): SnapAnchors => ({
+  xs: rects.flatMap((r) => [r.x, r.x + r.w / 2, r.x + r.w]),
+  ys: rects.flatMap((r) => [r.y, r.y + r.h / 2, r.y + r.h]),
+});
+
+export interface SnapResult {
+  dx: number;
+  dy: number;
+  /** Document coordinate of the matched guide axis (null = no snap). */
+  guideX: number | null;
+  guideY: number | null;
+}
+
+/** Google-Drawings-style alignment: nudge (dx, dy) so the dragged rect's
+ *  edge/center lands exactly on the nearest anchor within `tol`. */
+export const snapDelta = (
+  rect: Rect,
+  dx: number,
+  dy: number,
+  anchors: SnapAnchors,
+  tol = SNAP_PX,
+): SnapResult => {
+  const best = (edges: number[], axes: number[]): { adj: number; guide: number } | null => {
+    let found: { adj: number; guide: number } | null = null;
+    for (const e of edges) {
+      for (const a of axes) {
+        const d = a - e;
+        if (Math.abs(d) <= tol && (!found || Math.abs(d) < Math.abs(found.adj))) {
+          found = { adj: d, guide: a };
+        }
+      }
+    }
+    return found;
+  };
+  const x = best([rect.x + dx, rect.x + rect.w / 2 + dx, rect.x + rect.w + dx], anchors.xs);
+  const y = best([rect.y + dy, rect.y + rect.h / 2 + dy, rect.y + rect.h + dy], anchors.ys);
+  return {
+    dx: dx + (x?.adj ?? 0),
+    dy: dy + (y?.adj ?? 0),
+    guideX: x?.guide ?? null,
+    guideY: y?.guide ?? null,
+  };
+};
+
 /** Delete one annotation; comment pins are renumbered to stay 1..N (the pin
  *  number is the screenshot ↔ JSON link, so it must have no gaps). */
 export const removeAnnotation = (a: EditAnnotations, sel: AnnotationSelection): void => {
