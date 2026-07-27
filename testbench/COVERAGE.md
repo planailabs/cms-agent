@@ -61,10 +61,12 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | One-click new chat from the switcher header | 02 | ✅ |
 | Theme toggle (persisted) | 02 | ✅ |
 | Preview page follows the workspace theme (live flip) | 02 | ✅ |
-| Diff viewer: pane browsing syncs other pane + tabs, address free-browse | 05 | ✅ |
+| Diff viewer: pane browsing syncs other pane + route chip, address free-browse | 05 | ✅ |
+| Route-chip dropdown (changed pages list, pick navigates + closes) | 05 | ✅ |
+| Icon rail (six tools, settings opens overlay) + compact header (branch pill, version chip, initials avatar) | 02 | ✅ |
 | Chat transcript scroll preserved across rerenders (tool-use jump fix) | 05 | ✅ |
-| Element picker from the diff viewer (arm → live preview on diff route → cancel) | 05 | ✅ |
-| Edit toolbar offers swap tool; exit returns to diff viewer | 05 | ✅ |
+| Element picker from the icon rail in the diff phase (arm → live preview on diff route → cancel) | 05 | ✅ |
+| Edit mode from the icon rail; toolbar offers swap tool; exit returns to diff viewer | 05 | ✅ |
 | Chat visibility setting (restricted hides foreign chats, admin bypass) | 07 | ✅ |
 | Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
 | Language switch en↔de (judged screenshot) | 02 | ✅ |

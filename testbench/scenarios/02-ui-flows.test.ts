@@ -76,6 +76,27 @@ describe('ui flows', () => {
     ok('one-click chat created on the active branch', true);
   });
 
+  it('redesign chrome: icon rail tools and compact header', async () => {
+    // Icon rail: six tool buttons, settings opens the overlay
+    const railButtons = await s.page.locator('.ws-rail .ws-rail__btn').count();
+    ok('icon rail renders its six tools', railButtons === 6, `${railButtons} buttons`);
+    await s.page.locator('.ws-rail [data-action="settings-link"]').click();
+    await s.page.locator('.settings-panel').waitFor({ timeout: 10_000 });
+    ok('rail settings button opens the settings overlay', true);
+    await dataAction(s.page, 'close-settings').first().click();
+    await s.page.locator('.settings-panel').waitFor({ state: 'detached', timeout: 10_000 });
+
+    // Compact header: branch pill, version chip, initials avatar
+    await s.page.locator('.app-header__branch').waitFor({ timeout: 15_000 });
+    const pill = (await s.page.locator('.app-header__branch').innerText()).trim();
+    ok('header branch pill shows the active branch', pill.length > 0, pill);
+    const version = (await s.page.locator('.app-header__version').innerText()).trim();
+    ok('header shows the version chip', version.length > 0, version);
+    await s.page.locator('.avatar-initials').waitFor({ timeout: 15_000 });
+    const initials = (await s.page.locator('.avatar-initials').innerText()).trim();
+    ok('avatar shows user initials', /^\S{1,2}$/.test(initials), initials);
+  });
+
   it('paste and drop stage attachments (image file, long text, dropzone)', async () => {
     const input = dataAction(s.page, 'machine-config-input').first();
     await input.waitFor({ timeout: 15_000 });

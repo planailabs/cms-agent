@@ -168,6 +168,23 @@ describe('preview + proxy', () => {
       await expect.poll(() => pathnameOf('ws-diff-after'), { timeout: 60_000 }).toBe('/');
       await expect.poll(() => pathnameOf('ws-diff-before'), { timeout: 60_000 }).toBe('/');
       ok('diff address input navigates both panes', true);
+
+      // Route-chip dropdown (redesign) lists the changed pages; picking one
+      // navigates the panes and closes the dropdown.
+      await s.page.locator('[data-action="ws-diff-routes-toggle"]').click();
+      await s.page.locator('.ws-route-pop').waitFor({ timeout: 10_000 });
+      const items = s.page.locator('.ws-route-pop__item');
+      const entryCount = await items.count();
+      ok('route dropdown lists the changed pages', entryCount > 0, `${entryCount} entries`);
+      const targetRoute = await items.first().getAttribute('data-route');
+      await items.first().click();
+      await s.page.locator('.ws-route-pop').waitFor({ state: 'detached', timeout: 10_000 });
+      ok('route pick closes the dropdown', true);
+      if (targetRoute) {
+        const want = targetRoute.replace(/\/+$/, '') || '/';
+        await expect.poll(() => pathnameOf('ws-diff-after'), { timeout: 60_000 }).toBe(want);
+        ok('route pick navigates the panes', true);
+      }
     } finally {
       await browser.close();
     }
