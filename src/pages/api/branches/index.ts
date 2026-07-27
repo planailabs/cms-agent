@@ -7,13 +7,14 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { chatVisibilityWhere } from '@/lib/chatAccess';
 import { syncBranchesFromRepo } from '@/lib/branchSync';
 import { ensureBranch, ensureWorktree, validateBranchName } from '@/lib/git/engine';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ locals }) => {
   // Git is the source of truth for target branches — mirror it (throttled)
   let missing: string[] = [];
   try {
@@ -25,8 +26,9 @@ export const GET: APIRoute = async () => {
     orderBy: { createdAt: 'desc' },
     include: {
       chats: {
-        // Archived (done) chats live in the archive view, not the sidebar
-        where: { archivedAt: null },
+        // Archived (done) chats live in the archive view, not the sidebar;
+        // restricted visibility narrows to the viewer's own chats.
+        where: { archivedAt: null, ...(await chatVisibilityWhere(locals.user!)) },
         orderBy: { updatedAt: 'desc' },
         select: {
           id: true,

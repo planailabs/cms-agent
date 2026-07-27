@@ -10,7 +10,16 @@ import type { APIRoute } from 'astro';
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
-export const POST: APIRoute = async ({ params }) => {
+export const POST: APIRoute = async ({ params, locals }) => {
+  const { prisma } = await import('@/lib/db');
+  const { chatAccessDenied } = await import('@/lib/chatAccess');
+  const chat = await prisma.chat.findUnique({
+    where: { id: params.id! },
+    select: { createdById: true },
+  });
+  if (!chat) return json({ error: 'Chat not found' }, 404);
+  const denied = await chatAccessDenied(locals.user!, chat);
+  if (denied) return denied;
   await import('@/lib/publish/publisher'); // ensures automatism types are registered
   const { findPausedAutomatism, resumeAutomatism } = await import('@/lib/automatism');
   const paused = await findPausedAutomatism(params.id!);

@@ -8,9 +8,10 @@ export const prerender = false;
 import fs from 'node:fs';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied } from '@/lib/chatAccess';
 import { diffRoute, type ShotKind } from '@/lib/diff/screenshot';
 
-export const GET: APIRoute = async ({ params, url }) => {
+export const GET: APIRoute = async ({ params, url, locals }) => {
   const route = url.searchParams.get('route');
   const kind = (url.searchParams.get('kind') ?? 'diff') as ShotKind;
   if (!route || !route.startsWith('/')) {
@@ -25,6 +26,8 @@ export const GET: APIRoute = async ({ params, url }) => {
     include: { branch: true },
   });
   if (!chat) return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
+  const denied = await chatAccessDenied(locals.user!, chat);
+  if (denied) return denied;
 
   try {
     const result = await diffRoute(chat.workBranch, route, chat.branch.name);

@@ -13,6 +13,7 @@ import path from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { dbNull, prisma } from '@/lib/db';
 import { env } from '@/lib/env';
+import { canSeeOthersChats } from '@/lib/chatAccess';
 import { broadcast, withBranchLock } from '@/lib/agent/bus';
 import { emitChatState, emitChatStatesForBranch } from '@/lib/agent/chatState';
 import { WorkflowError } from '@/lib/agent/workflow';
@@ -44,11 +45,25 @@ import { getDeployFlow, listDeployFlows, type DeployFlow, type DeployFlowStep } 
 
 registerBuiltinFlows();
 
+/** Restricted visibility: a foreign chat is indistinguishable from absent. */
+async function assertChatVisibleTo(
+  viewer: { id: string; role?: string },
+  chat: { createdById: string | null },
+): Promise<void> {
+  if (
+    chat.createdById &&
+    chat.createdById !== viewer.id &&
+    !(await canSeeOthersChats({ id: viewer.id, role: viewer.role ?? '' }))
+  ) {
+    throw new WorkflowError('Chat not found', 404);
+  }
+}
+
 export interface PublishRequest {
   chatId: string;
   /** Exact branch head the user approved — refused when the branch moved. */
   sha: string;
-  actor: { id: string; name: string; email: string };
+  actor: { id: string; name: string; email: string; role?: string };
   expectedVersion?: number;
   idempotencyKey?: string;
 }
@@ -86,6 +101,7 @@ export async function publish(
     include: { branch: true },
   });
   if (!chat) throw new WorkflowError('Chat not found', 404);
+  await assertChatVisibleTo(req.actor, chat);
   if (chat.workflowPhase !== 'preview') {
     throw new WorkflowError(`Cannot publish from the ${chat.workflowPhase} phase.`);
   }
@@ -203,7 +219,7 @@ interface PullData extends AutomatismData {
 const pullStarting = new Set<string>();
 
 /** Start a target→work sync for a workflow chat. Throws on invalid state. */
-export async function startPull(chatId: string, actor: { id: string; name: string }): Promise<string> {
+export async function startPull(chatId: string, actor: { id: string; name: string; role?: string }): Promise<string> {
   if (pullStarting.has(chatId)) throw new WorkflowError('A sync is already starting.', 409);
   pullStarting.add(chatId);
   try {
@@ -213,9 +229,10 @@ export async function startPull(chatId: string, actor: { id: string; name: strin
   }
 }
 
-async function startPullInner(chatId: string, actor: { id: string; name: string }): Promise<string> {
+async function startPullInner(chatId: string, actor: { id: string; name: string; role?: string }): Promise<string> {
   const chat = await prisma.chat.findUnique({ where: { id: chatId }, include: { branch: true } });
   if (!chat) throw new WorkflowError('Chat not found', 404);
+  await assertChatVisibleTo(actor, chat);
   if (chat.kind !== 'workflow') throw new WorkflowError('Only workflow chats can sync.');
   if (chat.archivedAt) throw new WorkflowError('This chat is archived.');
   const active = await prisma.automatism.findFirst({

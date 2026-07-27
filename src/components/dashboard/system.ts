@@ -262,34 +262,37 @@ export async function initSystem(container: HTMLElement): Promise<void> {
     });
   }
 
-  // ── Global attachment settings: one-file-per-message toggle ────────────────
+  // ── Global settings toggles (admin) ────────────────────────────────────────
   const settingsBox = document.createElement('div');
   settingsBox.className = 'dash-settings-box';
   container.prepend(settingsBox);
-  async function loadAttachmentSetting() {
+  const TOGGLES = [
+    { key: 'attachmentsOnePerMessage', labelKey: 'dashboard.system.attachmentsOnePerMessage' },
+    { key: 'chatsSharedVisibility', labelKey: 'dashboard.system.chatsSharedVisibility' },
+  ] as const;
+  async function loadSettings() {
     try {
-      const { attachmentsOnePerMessage } = await fetchJson<{ attachmentsOnePerMessage: boolean }>(
-        '/api/admin/settings',
-      );
-      settingsBox.innerHTML = `
+      const values = await fetchJson<Record<string, boolean>>('/api/admin/settings');
+      settingsBox.innerHTML = TOGGLES.map(
+        ({ key, labelKey }) => `
         <label class="dash-toggle">
-          <input type="checkbox" class="attachments-one-per-message"${attachmentsOnePerMessage ? ' checked' : ''} />
-          <span>${escapeHtml(t(uiLocale(), 'dashboard.system.attachmentsOnePerMessage'))}</span>
-        </label>`;
-      settingsBox
-        .querySelector<HTMLInputElement>('.attachments-one-per-message')
-        ?.addEventListener('change', async (ev) => {
-          const checked = (ev.target as HTMLInputElement).checked;
+          <input type="checkbox" data-setting="${key}"${values[key] ? ' checked' : ''} />
+          <span>${escapeHtml(t(uiLocale(), labelKey))}</span>
+        </label>`,
+      ).join('');
+      for (const input of settingsBox.querySelectorAll<HTMLInputElement>('input[data-setting]')) {
+        input.addEventListener('change', async () => {
           try {
             await fetchJson('/api/admin/settings', {
               method: 'PUT',
-              body: JSON.stringify({ attachmentsOnePerMessage: checked }),
+              body: JSON.stringify({ [input.dataset.setting!]: input.checked }),
             });
             showStatus(statusMsg, t(uiLocale(), 'dashboard.system.settingSaved'), 'success');
           } catch (err) {
             report(err, t(uiLocale(), 'dashboard.system.settingFailed'));
           }
         });
+      }
     } catch (err) {
       report(err, t(uiLocale(), 'dashboard.system.settingFailed'));
     }
@@ -299,5 +302,5 @@ export async function initSystem(container: HTMLElement): Promise<void> {
     void Promise.all([loadPreviews(), loadBranches(), loadChats()]);
   });
 
-  await Promise.all([loadPreviews(), loadBranches(), loadChats(), loadAttachmentSetting()]);
+  await Promise.all([loadPreviews(), loadBranches(), loadChats(), loadSettings()]);
 }

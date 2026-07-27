@@ -7,18 +7,21 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied } from '@/lib/chatAccess';
 import { changedFiles, ensureWorktree } from '@/lib/git/engine';
 import { resolveChangedPages } from '@/lib/diff/routes';
 import { ensureInstance } from '@/lib/preview/manager';
 import { affectedGraphRoutes } from '@/lib/preview/routeGraph';
 import { activeBackend } from '@/lib/site';
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, locals }) => {
   const chat = await prisma.chat.findUnique({
     where: { id: params.chatId! },
     include: { branch: true },
   });
   if (!chat) return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
+  const denied = await chatAccessDenied(locals.user!, chat);
+  if (denied) return denied;
 
   const files = await changedFiles(chat.workBranch, chat.branch.name);
   const plan = chat.planJson as { pages?: Array<{ url: string }> } | null;

@@ -6,9 +6,10 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied } from '@/lib/chatAccess';
 import { buildChatState } from '@/lib/agent/chatState';
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ url, locals }) => {
   const chatId = url.searchParams.get('chatId');
   if (!chatId) {
     return new Response(JSON.stringify({ error: 'chatId required' }), { status: 400 });
@@ -18,6 +19,8 @@ export const GET: APIRoute = async ({ url }) => {
   if (!chat) {
     return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
   }
+  const denied = await chatAccessDenied(locals.user!, chat);
+  if (denied) return denied;
   const checkpoint = await prisma.message.findFirst({
     where: { chatId, role: 'compaction' },
     orderBy: { ordinal: 'desc' },

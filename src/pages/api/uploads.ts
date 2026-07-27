@@ -6,6 +6,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied } from '@/lib/chatAccess';
 import { ATTACHMENT_KINDS, storeUpload, UploadError } from '@/lib/uploads';
 
 const json = (data: unknown, status = 200) =>
@@ -26,8 +27,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const chatIdRaw = form.get('chatId');
   const chatId = typeof chatIdRaw === 'string' && chatIdRaw ? chatIdRaw : null;
   if (chatId) {
-    const chat = await prisma.chat.findUnique({ where: { id: chatId }, select: { id: true } });
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: { id: true, createdById: true },
+    });
     if (!chat) return json({ error: 'Chat not found' }, 404);
+    const denied = await chatAccessDenied(user, chat);
+    if (denied) return denied;
   }
 
   try {

@@ -7,14 +7,15 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied, chatVisibilityWhere } from '@/lib/chatAccess';
 import { deleteChatDeep } from '@/lib/chatDelete';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ locals }) => {
   const chats = await prisma.chat.findMany({
-    where: { archivedAt: { not: null } },
+    where: { archivedAt: { not: null }, ...(await chatVisibilityWhere(locals.user!)) },
     orderBy: { archivedAt: 'desc' },
     include: {
       branch: { select: { name: true } },
@@ -40,11 +41,13 @@ export const GET: APIRoute = async () => {
   });
 };
 
-export const DELETE: APIRoute = async ({ url }) => {
+export const DELETE: APIRoute = async ({ url, locals }) => {
   const id = url.searchParams.get('id');
   if (!id) return json({ error: 'id required' }, 400);
   const chat = await prisma.chat.findUnique({ where: { id } });
   if (!chat) return json({ error: 'Chat not found' }, 404);
+  const denied = await chatAccessDenied(locals.user!, chat);
+  if (denied) return denied;
   if (!chat.archivedAt) return json({ error: 'Only archived chats can be deleted here.' }, 400);
 
   await deleteChatDeep(chat);

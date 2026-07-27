@@ -8,6 +8,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied } from '@/lib/chatAccess';
 import { ensureWorktree } from '@/lib/git/engine';
 import {
   loadAdminRules,
@@ -52,12 +53,14 @@ const cbmIndexStatus = async (ext: ExternalMcp): Promise<string | undefined> => 
   return ext.callTool('index_status', { project });
 };
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ url, locals }) => {
   const chatId = url.searchParams.get('chat') ?? '';
   const chat = await prisma.chat.findUnique({ where: { id: chatId }, include: { branch: true } });
   if (!chat) {
     return new Response(JSON.stringify({ error: 'Chat not found' }), { status: 404 });
   }
+  const denied = await chatAccessDenied(locals.user!, chat);
+  if (denied) return denied;
 
   let worktreePath = '';
   if (chat.kind === 'workflow') {

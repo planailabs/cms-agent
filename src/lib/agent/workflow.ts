@@ -10,6 +10,7 @@ import { prisma } from '@/lib/db';
 import { acquireTurnLock, broadcast, releaseTurnLock, withBranchLock } from './bus';
 import { emitChatState, emitChatStatesForBranch } from './chatState';
 import { handleChatMessage } from './handler';
+import { canSeeOthersChats } from '@/lib/chatAccess';
 import {
   branchSha,
   changedFiles,
@@ -34,17 +35,27 @@ export class WorkflowError extends Error {
 
 interface TransitionOpts {
   chatId: string;
-  actor: { id: string; name: string; email: string; language?: string };
+  actor: { id: string; name: string; email: string; role?: string; language?: string };
   expectedVersion?: number;
   idempotencyKey?: string;
 }
 
-async function loadChat(chatId: string) {
+async function loadChat(chatId: string, viewer?: TransitionOpts['actor']) {
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
     include: { branch: true },
   });
   if (!chat) throw new WorkflowError('Chat not found', 404);
+  // Restricted visibility: a foreign chat is indistinguishable from absent.
+  // Internal callers (no viewer) are unaffected.
+  if (
+    viewer &&
+    chat.createdById &&
+    chat.createdById !== viewer.id &&
+    !(await canSeeOthersChats({ id: viewer.id, role: viewer.role ?? '' }))
+  ) {
+    throw new WorkflowError('Chat not found', 404);
+  }
   return chat;
 }
 
@@ -100,7 +111,7 @@ function emitPhase(chatId: string, _workflowPhase: WorkflowPhase, _extra: object
 
 /** PLAN → EXECUTE. Binds the pending propose_plan payload as the approved plan. */
 export async function approvePlan(opts: TransitionOpts): Promise<void> {
-  const chat = await loadChat(opts.chatId);
+  const chat = await loadChat(opts.chatId, opts.actor);
   if (chat.workflowPhase !== 'plan') {
     throw new WorkflowError(`Cannot approve a plan in the ${chat.workflowPhase} phase.`);
   }
@@ -158,7 +169,7 @@ export async function returnToPlan(chatId: string): Promise<void> {
 
 /** PLAN/PREVIEW → PLAN with feedback (revision round on the same branch). */
 export async function requestChanges(opts: TransitionOpts & { feedback: string }): Promise<void> {
-  const chat = await loadChat(opts.chatId);
+  const chat = await loadChat(opts.chatId, opts.actor);
   if (chat.workflowPhase !== 'plan' && chat.workflowPhase !== 'preview') {
     throw new WorkflowError(`Cannot request changes in the ${chat.workflowPhase} phase.`);
   }
@@ -192,7 +203,7 @@ export async function requestChanges(opts: TransitionOpts & { feedback: string }
 export async function handoffToPlan(
   opts: TransitionOpts & { text: string; attachmentIds: string[] },
 ): Promise<void> {
-  const chat = await loadChat(opts.chatId);
+  const chat = await loadChat(opts.chatId, opts.actor);
   if (chat.workflowPhase === 'published') {
     throw new WorkflowError('Cannot hand off to planning from the published phase.');
   }
@@ -229,7 +240,7 @@ export async function handoffToPlan(
 export async function toPreview(opts: TransitionOpts & { summary?: string }): Promise<{
   sha: string | null;
 }> {
-  const chat = await loadChat(opts.chatId);
+  const chat = await loadChat(opts.chatId, opts.actor);
   if (chat.workflowPhase !== 'execute') {
     throw new WorkflowError(`Cannot move to preview from the ${chat.workflowPhase} phase.`);
   }

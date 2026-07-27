@@ -10,6 +10,7 @@ import type { APIRoute } from 'astro';
 import { acquireTurnLock, broadcast, releaseTurnLock } from '@/lib/agent/bus';
 import { handleChatMessage } from '@/lib/agent/handler';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied } from '@/lib/chatAccess';
 import type { IncomingChatMessage } from '@/lib/agent/types';
 
 const json = (data: unknown, status = 200) =>
@@ -47,9 +48,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // Archived chats are done — nothing may start a turn on them again.
   const chat = await prisma.chat.findUnique({
     where: { id: body.chatId },
-    select: { archivedAt: true, turnPhase: true, pendingQuestion: true },
+    select: { archivedAt: true, turnPhase: true, pendingQuestion: true, createdById: true },
   });
   if (!chat) return json({ error: 'Chat not found' }, 404);
+  const denied = await chatAccessDenied(user, chat);
+  if (denied) return denied;
   if (chat.archivedAt) {
     return json({ error: 'This chat is archived and no longer accepts messages.' }, 409);
   }

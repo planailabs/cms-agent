@@ -218,6 +218,7 @@ export const dashboardCatalogs: AreaCatalogs = {
     'dashboard.system.failedLoadChats': 'Failed to load chats',
     'dashboard.system.noChats': 'No chats',
     'dashboard.system.attachmentsOnePerMessage': 'Limit chat attachments to one file per message',
+    'dashboard.system.chatsSharedVisibility': 'Users can see other users’ chats',
     'dashboard.system.settingSaved': 'Setting saved',
     'dashboard.system.settingFailed': 'Could not save the setting',
     'dashboard.system.confirmDeleteChat':
@@ -447,6 +448,7 @@ export const dashboardCatalogs: AreaCatalogs = {
     'dashboard.system.failedLoadChats': 'Chats konnten nicht geladen werden',
     'dashboard.system.noChats': 'Keine Chats',
     'dashboard.system.attachmentsOnePerMessage': 'Chat-Anhänge auf eine Datei pro Nachricht begrenzen',
+    'dashboard.system.chatsSharedVisibility': 'Benutzer sehen die Chats anderer Benutzer',
     'dashboard.system.settingSaved': 'Einstellung gespeichert',
     'dashboard.system.settingFailed': 'Einstellung konnte nicht gespeichert werden',
     'dashboard.system.confirmDeleteChat':

@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied } from '@/lib/chatAccess';
 import { ensureWorktree } from '@/lib/git/engine';
 import { jail } from '@/lib/agent/tools/fsTools';
 import type { ToolContext } from '@/lib/agent/tools/registry';
@@ -67,7 +68,7 @@ async function highlightLines(text: string, filePath: string): Promise<string[] 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
-export const GET: APIRoute = async ({ params, url }) => {
+export const GET: APIRoute = async ({ params, url, locals }) => {
   const relPath = url.searchParams.get('path') ?? '.';
   const mode = url.searchParams.get('mode');
 
@@ -76,6 +77,8 @@ export const GET: APIRoute = async ({ params, url }) => {
     include: { branch: { select: { name: true } } },
   });
   if (!chat) return json({ error: 'Chat not found' }, 404);
+  const denied = await chatAccessDenied(locals.user!, chat);
+  if (denied) return denied;
   if (chat.kind !== 'workflow') return json({ error: 'No worktree for this chat' }, 400);
 
   let worktreePath: string;

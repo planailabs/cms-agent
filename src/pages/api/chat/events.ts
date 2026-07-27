@@ -9,8 +9,9 @@ import type { APIRoute } from 'astro';
 import { addConnection, type SSEWriter } from '@/lib/agent/bus';
 import { currentChatState } from '@/lib/agent/chatState';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied } from '@/lib/chatAccess';
 
-export const GET: APIRoute = async ({ request, url }) => {
+export const GET: APIRoute = async ({ request, url, locals }) => {
   const chatId = url.searchParams.get('chatId');
   if (!chatId) {
     return new Response(JSON.stringify({ error: 'chatId required' }), {
@@ -19,7 +20,12 @@ export const GET: APIRoute = async ({ request, url }) => {
     });
   }
 
-  const chat = await prisma.chat.findUnique({ where: { id: chatId }, select: { id: true } });
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { id: true, createdById: true },
+  });
+  const denied = chat && (await chatAccessDenied(locals.user!, chat));
+  if (denied) return denied;
   if (!chat) {
     return new Response(JSON.stringify({ error: 'Chat not found' }), {
       status: 404,

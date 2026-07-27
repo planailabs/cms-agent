@@ -9,6 +9,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { chatAccessDenied } from '@/lib/chatAccess';
 import { emitChatState } from '@/lib/agent/chatState';
 
 const json = (data: unknown, status = 200) =>
@@ -46,8 +47,13 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   const { chatId, tabs, clientId } = parsed.data;
   const activeIndex = Math.min(parsed.data.activeIndex, tabs.length - 1);
 
-  const chat = await prisma.chat.findUnique({ where: { id: chatId }, select: { id: true } });
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { id: true, createdById: true },
+  });
   if (!chat) return json({ error: 'Chat not found' }, 404);
+  const denied = await chatAccessDenied(user!, chat);
+  if (denied) return denied;
 
   await prisma.chatTabs.upsert({
     where: { chatId_userId: { chatId, userId: user.id } },
