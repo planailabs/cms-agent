@@ -1,4 +1,5 @@
 import { store } from '../app/store';
+import { registerLayer } from '../app/layers';
 
 export const openSettingsOverlay = () => {
   const state = store.state;
@@ -18,14 +19,10 @@ export const closeSettingsOverlay = () => {
   });
 };
 
-export const handleGlobalKeyDown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape' && store.state.isSettingsOverlayOpen) {
-    event.preventDefault();
-    closeSettingsOverlay();
-  }
-};
-
-// Initialize global listeners
-if (typeof window !== 'undefined') {
-  window.addEventListener('keydown', handleGlobalKeyDown);
-}
+// Settings sits above every other layer; Esc routes through the layer stack.
+registerLayer({
+  id: 'settings-overlay',
+  priority: 120,
+  isOpen: (s) => s.isSettingsOverlayOpen,
+  close: closeSettingsOverlay,
+});

@@ -7,6 +7,7 @@
 
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
+import { store } from '../chat/app/store';
 import type { AppState } from '../chat/app/state';
 import type { BrowserName } from './state';
 import { previewBranchName } from './preview';
@@ -131,4 +132,17 @@ registerWindow({
   tooltipKey: 'workspace.preview.browsersTitle',
   railAction: 'ws-bc-open',
   render: renderBrowserCompare,
+  capture: (state) => ({
+    a: state.workspace.browserCompare.a,
+    b: state.workspace.browserCompare.b,
+    mode: state.workspace.browserCompare.mode,
+  }),
+  restore: (data) => {
+    const d = data as { a?: string; b?: string; mode?: string };
+    const bc = store.state.workspace.browserCompare;
+    const names = ['chromium', 'firefox', 'webkit'];
+    if (d.a && names.includes(d.a)) bc.a = d.a as BrowserName;
+    if (d.b && names.includes(d.b)) bc.b = d.b as BrowserName;
+    if (d.mode && ['highlight', 'onion', 'scroll'].includes(d.mode)) bc.mode = d.mode as typeof bc.mode;
+  },
 });

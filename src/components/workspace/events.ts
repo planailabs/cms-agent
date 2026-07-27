@@ -13,6 +13,7 @@ import { registerDiffScrollSync } from './diffScroll';
 import { navigateDiffTo } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
 import { closeWindow } from './window';
+import { registerLayer } from '../chat/app/layers';
 import {
   approvePlanAction,
   requestChangesAction,
@@ -246,35 +247,47 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     void openFile(target.path, target.line);
   });
 
-  // Route-chip dropdown (diff viewer) closes on outside clicks.
-  document.addEventListener('click', (event) => {
-    const diff = store.state.workspace.diff;
-    if (!diff.routesOpen) return;
-    const menu = document.querySelector('[data-menu="diff-routes"]');
-    if (menu && !menu.contains(event.target as Node)) {
-      diff.routesOpen = false;
-      store.notify();
-    }
+  // Workspace layers (Esc closes topmost; popovers close on outside click) —
+  // shared layer stack in chat/app/layers.ts, installed by registerAllEvents.
+  registerLayer({
+    id: 'ws-input-modal',
+    priority: 110,
+    isOpen: (s) => s.workspace.inputModal !== null,
+    close: closeInputModal,
   });
-
-  // ESC closes whichever workspace modal is open (topmost first). The settings
-  // overlay has its own Esc handler (chat/actions/overlay.ts).
-  window.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    const ws = store.state.workspace;
-    const closers: Array<[boolean, () => void]> = [
-      [ws.inputModal !== null, closeInputModal],
-      [ws.diff.routesOpen, () => { ws.diff.routesOpen = false; store.notify(); }],
-      [ws.window !== null, closeWindow],
-      [ws.planModalOpen, closePlanModal],
-      [ws.windowPicker !== null, closeWindowPicker],
-      [ws.elementEdit.active, () => stopEditMode()],
-    ];
-    const hit = closers.find(([open]) => open);
-    if (hit) {
-      event.preventDefault();
-      hit[1]();
-    }
+  registerLayer({
+    id: 'ws-diff-routes',
+    priority: 90,
+    isOpen: (s) => s.workspace.diff.routesOpen,
+    close: () => {
+      store.state.workspace.diff.routesOpen = false;
+      store.notify();
+    },
+    outsideSelector: '[data-menu="diff-routes"]',
+  });
+  registerLayer({
+    id: 'ws-window',
+    priority: 80,
+    isOpen: (s) => s.workspace.window !== null,
+    close: closeWindow,
+  });
+  registerLayer({
+    id: 'ws-plan-modal',
+    priority: 70,
+    isOpen: (s) => s.workspace.planModalOpen,
+    close: closePlanModal,
+  });
+  registerLayer({
+    id: 'ws-boot-session-offer',
+    priority: 60,
+    isOpen: (s) => s.workspace.windowPicker !== null && s.workspace.window !== 'sessions',
+    close: closeWindowPicker,
+  });
+  registerLayer({
+    id: 'ws-element-edit',
+    priority: 50,
+    isOpen: (s) => s.workspace.elementEdit.active,
+    close: () => stopEditMode(),
   });
 
   // Phase / workflow card actions

@@ -30,6 +30,12 @@ export interface WindowDef {
   onClose?: () => void;
   /** Rail button disabled (e.g. needs an active chat). */
   disabled?: (state: AppState) => boolean;
+  /** What of this window survives a reload (window-session blob). Return
+   *  undefined to persist nothing. Must be JSON-serializable. */
+  capture?: (state: AppState) => unknown;
+  /** Seed state from previously captured data (called on session restore,
+   *  before the active window re-opens; loads run via onOpen). */
+  restore?: (data: unknown) => void;
 }
 
 const registry = new Map<WindowKind, WindowDef>();
@@ -69,4 +75,27 @@ export const renderActiveWindow = (state: AppState): string | null => {
   const kind = state.workspace.window;
   const def = kind ? registry.get(kind) : undefined;
   return def ? def.render(state) : null;
+};
+
+// ── Window-session persistence (windowSession.ts calls these) ────────────
+
+/** Per-window persisted data, keyed by kind — from each def's capture(). */
+export const captureWindowState = (state: AppState): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const def of registry.values()) {
+    const data = def.capture?.(state);
+    if (data !== undefined) out[def.kind] = data;
+  }
+  return out;
+};
+
+/** Seed every captured window's state, then re-open the active one. */
+export const restoreWindowState = (
+  windows: Record<string, unknown> | undefined,
+  active: WindowKind | null | undefined,
+): void => {
+  for (const [kind, data] of Object.entries(windows ?? {})) {
+    registry.get(kind as WindowKind)?.restore?.(data);
+  }
+  if (active && registry.has(active)) openWindow(active);
 };

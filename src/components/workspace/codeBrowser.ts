@@ -337,4 +337,14 @@ registerWindow({
     for (const path of new Set(['.', ...cb.expanded])) if (!cb.dirs[path]) void loadDir(path);
   },
   disabled: (state) => !state.activeChatId,
+  capture: (state) => ({
+    filePath: state.workspace.codeBrowser.filePath,
+    expanded: [...state.workspace.codeBrowser.expanded],
+  }),
+  restore: (data) => {
+    const d = data as { filePath?: string | null; expanded?: unknown };
+    const cb = store.state.workspace.codeBrowser;
+    if (Array.isArray(d.expanded)) cb.expanded = d.expanded.filter((x): x is string => typeof x === 'string');
+    if (typeof d.filePath === 'string' && d.filePath) void openFile(d.filePath);
+  },
 });

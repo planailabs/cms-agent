@@ -12,8 +12,13 @@ import { t, uiLocale } from '@/lib/i18n';
 import type { EditAnnotations, EditTool } from '@/injected/annotate';
 import type { AppState } from '../chat/app/state';
 import { ensureActiveChat, loadBranches, switchChat } from '../chat/actions/chat';
-import { openCodeBrowser, openFile } from './codeBrowser';
-import { closeWindow, openWindow, registerWindow } from './window';
+import {
+  captureWindowState,
+  closeWindow,
+  openWindow,
+  registerWindow,
+  restoreWindowState,
+} from './window';
 import type { WindowKind } from './state';
 
 const KEY = 'cms-window-id';
@@ -27,10 +32,13 @@ interface WindowViewState {
   compareMode: 'height' | 'content';
   sidebarWidth: number;
   sidebarCollapsed: boolean;
-  codeBrowser: { open?: boolean; filePath: string | null; expanded: string[] };
-  browserCompare: { open?: boolean; a: string; b: string; mode: string };
+  /** v1 blobs carried these two hardcoded — kept optional for restore. */
+  codeBrowser?: { open?: boolean; filePath: string | null; expanded: string[] };
+  browserCompare?: { open?: boolean; a: string; b: string; mode: string };
   /** Active main-area window (replaces the v1 per-window open flags). */
   window?: WindowKind | null;
+  /** Per-window persisted data from each WindowDef's capture(). */
+  windows?: Record<string, unknown>;
   /** Active element-edit session — annotations survive reloads and server
    *  restarts (the deploy update-watcher reloads every window). */
   elementEdit?: { active: boolean; tool: EditTool; annotations: EditAnnotations | null };
@@ -53,15 +61,7 @@ const captureViewState = (state: AppState): WindowViewState => {
     sidebarWidth: ws.sidebarWidth,
     sidebarCollapsed: ws.sidebarCollapsed,
     window: ws.window,
-    codeBrowser: {
-      filePath: ws.codeBrowser.filePath,
-      expanded: [...ws.codeBrowser.expanded],
-    },
-    browserCompare: {
-      a: ws.browserCompare.a,
-      b: ws.browserCompare.b,
-      mode: ws.browserCompare.mode,
-    },
+    windows: captureWindowState(state),
     elementEdit: {
       active: ws.elementEdit.active,
       tool: ws.elementEdit.tool,
@@ -82,23 +82,18 @@ const applyViewState = (blob: WindowViewState): void => {
   ws.compareMode = blob.compareMode === 'content' ? 'content' : 'height';
   if (blob.sidebarWidth >= 280) ws.sidebarWidth = blob.sidebarWidth;
   ws.sidebarCollapsed = Boolean(blob.sidebarCollapsed);
-  const bc = blob.browserCompare;
-  if (bc) {
-    ws.browserCompare.mode = (bc.mode as typeof ws.browserCompare.mode) || 'highlight';
-    if (bc.a) ws.browserCompare.a = bc.a as typeof ws.browserCompare.a;
-    if (bc.b) ws.browserCompare.b = bc.b as typeof ws.browserCompare.b;
-  }
-  const cb = blob.codeBrowser;
-  if (cb && Array.isArray(cb.expanded)) ws.codeBrowser.expanded = cb.expanded;
-  // Window restore — new blobs carry the kind; v1 blobs used open flags.
-  const legacy: WindowKind | null = cb?.open ? 'code' : bc?.open ? 'browsers' : null;
-  const win = blob.window ?? legacy;
-  if (win === 'code') {
-    openCodeBrowser();
-    if (cb?.filePath) void openFile(cb.filePath);
-  } else if (win && ['browsers', 'git', 'caps', 'archive'].includes(win)) {
-    openWindow(win);
-  }
+  // Window restore: each registered window seeds its state from the blob's
+  // windows map (v1 blobs mapped onto it), then the active one re-opens.
+  const legacyWindows: Record<string, unknown> = {};
+  if (blob.browserCompare) legacyWindows.browsers = blob.browserCompare;
+  if (blob.codeBrowser) legacyWindows.code = blob.codeBrowser;
+  const legacyActive: WindowKind | null = blob.codeBrowser?.open
+    ? 'code'
+    : blob.browserCompare?.open
+      ? 'browsers'
+      : null;
+  const active = blob.window ?? legacyActive;
+  restoreWindowState(blob.windows ?? legacyWindows, active === 'sessions' ? null : active);
   const ee = blob.elementEdit;
   if (ee?.active) {
     // previewAgent re-arms the iframe module on load (cms:edit-start carries
