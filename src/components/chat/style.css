@@ -276,13 +276,6 @@ html.is-first-visit #app {
     white-space: nowrap;
   }
 
-  .avatar-shell.avatar-initials {
-    font-size: 0.6em;
-    font-weight: 600;
-    color: var(--text-primary);
-    letter-spacing: 0.02em;
-  }
-
   .logo-link {
     transition:
       color 150ms ease,

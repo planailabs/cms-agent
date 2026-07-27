@@ -144,14 +144,6 @@ interface HeaderParams {
   state: AppState;
 }
 
-/** "Maciej Krüger" → "MK"; single names use their first letter. */
-export const userInitials = (name: string): string =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
 
 const buildClassList = (...classes: (string | false | undefined)[]): string =>
   classes.filter(Boolean).join(' ');
@@ -181,11 +173,8 @@ export const renderHeader = ({ locale, state }: HeaderParams): string => {
     ? ''
     : `data-tooltip="${navigation.settingsLabel}"`;
 
-  // Avatar content: /api/me has no avatar URL — user initials, icon until loaded
-  const initials = state.user?.name ? userInitials(state.user.name) : '';
-  const avatarContent = initials
-    ? `<span class="avatar-shell avatar-fallback avatar-initials">${initials}</span>`
-    : `<span class="avatar-shell avatar-fallback">${getUserIconSvg()}</span>`;
+  // Avatar content: /api/me has no avatar URL, so always show the fallback icon
+  const avatarContent = `<span class="avatar-shell avatar-fallback">${getUserIconSvg()}</span>`;
 
   // Dropdown menus
   const languageDropdown = state.isLanguageMenuOpen

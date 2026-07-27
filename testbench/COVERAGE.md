@@ -63,7 +63,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Preview page follows the workspace theme (live flip) | 02 | ✅ |
 | Diff viewer: pane browsing syncs other pane + route chip, address free-browse | 05 | ✅ |
 | Route-chip dropdown (changed pages list, pick navigates + closes) | 05 | ✅ |
-| Icon rail (stage tools + registered windows + settings) + compact header (branch pill, version chip, initials avatar) | 02 | ✅ |
+| Icon rail (stage tools + registered windows + settings) + compact header (branch pill, version chip, avatar icon) | 02 | ✅ |
 | Composer element-picker button (arms/disarms) | 02 | ✅ |
 | Publish / request-changes action row under the composer (preview phase) | 05 | ✅ |
 | Chat transcript scroll preserved across rerenders (tool-use jump fix) | 05 | ✅ |

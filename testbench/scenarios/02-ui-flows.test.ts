@@ -101,9 +101,10 @@ describe('ui flows', () => {
     ok('header branch pill shows the active branch', pill.length > 0, pill);
     const version = (await s.page.locator('.app-header__version').innerText()).trim();
     ok('header shows the version chip', version.length > 0, version);
-    await s.page.locator('.avatar-initials').waitFor({ timeout: 15_000 });
-    const initials = (await s.page.locator('.avatar-initials').innerText()).trim();
-    ok('avatar shows user initials', /^\S{1,2}$/.test(initials), initials);
+    ok(
+      'avatar shows the user icon',
+      (await s.page.locator('.avatar-button .avatar-fallback svg').count()) > 0,
+    );
 
     // Composer hosts its own element-picker button (arms + disarms)
     const composerPick = s.page.locator('.composer-pick-button');
