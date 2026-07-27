@@ -16,6 +16,7 @@ import {
 } from '../content';
 import type { AppState } from '../app/state';
 import { store } from '../app/store';
+import { escapeHtml } from '../utils/html';
 import { APP_NAME, getAppBuild } from '../constants';
 import { t, uiLocale } from '@/lib/i18n';
 
@@ -143,6 +144,15 @@ interface HeaderParams {
   state: AppState;
 }
 
+/** "Maciej Krüger" → "MK"; single names use their first letter. */
+export const userInitials = (name: string): string =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+
 const buildClassList = (...classes: (string | false | undefined)[]): string =>
   classes.filter(Boolean).join(' ');
 
@@ -171,8 +181,11 @@ export const renderHeader = ({ locale, state }: HeaderParams): string => {
     ? ''
     : `data-tooltip="${navigation.settingsLabel}"`;
 
-  // Avatar content: /api/me has no avatar URL, so always show the fallback icon
-  const avatarContent = `<span class="avatar-shell avatar-fallback">${getUserIconSvg()}</span>`;
+  // Avatar content: /api/me has no avatar URL — user initials, icon until loaded
+  const initials = state.user?.name ? userInitials(state.user.name) : '';
+  const avatarContent = initials
+    ? `<span class="avatar-shell avatar-fallback avatar-initials">${initials}</span>`
+    : `<span class="avatar-shell avatar-fallback">${getUserIconSvg()}</span>`;
 
   // Dropdown menus
   const languageDropdown = state.isLanguageMenuOpen
@@ -203,16 +216,24 @@ export const renderHeader = ({ locale, state }: HeaderParams): string => {
       </div>`
     : '';
 
-  // Mobile: px-4 py-4, Desktop: px-8 py-6
-  return `<header class="flex w-full items-center justify-between px-4 py-4 md:px-8 md:py-6">
-    <span class="logo-link flex items-center gap-2 text-base font-semibold tracking-tight text-(--text-primary) md:text-lg">
-      <span class="flex items-baseline gap-2 leading-none">
-        <span>${APP_NAME}</span>
-        <span class="text-[0.5em] font-bold text-(--text-muted)">${appBuild.version}${appBuild.commit ? ` <span class="font-normal">${appBuild.commit}</span>` : ''}</span>
-      </span>
+  // Compact app bar: brand + version chip left, branch pill + menus right.
+  const activeBranch = state.branches.find((b) => b.id === state.activeBranchId)?.name;
+  const branchPill = activeBranch
+    ? `<span class="app-header__branch tooltip" data-tooltip="${t(uiLocale(), 'chat.header.branch')}">
+        <span class="app-header__branch-dot" aria-hidden="true"></span>
+        <span class="app-header__branch-name">${escapeHtml(activeBranch)}</span>
+      </span>`
+    : '';
+
+  return `<header class="app-header">
+    <span class="logo-link app-header__brand text-(--text-primary)">
+      <span class="app-header__mark" aria-hidden="true"></span>
+      <span class="app-header__name">${APP_NAME}</span>
+      <span class="app-header__version ws-mono">${appBuild.version}${appBuild.commit ? ` · ${appBuild.commit}` : ''}</span>
     </span>
 
-    <div class="flex items-center gap-3 text-sm text-(--text-muted) md:gap-[14px]">
+    <div class="app-header__actions text-sm text-(--text-muted)">
+      ${branchPill}
       <div class="relative">
         <button
           class="icon-button tooltip"

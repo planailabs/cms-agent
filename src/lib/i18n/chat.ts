@@ -66,6 +66,7 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.sidebar.collapse': 'Collapse chat sidebar',
     // Header
     'chat.header.dashboard': 'Dashboard',
+    'chat.header.branch': 'Active branch',
     // Settings overlay
     'chat.settings.notSignedIn': 'Not signed in',
     'chat.settings.closeOverlay': 'Close overlay',
@@ -139,6 +140,7 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.sidebar.collapse': 'Chat-Seitenleiste einklappen',
     // Header
     'chat.header.dashboard': 'Dashboard',
+    'chat.header.branch': 'Aktiver Branch',
     // Settings overlay
     'chat.settings.notSignedIn': 'Nicht angemeldet',
     'chat.settings.closeOverlay': 'Overlay schließen',

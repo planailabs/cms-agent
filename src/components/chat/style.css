@@ -189,6 +189,84 @@ html.is-first-visit #app {
     background: var(--surface-hover);
   }
 
+  /* Compact app bar (redesign): brand + version chip left, branch pill +
+     menus right. Grey token palette, mockup layout. */
+  .app-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    height: 48px;
+    padding: 0 0.75rem 0 1rem;
+    font-size: 0.8125rem;
+    border-bottom: 1px solid color-mix(in lab, var(--border-muted) 80%, transparent);
+    background: color-mix(in lab, var(--surface-elevated) 65%, var(--surface-base));
+  }
+
+  .app-header__brand {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    gap: 0.55rem;
+  }
+
+  .app-header__mark {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    border-radius: 5px;
+    background: linear-gradient(140deg, var(--accent), color-mix(in lab, var(--accent) 62%, black));
+  }
+
+  .app-header__version {
+    font-size: 0.66rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    border: 1px solid color-mix(in lab, var(--border-muted) 80%, transparent);
+    border-radius: 5px;
+    padding: 2px 6px;
+    line-height: 1.3;
+  }
+
+  .app-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+
+  .app-header__branch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 8px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in lab, var(--border-muted) 80%, transparent);
+    background: color-mix(in lab, var(--surface-elevated) 90%, transparent);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    max-width: 200px;
+  }
+
+  .app-header__branch-dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--accent-strong);
+  }
+
+  .app-header__branch-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .avatar-shell.avatar-initials {
+    font-size: 0.6em;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+  }
+
   .logo-link {
     transition:
       color 150ms ease,
