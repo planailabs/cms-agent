@@ -18,6 +18,7 @@ import { initEditMode } from './editMode';
 import { initNavigation } from './navigation';
 import { initSelection } from './selection';
 import { initPicker } from './picker';
+import { initThemeSync } from './theme';
 
 const STYLE =
   '.cms-ov-btn{position:absolute;z-index:2147483646;padding:4px 10px;border-radius:999px;' +
@@ -57,6 +58,7 @@ export default function cmsAgentModule(agent: AgentApi): void {
   agent.onTeardown(() => style.remove());
 
   initConfig(agent);
+  initThemeSync(agent);
   const listen = createListen(agent);
   initNavigation(agent, listen);
   initSelection(agent, listen);
