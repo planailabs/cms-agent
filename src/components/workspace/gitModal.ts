@@ -9,6 +9,7 @@ import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState } from '../chat/app/state';
 import type { GitCommitRow } from './state';
+import { closeWindow, openWindow, registerWindow } from './window';
 
 // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -22,18 +23,9 @@ const defaultBranch = (state: AppState): string | null => {
   return state.branches.find((b) => b.id === state.activeBranchId)?.name ?? null;
 };
 
-export const openGitModal = (): void => {
-  const g = store.state.workspace.git;
-  g.open = true;
-  g.selectedSha = null;
-  g.patch = null;
-  void loadGitCommits(defaultBranch(store.state));
-};
+export const openGitModal = (): void => openWindow('git');
 
-export const closeGitModal = (): void => {
-  store.state.workspace.git.open = false;
-  store.notify();
-};
+export const closeGitModal = (): void => closeWindow();
 
 /** Load token — a newer load supersedes in-flight responses. */
 let gitLoadSeq = 0;
@@ -242,7 +234,6 @@ const branchOptions = (state: AppState, selected: string | null): string =>
 export const renderGitModal = (state: AppState): string => {
   const locale = uiLocale();
   const g = state.workspace.git;
-  if (!g.open) return '';
 
   const selected = g.selectedSha ? g.commits.find((c) => c.sha === g.selectedSha) : null;
   const head = g.selectedSha
@@ -268,3 +259,18 @@ export const renderGitModal = (state: AppState): string => {
       </div>
     </div>`;
 };
+
+registerWindow({
+  kind: 'git',
+  order: 30,
+  icon: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.6V8l2.4 1.6"/></svg>`,
+  tooltipKey: 'workspace.sidebar.gitTitle',
+  railAction: 'ws-git-open',
+  render: renderGitModal,
+  onOpen: () => {
+    const g = store.state.workspace.git;
+    g.selectedSha = null;
+    g.patch = null;
+    void loadGitCommits(defaultBranch(store.state));
+  },
+});

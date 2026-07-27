@@ -20,6 +20,7 @@ import {
   type ContextChip,
   type DiffPage,
 } from './state';
+import { closeWindow, openWindow } from './window';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -392,14 +393,8 @@ export const attachContextChip = (chip: ContextChip): void => {
 // Cross-browser comparison overlay
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const openBrowserCompare = (): void => {
-  store.state.workspace.browserCompare.open = true;
-  store.notify();
-};
-export const closeBrowserCompare = (): void => {
-  store.state.workspace.browserCompare.open = false;
-  store.notify();
-};
+export const openBrowserCompare = (): void => openWindow('browsers');
+export const closeBrowserCompare = (): void => closeWindow();
 export const setBrowserCompareBrowser = (which: 'a' | 'b', name: BrowserName): void => {
   store.state.workspace.browserCompare[which] = name;
   store.notify();
@@ -437,6 +432,7 @@ export const adoptDiffRoute = (): void => {
 
 export const startEditMode = (): void => {
   const ws = store.state.workspace;
+  closeWindow(); // edit mode is a stage tool — any open window yields
   ws.elementEdit = createInitialElementEditState();
   ws.elementEdit.active = true;
   ws.pickerActive = false;

@@ -3453,14 +3453,33 @@ html.is-first-visit #app {
 
 /* ── Archive modal (full-screen, done chats) ── */
 
+/* Shell shared by archive/git/caps/code/session views. In the overlay
+   region it is a fullscreen modal (boot-time session offer, plan modal);
+   in the main region it renders as a stage "window" beside the chat. */
 .ws-archive {
+  display: flex;
+}
+
+#overlay-region .ws-archive {
   position: fixed;
   inset: 0;
   z-index: 60;
-  display: flex;
   padding: 2rem;
   background: color-mix(in srgb, var(--surface-base) 70%, transparent);
   backdrop-filter: blur(4px);
+}
+
+#main-region .ws-archive {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+#main-region .ws-archive__panel {
+  box-shadow: none;
+  border-radius: 14px;
+  border-color: color-mix(in lab, var(--border-muted) 80%, transparent);
+  background: color-mix(in lab, var(--surface-elevated) 55%, var(--surface-base));
 }
 
 .ws-archive__panel {

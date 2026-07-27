@@ -78,29 +78,12 @@ export const renderBranchSwitcher = (state: AppState): string => {
   const activeBranch = state.branches.find((b) => b.id === state.activeBranchId);
   const activeChat = activeBranch?.chats.find((c) => c.id === state.activeChatId);
 
-  // Secondary actions (Git/Commit, Skills, Archive, Windows) live in a "⋯"
-  // dropdown so the branch panel stays uncluttered; New branch stays inline.
-  const menuOpen = state.workspace.branchMenuOpen;
-  const menu = `<div class="ws-menu">
-          <button type="button" class="ws-mini-button ws-menu__toggle" data-action="ws-branch-menu-toggle"
-            aria-haspopup="menu" aria-expanded="${menuOpen}"
-            title="${escapeHtml(t(locale, 'workspace.sidebar.moreTitle'))}">${escapeHtml(t(locale, 'workspace.sidebar.moreButton'))}</button>
-          ${
-            menuOpen
-              ? `<div class="ws-menu__dropdown" role="menu">
-            <button type="button" class="ws-menu__item" role="menuitem" data-action="ws-git-open" title="${escapeHtml(t(locale, 'workspace.sidebar.gitTitle'))}">${escapeHtml(t(locale, 'workspace.sidebar.gitButton'))}</button>
-            <button type="button" class="ws-menu__item" role="menuitem" data-action="ws-caps-open" title="${escapeHtml(t(locale, 'workspace.sidebar.capsTitle'))}">${escapeHtml(t(locale, 'workspace.sidebar.capsButton'))}</button>
-            <button type="button" class="ws-menu__item" role="menuitem" data-action="ws-archive-open" title="${escapeHtml(t(locale, 'workspace.sidebar.archiveTitle'))}">${escapeHtml(t(locale, 'workspace.sidebar.archiveButton'))}</button>
-            <button type="button" class="ws-menu__item" role="menuitem" data-action="ws-wsn-open" title="${escapeHtml(t(locale, 'workspace.window.buttonTitle'))}">${escapeHtml(t(locale, 'workspace.window.button'))}</button>
-          </div>`
-              : ''
-          }
-        </div>`;
+  // Git/Skills/Archive/Windows moved to the icon rail (rail.ts) — the branch
+  // panel keeps branch-scoped actions only.
   const panel = state.workspace.branchListOpen
     ? `<div class="ws-branch-panel">
         <div class="ws-branch-panel__actions">
           <button type="button" class="ws-mini-button" data-action="ws-new-branch">${escapeHtml(t(locale, 'workspace.sidebar.newBranch'))}</button>
-          ${menu}
         </div>
         <div class="ws-branch-panel__list">${renderBranchList(state) || `<span class="ws-empty-note">${escapeHtml(t(locale, 'workspace.sidebar.noBranches'))}</span>`}</div>
       </div>`

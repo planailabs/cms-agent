@@ -75,9 +75,11 @@ export type DiffViewMode = 'side-by-side' | 'highlight' | 'onion' | 'scroll';
 
 export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 
-/** Cross-browser comparison overlay (main area) — preview + regular mode. */
+/** Exclusive main-area window (workspace/window.ts registry). */
+export type WindowKind = 'browsers' | 'code' | 'git' | 'caps' | 'archive' | 'sessions';
+
+/** Cross-browser comparison window (main area) — preview + regular mode. */
 export interface BrowserCompareState {
-  open: boolean;
   a: BrowserName;
   b: BrowserName;
   /** Reuses the diff widgets: highlight (overlay) or onion (slider). */
@@ -108,9 +110,8 @@ export interface GitCommitRow {
   onTarget: boolean;
 }
 
-/** Full-screen git modal: commit list per branch + per-commit diff. */
+/** Commits window: commit list per branch + per-commit diff. */
 export interface GitModalState {
-  open: boolean;
   loading: boolean;
   error: string | null;
   /** Branch whose commits are listed (work branch or target branch). */
@@ -147,7 +148,6 @@ export interface ProposedPlan {
 
 /** Code browser modal — worktree tree + file view + line-range selection. */
 export interface CodeBrowserState {
-  open: boolean;
   /** Loaded directory listings by relative path ('.' = root). */
   dirs: Record<string, Array<{ name: string; dir: boolean }>>;
   /** Expanded directory paths. */
@@ -166,7 +166,6 @@ export interface CodeBrowserState {
 }
 
 export const createInitialCodeBrowserState = (): CodeBrowserState => ({
-  open: false,
   dirs: {},
   expanded: [],
   filePath: null,
@@ -189,9 +188,8 @@ export interface CapabilityMcpRow {
   source?: 'config' | 'worktree';
 }
 
-/** Full-screen skills/MCP capabilities modal (per-chat status). */
+/** Skills/MCP capabilities window (per-chat status). */
 export interface CapsModalState {
-  open: boolean;
   loading: boolean;
   error: string | null;
   /** Chat whose capabilities are shown. */
@@ -201,9 +199,8 @@ export interface CapsModalState {
   mcps: CapabilityMcpRow[];
 }
 
-/** Full-screen archive modal (done chats; delete = chat + branch + data). */
+/** Archive window (done chats; delete = chat + branch + data). */
 export interface ArchiveState {
-  open: boolean;
   loading: boolean;
   error: string | null;
   chats: ArchivedChatRow[];
@@ -257,8 +254,9 @@ export interface WorkspaceState {
   sidebarCollapsed: boolean;
   /** Branch switcher / chat list panel expanded. */
   branchListOpen: boolean;
-  /** Secondary-actions ("⋯") dropdown in the branch panel expanded. */
-  branchMenuOpen: boolean;
+
+  /** Active main-area window; null = the preview/diff stage. */
+  window: WindowKind | null;
 
   /** Current route inside the preview iframe (cms:navigation). */
   previewRoute: string;
@@ -353,7 +351,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   sidebarWidth: 420,
   sidebarCollapsed: false,
   branchListOpen: false,
-  branchMenuOpen: false,
+  window: null,
   previewRoute: '/',
   previewTabs: ['/'],
   previewTabIds: [crypto.randomUUID()],
@@ -373,7 +371,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   contextChip: null,
   diff: createInitialDiffState(),
   browserCompare: createInitialBrowserCompareState(),
-  archive: { open: false, loading: false, error: null, chats: [], busyId: null },
+  archive: { loading: false, error: null, chats: [], busyId: null },
   git: createInitialGitModalState(),
   caps: createInitialCapsModalState(),
   automatism: null,
@@ -382,7 +380,6 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
 });
 
 export const createInitialCapsModalState = (): CapsModalState => ({
-  open: false,
   loading: false,
   error: null,
   chatId: null,
@@ -392,7 +389,6 @@ export const createInitialCapsModalState = (): CapsModalState => ({
 });
 
 export const createInitialGitModalState = (): GitModalState => ({
-  open: false,
   loading: false,
   error: null,
   branch: null,
@@ -404,7 +400,6 @@ export const createInitialGitModalState = (): GitModalState => ({
 });
 
 export const createInitialBrowserCompareState = (): BrowserCompareState => ({
-  open: false,
   a: 'chromium',
   b: 'firefox',
   mode: 'highlight',
@@ -427,6 +422,9 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.contextChip = null;
   ws.diff = createInitialDiffState();
   ws.browserCompare = createInitialBrowserCompareState();
+  // Chat-scoped windows close on switch; branch-level ones (git/caps/
+  // archive/sessions) survive it, as before the window machine.
+  if (ws.window === 'code' || ws.window === 'browsers') ws.window = null;
   ws.automatism = null;
   ws.targetAhead = false;
   ws.pickerActive = false;

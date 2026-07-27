@@ -9,6 +9,7 @@ import { store } from '../chat/app/store';
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState } from '../chat/app/state';
+import { closeWindow, openWindow, registerWindow } from './window';
 
 const MAX_SNIPPET_CHARS = 4000;
 
@@ -21,19 +22,9 @@ const api = (path: string, mode?: 'raw' | 'download'): string => {
   return mode ? `${url}&mode=${mode}` : url;
 };
 
-export const openCodeBrowser = (): void => {
-  const cb = store.state.workspace.codeBrowser;
-  cb.open = true;
-  cb.error = null;
-  store.notify();
-  for (const path of new Set(['.', ...cb.expanded]))
-    if (!cb.dirs[path]) void loadDir(path);
-};
+export const openCodeBrowser = (): void => openWindow('code');
 
-export const closeCodeBrowser = (): void => {
-  store.state.workspace.codeBrowser.open = false;
-  store.notify();
-};
+export const closeCodeBrowser = (): void => closeWindow();
 
 export const loadDir = async (path: string): Promise<void> => {
   const seq = (cbDirLoadSeq.get(path) ?? 0) + 1;
@@ -196,7 +187,7 @@ export const addCodeContext = (): void => {
       code: { path: cb.filePath, startLine: cb.selStart, endLine: cb.selEnd, snippet },
     },
   };
-  cb.open = false;
+  closeWindow();
   store.notify();
 };
 
@@ -304,7 +295,6 @@ const renderFile = (state: AppState): string => {
 export const renderCodeBrowser = (state: AppState): string => {
   const locale = uiLocale();
   const cb = state.workspace.codeBrowser;
-  if (!cb.open) return '';
   const hasSel = cb.selStart > 0 && cb.filePath;
 
   return `<div class="ws-archive ws-git" role="dialog" aria-modal="true" aria-label="${escapeHtml(t(locale, 'workspace.code.heading'))}">
@@ -333,3 +323,18 @@ export const renderCodeBrowser = (state: AppState): string => {
       </div>
     </div>`;
 };
+
+registerWindow({
+  kind: 'code',
+  order: 20,
+  icon: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.8 4.2L2.4 8l3.4 3.8M10.2 4.2L13.6 8l-3.4 3.8"/></svg>`,
+  tooltipKey: 'workspace.code.openTitle',
+  railAction: 'ws-cb-modal-open',
+  render: renderCodeBrowser,
+  onOpen: () => {
+    const cb = store.state.workspace.codeBrowser;
+    cb.error = null;
+    for (const path of new Set(['.', ...cb.expanded])) if (!cb.dirs[path]) void loadDir(path);
+  },
+  disabled: (state) => !state.activeChatId,
+});

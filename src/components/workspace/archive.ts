@@ -8,12 +8,16 @@ import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import { switchChat } from '../chat/actions/chat';
 import type { AppState } from '../chat/app/state';
+import { closeWindow, openWindow, registerWindow } from './window';
 
 // ── Actions ──────────────────────────────────────────────────────────────
 
-export const openArchive = async (): Promise<void> => {
+export const openArchive = (): void => openWindow('archive');
+
+export const closeArchive = (): void => closeWindow();
+
+const loadArchive = async (): Promise<void> => {
   const a = store.state.workspace.archive;
-  a.open = true;
   a.loading = true;
   a.error = null;
   store.notify();
@@ -32,11 +36,6 @@ export const openArchive = async (): Promise<void> => {
     a.loading = false;
     a.error = t(uiLocale(), 'workspace.archive.loadNetworkError');
   }
-  store.notify();
-};
-
-export const closeArchive = (): void => {
-  store.state.workspace.archive.open = false;
   store.notify();
 };
 
@@ -130,7 +129,6 @@ const renderRow = (row: AppState['workspace']['archive']['chats'][number], busy:
 export const renderArchiveModal = (state: AppState): string => {
   const locale = uiLocale();
   const a = state.workspace.archive;
-  if (!a.open) return '';
   const body = a.loading
     ? `<div class="ws-archive__empty">${escapeHtml(t(locale, 'workspace.archive.loading'))}</div>`
     : a.chats.length === 0
@@ -148,3 +146,13 @@ export const renderArchiveModal = (state: AppState): string => {
       </div>
     </div>`;
 };
+
+registerWindow({
+  kind: 'archive',
+  order: 50,
+  icon: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.8" y="2.6" width="12.4" height="3.4" rx="1"/><path d="M3 6v6.2a1.2 1.2 0 001.2 1.2h7.6A1.2 1.2 0 0013 12.2V6M6.4 8.8h3.2"/></svg>`,
+  tooltipKey: 'workspace.sidebar.archiveTitle',
+  railAction: 'ws-archive-open',
+  render: renderArchiveModal,
+  onOpen: () => void loadArchive(),
+});

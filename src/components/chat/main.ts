@@ -17,17 +17,18 @@ import { registerAllEvents } from './events';
 import { renderPreviewSkeleton, renderPreviewToolbar } from '../workspace/preview';
 import { syncPreviewFrames } from '../workspace/previewFrames';
 import { renderDiffViewer } from '../workspace/diffViewer';
-import { renderBrowserCompare } from '../workspace/browserCompare';
+import '../workspace/browserCompare'; // registers the 'browsers' window
 import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
 import { renderRail } from '../workspace/rail';
-import { renderArchiveModal } from '../workspace/archive';
-import { renderGitModal } from '../workspace/gitModal';
-import { renderCapsModal } from '../workspace/capsModal';
+import '../workspace/archive'; // registers the 'archive' window
+import '../workspace/gitModal'; // registers the 'git' window
+import '../workspace/capsModal'; // registers the 'caps' window
 import { renderPlanModal } from '../workspace/planModal';
 import { syncBoxHighlights } from '../workspace/highlightAlign';
 import { syncDiffContentAlignment } from '../workspace/diffScroll';
-import { renderCodeBrowser } from '../workspace/codeBrowser';
-import { bootWindowSession, renderWindowPicker } from '../workspace/windowSession';
+import '../workspace/codeBrowser'; // registers the 'code' window
+import { bootWindowSession, hasWindowId, renderWindowPicker } from '../workspace/windowSession';
+import { renderActiveWindow } from '../workspace/window';
 import { startUpdateWatcher } from '../workspace/appUpdate';
 import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
@@ -105,10 +106,13 @@ const initApp = () => {
       if (inPreviewPhase && !ws.diff.loaded && !ws.diff.loading && !ws.diff.error) {
         void loadDiffPages(); // lazy-load the changed pages on entering PREVIEW
       }
-      if (ws.browserCompare.open) {
-        // Cross-browser comparison overlay — replaces the main area in both
-        // the PREVIEW phase and regular preview mode.
-        setHtmlIfChanged(mainRegion, renderBrowserCompare(state));
+      // Workspace windows (workspace/window.ts state machine): code browser,
+      // commits, skills, archive, sessions, browser compare swap out the
+      // stage — the chat sidebar stays. The boot-time session offer (no
+      // window id yet) remains a blocking overlay below.
+      const windowView = renderActiveWindow(state);
+      if (windowView !== null) {
+        setHtmlIfChanged(mainRegion, windowView);
       } else if (inPreviewPhase) {
         setHtmlIfChanged(mainRegion, renderDiffViewer(state));
       } else {
@@ -176,14 +180,12 @@ const initApp = () => {
 
     // 4. Update Overlay (settings + full-screen archive modal)
     if (overlayRegion) {
+      // Archive/git/caps/code/sessions render as main-area windows above;
+      // only true overlays remain here (plus the boot-time session offer).
       const overlayMarkup =
         renderSettingsOverlay({ state, locale }) +
-        renderArchiveModal(state) +
-        renderGitModal(state) +
-        renderCapsModal(state) +
         renderPlanModal(state) +
-        renderCodeBrowser(state) +
-        renderWindowPicker(state) +
+        (hasWindowId() ? '' : renderWindowPicker(state)) +
         renderInputModal(state);
       if (overlayRegion.innerHTML !== overlayMarkup) {
         overlayRegion.innerHTML = overlayMarkup;

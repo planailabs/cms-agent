@@ -12,6 +12,7 @@ import { continueChatSession } from '../chat/actions/chat/session';
 import { registerDiffScrollSync } from './diffScroll';
 import { navigateDiffTo } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
+import { closeWindow } from './window';
 import {
   approvePlanAction,
   requestChangesAction,
@@ -264,13 +265,9 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     const closers: Array<[boolean, () => void]> = [
       [ws.inputModal !== null, closeInputModal],
       [ws.diff.routesOpen, () => { ws.diff.routesOpen = false; store.notify(); }],
-      [ws.codeBrowser.open, closeCodeBrowser],
-      [ws.git.open, closeGitModal],
-      [ws.caps.open, closeCapsModal],
-      [ws.archive.open, closeArchive],
+      [ws.window !== null, closeWindow],
       [ws.planModalOpen, closePlanModal],
       [ws.windowPicker !== null, closeWindowPicker],
-      [ws.browserCompare.open, closeBrowserCompare],
       [ws.elementEdit.active, () => stopEditMode()],
     ];
     const hit = closers.find(([open]) => open);
@@ -332,12 +329,6 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   // Branch switcher / chat list
   delegateEvent(app, 'click', '[data-action="ws-branch-list-toggle"]', () => {
     store.state.workspace.branchListOpen = !store.state.workspace.branchListOpen;
-    if (!store.state.workspace.branchListOpen) store.state.workspace.branchMenuOpen = false;
-    store.notify();
-  });
-  // Secondary-actions ("⋯") dropdown in the branch panel.
-  delegateEvent(app, 'click', '[data-action="ws-branch-menu-toggle"]', () => {
-    store.state.workspace.branchMenuOpen = !store.state.workspace.branchMenuOpen;
     store.notify();
   });
   delegateEvent(app, 'click', '[data-action="ws-new-branch"]', () =>
@@ -363,10 +354,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Archive modal (done chats)
-  delegateEvent(app, 'click', '[data-action="ws-archive-open"]', () => {
-    store.state.workspace.branchMenuOpen = false;
-    void openArchive();
-  });
+  delegateEvent(app, 'click', '[data-action="ws-archive-open"]', () => void openArchive());
   delegateEvent(app, 'click', '[data-action="ws-archive-close"]', () => closeArchive());
   delegateEvent(app, 'click', '[data-action="ws-archive-delete"]', (_e, target) => {
     const chatId = target.getAttribute('data-chat-id');
@@ -378,10 +366,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Git modal (commit list + diffs)
-  delegateEvent(app, 'click', '[data-action="ws-git-open"]', () => {
-    store.state.workspace.branchMenuOpen = false;
-    openGitModal();
-  });
+  delegateEvent(app, 'click', '[data-action="ws-git-open"]', () => openGitModal());
   delegateEvent(app, 'click', '[data-action="ws-git-close"]', () => closeGitModal());
   delegateEvent(app, 'click', '[data-action="ws-git-back"]', () => backToGitList());
   delegateEvent(app, 'click', '[data-action="ws-git-commit"]', (_e, target) => {
@@ -393,10 +378,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Capabilities modal (skills + MCP status)
-  delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => {
-    store.state.workspace.branchMenuOpen = false;
-    openCapsModal();
-  });
+  delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => openCapsModal());
   delegateEvent(app, 'click', '[data-action="ws-plan-open"]', () => openPlanModal());
   delegateEvent(app, 'click', '[data-action="ws-plan-close"]', () => closePlanModal());
   delegateEvent(app, 'click', '[data-action="ws-cb-modal-open"]', () => openCodeBrowser());
@@ -427,10 +409,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     if (target.dataset.id) void deleteWindowSession(target.dataset.id);
   });
   delegateEvent(app, 'click', '[data-action="ws-wsn-fresh"]', () => startFreshWindow());
-  delegateEvent(app, 'click', '[data-action="ws-wsn-open"]', () => {
-    store.state.workspace.branchMenuOpen = false;
-    void openWindowPicker();
-  });
+  delegateEvent(app, 'click', '[data-action="ws-wsn-open"]', () => void openWindowPicker());
   delegateEvent(app, 'click', '[data-action="ws-wsn-close"]', () => closeWindowPicker());
   delegateEvent(app, 'click', '[data-action="ws-compare-align"]', () => {
     const ws = store.state.workspace;
@@ -471,6 +450,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
       cancelElementPick(); // module replies cms:pick-cancel, but un-arm now
       ws.pickerActive = false;
     } else {
+      closeWindow(); // picking happens on the live preview — windows yield
       ws.pickerActive = true;
       // From the diff viewer the live preview mounts on notify — open it on
       // the reviewed page; the module push re-arms the pick there.

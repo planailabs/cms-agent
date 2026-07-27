@@ -13,6 +13,8 @@ import type { EditAnnotations, EditTool } from '@/injected/annotate';
 import type { AppState } from '../chat/app/state';
 import { ensureActiveChat, loadBranches, switchChat } from '../chat/actions/chat';
 import { openCodeBrowser, openFile } from './codeBrowser';
+import { closeWindow, openWindow, registerWindow } from './window';
+import type { WindowKind } from './state';
 
 const KEY = 'cms-window-id';
 const SAVE_DEBOUNCE_MS = 800;
@@ -25,8 +27,10 @@ interface WindowViewState {
   compareMode: 'height' | 'content';
   sidebarWidth: number;
   sidebarCollapsed: boolean;
-  codeBrowser: { open: boolean; filePath: string | null; expanded: string[] };
-  browserCompare: { open: boolean; a: string; b: string; mode: string };
+  codeBrowser: { open?: boolean; filePath: string | null; expanded: string[] };
+  browserCompare: { open?: boolean; a: string; b: string; mode: string };
+  /** Active main-area window (replaces the v1 per-window open flags). */
+  window?: WindowKind | null;
   /** Active element-edit session — annotations survive reloads and server
    *  restarts (the deploy update-watcher reloads every window). */
   elementEdit?: { active: boolean; tool: EditTool; annotations: EditAnnotations | null };
@@ -48,13 +52,12 @@ const captureViewState = (state: AppState): WindowViewState => {
     compareMode: ws.compareMode,
     sidebarWidth: ws.sidebarWidth,
     sidebarCollapsed: ws.sidebarCollapsed,
+    window: ws.window,
     codeBrowser: {
-      open: ws.codeBrowser.open,
       filePath: ws.codeBrowser.filePath,
       expanded: [...ws.codeBrowser.expanded],
     },
     browserCompare: {
-      open: ws.browserCompare.open,
       a: ws.browserCompare.a,
       b: ws.browserCompare.b,
       mode: ws.browserCompare.mode,
@@ -81,16 +84,20 @@ const applyViewState = (blob: WindowViewState): void => {
   ws.sidebarCollapsed = Boolean(blob.sidebarCollapsed);
   const bc = blob.browserCompare;
   if (bc) {
-    ws.browserCompare.open = Boolean(bc.open);
     ws.browserCompare.mode = (bc.mode as typeof ws.browserCompare.mode) || 'highlight';
     if (bc.a) ws.browserCompare.a = bc.a as typeof ws.browserCompare.a;
     if (bc.b) ws.browserCompare.b = bc.b as typeof ws.browserCompare.b;
   }
   const cb = blob.codeBrowser;
-  if (cb?.open) {
-    ws.codeBrowser.expanded = Array.isArray(cb.expanded) ? cb.expanded : ['.'];
+  if (cb && Array.isArray(cb.expanded)) ws.codeBrowser.expanded = cb.expanded;
+  // Window restore — new blobs carry the kind; v1 blobs used open flags.
+  const legacy: WindowKind | null = cb?.open ? 'code' : bc?.open ? 'browsers' : null;
+  const win = blob.window ?? legacy;
+  if (win === 'code') {
     openCodeBrowser();
-    if (cb.filePath) void openFile(cb.filePath);
+    if (cb?.filePath) void openFile(cb.filePath);
+  } else if (win && ['browsers', 'git', 'caps', 'archive'].includes(win)) {
+    openWindow(win);
   }
   const ee = blob.elementEdit;
   if (ee?.active) {
@@ -220,6 +227,7 @@ export const bootWindowSession = async (): Promise<void> => {
 export const startFreshWindow = (): void => {
   windowId = crypto.randomUUID();
   sessionStorage.setItem(KEY, windowId);
+  if (store.state.workspace.window === 'sessions') store.state.workspace.window = null;
   store.state.workspace.windowPicker = null;
   store.notify();
   void bootInto(null);
@@ -228,6 +236,7 @@ export const startFreshWindow = (): void => {
 export const adoptWindowSession = async (id: string): Promise<void> => {
   windowId = id;
   sessionStorage.setItem(KEY, id);
+  if (store.state.workspace.window === 'sessions') store.state.workspace.window = null;
   store.state.workspace.windowPicker = null;
   store.notify();
   await bootInto(await fetchSession(id));
@@ -249,9 +258,11 @@ export const deleteWindowSession = async (id: string): Promise<void> => {
   }
 };
 
-/** Open the window list on demand (Windows button) — switching this window
+/** Open the sessions window on demand (rail button) — switching this window
  *  to a saved session or managing the saved list from a running app. */
-export const openWindowPicker = async (): Promise<void> => {
+export const openWindowPicker = (): void => openWindow('sessions');
+
+const loadSessionsList = async (): Promise<void> => {
   try {
     const res = await fetch('/api/window-sessions');
     if (!res.ok) return;
@@ -264,6 +275,10 @@ export const openWindowPicker = async (): Promise<void> => {
 };
 
 export const closeWindowPicker = (): void => {
+  if (store.state.workspace.window === 'sessions') {
+    closeWindow(); // onClose clears the list
+    return;
+  }
   store.state.workspace.windowPicker = null;
   store.notify();
 };
@@ -275,13 +290,13 @@ export const hasWindowId = (): boolean => windowId !== null;
 
 export const renderWindowPicker = (state: AppState): string => {
   const sessions = state.workspace.windowPicker;
-  if (!sessions) return '';
-  const locale = uiLocale();
   // Manual open (window already chosen) gets a plain Close; the boot offer
   // must resolve via restore or start-fresh.
   const manual = hasWindowId();
+  if (!sessions && !manual) return '';
+  const locale = uiLocale();
 
-  const rows = sessions
+  const rows = (sessions ?? [])
     .map((s) => {
       const when = new Date(s.updatedAt).toLocaleString(locale);
       return `<div class="ws-git__row ws-caps__row">
@@ -311,3 +326,16 @@ export const renderWindowPicker = (state: AppState): string => {
       </div>
     </div>`;
 };
+
+registerWindow({
+  kind: 'sessions',
+  order: 60,
+  icon: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><rect x="1.8" y="4.6" width="9.6" height="8.6" rx="1.4"/><path d="M4.8 4.6V3.2A1.4 1.4 0 016.2 1.8h6.6a1.4 1.4 0 011.4 1.4v6.6a1.4 1.4 0 01-1.4 1.4h-1.4"/></svg>`,
+  tooltipKey: 'workspace.window.buttonTitle',
+  railAction: 'ws-wsn-open',
+  render: renderWindowPicker,
+  onOpen: () => void loadSessionsList(),
+  onClose: () => {
+    store.state.workspace.windowPicker = null;
+  },
+});

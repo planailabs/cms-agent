@@ -77,9 +77,9 @@ describe('ui flows', () => {
   });
 
   it('redesign chrome: icon rail tools and compact header', async () => {
-    // Icon rail: six tool buttons, settings opens the overlay
+    // Icon rail: 2 stage tools + 6 registered windows + settings
     const railButtons = await s.page.locator('.ws-rail .ws-rail__btn').count();
-    ok('icon rail renders its six tools', railButtons === 6, `${railButtons} buttons`);
+    ok('icon rail renders all nine tools', railButtons === 9, `${railButtons} buttons`);
     await s.page.locator('.ws-rail [data-action="settings-link"]').click();
     await s.page.locator('.settings-panel').waitFor({ timeout: 10_000 });
     ok('rail settings button opens the settings overlay', true);
@@ -270,32 +270,35 @@ describe('ui flows', () => {
     }
   });
 
-  it('branch menu modals: git, capabilities, archive, windows', async () => {
-    const openMenuItem = async (action: string) => {
-      await openBranchPanel(s.page);
-      await dataAction(s.page, 'ws-branch-menu-toggle').first().click();
-      await dataAction(s.page, action).first().click();
+  it('rail windows: git, capabilities, archive, sessions swap the stage (chat stays)', async () => {
+    const openRail = async (action: string) => {
+      await s.page.locator(`.ws-rail [data-action="${action}"]`).click();
+      await s.page.locator('#main-region .ws-archive__panel').first().waitFor({ timeout: 15_000 });
     };
+    const chatVisible = async () =>
+      (await dataAction(s.page, 'machine-config-input').count()) > 0;
 
-    await openMenuItem('ws-git-open');
+    await openRail('ws-git-open');
     await s.page.getByText('Initial site (basic-site)').first().waitFor({ timeout: 15_000 });
-    ok('git modal lists the initial commit', true);
+    ok('commits window lists the initial commit', true);
+    ok('chat sidebar stays while a window is open', await chatVisible());
     await dataAction(s.page, 'ws-git-close').first().click();
 
-    await openMenuItem('ws-caps-open');
-    await s.page.locator('.ws-archive__panel').first().waitFor({ timeout: 15_000 });
-    ok('capabilities modal opens', true);
+    await openRail('ws-caps-open');
+    ok('capabilities window opens', true);
     await dataAction(s.page, 'ws-caps-close').first().click();
 
-    await openMenuItem('ws-archive-open');
-    await s.page.locator('.ws-archive__panel').first().waitFor({ timeout: 15_000 });
-    ok('archive modal opens', true);
+    await openRail('ws-archive-open');
+    ok('archive window opens', true);
     await dataAction(s.page, 'ws-archive-close').first().click();
 
-    await openMenuItem('ws-wsn-open');
+    await openRail('ws-wsn-open');
     await dataAction(s.page, 'ws-wsn-fresh').first().waitFor({ timeout: 15_000 });
-    ok('window sessions picker opens', true);
+    ok('sessions window opens', true);
     await dataAction(s.page, 'ws-wsn-close').first().click();
+    // Closing the last window returns the stage to the preview
+    await s.page.locator('#preview-frame-region').waitFor({ timeout: 15_000 });
+    ok('closing the window returns to the preview stage', true);
   });
 
   it('code browser opens a file', async () => {

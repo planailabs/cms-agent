@@ -9,19 +9,13 @@ import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState } from '../chat/app/state';
 import type { CapabilityMcpRow, CapabilitySkillRow } from './state';
+import { closeWindow, openWindow, registerWindow } from './window';
 
 // ── Actions ──────────────────────────────────────────────────────────────
 
-export const openCapsModal = (): void => {
-  const c = store.state.workspace.caps;
-  c.open = true;
-  void loadCapabilities(store.state.activeChatId);
-};
+export const openCapsModal = (): void => openWindow('caps');
 
-export const closeCapsModal = (): void => {
-  store.state.workspace.caps.open = false;
-  store.notify();
-};
+export const closeCapsModal = (): void => closeWindow();
 
 /** Load token — a newer load supersedes in-flight responses. */
 let capsLoadSeq = 0;
@@ -161,7 +155,6 @@ const chatOptions = (state: AppState, selected: string | null): string =>
 export const renderCapsModal = (state: AppState): string => {
   const locale = uiLocale();
   const c = state.workspace.caps;
-  if (!c.open) return '';
 
   return `<div class="ws-archive ws-git" role="dialog" aria-modal="true" aria-label="${escapeHtml(t(locale, 'workspace.caps.heading'))}">
       <div class="ws-archive__panel">
@@ -182,3 +175,13 @@ export const renderCapsModal = (state: AppState): string => {
       </div>
     </div>`;
 };
+
+registerWindow({
+  kind: 'caps',
+  order: 40,
+  icon: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.8 1.6L3.4 9h3.4l-.6 5.4L11.6 7H8.2z"/></svg>`,
+  tooltipKey: 'workspace.sidebar.capsTitle',
+  railAction: 'ws-caps-open',
+  render: renderCapsModal,
+  onOpen: () => void loadCapabilities(store.state.activeChatId),
+});

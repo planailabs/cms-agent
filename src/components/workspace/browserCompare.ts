@@ -10,6 +10,7 @@ import { t, uiLocale } from '@/lib/i18n';
 import type { AppState } from '../chat/app/state';
 import type { BrowserName } from './state';
 import { previewBranchName } from './preview';
+import { registerWindow } from './window';
 
 /** Browser engine names are brand names — not translated. */
 const BROWSERS: Array<{ key: BrowserName; label: string }> = [
@@ -115,3 +116,12 @@ export const renderBrowserCompare = (state: AppState): string => {
       <div class="ws-diff-body">${body}</div>
     </div>`;
 };
+
+registerWindow({
+  kind: 'browsers',
+  order: 10,
+  icon: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="2"/><path d="M1.8 6h12.4"/><circle cx="4.2" cy="4.4" r="0.45" fill="currentColor" stroke="none"/></svg>`,
+  tooltipKey: 'workspace.preview.browsersTitle',
+  railAction: 'ws-bc-open',
+  render: renderBrowserCompare,
+});

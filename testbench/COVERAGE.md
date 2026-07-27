@@ -70,7 +70,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Chat visibility setting (restricted hides foreign chats, admin bypass) | 07 | ✅ |
 | Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
 | Language switch en↔de (judged screenshot) | 02 | ✅ |
-| Git modal / capabilities / archive / window sessions | 02 | ✅ |
+| Commits / capabilities / archive / sessions windows (rail-opened, stage-swapped, chat stays, close returns to preview) | 02 | ✅ |
 | Code browser (tree, open file — judged) | 02 | ✅ |
 | Preview tabs new/switch/close | 02 | ✅ |
 | Sidebar collapse/resize | 02 | 🟡 collapse only; drag-resize not simulated |

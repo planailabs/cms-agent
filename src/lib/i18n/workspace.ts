@@ -19,7 +19,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.sidebar.noChats': 'No chats yet',
     'workspace.sidebar.newBranch': '+ New branch',
     'workspace.sidebar.archiveTitle': 'Done chats',
-    'workspace.sidebar.archiveButton': '📦 Archive',
     'workspace.sidebar.noBranches': 'No branches yet',
 
     // ── phase bar (PLAN → EXECUTE → PREVIEW → PUBLISH) + automatism bar ──
@@ -163,7 +162,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.archive.viewTitle': 'Open this chat read-only',
 
     // ── Git modal ──
-    'workspace.sidebar.gitButton': 'Commits',
     'workspace.sidebar.gitTitle': 'Browse commits and diffs',
     'workspace.git.heading': 'Commits',
     'workspace.git.close': 'Close',
@@ -176,11 +174,8 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.git.networkError': 'Network error — please try again.',
 
     // ── Secondary-actions dropdown ──
-    'workspace.sidebar.moreButton': '⋯',
-    'workspace.sidebar.moreTitle': 'More actions',
 
     // ── Capabilities modal (skills + MCP status) ──
-    'workspace.sidebar.capsButton': '🧩 Skills',
     'workspace.sidebar.capsTitle': 'Skills and MCP status per chat',
     'workspace.caps.heading': 'Skills & MCP',
     'workspace.caps.loading': 'Loading capabilities…',
@@ -207,7 +202,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.code.empty': 'No files.',
     'workspace.window.heading': 'Continue where you left off?',
     'workspace.window.headingManual': 'Sessions',
-    'workspace.window.button': 'Sessions',
     'workspace.window.buttonTitle': 'Saved sessions — continue or manage them',
     'workspace.window.none': 'No saved sessions.',
     'workspace.window.restore': 'Continue',
@@ -240,7 +234,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.sidebar.noChats': 'Noch keine Chats',
     'workspace.sidebar.newBranch': '+ Neuer Branch',
     'workspace.sidebar.archiveTitle': 'Abgeschlossene Chats',
-    'workspace.sidebar.archiveButton': '📦 Archiv',
     'workspace.sidebar.noBranches': 'Noch keine Branches',
 
     // ── Phasenleiste + Automatismus-Leiste ──
@@ -388,7 +381,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.archive.viewTitle': 'Diesen Chat schreibgeschützt öffnen',
 
     // ── Git-Modal ──
-    'workspace.sidebar.gitButton': 'Commits',
     'workspace.sidebar.gitTitle': 'Commits und Diffs ansehen',
     'workspace.git.heading': 'Commits',
     'workspace.git.close': 'Schließen',
@@ -401,11 +393,8 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.git.networkError': 'Netzwerkfehler — bitte erneut versuchen.',
 
     // ── Dropdown für weitere Aktionen ──
-    'workspace.sidebar.moreButton': '⋯',
-    'workspace.sidebar.moreTitle': 'Weitere Aktionen',
 
     // ── Capabilities-Modal (Skills + MCP-Status) ──
-    'workspace.sidebar.capsButton': '🧩 Skills',
     'workspace.sidebar.capsTitle': 'Skills und MCP-Status pro Chat',
     'workspace.caps.heading': 'Skills & MCP',
     'workspace.caps.loading': 'Fähigkeiten werden geladen…',
@@ -432,7 +421,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.code.empty': 'Keine Dateien.',
     'workspace.window.heading': 'Weitermachen, wo du aufgehört hast?',
     'workspace.window.headingManual': 'Sitzungen',
-    'workspace.window.button': 'Sitzungen',
     'workspace.window.buttonTitle': 'Gespeicherte Sitzungen — fortsetzen oder verwalten',
     'workspace.window.none': 'Keine gespeicherten Sitzungen.',
     'workspace.window.restore': 'Fortsetzen',

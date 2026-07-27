@@ -44,11 +44,11 @@ export async function bootWorkspace(page: Page): Promise<void> {
   }
 }
 
-/** Expand the sidebar branch panel if collapsed (menu/new-chat live there). */
+/** Expand the sidebar branch panel if collapsed (new-chat/branch live there). */
 export async function openBranchPanel(page: Page): Promise<void> {
-  if ((await dataAction(page, 'ws-branch-menu-toggle').count()) === 0) {
+  if ((await page.locator('.ws-branch-panel').count()) === 0) {
     await dataAction(page, 'ws-branch-list-toggle').first().click();
-    await dataAction(page, 'ws-branch-menu-toggle').first().waitFor({ timeout: 10_000 });
+    await page.locator('.ws-branch-panel').first().waitFor({ timeout: 10_000 });
   }
 }
 
