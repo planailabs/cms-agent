@@ -11,6 +11,7 @@ import type { AppState } from '../chat/app/state';
 import type { BrowserName } from './state';
 import { previewBranchName } from './preview';
 import { registerWindow } from './window';
+import { MODE_ICONS } from './diffViewer';
 
 /** Browser engine names are brand names — not translated. */
 const BROWSERS: Array<{ key: BrowserName; label: string }> = [
@@ -92,18 +93,24 @@ export const renderBrowserCompare = (state: AppState): string => {
           )}
         </div>`;
 
+  // Same icon segmented control as the diff viewer's mode switch (redesign)
+  const modeButton = (mode: 'highlight' | 'onion' | 'scroll', icon: string, labelKey: string) =>
+    `<button type="button" class="ws-seg__btn ${bc.mode === mode ? 'is-active' : ''}"
+      data-action="ws-bc-mode" data-mode="${mode}"
+      title="${escapeHtml(t(locale, labelKey))}" aria-label="${escapeHtml(t(locale, labelKey))}">${icon}</button>`;
+
   return `<div class="ws-diff">
       <div class="ws-toolbar">
+        <span class="ws-chrome-dots" aria-hidden="true"><i></i><i></i></span>
         <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.bc.heading'))}</span>
         ${browserSelect('a', bc.a)}<span class="ws-bc-vs">${escapeHtml(t(locale, 'workspace.bc.vs'))}</span>${browserSelect('b', bc.b)}
         <span class="ws-toolbar__route ws-mono" title="${escapeHtml(route)}">${escapeHtml(route)}</span>
         <span class="ws-toolbar__spacer"></span>
-        <button type="button" class="ws-mini-button ${bc.mode === 'highlight' ? 'is-active' : ''}"
-          data-action="ws-bc-mode" data-mode="highlight">${escapeHtml(t(locale, 'workspace.diff.mode.highlight'))}</button>
-        <button type="button" class="ws-mini-button ${bc.mode === 'onion' ? 'is-active' : ''}"
-          data-action="ws-bc-mode" data-mode="onion">${escapeHtml(t(locale, 'workspace.diff.mode.onion'))}</button>
-        <button type="button" class="ws-mini-button ${bc.mode === 'scroll' ? 'is-active' : ''}"
-          data-action="ws-bc-mode" data-mode="scroll">${escapeHtml(t(locale, 'workspace.diff.mode.sideBySide'))}</button>
+        <div class="ws-seg">
+          ${modeButton('highlight', MODE_ICONS.highlight, 'workspace.diff.mode.highlight')}
+          ${modeButton('onion', MODE_ICONS.onion, 'workspace.diff.mode.onion')}
+          ${modeButton('scroll', MODE_ICONS['side-by-side'], 'workspace.diff.mode.sideBySide')}
+        </div>
         ${
           bc.mode === 'highlight'
             ? `<button type="button" class="ws-mini-button ${bc.overlayVisible ? 'is-active' : ''}"

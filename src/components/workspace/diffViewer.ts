@@ -63,8 +63,9 @@ const MODES: Array<{ key: DiffViewMode; labelKey: string }> = [
   { key: 'onion', labelKey: 'workspace.diff.mode.onion' },
 ];
 
-/** Segmented-control glyphs (redesign) — labels stay as tooltips. */
-const MODE_ICONS: Record<DiffViewMode, string> = {
+/** Segmented-control glyphs (redesign) — labels stay as tooltips. Shared
+ *  with the browser-compare window's mode control. */
+export const MODE_ICONS: Record<DiffViewMode, string> = {
   'side-by-side': `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.6" y="3" width="5.4" height="10" rx="1.2"/><rect x="9" y="3" width="5.4" height="10" rx="1.2"/></svg>`,
   scroll: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.4" y="2" width="11.2" height="12" rx="1.6"/><path d="M8 5.2v5.6M6 8.8L8 10.8l2-2"/></svg>`,
   highlight: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.6"/><rect x="4" y="5" width="8" height="2.4" rx="0.8" fill="currentColor" stroke="none" opacity="0.55"/><path d="M4 10.4h5.6"/></svg>`,
