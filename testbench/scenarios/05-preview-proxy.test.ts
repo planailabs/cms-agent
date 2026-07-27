@@ -319,7 +319,8 @@ describe('preview + proxy', () => {
         .locator('.ws-mini-button--handoff[data-action="ws-edit-handoff"]')
         .count();
       ok('handoff button carries the secondary accent style', handoffSecondary === 1);
-      await s.page.locator('[data-action="ws-edit-exit"]').click();
+      // Two exit buttons exist in edit mode (rail + edit toolbar)
+      await s.page.locator('[data-action="ws-edit-exit"]').first().click();
       await s.page.locator('.ws-diff').first().waitFor({ timeout: 30_000 });
       ok('exiting edit mode returns to the diff viewer', true);
     } finally {
