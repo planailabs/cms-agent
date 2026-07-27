@@ -322,6 +322,12 @@ describe('ui flows', () => {
     // Closing the last window returns the stage to the preview
     await s.page.locator('#preview-frame-region').waitFor({ timeout: 15_000 });
     ok('closing the window returns to the preview stage', true);
+
+    // Clicking an opener again toggles its window closed
+    await openRail('ws-git-open');
+    await s.page.locator(`.ws-rail [data-action="ws-git-open"]`).click();
+    await s.page.locator('#preview-frame-region').waitFor({ timeout: 15_000 });
+    ok('re-clicking the rail opener closes the window again', true);
   });
 
   it('code browser opens a file', async () => {

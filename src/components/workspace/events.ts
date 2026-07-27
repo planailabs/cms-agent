@@ -12,7 +12,7 @@ import { continueChatSession } from '../chat/actions/chat/session';
 import { registerDiffScrollSync } from './diffScroll';
 import { navigateDiffTo } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
-import { closeWindow } from './window';
+import { closeWindow, toggleWindow } from './window';
 import { registerLayer } from '../chat/app/layers';
 import {
   approvePlanAction,
@@ -39,7 +39,6 @@ import {
   setEditTool,
   onEditChanged,
   handoffEditAction,
-  openBrowserCompare,
   closeBrowserCompare,
   toggleBrowserCompareOverlay,
   setBrowserCompareMode,
@@ -53,15 +52,14 @@ import {
   postEditUndo,
   postEditClear,
 } from './previewAgent';
-import { openArchive, closeArchive, deleteArchivedChat, openArchivedChat } from './archive';
-import { openGitModal, closeGitModal, loadGitCommits, selectGitCommit, backToGitList } from './gitModal';
-import { openCapsModal, closeCapsModal, loadCapabilities } from './capsModal';
+import { closeArchive, deleteArchivedChat, openArchivedChat } from './archive';
+import { closeGitModal, loadGitCommits, selectGitCommit, backToGitList } from './gitModal';
+import { closeCapsModal, loadCapabilities } from './capsModal';
 import { openPlanModal, closePlanModal } from './planModal';
 import {
   adoptWindowSession,
   closeWindowPicker,
   deleteWindowSession,
-  openWindowPicker,
   startFreshWindow,
 } from './windowSession';
 import {
@@ -367,7 +365,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Archive modal (done chats)
-  delegateEvent(app, 'click', '[data-action="ws-archive-open"]', () => void openArchive());
+  delegateEvent(app, 'click', '[data-action="ws-archive-open"]', () => toggleWindow('archive'));
   delegateEvent(app, 'click', '[data-action="ws-archive-close"]', () => closeArchive());
   delegateEvent(app, 'click', '[data-action="ws-archive-delete"]', (_e, target) => {
     const chatId = target.getAttribute('data-chat-id');
@@ -379,7 +377,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Git modal (commit list + diffs)
-  delegateEvent(app, 'click', '[data-action="ws-git-open"]', () => openGitModal());
+  delegateEvent(app, 'click', '[data-action="ws-git-open"]', () => toggleWindow('git'));
   delegateEvent(app, 'click', '[data-action="ws-git-close"]', () => closeGitModal());
   delegateEvent(app, 'click', '[data-action="ws-git-back"]', () => backToGitList());
   delegateEvent(app, 'click', '[data-action="ws-git-commit"]', (_e, target) => {
@@ -391,10 +389,10 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Capabilities modal (skills + MCP status)
-  delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => openCapsModal());
+  delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => toggleWindow('caps'));
   delegateEvent(app, 'click', '[data-action="ws-plan-open"]', () => openPlanModal());
   delegateEvent(app, 'click', '[data-action="ws-plan-close"]', () => closePlanModal());
-  delegateEvent(app, 'click', '[data-action="ws-cb-modal-open"]', () => openCodeBrowser());
+  delegateEvent(app, 'click', '[data-action="ws-cb-modal-open"]', () => toggleWindow('code'));
   delegateEvent(app, 'click', '[data-action="ws-cb-modal-close"]', () => closeCodeBrowser());
   delegateEvent(app, 'click', '[data-action="ws-cb-dir"]', (_e, target) =>
     toggleDir(target.dataset.path ?? '.'),
@@ -422,7 +420,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     if (target.dataset.id) void deleteWindowSession(target.dataset.id);
   });
   delegateEvent(app, 'click', '[data-action="ws-wsn-fresh"]', () => startFreshWindow());
-  delegateEvent(app, 'click', '[data-action="ws-wsn-open"]', () => void openWindowPicker());
+  delegateEvent(app, 'click', '[data-action="ws-wsn-open"]', () => toggleWindow('sessions'));
   delegateEvent(app, 'click', '[data-action="ws-wsn-close"]', () => closeWindowPicker());
   delegateEvent(app, 'click', '[data-action="ws-compare-align"]', () => {
     const ws = store.state.workspace;
@@ -541,7 +539,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Cross-browser comparison overlay
-  delegateEvent(app, 'click', '[data-action="ws-bc-open"]', () => openBrowserCompare());
+  delegateEvent(app, 'click', '[data-action="ws-bc-open"]', () => toggleWindow('browsers'));
   delegateEvent(app, 'click', '[data-action="ws-bc-close"]', () => closeBrowserCompare());
   delegateEvent(app, 'click', '[data-action="ws-bc-overlay-toggle"]', () => toggleBrowserCompareOverlay());
   delegateEvent(app, 'click', '[data-action="ws-bc-mode"]', (_e, target) => {
