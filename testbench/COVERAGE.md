@@ -83,6 +83,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Composer paste (image ctrl+v/context menu), long-text-as-attachment, dropzone drop | 02 | ✅ |
 | Hex → color-name chips in chat markdown | — | 🟡 covered by unit tests through renderMarkdown (agent must mention a hex to drive it in bench) |
 | Collapsed tool-call groups (grouping, running state, meta preview, mode gate) | — | 🟡 unit-covered (test/tool-groups.test.ts); bench-driving needs a technical-mode agent turn in a browser session |
+| Routeless-files warn chip + toggle banner (diff viewer) | — | 🟡 unit-covered (test/diff-renderer.test.ts); bench-driving needs a journey that changes non-page files |
 
 ## Agent tool paths (implicit via e2e prompts)
 

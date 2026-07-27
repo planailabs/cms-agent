@@ -198,11 +198,13 @@ export const renderDiffViewer = (state: AppState): string => {
     </div>`;
 
   if (diff.pages.length === 0) {
+    // Nothing else to review — the routeless files are the whole story, so
+    // the banner shows without a chip toggle.
     return `<div class="ws-diff">
         ${header}
+        ${diff.unresolved.length ? warnBanner(diff.unresolved) : ''}
         <div class="ws-diff--centered">
           <p class="ws-empty-note">${escapeHtml(t(locale, 'workspace.diff.noChangedPages'))}</p>
-          ${diff.unresolved.length ? unresolvedNote(diff.unresolved) : ''}
         </div>
       </div>`;
   }
@@ -263,16 +265,25 @@ export const renderDiffViewer = (state: AppState): string => {
         autocomplete="off" value="${escapeHtml(route)}" aria-label="${escapeHtml(t(locale, 'workspace.preview.addressLabel'))}" />
     </form>`;
 
+  // Files without a page route: amber chip (count) toggling the banner
+  const warnChip = diff.unresolved.length
+    ? `<button type="button" class="ws-warn-chip ${diff.warnOpen ? 'is-open' : ''}"
+        data-action="ws-diff-warn-toggle" aria-expanded="${diff.warnOpen}"
+        title="${escapeHtml(t(locale, 'workspace.diff.unresolvedTitle', { count: String(diff.unresolved.length) }))}">
+        <span class="ws-warn-chip__dot" aria-hidden="true"></span>${diff.unresolved.length}
+      </button>`
+    : '';
+
   return `<div class="ws-diff">
       ${header}
-      <div class="ws-diff-controls">${routeSelect}<span class="ws-vr"></span><div class="ws-seg">${modes}</div>${address}<span class="ws-toolbar__spacer"></span>${alignToggle}</div>
-      ${diff.unresolved.length ? unresolvedNote(diff.unresolved) : ''}
+      <div class="ws-diff-controls">${routeSelect}<span class="ws-vr"></span><div class="ws-seg">${modes}</div>${address}<span class="ws-toolbar__spacer"></span>${warnChip}${alignToggle}</div>
+      ${diff.unresolved.length && diff.warnOpen ? warnBanner(diff.unresolved) : ''}
       <div class="ws-diff-body">${body}</div>
     </div>`;
 };
 
-const unresolvedNote = (files: string[]): string =>
-  `<p class="ws-unresolved-note">
-    ${escapeHtml(t(uiLocale(), 'workspace.diff.unresolvedNote'))}
-    ${files.map((f) => `<span class="ws-mono">${escapeHtml(f)}</span>`).join(', ')}
-  </p>`;
+const warnBanner = (files: string[]): string =>
+  `<div class="ws-warn-banner">
+    <div class="ws-warn-banner__head">${escapeHtml(t(uiLocale(), 'workspace.diff.unresolvedNote'))}</div>
+    ${files.map((f) => `<div class="ws-warn-banner__file ws-mono">${escapeHtml(f)}</div>`).join('')}
+  </div>`;

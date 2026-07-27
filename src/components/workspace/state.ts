@@ -237,6 +237,8 @@ export interface DiffState {
   selectedRoute: string | null;
   /** Route-chip dropdown (changed pages) expanded. */
   routesOpen: boolean;
+  /** Amber warn banner (files without a page route) expanded. */
+  warnOpen: boolean;
   mode: DiffViewMode;
   /** Highlight mode: whether the diff overlay image is visible. */
   overlayVisible: boolean;
@@ -342,6 +344,7 @@ export const createInitialDiffState = (): DiffState => ({
   unresolved: [],
   selectedRoute: null,
   routesOpen: false,
+  warnOpen: false,
   mode: 'side-by-side',
   overlayVisible: true,
   onionPercent: 50,

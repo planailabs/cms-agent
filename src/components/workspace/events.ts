@@ -505,6 +505,11 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     diff.routesOpen = !diff.routesOpen;
     store.notify();
   });
+  delegateEvent(app, 'click', '[data-action="ws-diff-warn-toggle"]', () => {
+    const diff = store.state.workspace.diff;
+    diff.warnOpen = !diff.warnOpen;
+    store.notify();
+  });
   delegateEvent(app, 'submit', '[data-action="ws-diff-address-form"]', (event, target) => {
     event.preventDefault();
     const input = target.querySelector<HTMLInputElement>('.ws-address__input');

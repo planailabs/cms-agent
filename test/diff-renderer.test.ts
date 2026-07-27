@@ -85,6 +85,32 @@ describe('diff compare renderers', () => {
     expect(html).not.toContain('kind=after-aligned');
   });
 
+  it('shows routeless files as an amber chip toggling the banner', () => {
+    const state = mkState();
+    state.workspace.diff.unresolved = ['src/pages/blog/[id].astro'];
+
+    let html = renderDiffViewer(state);
+    expect(html).toContain('ws-warn-chip');
+    expect(html).toContain('>1\n');
+    expect(html).not.toContain('ws-warn-banner');
+
+    state.workspace.diff.warnOpen = true;
+    html = renderDiffViewer(state);
+    expect(html).toContain('ws-warn-banner');
+    expect(html).toContain('src/pages/blog/[id].astro');
+  });
+
+  it('shows the banner without a chip when no pages changed at all', () => {
+    const state = mkState();
+    state.workspace.diff.pages = [];
+    state.workspace.diff.unresolved = ['src/lib/util.ts'];
+
+    const html = renderDiffViewer(state);
+    expect(html).toContain('ws-warn-banner');
+    expect(html).toContain('src/lib/util.ts');
+    expect(html).not.toContain('ws-warn-chip');
+  });
+
   it('keeps highlight mode on raw before/after shots for box overlays', () => {
     const state = mkState();
     state.workspace.compareMode = 'content';
