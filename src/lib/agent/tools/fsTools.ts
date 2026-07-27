@@ -16,6 +16,7 @@ import {
   showCommit,
   worktreeStatus,
 } from '@/lib/git/engine';
+import { imageMimeForPath } from '../messageUtils';
 import { registerTool, type ToolContext, type ToolDef } from './registry';
 import { activeBackend } from '@/lib/site';
 
@@ -86,7 +87,16 @@ const readFileTool: ToolDef = {
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const p = jail(ctx, input.path);
-    const content = fs.readFileSync(p, 'utf8');
+    const buf = fs.readFileSync(p);
+    // Binaries are not text — raw NUL bytes would also kill the Postgres
+    // message insert. Repo images still reach the model: the loop pairs this
+    // marker with an inlined multimodal message (see toOpenAiMessages).
+    if (buf.includes(0)) {
+      return imageMimeForPath(input.path)
+        ? `[image file: ${input.path}, ${buf.length} bytes — attached to the conversation below]`
+        : `[binary file: ${input.path}, ${buf.length} bytes — not readable as text]`;
+    }
+    const content = buf.toString('utf8');
     return content.length > MAX_FILE_CHARS
       ? content.slice(0, MAX_FILE_CHARS) + `\n… (truncated, ${content.length} chars total)`
       : content;

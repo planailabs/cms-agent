@@ -5,6 +5,7 @@
  *   idle → (rounds of tool calls) → waiting_for_answer | tool_pending → idle
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import OpenAI from 'openai';
 import { env } from '@/lib/env';
 import { prisma } from '@/lib/db';
@@ -12,8 +13,10 @@ import { broadcast } from './bus';
 import {
   compactionTranscript,
   getLastToolCalls,
+  imageMimeForPath,
   sanitizeMessages,
   toOpenAiMessages,
+  type FileImageResolver,
   type ImageResolver,
 } from './messageUtils';
 import type { PersistenceAdapter } from './persistence';
@@ -156,6 +159,30 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
     };
   }
 
+  // read_file on a repo image inlines the pixels the same way (the tool
+  // result itself is only a text marker — bytes never enter chat history).
+  const fileImages = new Map<string, { mime: string; dataUrl: string } | null>();
+  const worktreeRoot = path.resolve(toolContext.worktreePath);
+  const resolveFileImage: FileImageResolver = (rel) => {
+    if (fileImages.has(rel)) return fileImages.get(rel)!;
+    let result: { mime: string; dataUrl: string } | null = null;
+    const mime = imageMimeForPath(rel);
+    const abs = path.resolve(worktreeRoot, rel);
+    if (mime && (abs === worktreeRoot || abs.startsWith(worktreeRoot + path.sep))) {
+      try {
+        const b = fs.readFileSync(abs);
+        // Chat Completions data-URL practical limit — skip absurd files
+        if (b.length > 0 && b.length <= 8 * 1024 * 1024) {
+          result = { mime, dataUrl: `data:${mime};base64,${b.toString('base64')}` };
+        }
+      } catch {
+        result = null;
+      }
+    }
+    fileImages.set(rel, result);
+    return result;
+  };
+
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let activeContextTokens = 0;
@@ -247,7 +274,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       rounds++;
 
       const chatMessages = sanitizeMessages(
-        toOpenAiMessages(messages.filter((m) => m.role !== 'cancel'), resolveImage),
+        toOpenAiMessages(messages.filter((m) => m.role !== 'cancel'), resolveImage, resolveFileImage),
       );
 
       // Route to the vision model when the context now contains an image part.

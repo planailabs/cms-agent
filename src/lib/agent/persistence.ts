@@ -26,6 +26,22 @@ export interface PersistenceAdapter {
   appendMsg(msg: StoredMessage): Promise<void>;
 }
 
+/** Postgres text/jsonb cannot store U+0000 — binary sneaking into a tool
+ *  result or command output must not kill the message insert. Deep-strips
+ *  NUL from every string, replacing with U+FFFD. */
+export const stripNul = <T>(value: T): T => {
+  if (typeof value === 'string') {
+    return (value.includes('\u0000') ? value.replaceAll('\u0000', '\uFFFD') : value) as T;
+  }
+  if (Array.isArray(value)) return value.map(stripNul) as T;
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, stripNul(v)]),
+    ) as T;
+  }
+  return value;
+};
+
 // ─── Display text ────────────────────────────────────────────────────────────
 
 export const extractDisplayText = (msg: StoredMessage): string => {
@@ -132,7 +148,7 @@ export function createDbAdapter(
               ? undefined
               : pendingQuestion === null
                 ? dbNull
-                : (pendingQuestion as object),
+                : (stripNul(pendingQuestion) as object),
         },
       });
       // Remote turn state: every phase persist streams a fresh snapshot
@@ -156,9 +172,9 @@ export function createDbAdapter(
               chatId,
               authorId: msg.role === 'user' || msg.role === 'cancel' ? authorId : null,
               role: msg.role,
-              content: extractDisplayText(msg),
-              contentBlocks: contentBlocks ?? undefined,
-              pageContext: msg.role === 'user' ? ((msg.pageContext as object | undefined) ?? undefined) : undefined,
+              content: stripNul(extractDisplayText(msg)),
+              contentBlocks: contentBlocks ? stripNul(contentBlocks) : undefined,
+              pageContext: msg.role === 'user' ? (stripNul(msg.pageContext as object | undefined) ?? undefined) : undefined,
               ordinal,
             },
           });
