@@ -241,9 +241,12 @@ describe('e2e agent journey', () => {
     );
     ok('question turn streams without error', noError(events));
     const st = await chatState(chatC);
-    ok('agent asked a question', st.pendingQuestion?.toolName === 'ask_question', st.pendingQuestion?.toolName);
+    // A color-scheme prompt legitimately resolves to either question tool
+    const tool = st.pendingQuestion?.toolName;
+    ok('agent asked a question', tool === 'ask_question' || tool === 'pick_color', tool);
 
-    const answerEvents = await client.sendMessageAndCollect(chatC, 'Dark blue and white.', {
+    const answer = tool === 'pick_color' ? '#1e3a8a' : 'Dark blue and white.';
+    const answerEvents = await client.sendMessageAndCollect(chatC, answer, {
       type: 'answer',
       timeoutMs: 420_000,
     });

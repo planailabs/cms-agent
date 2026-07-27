@@ -81,8 +81,12 @@ describe('ui flows', () => {
     await input.waitFor({ timeout: 15_000 });
     const chipCount = () => s.page.locator('[data-attach-chips] .composer-chip').count();
 
+    // Query + dispatch inside ONE page-side task — a store rerender can
+    // replace the composer DOM between a locator resolve and its evaluate,
+    // detaching the node so the event never bubbles.
     // 1) ctrl+v with an image file on the clipboard
-    await input.evaluate((el) => {
+    await s.page.evaluate(() => {
+      const el = document.querySelector('[data-action="machine-config-input"]')!;
       const bytes = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
       const buf = Uint8Array.from(bytes, (c) => c.charCodeAt(0));
       const dt = new DataTransfer();
@@ -93,7 +97,8 @@ describe('ui flows', () => {
     ok('pasted image becomes an attachment chip', true);
 
     // 2) pasting very long text becomes a text attachment, short text does not
-    await input.evaluate((el) => {
+    await s.page.evaluate(() => {
+      const el = document.querySelector('[data-action="machine-config-input"]')!;
       const dt = new DataTransfer();
       dt.setData('text/plain', 'x'.repeat(5000));
       el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
@@ -103,7 +108,8 @@ describe('ui flows', () => {
     ok('long paste becomes a chip, not composer text', !composerText.includes('xxxx'), composerText.slice(0, 40));
 
     // 3) drop on the composer dropzone (the drag-and-drop upload path)
-    await s.page.locator('[data-action="chat-dropzone"]').first().evaluate((el) => {
+    await s.page.evaluate(() => {
+      const el = document.querySelector('[data-action="chat-dropzone"]')!;
       const dt = new DataTransfer();
       dt.items.add(new File(['dropped'], 'dropped.txt', { type: 'text/plain' }));
       el.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
