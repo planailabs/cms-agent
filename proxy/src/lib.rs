@@ -89,8 +89,10 @@ struct CmsProxy {
     base_domain: String,
     require_auth: bool,
     auth_secret: Vec<u8>,
-    signin_url: String,
-    overlay_tag: String,
+    /// scheme://BASE_DOMAIN — the public CMS origin WITHOUT a port. Requests
+    /// append the port their Host header carried (the CMS is reached through
+    /// this same proxy, so the port is shared); standard ports carry none.
+    cms_origin: String,
     routes: Arc<RoutesStore>,
     sessions: Arc<SessionStore>,
     access: Arc<AccessTracker>,
@@ -102,6 +104,10 @@ struct RequestCtx {
     upstream: Option<String>,
     /// True for case 2 (running preview): CSP strip + overlay injection apply.
     is_preview: bool,
+    /// Port the request's Host header carried (None on standard ports). The
+    /// CMS is reached through this same proxy, so the workspace origin the
+    /// bootstrap must trust carries the same port.
+    host_port: Option<String>,
     /// True while an HTML response body is being buffered for injection.
     buffering: bool,
     buffer: Vec<u8>,
@@ -132,9 +138,17 @@ impl CmsProxy {
         false
     }
 
-    async fn redirect_signin(&self, session: &mut Session) -> Result<()> {
+    fn cms_origin_for(&self, port: Option<&str>) -> String {
+        match port {
+            Some(p) => format!("{}:{}", self.cms_origin, p),
+            None => self.cms_origin.clone(),
+        }
+    }
+
+    async fn redirect_signin(&self, session: &mut Session, port: Option<&str>) -> Result<()> {
+        let signin_url = format!("{}/signin/", self.cms_origin_for(port));
         let mut resp = ResponseHeader::build(302, Some(3))?;
-        resp.insert_header("Location", self.signin_url.as_str())?;
+        resp.insert_header("Location", signin_url)?;
         resp.insert_header("Cache-Control", "no-store")?;
         resp.insert_header("Content-Length", "0")?;
         session.write_response_header(Box::new(resp), true).await
@@ -151,6 +165,18 @@ fn request_host(req: &RequestHeader) -> Option<String> {
     req.uri.authority().map(|a| a.to_string())
 }
 
+/// Explicit port of a Host header value, if any ("name:8080" → "8080").
+/// A bare IPv6 authority ("[::1]") yields None (its colon splits are not
+/// all-digit).
+fn host_port(host: &str) -> Option<&str> {
+    match host.rsplit_once(':') {
+        Some((h, p)) if !h.is_empty() && !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) => {
+            Some(p)
+        }
+        _ => None,
+    }
+}
+
 #[async_trait]
 impl ProxyHttp for CmsProxy {
     type CTX = RequestCtx;
@@ -164,6 +190,7 @@ impl ProxyHttp for CmsProxy {
             session.respond_error(404).await?;
             return Ok(true);
         };
+        ctx.host_port = host_port(&host).map(str::to_string);
         let routes: Arc<Routes> = self.routes.get();
 
         match routes::decide(&host, &self.base_domain, &routes) {
@@ -173,7 +200,7 @@ impl ProxyHttp for CmsProxy {
             }
             RouteDecision::Preview { branch, upstream } => {
                 if !self.is_authorized(session) {
-                    self.redirect_signin(session).await?;
+                    self.redirect_signin(session, ctx.host_port.as_deref()).await?;
                     return Ok(true);
                 }
                 self.access.touch(&branch, auth::now_ms());
@@ -193,7 +220,7 @@ impl ProxyHttp for CmsProxy {
             }
             RouteDecision::Boot { branch, upstream } => {
                 if !self.is_authorized(session) {
-                    self.redirect_signin(session).await?;
+                    self.redirect_signin(session, ctx.host_port.as_deref()).await?;
                     return Ok(true);
                 }
                 self.access.touch(&branch, auth::now_ms());
@@ -332,7 +359,8 @@ impl ProxyHttp for CmsProxy {
         }
         ctx.buffering = false;
         let html = std::mem::take(&mut ctx.buffer);
-        let out = inject::inject_overlay(&html, &self.overlay_tag).unwrap_or(html);
+        let tag = inject::agent_script_tag(&self.cms_origin_for(ctx.host_port.as_deref()));
+        let out = inject::inject_overlay(&html, &tag).unwrap_or(html);
         *body = Some(Bytes::from(out));
         Ok(None)
     }
@@ -350,11 +378,7 @@ fn run_proxy(cfg: Config, state: Arc<ProxyState>) {
     access::spawn_flusher(access.clone(), access_path);
 
     let proxy = CmsProxy {
-        signin_url: format!("{}://{}/signin/", cfg.public_scheme, cfg.base_domain),
-        overlay_tag: inject::agent_script_tag(&format!(
-            "{}://{}",
-            cfg.public_scheme, cfg.base_domain
-        )),
+        cms_origin: format!("{}://{}", cfg.public_scheme, cfg.base_domain),
         base_domain: cfg.base_domain,
         require_auth: cfg.require_auth,
         auth_secret: cfg.auth_secret,
@@ -439,5 +463,17 @@ mod native_tests {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         assert!(ensure_listen_available(&address.to_string()).is_err());
+    }
+
+    #[test]
+    fn host_port_extracts_only_explicit_numeric_ports() {
+        use super::host_port;
+        assert_eq!(host_port("cms.example.com:8080"), Some("8080"));
+        assert_eq!(host_port("main.localhost:44341"), Some("44341"));
+        assert_eq!(host_port("cms.example.com"), None);
+        assert_eq!(host_port("[::1]"), None);
+        assert_eq!(host_port("[::1]:8080"), Some("8080"));
+        assert_eq!(host_port(":8080"), None);
+        assert_eq!(host_port("host:"), None);
     }
 }
