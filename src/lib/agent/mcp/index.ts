@@ -16,6 +16,10 @@ import { attachContext7 } from './context7';
 import { attachCustomMcps } from './custom';
 import type { ExternalMcp } from './external';
 
+/** In-process tools include image generation, builds and deploys — the SDK's
+ *  60s default request timeout (-32001) kills them mid-run. */
+const OWN_TOOL_TIMEOUT_MS = 600_000;
+
 export interface McpBridge {
   /** OpenAI function-tool definitions for the current phase. */
   asOpenAiTools(): Promise<OpenAI.Chat.Completions.ChatCompletionTool[]>;
@@ -98,7 +102,9 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
       const ext = externals.find((e) => e.toolNames.has(name));
       if (ext) return ext.callTool(name, input);
       try {
-        const result = await client.callTool({ name, arguments: input });
+        const result = await client.callTool({ name, arguments: input }, undefined, {
+          timeout: OWN_TOOL_TIMEOUT_MS,
+        });
         const content = (result.content ?? []) as Array<{ type: string; text?: string }>;
         return content
           .filter((c) => c.type === 'text' && typeof c.text === 'string')
