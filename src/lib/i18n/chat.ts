@@ -12,6 +12,10 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.color.confirm': 'Use this color',
     'chat.attach.remove': 'Remove attachment',
     'chat.toolRunning': 'running…',
+    'chat.tools.group': '{count} tool calls',
+    'chat.tools.groupOne': '1 tool call',
+    'chat.tools.done': 'done',
+    'chat.tools.running': 'running…',
     'chat.compaction.working': 'Compacting…',
     'chat.compaction.title': 'Earlier conversation compacted',
     // Plan approval card
@@ -86,6 +90,10 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.color.confirm': 'Farbe übernehmen',
     'chat.attach.remove': 'Anhang entfernen',
     'chat.toolRunning': 'läuft…',
+    'chat.tools.group': '{count} Werkzeugaufrufe',
+    'chat.tools.groupOne': '1 Werkzeugaufruf',
+    'chat.tools.done': 'abgeschlossen',
+    'chat.tools.running': 'laufen…',
     'chat.compaction.working': 'Kontext wird komprimiert…',
     'chat.compaction.title': 'Früherer Gesprächsverlauf komprimiert',
     // Plan approval card

@@ -397,6 +397,110 @@ html.is-first-visit #app {
       0 0 0 1px color-mix(in lab, var(--accent) 15%, transparent);
   }
 
+  /* ── Collapsed tool-call groups (redesign × existing detail view) ── */
+
+  .chat-tools {
+    margin: 0.15rem 0;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .chat-tools summary {
+    list-style: none;
+  }
+
+  .chat-tools summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .chat-tools__summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.45rem 0.65rem;
+    border-radius: 9px;
+    border: 1px solid color-mix(in lab, var(--border-muted) 70%, transparent);
+    background: color-mix(in lab, var(--surface-elevated) 80%, transparent);
+    cursor: pointer;
+  }
+
+  .chat-tools__summary:hover {
+    background: var(--surface-hover);
+  }
+
+  .chat-tools__caret {
+    flex: none;
+    transition: transform 120ms ease;
+  }
+
+  .chat-tools[open] > .chat-tools__summary .chat-tools__caret {
+    transform: rotate(90deg);
+  }
+
+  .chat-tools__label {
+    font-size: 0.72rem;
+  }
+
+  .chat-tools__list {
+    margin: 5px 0 0 6px;
+    padding-left: 6px;
+    border-left: 1px solid color-mix(in lab, var(--border-muted) 80%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .chat-tools__row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 5px 8px;
+    border-radius: 7px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    min-width: 0;
+  }
+
+  .chat-tools__row:hover {
+    background: var(--surface-hover);
+  }
+
+  .chat-tools__dot {
+    width: 4px;
+    height: 4px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--accent-strong);
+  }
+
+  .chat-tools__dot.is-running {
+    background: var(--accent);
+  }
+
+  .chat-tools__name {
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .chat-tools__meta {
+    margin-left: auto;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: color-mix(in lab, var(--text-muted) 70%, transparent);
+  }
+
+  .chat-tools__detail {
+    margin: 2px 0 4px 14px;
+    padding-left: 8px;
+    border-left: 1px solid color-mix(in lab, var(--border-muted) 60%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   /* Armed element picker highlights its composer button */
   .composer-pick-button.is-active {
     color: var(--accent);
