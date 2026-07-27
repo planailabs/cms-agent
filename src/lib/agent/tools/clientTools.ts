@@ -70,8 +70,27 @@ export const needsHumanAttentionTool: ToolDef = {
   kinds: ['workflow', 'deployment', 'deployments'],
 };
 
+export const pickColorTool: ToolDef = {
+  name: 'pick_color',
+  description:
+    'Ask the user to pick a color with a visual color picker. The reply is the chosen ' +
+    'color as #rrggbb. Use when a color decision is theirs to make; pass the current ' +
+    'value so the picker starts from it.',
+  schema: z.object({
+    question: z.string().describe('What the color is for.'),
+    current: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional()
+      .describe('Current/default color as #rrggbb.'),
+  }),
+  phases: ['plan', 'execute', 'preview', 'published'],
+  kinds: ['workflow', 'deployment', 'deployments'],
+};
+
 export function registerClientTools(): void {
   registerTool(askQuestionTool);
+  registerTool(pickColorTool);
   registerTool(proposePlanTool);
   registerTool(finishExecutionTool);
   registerTool(needsHumanAttentionTool);

@@ -8,6 +8,8 @@ export const chatCatalogs: AreaCatalogs = {
   en: {
     'chat.automatismHead': 'Automatism',
     'chat.attach.add': 'Attach a file',
+    'chat.color.pick': 'Pick a color',
+    'chat.color.confirm': 'Use this color',
     'chat.attach.remove': 'Remove attachment',
     'chat.toolRunning': 'running…',
     'chat.compaction.working': 'Compacting…',
@@ -79,6 +81,8 @@ export const chatCatalogs: AreaCatalogs = {
   de: {
     'chat.automatismHead': 'Automatismus',
     'chat.attach.add': 'Datei anhängen',
+    'chat.color.pick': 'Farbe wählen',
+    'chat.color.confirm': 'Farbe übernehmen',
     'chat.attach.remove': 'Anhang entfernen',
     'chat.toolRunning': 'läuft…',
     'chat.compaction.working': 'Kontext wird komprimiert…',

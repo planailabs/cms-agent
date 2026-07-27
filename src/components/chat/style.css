@@ -1737,6 +1737,15 @@ html.is-first-visit #app {
     vertical-align: baseline;
   }
 
+  .chat-color-input {
+    width: 3rem;
+    height: 2rem;
+    padding: 0.15rem;
+    border: 1px solid var(--border-muted);
+    border-radius: 0.5rem;
+    background: var(--surface-elevated);
+  }
+
   .chat-color__swatch {
     width: 0.72em;
     height: 0.72em;

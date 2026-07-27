@@ -81,7 +81,8 @@ locally booted production build (see `launcher.mjs`). Status legend:
 ## Agent tool paths (implicit via e2e prompts)
 
 Read tools + write_file/edit_file + git commit (03 journey), propose_plan /
-ask_question / finish_execution client tools (03), conflict tools +
+ask_question / finish_execution client tools (03; pick_color registered +
+UI unit-tested — bench-driving it needs a prompt that makes the agent call it), conflict tools +
 resume_automatism (06 pull-conflict resolution turn), screenshot/diff
 pipeline (03/05). Web tools, generate_image, run_command, use_skill,
 propose_memory: ⛔ not deterministically triggerable — would need

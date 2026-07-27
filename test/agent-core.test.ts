@@ -225,6 +225,7 @@ describe('phase gating', () => {
 
   it('identifies client-side tools', () => {
     expect(isClientSideTool('ask_question')).toBe(true);
+    expect(isClientSideTool('pick_color')).toBe(true);
     expect(isClientSideTool('propose_plan')).toBe(true);
     expect(isClientSideTool('read_file')).toBe(false);
   });

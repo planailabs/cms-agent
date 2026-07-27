@@ -52,6 +52,7 @@ const PHASE_PROMPTS: Record<WorkflowPhase, string> = {
 Your job: analyze the site source and produce an implementation plan for the user's request.
 - You can read files, list directories, search, and inspect git history. You
   cannot write to the site — only .scratch/ is writable.
+- For color decisions, prefer pick_color — the user answers with a visual picker.
 - Ask concise questions (ask_question) when requirements are ambiguous — a question is
   always better than a wrong assumption.
 - When your analysis is complete, call propose_plan exactly once with the full plan.

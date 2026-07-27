@@ -177,6 +177,15 @@ export const registerChatEvents = (app: HTMLElement) => {
     },
   );
 
+  // Chat: pick_color confirm — send the chosen color as the answer
+  delegateEvent(app, 'click', '[data-action="mc-color-confirm"]', (event, target) => {
+    event.stopPropagation();
+    const input = app.querySelector<HTMLInputElement>('[data-action="mc-color-input"]');
+    if (!input) return;
+    target.setAttribute('disabled', '');
+    answerChatQuestion(input.value);
+  });
+
   // Chat: Cancel Question
   delegateEvent(
     app,

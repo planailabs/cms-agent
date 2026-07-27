@@ -36,6 +36,26 @@ export const renderQuestionUI = (
           ${skipLabel}
         </button>
       </div>`;
+  } else if (prompt?.toolName === 'pick_color') {
+    const input = prompt.input as { question?: string; current?: string };
+    const start = /^#[0-9a-fA-F]{6}$/.test(input.current ?? '') ? input.current! : '#7852ee';
+    if (input.question) {
+      questionLabel = `<div class="flex justify-start">
+          <p class="max-w-full text-sm leading-relaxed text-(--text-muted)">
+            ${escapeHtml(input.question)}
+          </p>
+        </div>`;
+    }
+    questionButtons = `<div class="flex flex-wrap items-center gap-2 text-sm text-(--text-primary)">
+        <input type="color" class="chat-color-input" data-action="mc-color-input"
+          value="${escapeHtml(start)}" aria-label="${escapeHtml(t(uiLocale(), 'chat.color.pick'))}" />
+        <button type="button" class="chat-cta-button" data-action="mc-color-confirm">
+          ✓ ${escapeHtml(t(uiLocale(), 'chat.color.confirm'))}
+        </button>
+        <button type="button" class="chat-cta-button chat-cta-button--cancel" data-action="mc-question-cancel">
+          ${skipLabel}
+        </button>
+      </div>`;
   } else if (prompt?.toolName === 'ask_question') {
     const aqInput = prompt.input as { type?: string; question?: string; options?: string[] };
     if (aqInput.question) {
