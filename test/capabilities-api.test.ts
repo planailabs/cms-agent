@@ -19,7 +19,7 @@ import { GET } from '@/pages/api/agent/capabilities';
 const ACTOR = { id: 'caps-api-user', name: 'Caps Tester' };
 
 const get = (chatId: string) =>
-  GET({ url: new URL(`http://localhost/api/agent/capabilities?chat=${chatId}`) } as never);
+  GET({ url: new URL(`http://localhost/api/agent/capabilities?chat=${chatId}`), locals: { user: { id: 'u-test-admin', role: 'admin' } }, } as never);
 
 let chatId: string;
 

@@ -162,4 +162,77 @@ describe('real auth (mock OIDC IdP)', () => {
       await browser?.close();
     }
   }, 120_000);
+
+  it('chat visibility setting: restricted hides foreign chats from editors', async () => {
+    // No admin OIDC identity exists (allowlist is alice + team domain), so
+    // promote bob directly in the bench DB — the toggle + admin-bypass paths
+    // then run through real sessions.
+    process.env.DATABASE_URL = benchEnv.DATABASE_URL;
+    const { prisma } = await import('@/lib/db');
+    await prisma.user.updateMany({
+      where: { email: 'bob@team.bench.test' },
+      data: { role: 'admin' },
+    });
+
+    const alice = await oidcSignIn({ sub: 'alice', email: 'alice@bench.test', name: 'Alice Bench' });
+    const bob = await oidcSignIn({ sub: 'bob', email: 'bob@team.bench.test', name: 'Bob Team' });
+    const chatsFor = async (jar: Jar) =>
+      (
+        (await (
+          await fetch(`${baseUrl}/api/branches`, { headers: { cookie: cookieHeader(jar) } })
+        ).json()) as { branches: { id: string; chats: { id: string }[] }[] }
+      ).branches.flatMap((b) => b.chats.map((c) => c.id));
+    const putSetting = (jar: Jar, value: boolean) =>
+      fetch(`${baseUrl}/api/admin/settings`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', cookie: cookieHeader(jar) },
+        body: JSON.stringify({ chatsSharedVisibility: value }),
+      });
+    const historyStatus = async (jar: Jar, chatId: string) =>
+      (
+        await fetch(`${baseUrl}/api/chat/history?chatId=${chatId}`, {
+          headers: { cookie: cookieHeader(jar) },
+        })
+      ).status;
+
+    // A chat with a real creator (bob) — foreign from alice's point of view.
+    // The main phase's surviving chat is the creator-less system Deployments
+    // chat, which restricted mode deliberately keeps visible.
+    const branchList = (await (
+      await fetch(`${baseUrl}/api/branches`, { headers: { cookie: cookieHeader(bob) } })
+    ).json()) as { branches: { id: string }[] };
+    const created = await fetch(`${baseUrl}/api/chats`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookieHeader(bob) },
+      body: JSON.stringify({ branchId: branchList.branches[0]!.id, title: 'bob visibility probe' }),
+    });
+    ok('admin creates a probe chat', created.status === 201, String(created.status));
+    const foreignId = ((await created.json()) as { chat: { id: string } }).chat.id;
+    const systemChat = await prisma.chat.findFirst({
+      where: { kind: 'deployments' },
+      select: { id: true },
+    });
+
+    const before = await chatsFor(alice);
+    ok('shared (default): editor sees the foreign chat', before.includes(foreignId), `${before.length} chats`);
+
+    ok('editor cannot flip the setting', (await putSetting(alice, false)).status === 403);
+    ok('admin flips shared visibility off', (await putSetting(bob, false)).status === 200);
+    try {
+      const restricted = await chatsFor(alice);
+      ok('restricted: foreign chat gone from the editor list', !restricted.includes(foreignId), `${restricted.length} left`);
+      ok('restricted: foreign chat history reads as 404', (await historyStatus(alice, foreignId)) === 404);
+      if (systemChat) {
+        ok('restricted: system chat stays listed', restricted.includes(systemChat.id));
+        ok('restricted: system chat stays readable', (await historyStatus(alice, systemChat.id)) === 200);
+      }
+      const adminSees = await chatsFor(bob);
+      ok('restricted: admin still sees everything', adminSees.includes(foreignId), `${adminSees.length}`);
+    } finally {
+      // Restore the default whatever happened above.
+      await putSetting(bob, true);
+    }
+    const restored = await chatsFor(alice);
+    ok('restored: editor sees the foreign chat again', restored.includes(foreignId), `${restored.length} chats`);
+  });
 });

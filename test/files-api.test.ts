@@ -16,6 +16,7 @@ const get = async (p: string) => {
   const res = await GET({
     params: { chatId },
     url: new URL(`http://localhost/api/files/${chatId}?path=${encodeURIComponent(p)}`),
+    locals: { user: { id: 'u-test-admin', role: 'admin' } },
   } as never);
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 };
@@ -26,6 +27,7 @@ const getMode = (p: string, mode: string) =>
     url: new URL(
       `http://localhost/api/files/${chatId}?path=${encodeURIComponent(p)}&mode=${mode}`,
     ),
+    locals: { user: { id: 'u-test-admin', role: 'admin' } },
   } as never);
 
 beforeAll(async () => {
@@ -124,6 +126,7 @@ describe('files API', () => {
     const res = await GET({
       params: { chatId: 'does-not-exist' },
       url: new URL('http://localhost/api/files/x?path=.'),
+      locals: { user: { id: 'u-test-admin', role: 'admin' } },
     } as never);
     expect(res.status).toBe(404);
   });

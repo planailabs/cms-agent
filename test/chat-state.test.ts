@@ -283,6 +283,7 @@ describe('streamed chat state', () => {
   it('history returns the same snapshot the stream uses', async () => {
     const res = await historyGet({
       url: new URL(`http://localhost/api/chat/history?chatId=${chatId}`),
+      locals: { user: { id: 'u-test-admin', role: 'admin' } },
     } as never);
     const body = (await res.json()) as { state: Record<string, unknown> };
     const rebuilt = await buildChatState(chatId);
@@ -310,6 +311,7 @@ describe('streamed chat state', () => {
 
     const res = await historyGet({
       url: new URL(`http://localhost/api/chat/history?chatId=${chat.id}`),
+      locals: { user: { id: 'u-test-admin', role: 'admin' } },
     } as never);
     const body = (await res.json()) as { messages: Array<{ role: string; content: string }> };
     expect(body.messages.map((m) => m.role)).toEqual(['compaction', 'user']);
