@@ -6,6 +6,7 @@
  */
 
 import { Marked } from 'marked';
+import { annotateColorsInHtml } from './colorNames';
 
 const marked = new Marked({
   breaks: true,
@@ -20,7 +21,7 @@ export const renderMarkdown = (text: string): string => {
   const html = marked.parse(text) as string;
 
   // Open regular links in a new tab.
-  const links = html.replace(
+  const links = annotateColorsInHtml(html).replace(
     /<a /g,
     '<a target="_blank" rel="noopener noreferrer" ',
   );

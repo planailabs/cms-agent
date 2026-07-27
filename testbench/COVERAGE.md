@@ -76,6 +76,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Element-edit overlay (draw/move/comment in-iframe) | — | 🟡 handoff covered API-side in 03; in-iframe drawing not driven |
 | Browser compare UI, diff-viewer modes UI | — | 🟡 endpoints covered (03/05); overlay UIs not driven |
 | Attachments upload + send with image | 01 (API upload) | 🟡 composer chip flow not driven |
+| Hex → color-name chips in chat markdown | — | 🟡 covered by unit tests through renderMarkdown (agent must mention a hex to drive it in bench) |
 
 ## Agent tool paths (implicit via e2e prompts)
 
