@@ -46,7 +46,10 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `/__preview/boot/<branch>` (CMS-host redirect) | 05 | ✅ |
 | `/__preview/wait/<branch>` (SSE) | 05 | ✅ |
 | `<branch>.BASE_DOMAIN` proxy routing + injection | 05 | ✅ |
-| OAuth signin flow, allowlist, cookie migration, 401s | — | ⛔ SKIP_AUTH replaces the auth stack; needs an OIDC test IdP |
+| OAuth signin flow (full authorization-code + PKCE round trip) | 07 (instrumented mock IdP, own server boot without SKIP_AUTH) | ✅ |
+| Email allowlist (ALLOWED_EMAILS admit, domain-rule admit, reject) | 07 | ✅ |
+| Unauthenticated 401s / signin redirect / public paths / impersonate-off | 07 | ✅ |
+| Session cookie migration to Domain=.BASE_DOMAIN | — | ⛔ migration is a no-op when BASE_DOMAIN=localhost (the bench's only hermetic domain) |
 
 ## UI flows (Playwright)
 

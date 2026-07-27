@@ -19,6 +19,7 @@
     "bench:admin": "node testbench/launcher.mjs --group admin",
     "bench:proxy": "node testbench/launcher.mjs --group proxy",
     "bench:recovery": "node testbench/launcher.mjs --group recovery",
+    "bench:auth": "node testbench/launcher.mjs --group auth",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },
@@ -51,6 +52,7 @@
     "@types/pngjs": "^6.0.5",
     "astro-compress": "^2.3.8",
     "esbuild": "^0.27.7",
+    "oauth2-mock-server": "^9.1.0",
     "playwright": "1.60.0",
     "prisma": "^7.8.0",
     "typescript": "^5.7.0",

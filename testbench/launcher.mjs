@@ -7,11 +7,14 @@
  * vitest and renders a verdict report. Real AI keys come from .env; the
  * judge model is JUDGE_MODEL (fallback OPENAI_MODEL).
  *
- *   pnpm bench                 # full suite
- *   pnpm bench --group api     # one group (api|ui|e2e|admin|proxy)
+ *   pnpm bench                 # full suite (main phase + real-auth phase)
+ *   pnpm bench --group api     # one group (api|ui|e2e|admin|proxy|recovery|auth)
  *   pnpm bench --grep 'name'   # vitest -t filter
  *   pnpm bench --keep          # keep DB/workspace for debugging
  *   pnpm bench --no-build      # skip the dist staleness check
+ *
+ * The auth group runs as its own phase: the server is rebooted WITHOUT
+ * SKIP_AUTH and OIDC_ISSUER points at the mock IdP the 07-auth suite binds.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -28,6 +31,8 @@ const GROUPS = {
   admin: 'testbench/scenarios/04-admin.test.ts',
   proxy: 'testbench/scenarios/05-preview-proxy.test.ts',
   recovery: 'testbench/scenarios/06-recovery.test.ts',
+  // Runs on its own server boot: SKIP_AUTH off, OIDC against an in-test mock IdP.
+  auth: 'testbench/scenarios/07-auth.test.ts',
 };
 
 // ── args ─────────────────────────────────────────────────────────────────
@@ -48,7 +53,7 @@ const grep = opt('--grep');
 const groups = [];
 let g;
 while ((g = opt('--group'))) {
-  if (!GROUPS[g]) fail(`unknown group '${g}' (api|ui|e2e|admin|proxy|recovery)`);
+  if (!GROUPS[g]) fail(`unknown group '${g}' (api|ui|e2e|admin|proxy|recovery|auth)`);
   groups.push(GROUPS[g]);
 }
 
@@ -147,6 +152,7 @@ run('git', ['-C', sitePath, 'push', '-q', 'origin', 'main']);
 
 const cmsPort = await freePort();
 const proxyPort = await freePort();
+const idpPort = await freePort();
 const baseUrl = `http://localhost:${proxyPort}`;
 
 const serverEnv = { ...process.env, ...dotenv };
@@ -171,46 +177,107 @@ Object.assign(serverEnv, {
   ROUTE_MAPPINGS: '',
 });
 
-const benchBlob = {
-  baseUrl,
-  proxyPort,
-  env: Object.fromEntries(Object.entries(serverEnv).map(([k, v]) => [k, String(v)])),
-  work,
-  sitePath,
-  deployRemotePath,
-};
-const benchEnvFile = path.join(work, 'bench-env.json');
-fs.writeFileSync(benchEnvFile, JSON.stringify(benchBlob, null, 2));
+// The auth phase reboots the SAME workspace/DB with the real auth stack:
+// SKIP_AUTH absent, OIDC pointed at the port the 07-auth suite binds its
+// instrumented mock IdP to (discovery is fetched lazily at first sign-in,
+// so the server can boot before the IdP listens).
+const authServerEnv = { ...serverEnv };
+delete authServerEnv.SKIP_AUTH;
+Object.assign(authServerEnv, {
+  OIDC_ISSUER: `http://127.0.0.1:${idpPort}`,
+  OIDC_CLIENT_ID: 'bench-client',
+  OIDC_CLIENT_SECRET: 'bench-client-secret',
+  ALLOWED_EMAILS: 'alice@bench.test',
+  ALLOWED_EMAIL_DOMAIN: 'team.bench.test',
+  BETTER_AUTH_SECRET: serverEnv.BETTER_AUTH_SECRET || 'bench-better-auth-secret-0123456789',
+});
 
-// ── boot server ──────────────────────────────────────────────────────────
+const writeBlob = (name, envObj, extra = {}) => {
+  const blob = {
+    baseUrl,
+    proxyPort,
+    env: Object.fromEntries(Object.entries(envObj).map(([k, v]) => [k, String(v)])),
+    work,
+    sitePath,
+    deployRemotePath,
+    ...extra,
+  };
+  const file = path.join(work, name);
+  fs.writeFileSync(file, JSON.stringify(blob, null, 2));
+  return file;
+};
+const benchEnvFile = writeBlob('bench-env.json', serverEnv);
+const authEnvFile = writeBlob('bench-env-auth.json', authServerEnv, { authIdpPort: idpPort });
+
+// ── boot / teardown ──────────────────────────────────────────────────────
 const logPath = path.join(resultsDir, 'server.log');
 // Log via an fd, not parent-side pipes — a --keep server must survive our exit.
 const logFd = fs.openSync(logPath, 'a');
-const server = spawn('bash', ['scripts/launch-with-sandbox.sh', 'node', 'server.mjs'], {
-  cwd: ROOT,
-  env: serverEnv,
-  detached: true,
-  stdio: ['ignore', logFd, logFd],
-});
+let server = null;
+
+const bootServer = (envObj) => {
+  server = spawn('bash', ['scripts/launch-with-sandbox.sh', 'node', 'server.mjs'], {
+    cwd: ROOT,
+    env: envObj,
+    detached: true,
+    stdio: ['ignore', logFd, logFd],
+  });
+};
+
+const portFree = (port) =>
+  new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(false));
+    srv.listen(port, '127.0.0.1', () => srv.close(() => resolve(true)));
+  });
+
+const killServer = async () => {
+  if (!server) return;
+  const pid = server.pid;
+  try {
+    process.kill(-pid, 'SIGTERM');
+  } catch {
+    /* already gone */
+  }
+  // The next phase reuses the same ports — wait until they are actually
+  // released (the node server can outlive the proxy), escalating to SIGKILL.
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    if ((await portFree(cmsPort)) && (await portFree(proxyPort))) break;
+    if (Date.now() > deadline - 7_000) {
+      try {
+        process.kill(-pid, 'SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  server = null;
+};
 
 let tornDown = false;
 const teardown = () => {
   if (tornDown) return;
   tornDown = true;
-  if (keep) {
+  if (keep && server) {
     console.log(
       `bench: --keep — server pid ${server.pid} still running at ${baseUrl}; db ${dbName}; work ${work}`,
     );
     server.unref();
     return;
   }
-  try {
-    process.kill(-server.pid, 'SIGTERM');
-  } catch {
-    /* already gone */
+  // Sync kill (signal handlers can't await): SIGTERM + grace is enough here —
+  // only dropdb needs the connections gone, not the ports.
+  if (server) {
+    try {
+      process.kill(-server.pid, 'SIGTERM');
+    } catch {
+      /* already gone */
+    }
+    spawnSync('sleep', ['2']);
+    server = null;
   }
-  // Give the process group a moment to die before dropping its DB.
-  spawnSync('sleep', ['2']);
   spawnSync('dropdb', ['--if-exists', dbName], { stdio: 'inherit' });
   // The server leaves the sandbox squashfuse mounted under VAR_DIR — rm
   // would otherwise walk into (and fail on) the mount.
@@ -232,52 +299,73 @@ process.on('SIGTERM', () => {
   process.exit(143);
 });
 
-const healthy = await (async () => {
+// 401 counts as healthy: the auth phase gates /api/version behind a session.
+const waitHealthy = async () => {
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     if (server.exitCode !== null) return false;
     try {
       const res = await fetch(`${baseUrl}/api/version`);
-      if (res.status === 200) return true;
+      if (res.status === 200 || res.status === 401) return true;
     } catch {
       /* not up yet */
     }
     await new Promise((r) => setTimeout(r, 500));
   }
   return false;
-})();
-if (!healthy) {
-  console.error('bench: server failed to become healthy; last log lines:');
-  try {
-    console.error(fs.readFileSync(logPath, 'utf8').split('\n').slice(-40).join('\n'));
-  } catch {
-    /* no log */
-  }
-  teardown();
-  process.exit(1);
-}
-console.log(`bench: server healthy at ${baseUrl}`);
+};
 
-// ── run scenarios ────────────────────────────────────────────────────────
-const vitestArgs = [
-  'vitest',
-  'run',
-  '--config',
-  'testbench/vitest.config.ts',
-  ...(groups.length > 0 ? groups : []),
-  ...(grep ? ['-t', grep] : []),
-];
-const result = spawnSync('npx', vitestArgs, {
-  cwd: ROOT,
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    BENCH_ENV_FILE: benchEnvFile,
-    BENCH_BASE_URL: baseUrl,
-    BENCH_RESULTS_DIR: resultsDir,
-    PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS: '1',
-  },
-});
+// ── run scenarios (auth needs its own server boot) ───────────────────────
+const selected = groups.length > 0 ? groups : Object.values(GROUPS);
+const mainFiles = selected.filter((f) => f !== GROUPS.auth);
+const phases = [];
+if (mainFiles.length > 0) {
+  phases.push({ name: 'main', files: mainFiles, env: serverEnv, envFile: benchEnvFile });
+}
+if (selected.includes(GROUPS.auth)) {
+  phases.push({ name: 'auth', files: [GROUPS.auth], env: authServerEnv, envFile: authEnvFile });
+}
+
+let anyFailed = false;
+for (const phase of phases) {
+  await killServer();
+  bootServer(phase.env);
+  if (!(await waitHealthy())) {
+    console.error(`bench: ${phase.name} server failed to become healthy; last log lines:`);
+    try {
+      console.error(fs.readFileSync(logPath, 'utf8').split('\n').slice(-40).join('\n'));
+    } catch {
+      /* no log */
+    }
+    teardown();
+    process.exit(1);
+  }
+  console.log(`bench: ${phase.name} server healthy at ${baseUrl}`);
+
+  const result = spawnSync(
+    'npx',
+    [
+      'vitest',
+      'run',
+      '--config',
+      'testbench/vitest.config.ts',
+      ...phase.files,
+      ...(grep ? ['-t', grep] : []),
+    ],
+    {
+      cwd: ROOT,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        BENCH_ENV_FILE: phase.envFile,
+        BENCH_BASE_URL: baseUrl,
+        BENCH_RESULTS_DIR: resultsDir,
+        PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS: '1',
+      },
+    },
+  );
+  if (result.status !== 0) anyFailed = true;
+}
 
 // ── report ───────────────────────────────────────────────────────────────
 const verdictsPath = path.join(resultsDir, 'verdicts.jsonl');
@@ -310,4 +398,4 @@ ${rows}
 }
 
 teardown();
-process.exit(result.status ?? 1);
+process.exit(anyFailed ? 1 : 0);

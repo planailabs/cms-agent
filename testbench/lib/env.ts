@@ -17,6 +17,8 @@ export interface BenchRun {
   sitePath: string;
   deployRemotePath: string;
   resultsDir: string;
+  /** Auth phase only: the port 07-auth binds its mock OIDC IdP to. */
+  authIdpPort?: number;
 }
 
 let cached: BenchRun | null = null;
