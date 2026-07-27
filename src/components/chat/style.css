@@ -169,6 +169,20 @@ html.is-first-visit #app {
     }
   }
 
+  /* Right-side tooltip variant (icon rail) */
+  .tooltip--right::after {
+    top: 50%;
+    left: 100%;
+    transform: translate(1rem, -50%);
+  }
+
+  @media (any-hover: hover) and (pointer: fine) {
+    .tooltip--right:hover::after,
+    .tooltip--right:focus-visible::after {
+      transform: translate(0.6rem, -50%);
+    }
+  }
+
   @media (any-hover: none), (pointer: coarse) {
     .tooltip::after {
       content: none;
@@ -1498,6 +1512,64 @@ html.is-first-visit #app {
     padding: 10px;
   }
 
+  /* ── Icon rail (redesign): vertical tool strip left of the stage ── */
+
+  .ws-rail {
+    flex: none;
+    width: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 0;
+    border-right: 1px solid color-mix(in lab, var(--border-muted) 80%, transparent);
+    background: color-mix(in lab, var(--surface-elevated) 65%, var(--surface-base));
+  }
+
+  .ws-rail__btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      background 120ms ease,
+      color 120ms ease;
+  }
+
+  .ws-rail__btn:hover:not([disabled]) {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .ws-rail__btn.is-active {
+    background: color-mix(in lab, var(--accent) 15%, transparent);
+    border-color: color-mix(in lab, var(--accent) 40%, transparent);
+    color: var(--accent);
+  }
+
+  .ws-rail__btn[disabled] {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .ws-rail__sep {
+    width: 22px;
+    height: 1px;
+    flex: none;
+    background: color-mix(in lab, var(--border-muted) 80%, transparent);
+    margin: 6px 0;
+  }
+
+  .ws-rail__spacer {
+    flex: 1;
+  }
+
   .ws-resize-handle {
     flex: 0 0 5px;
     cursor: col-resize;
@@ -1746,6 +1818,13 @@ html.is-first-visit #app {
 
   .ws-toolbar__spacer {
     flex: 1;
+  }
+
+  /* Armed element-picker hint in the preview chrome bar */
+  .ws-toolbar__picking {
+    font-size: 0.75rem;
+    color: var(--accent);
+    white-space: nowrap;
   }
 
   .ws-bc-select {

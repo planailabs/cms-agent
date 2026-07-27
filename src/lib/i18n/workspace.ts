@@ -141,6 +141,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.diff.browsedPage': 'Browsed page (not in the changed pages)',
     'workspace.diff.changedCount': '{count} changed',
     'workspace.diff.routesTitle': 'Changed pages',
+    'workspace.rail.settings': 'Settings',
 
     // ── cross-browser comparison overlay ──
     'workspace.bc.renderingShot': 'Rendering {name}…',
@@ -365,6 +366,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.diff.browsedPage': 'Besuchte Seite (nicht in den geänderten Seiten)',
     'workspace.diff.changedCount': '{count} geändert',
     'workspace.diff.routesTitle': 'Geänderte Seiten',
+    'workspace.rail.settings': 'Einstellungen',
 
     // ── Browser-Vergleich ──
     'workspace.bc.renderingShot': '{name} wird gerendert…',

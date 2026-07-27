@@ -235,14 +235,16 @@ describe('preview + proxy', () => {
         .locator(`[data-action="ws-open-chat"][data-chat-id="${j.chatB}"]`)
         .first()
         .click();
-      // Diff toolbar renders once the changed pages load
-      const pick = s.page.locator('.ws-diff [data-action="ws-element-pick"]');
-      await pick.waitFor({ timeout: 60_000 });
+      // Diff controls render once the changed pages load; the picker entry
+      // point lives in the icon rail (redesign).
+      await s.page.locator('.ws-route-chip').waitFor({ timeout: 60_000 });
+      const pick = s.page.locator('.ws-rail [data-action="ws-element-pick"]');
+      await pick.waitFor({ timeout: 10_000 });
       const diffRoute = await s.page
         .locator('.ws-route-chip')
         .first()
         .getAttribute('data-active-route');
-      ok('picker button renders in the diff toolbar', true);
+      ok('picker button renders in the icon rail', true);
 
       // Arming the picker swaps to the live preview on the reviewed page
       await pick.click();
@@ -281,8 +283,10 @@ describe('preview + proxy', () => {
         .locator(`[data-action="ws-open-chat"][data-chat-id="${j.chatB}"]`)
         .first()
         .click();
-      await s.page.locator('.ws-diff [data-action="ws-edit-mode"]').waitFor({ timeout: 60_000 });
-      await s.page.locator('.ws-diff [data-action="ws-edit-mode"]').click();
+      await s.page.locator('.ws-diff').first().waitFor({ timeout: 60_000 });
+      const editBtn = s.page.locator('.ws-rail [data-action="ws-edit-mode"]:not([disabled])');
+      await editBtn.waitFor({ timeout: 60_000 });
+      await editBtn.click();
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="swap"]').waitFor({ timeout: 30_000 });
       const tools = await s.page.locator('[data-action="ws-edit-tool"]').count();
       ok('edit toolbar lists all five tools', tools === 5, `${tools} tools`);

@@ -19,6 +19,7 @@ import { syncPreviewFrames } from '../workspace/previewFrames';
 import { renderDiffViewer } from '../workspace/diffViewer';
 import { renderBrowserCompare } from '../workspace/browserCompare';
 import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
+import { renderRail } from '../workspace/rail';
 import { renderArchiveModal } from '../workspace/archive';
 import { renderGitModal } from '../workspace/gitModal';
 import { renderCapsModal } from '../workspace/capsModal';
@@ -55,6 +56,7 @@ const initApp = () => {
       <div id="header-region" class="shrink-0"></div>
 
       <div class="ws-layout flex min-h-0 flex-1">
+        <nav id="rail-region" class="ws-rail" aria-label="Tools"></nav>
         <main id="main-region" class="ws-main min-w-0 flex-1"></main>
         <div id="sidebar-resize-handle" class="ws-resize-handle" role="separator"
           aria-orientation="vertical" aria-label="${t(uiLocale(), 'chat.sidebar.resize')}"></div>
@@ -66,6 +68,7 @@ const initApp = () => {
   }
 
   const headerRegion = app?.querySelector('#header-region') as HTMLElement;
+  const railRegion = app?.querySelector('#rail-region') as HTMLElement;
   const mainRegion = app?.querySelector('#main-region') as HTMLElement;
   const sidebarRegion = app?.querySelector('#sidebar-region') as HTMLElement;
   const resizeHandle = app?.querySelector('#sidebar-resize-handle') as HTMLElement;
@@ -82,9 +85,12 @@ const initApp = () => {
     const locale = locales[state.localeKey];
     const ws = state.workspace;
 
-    // 1. Update Header
+    // 1. Update Header + icon rail
     if (headerRegion) {
       headerRegion.innerHTML = renderHeader({ locale, state });
+    }
+    if (railRegion) {
+      setHtmlIfChanged(railRegion, renderRail(state));
     }
 
     // 2. Main area: diff viewer in the PREVIEW phase, live preview otherwise.

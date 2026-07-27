@@ -104,11 +104,8 @@ export const renderPreviewToolbar = (state: AppState): string => {
   const label =
     branch === target ? `⎇ ${escapeHtml(target)}` : `⎇ ${escapeHtml(branch)} → ${escapeHtml(target)}`;
 
-  const editButton = canEnterEditMode(state)
-    ? `<button type="button" class="ws-mini-button" data-action="ws-edit-mode"
-        title="${escapeHtml(t(locale, 'workspace.preview.editModeTitle'))}">${escapeHtml(t(locale, 'workspace.preview.editMode'))}</button>`
-    : '';
-
+  // Edit mode, element picker, browser compare and the code browser moved to
+  // the icon rail (rail.ts) — the chrome bar keeps navigation-only controls.
   return `${renderTabStrip(ws)}
       <div class="ws-toolbar">
         <span class="ws-chrome-dots" aria-hidden="true"><i></i><i></i></span>
@@ -118,15 +115,11 @@ export const renderPreviewToolbar = (state: AppState): string => {
             autocomplete="off" value="${escapeHtml(ws.previewRoute)}" aria-label="${escapeHtml(t(locale, 'workspace.preview.addressLabel'))}" />
         </form>
         <span class="ws-toolbar__spacer"></span>
-        ${editButton}
-        <button type="button" class="ws-mini-button ${ws.pickerActive ? 'is-active' : ''}"
-          data-action="ws-element-pick" title="${escapeHtml(t(locale, 'workspace.preview.pickTitle'))}">
-          ${escapeHtml(t(locale, ws.pickerActive ? 'workspace.preview.picking' : 'workspace.preview.elementPicker'))}
-        </button>
-        <button type="button" class="ws-mini-button" data-action="ws-bc-open"
-          title="${escapeHtml(t(locale, 'workspace.preview.browsersTitle'))}">${escapeHtml(t(locale, 'workspace.preview.browsers'))}</button>
-        <button type="button" class="ws-mini-button ws-mono" data-action="ws-cb-modal-open"
-          title="${escapeHtml(t(locale, 'workspace.code.openTitle'))}">{ }</button>
+        ${
+          ws.pickerActive
+            ? `<span class="ws-toolbar__picking">${escapeHtml(t(locale, 'workspace.preview.picking'))}</span>`
+            : ''
+        }
         <a class="ws-mini-button" href="${escapeHtml(branchPreviewUrl(branch, ws.previewRoute))}"
           target="_blank" rel="noopener" title="${escapeHtml(t(locale, 'workspace.preview.openNewTab'))}">↗</a>
       </div>`;
