@@ -423,11 +423,24 @@ export const removeContextChip = (): void => {
 // Element-edit mode (annotate the preview → handoff to the agent)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Entering pick/edit mode from the diff viewer: the live preview should
+ *  open on the page being reviewed, not a stale previewRoute. */
+export const adoptDiffRoute = (): void => {
+  const s = store.state;
+  const ws = s.workspace;
+  if (s.workflowPhase !== 'preview' || !ws.diff.loaded) return;
+  const route = ws.diff.selectedRoute ?? ws.diff.pages[0]?.route;
+  if (!route || ws.previewRoute === route) return;
+  ws.previewRoute = route;
+  ws.previewTabs[ws.activeTabIndex] = route;
+};
+
 export const startEditMode = (): void => {
   const ws = store.state.workspace;
   ws.elementEdit = createInitialElementEditState();
   ws.elementEdit.active = true;
   ws.pickerActive = false;
+  adoptDiffRoute();
   // Mounts the live preview frames first when entering from the diff viewer;
   // if the iframe is still loading, the module push re-arms edit mode.
   store.notify();

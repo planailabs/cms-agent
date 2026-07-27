@@ -114,6 +114,11 @@ const pushModule = (iframe: HTMLIFrameElement): void => {
       if (store.state.workspace.elementEdit.active && iframe === getPreviewIframe()) {
         postEditStart();
       }
+      // Same for an armed picker (e.g. armed from the diff viewer before the
+      // live preview frame existed).
+      if (store.state.workspace.pickerActive && iframe === getPreviewIframe()) {
+        startElementPick();
+      }
     })
     .catch((err) => {
       console.error('[preview-agent] module load failed:', err);

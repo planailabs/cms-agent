@@ -63,6 +63,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Preview page follows the workspace theme (live flip) | 02 | ✅ |
 | Diff viewer: pane browsing syncs other pane + tabs, address free-browse | 05 | ✅ |
 | Chat transcript scroll preserved across rerenders (tool-use jump fix) | 05 | ✅ |
+| Element picker from the diff viewer (arm → live preview on diff route → cancel) | 05 | ✅ |
 | Chat visibility setting (restricted hides foreign chats, admin bypass) | 07 | ✅ |
 | Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
 | Language switch en↔de (judged screenshot) | 02 | ✅ |

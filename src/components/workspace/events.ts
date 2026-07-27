@@ -31,6 +31,7 @@ import {
   newPreviewTab,
   attachContextChip,
   removeContextChip,
+  adoptDiffRoute,
   startEditMode,
   stopEditMode,
   setEditTool,
@@ -458,8 +459,11 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
       cancelElementPick(); // module replies cms:pick-cancel, but un-arm now
       ws.pickerActive = false;
     } else {
-      startElementPick();
       ws.pickerActive = true;
+      // From the diff viewer the live preview mounts on notify — open it on
+      // the reviewed page; the module push re-arms the pick there.
+      adoptDiffRoute();
+      startElementPick();
     }
     store.notify();
   });

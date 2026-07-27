@@ -89,10 +89,13 @@ const initApp = () => {
 
     // 2. Main area: diff viewer in the PREVIEW phase, live preview otherwise.
     if (mainRegion) {
-      // Edit mode forces the live preview even in the PREVIEW phase (the
-      // diff viewer returns when the edit session ends).
+      // Edit mode and the armed element picker force the live preview even
+      // in the PREVIEW phase (the diff viewer returns when they end).
       const inPreviewPhase =
-        state.workflowPhase === 'preview' && !!state.activeChatId && !ws.elementEdit.active;
+        state.workflowPhase === 'preview' &&
+        !!state.activeChatId &&
+        !ws.elementEdit.active &&
+        !ws.pickerActive;
       if (inPreviewPhase && !ws.diff.loaded && !ws.diff.loading && !ws.diff.error) {
         void loadDiffPages(); // lazy-load the changed pages on entering PREVIEW
       }

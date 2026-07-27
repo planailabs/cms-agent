@@ -220,6 +220,52 @@ describe('preview + proxy', () => {
     }
   }, 300_000);
 
+  it('element picker works from the diff viewer (preview phase)', async () => {
+    const j = loadJourney();
+    if (!j?.chatB) {
+      recordAssert(SCENARIO, 'diff picker', true, 'n/a — e2e group not run');
+      return;
+    }
+    const browser = await launchBrowser();
+    try {
+      const s = await newSession(browser);
+      await bootWorkspace(s.page);
+      await openBranchPanel(s.page);
+      await s.page
+        .locator(`[data-action="ws-open-chat"][data-chat-id="${j.chatB}"]`)
+        .first()
+        .click();
+      // Diff toolbar renders once the changed pages load
+      const pick = s.page.locator('.ws-diff [data-action="ws-element-pick"]');
+      await pick.waitFor({ timeout: 60_000 });
+      const diffRoute = await s.page
+        .locator('.ws-diff-tab.is-active')
+        .first()
+        .getAttribute('data-route');
+      ok('picker button renders in the diff toolbar', true);
+
+      // Arming the picker swaps to the live preview on the reviewed page
+      await pick.click();
+      await s.page.locator('#preview-frame-region iframe').first().waitFor({ timeout: 30_000 });
+      const addr = await s.page.locator('.ws-address__input').first().inputValue();
+      const key = (r: string) => r.replace(/\/+$/, '') || '/';
+      ok(
+        'live preview opens on the reviewed diff route',
+        diffRoute !== null && key(addr) === key(diffRoute),
+        `addr=${addr} diff=${diffRoute}`,
+      );
+      const armed = s.page.locator('[data-action="ws-element-pick"].is-active');
+      ok('picker shows armed', (await armed.count()) > 0);
+
+      // Cancelling returns to the diff viewer
+      await armed.first().click();
+      await s.page.locator('.ws-diff').first().waitFor({ timeout: 30_000 });
+      ok('cancelling the pick returns to the diff viewer', true);
+    } finally {
+      await browser.close();
+    }
+  }, 300_000);
+
   it('archived chat can be deleted permanently (final destructive probe)', async () => {
     const journey = loadJourney();
     if (!journey) {
