@@ -153,3 +153,10 @@ UI changes: verify in a real browser against the prod build — see
 or update a checked-in Playwright UI regression that asserts computed
 visibility and user-facing behavior; a scratch browser script alone is not
 sufficient verification.
+
+Every new UI or functionality ships with testbench coverage: add or extend a
+scenario under `testbench/scenarios/` (group by surface — API probes, UI
+flows, e2e agent, admin, proxy, recovery, auth), record checks via
+`recordAssert`/`judgeStep`, and update `testbench/COVERAGE.md`. Scenarios are
+filename-ordered and data-dependent (03's journey feeds later files); run the
+touched group (`pnpm bench:<group>`) before landing.
