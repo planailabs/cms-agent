@@ -245,6 +245,17 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     void openFile(target.path, target.line);
   });
 
+  // Route-chip dropdown (diff viewer) closes on outside clicks.
+  document.addEventListener('click', (event) => {
+    const diff = store.state.workspace.diff;
+    if (!diff.routesOpen) return;
+    const menu = document.querySelector('[data-menu="diff-routes"]');
+    if (menu && !menu.contains(event.target as Node)) {
+      diff.routesOpen = false;
+      store.notify();
+    }
+  });
+
   // ESC closes whichever workspace modal is open (topmost first). The settings
   // overlay has its own Esc handler (chat/actions/overlay.ts).
   window.addEventListener('keydown', (event) => {
@@ -252,6 +263,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     const ws = store.state.workspace;
     const closers: Array<[boolean, () => void]> = [
       [ws.inputModal !== null, closeInputModal],
+      [ws.diff.routesOpen, () => { ws.diff.routesOpen = false; store.notify(); }],
       [ws.codeBrowser.open, closeCodeBrowser],
       [ws.git.open, closeGitModal],
       [ws.caps.open, closeCapsModal],
@@ -501,7 +513,17 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-diff-reload"]', () => void loadDiffPages());
   delegateEvent(app, 'click', '[data-action="ws-diff-select-route"]', (_e, target) => {
     const route = target.getAttribute('data-route');
+    const diff = store.state.workspace.diff;
+    if (diff.routesOpen) {
+      diff.routesOpen = false;
+      store.notify(); // close even when the route doesn't change
+    }
     if (route) navigateDiffTo(route);
+  });
+  delegateEvent(app, 'click', '[data-action="ws-diff-routes-toggle"]', () => {
+    const diff = store.state.workspace.diff;
+    diff.routesOpen = !diff.routesOpen;
+    store.notify();
   });
   delegateEvent(app, 'submit', '[data-action="ws-diff-address-form"]', (event, target) => {
     event.preventDefault();

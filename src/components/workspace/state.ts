@@ -238,6 +238,8 @@ export interface DiffState {
   pages: DiffPage[];
   unresolved: string[];
   selectedRoute: string | null;
+  /** Route-chip dropdown (changed pages) expanded. */
+  routesOpen: boolean;
   mode: DiffViewMode;
   /** Highlight mode: whether the diff overlay image is visible. */
   overlayVisible: boolean;
@@ -341,6 +343,7 @@ export const createInitialDiffState = (): DiffState => ({
   pages: [],
   unresolved: [],
   selectedRoute: null,
+  routesOpen: false,
   mode: 'side-by-side',
   overlayVisible: true,
   onionPercent: 50,

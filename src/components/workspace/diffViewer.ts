@@ -63,6 +63,14 @@ const MODES: Array<{ key: DiffViewMode; labelKey: string }> = [
   { key: 'onion', labelKey: 'workspace.diff.mode.onion' },
 ];
 
+/** Segmented-control glyphs (redesign) — labels stay as tooltips. */
+const MODE_ICONS: Record<DiffViewMode, string> = {
+  'side-by-side': `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.6" y="3" width="5.4" height="10" rx="1.2"/><rect x="9" y="3" width="5.4" height="10" rx="1.2"/></svg>`,
+  scroll: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.4" y="2" width="11.2" height="12" rx="1.6"/><path d="M8 5.2v5.6M6 8.8L8 10.8l2-2"/></svg>`,
+  highlight: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.6"/><rect x="4" y="5" width="8" height="2.4" rx="0.8" fill="currentColor" stroke="none" opacity="0.55"/><path d="M4 10.4h5.6"/></svg>`,
+  onion: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="6.2" cy="8" r="4.4"/><circle cx="9.8" cy="8" r="4.4"/></svg>`,
+};
+
 const shotUrl = (chatId: string, route: string, kind: 'before' | 'after' | 'diff' | 'before-aligned' | 'after-aligned'): string =>
   `/api/diff/${encodeURIComponent(chatId)}/shot?route=${encodeURIComponent(route)}&kind=${kind}`;
 
@@ -210,26 +218,42 @@ export const renderDiffViewer = (state: AppState): string => {
   }
 
   const route = resolveDiffRoute(diff) ?? diff.pages[0]!.route;
-  const tabs = diff.pages
-    .map(
-      (p) => `<button type="button"
-        class="ws-diff-tab ${routeKey(p.route) === routeKey(route) ? 'is-active' : ''}"
-        data-action="ws-diff-select-route" data-route="${escapeHtml(p.route)}"
-        title="${escapeHtml(p.file)}">${escapeHtml(p.route)}</button>`,
-    )
-    .join('');
+  const routeItem = (r: string, file: string | null, active: boolean): string => `<button type="button"
+      class="ws-route-pop__item ${active ? 'is-active' : ''}" role="menuitem"
+      data-action="ws-diff-select-route" data-route="${escapeHtml(r)}"
+      ${file ? `title="${escapeHtml(file)}"` : ''}>
+      <span class="ws-route-pop__route ws-mono">${escapeHtml(r)}</span>
+      ${file ? `<span class="ws-route-pop__file">${escapeHtml(file.split('/').pop() ?? '')}</span>` : ''}
+    </button>`;
   // Free browsing (links inside a pane or the address input) may leave the
-  // changed-pages list — show where the user is as a transient active tab.
-  const freeTab = diff.pages.some((p) => routeKey(p.route) === routeKey(route))
-    ? ''
-    : `<button type="button" class="ws-diff-tab is-active"
-        data-action="ws-diff-select-route" data-route="${escapeHtml(route)}"
-        title="${escapeHtml(t(locale, 'workspace.diff.browsedPage'))}">${escapeHtml(route)}</button>`;
+  // changed-pages list — show where the user is as a transient entry.
+  const onChangedPage = diff.pages.some((p) => routeKey(p.route) === routeKey(route));
+  const items =
+    (onChangedPage ? '' : routeItem(route, t(locale, 'workspace.diff.browsedPage'), true)) +
+    diff.pages
+      .map((p) => routeItem(p.route, p.file, routeKey(p.route) === routeKey(route)))
+      .join('');
+  const pop = diff.routesOpen
+    ? `<div class="ws-route-pop" role="menu">
+        <div class="ws-route-pop__head">${escapeHtml(t(locale, 'workspace.diff.routesTitle'))}</div>
+        ${items}
+      </div>`
+    : '';
+  const routeSelect = `<div class="ws-route-select" data-menu="diff-routes">
+      <button type="button" class="ws-route-chip" data-action="ws-diff-routes-toggle"
+        data-active-route="${escapeHtml(route)}" aria-haspopup="menu" aria-expanded="${diff.routesOpen}">
+        <span class="ws-route-chip__route ws-mono">${escapeHtml(route)}</span>
+        <span class="ws-switcher__caret">${diff.routesOpen ? '▴' : '▾'}</span>
+      </button>
+      ${pop}
+    </div>
+    <span class="ws-diff-count">${escapeHtml(t(locale, 'workspace.diff.changedCount', { count: String(diff.pages.length) }))}</span>`;
 
   const modes = MODES.map(
     (m) => `<button type="button"
-      class="ws-mini-button ${m.key === diff.mode ? 'is-active' : ''}"
-      data-action="ws-diff-mode" data-mode="${m.key}">${escapeHtml(t(locale, m.labelKey))}</button>`,
+      class="ws-seg__btn ${m.key === diff.mode ? 'is-active' : ''}"
+      data-action="ws-diff-mode" data-mode="${m.key}"
+      title="${escapeHtml(t(locale, m.labelKey))}" aria-label="${escapeHtml(t(locale, m.labelKey))}">${MODE_ICONS[m.key]}</button>`,
   ).join('');
   const contentMode = state.workspace.compareMode === 'content';
   const alignToggle = `<button type="button"
@@ -251,8 +275,7 @@ export const renderDiffViewer = (state: AppState): string => {
 
   return `<div class="ws-diff">
       ${header}
-      <div class="ws-diff-tabs">${tabs}${freeTab}</div>
-      <div class="ws-diff-modes">${modes}${address}<span class="ws-toolbar__spacer"></span>${alignToggle}</div>
+      <div class="ws-diff-controls">${routeSelect}<span class="ws-vr"></span><div class="ws-seg">${modes}</div>${address}<span class="ws-toolbar__spacer"></span>${alignToggle}</div>
       ${diff.unresolved.length ? unresolvedNote(diff.unresolved) : ''}
       <div class="ws-diff-body">${body}</div>
     </div>`;

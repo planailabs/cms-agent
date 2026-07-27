@@ -155,11 +155,11 @@ describe('preview + proxy', () => {
       await expect.poll(() => pathnameOf('ws-diff-before'), { timeout: 60_000 }).toBe('/about');
       ok('browsing one pane navigates the other to the same route', true);
       await expect
-        .poll(() => s.page.locator('.ws-diff-tab.is-active[data-route^="/about"]').count(), {
+        .poll(() => s.page.locator('.ws-route-chip[data-active-route^="/about"]').count(), {
           timeout: 10_000,
         })
         .toBeGreaterThan(0);
-      ok('browsed off-list route shows as the active tab', true);
+      ok('browsed off-list route shows in the route chip', true);
 
       // Address input free-browses both panes back to a changed page
       const addr = s.page.locator('[data-action="ws-diff-address-form"] .ws-address__input');
@@ -239,9 +239,9 @@ describe('preview + proxy', () => {
       const pick = s.page.locator('.ws-diff [data-action="ws-element-pick"]');
       await pick.waitFor({ timeout: 60_000 });
       const diffRoute = await s.page
-        .locator('.ws-diff-tab.is-active')
+        .locator('.ws-route-chip')
         .first()
-        .getAttribute('data-route');
+        .getAttribute('data-active-route');
       ok('picker button renders in the diff toolbar', true);
 
       // Arming the picker swaps to the live preview on the reviewed page
