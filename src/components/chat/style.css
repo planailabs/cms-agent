@@ -2019,6 +2019,14 @@ html.is-first-visit #app {
     min-width: 0;
   }
 
+  .ws-switcher__dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+
   .ws-switcher__branch {
     font-weight: 600;
     white-space: nowrap;
