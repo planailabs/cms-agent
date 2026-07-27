@@ -219,6 +219,9 @@ describe('ui flows', () => {
           'FAIL only for clearly English sentences/labels rendered by the app. Ignore user data: ' +
           'chat titles (e.g. "New chat", "Deployments" created earlier), branch names like "main", ' +
           'routes/URLs, and code. German anglicisms ("Browser", "Tab", "Element-Picker") count as German. ' +
+          'The large area on the left is a preview IFRAME showing the user\'s own WEBSITE — ' +
+          'everything inside it (e.g. nav links like "About us") is site content, not app chrome, ' +
+          'and is NEVER grounds to fail. ' +
           'These exact strings are NEVER grounds to fail, wherever they appear: "CMS Agent" ' +
           '(the product name), "New chat", "Deployments", "main".',
         artifacts: [{ kind: 'screenshot', label: 'german-ui', content: await shot(s.page) }],
