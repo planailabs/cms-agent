@@ -799,6 +799,14 @@ html.is-first-visit #app {
     white-space: nowrap;
   }
 
+  .composer-chip__err {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #e5484d;
+  }
+
   .composer-chip__remove {
     border: 0;
     background: transparent;

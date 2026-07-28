@@ -108,10 +108,15 @@ async function uploadOne(file: File, localId: string, chatId: string): Promise<v
     form.append('file', file);
     form.append('chatId', chatId);
     const res = await fetch('/api/uploads', { method: 'POST', body: form });
-    const data = (await res.json().catch(() => ({}))) as {
-      upload?: { id: string };
-      error?: string;
-    };
+    // Non-JSON bodies (e.g. Astro's CSRF middleware answers text/plain) still
+    // carry the reason — surface them instead of a generic failure.
+    const body = await res.text();
+    let data: { upload?: { id: string }; error?: string } = {};
+    try {
+      data = JSON.parse(body) as typeof data;
+    } catch {
+      /* non-JSON body — kept in `body` */
+    }
     const item = find();
     if (!item) return; // removed while uploading
     if (res.ok && data.upload) {
@@ -119,13 +124,17 @@ async function uploadOne(file: File, localId: string, chatId: string): Promise<v
       item.status = 'ready';
     } else {
       item.status = 'error';
-      item.error = data.error ?? 'Upload failed';
+      item.error =
+        data.error ??
+        (body.trim()
+          ? `${t(uiLocale(), 'chat.attach.failed')} (${res.status}): ${body.trim().slice(0, 200)}`
+          : `${t(uiLocale(), 'chat.attach.failed')} (${res.status})`);
     }
   } catch {
     const item = find();
     if (item) {
       item.status = 'error';
-      item.error = 'Upload failed';
+      item.error = t(uiLocale(), 'chat.attach.failed');
     }
   }
   syncChips();
@@ -145,6 +154,7 @@ export const renderAttachmentChipsHtml = (): string =>
       return `<span class="composer-chip${state}" title="${escapeHtml(a.error ?? a.filename)}">
           ${thumb}
           <span class="composer-chip__name">${escapeHtml(a.filename)}</span>
+          ${a.status === 'error' ? `<span class="composer-chip__err">${escapeHtml(a.error ?? t(uiLocale(), 'chat.attach.failed'))}</span>` : ''}
           <button type="button" class="composer-chip__remove" data-action="chat-attach-remove"
             data-local-id="${escapeHtml(a.localId)}"
             aria-label="${escapeHtml(t(uiLocale(), 'chat.attach.remove'))}">×</button>
