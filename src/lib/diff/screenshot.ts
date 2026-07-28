@@ -33,6 +33,7 @@ import {
 } from "@/lib/compare/inject";
 import { branchSha, defaultBranch } from "@/lib/git/engine";
 import { ensureInstance } from "@/lib/preview/manager";
+import type { PreviewDevice } from "@/lib/preview/devices";
 
 // Content-aligned shots: the same page re-rendered with filler <div>s injected
 // (a real reflow — no canvas slicing) so before/after content sits at the same
@@ -94,12 +95,16 @@ function shotFiles(
   };
 }
 
-/** Launch a browser and open one preview route; caller closes `launched`. */
+/** Launch a browser and open one preview route; caller closes `launched`.
+ *  With a device preset the page runs in a device-emulated context
+ *  (viewport + UA + scale factor + touch; isMobile is chromium/webkit-only —
+ *  playwright rejects it on firefox). */
 async function openPage(
   port: number,
   route: string,
   browser: BrowserName,
   viewport = VIEWPORT,
+  device?: PreviewDevice | null,
 ): Promise<{
   launched: import("playwright").Browser;
   page: import("playwright").Page;
@@ -112,7 +117,17 @@ async function openPage(
     browser === "chromium" ? { chromiumSandbox: false } : {},
   );
   try {
-    const page = await launched.newPage({ viewport });
+    const page = device
+      ? await (
+          await launched.newContext({
+            viewport: { width: device.width, height: device.height },
+            userAgent: device.userAgent,
+            deviceScaleFactor: device.deviceScaleFactor,
+            hasTouch: device.hasTouch,
+            ...(browser === "firefox" ? {} : { isMobile: device.isMobile }),
+          })
+        ).newPage()
+      : await launched.newPage({ viewport });
     // Connect on the host the dev server actually binds (HOST — ::1 in dev,
     // 127.0.0.1 in prod); v6 needs brackets.
     const host = env().HOST;
@@ -196,8 +211,9 @@ async function screenshot(
   route: string,
   outFile: string,
   browser: BrowserName = "chromium",
+  device?: PreviewDevice | null,
 ): Promise<MarkerDoc | null> {
-  const { launched, page } = await openPage(port, route, browser);
+  const { launched, page } = await openPage(port, route, browser, VIEWPORT, device);
   let markers: MarkerDoc | null = null;
   try {
     // Content markers next to the shot — also tags each element (data-cmsm) so
@@ -246,8 +262,9 @@ async function openAligned(
   route: string,
   browser: BrowserName,
   spacers: Spacer[],
+  device?: PreviewDevice | null,
 ): Promise<AlignedPage> {
-  const { launched, page } = await openPage(port, route, browser);
+  const { launched, page } = await openPage(port, route, browser, VIEWPORT, device);
   await page.evaluate(COLLECT_MARKERS_JS); // assign data-cmsm the plan indexes by
   if (spacers.length) {
     await page.evaluate(
@@ -271,14 +288,15 @@ async function alignedShots(
   markersB: MarkerDoc,
   browserA: BrowserName = "chromium",
   browserB: BrowserName = "chromium",
+  device?: PreviewDevice | null,
 ): Promise<void> {
   const plan = spacingPlan(markersA.m, markersA.h, markersB.m, markersB.h);
   let A: AlignedPage | undefined;
   let B: AlignedPage | undefined;
   try {
     let [openedA, openedB] = await Promise.all([
-      openAligned(aPort, route, browserA, plan.a),
-      openAligned(bPort, route, browserB, plan.b),
+      openAligned(aPort, route, browserA, plan.a, device),
+      openAligned(bPort, route, browserB, plan.b, device),
     ]);
     A = openedA;
     B = openedB;
@@ -338,8 +356,8 @@ async function alignedShots(
       A = undefined;
       B = undefined;
       [openedA, openedB] = await Promise.all([
-        openAligned(aPort, route, browserA, plan.a),
-        openAligned(bPort, route, browserB, plan.b),
+        openAligned(aPort, route, browserA, plan.a, device),
+        openAligned(bPort, route, browserB, plan.b, device),
       ]);
       A = openedA;
       B = openedB;
@@ -511,9 +529,10 @@ export async function diffBrowsers(
   route: string,
   browserA: BrowserName,
   browserB: BrowserName,
+  device?: PreviewDevice | null,
 ): Promise<DiffResult> {
   const ref = await branchSha(branch);
-  const key = cacheKey("browsers", route, ref, browserA, browserB);
+  const key = cacheKey("browsers", route, ref, browserA, browserB, device?.key ?? "");
   const dir = cacheDir(branch);
   fs.mkdirSync(dir, { recursive: true });
 
@@ -529,8 +548,8 @@ export async function diffBrowsers(
 
     const instance = await ensureInstance(branch);
     const [ma, mb] = await Promise.all([
-      screenshot(instance.port, route, files.before, browserA),
-      screenshot(instance.port, route, files.after, browserB),
+      screenshot(instance.port, route, files.before, browserA, device),
+      screenshot(instance.port, route, files.after, browserB, device),
     ]);
 
     const { changed, total } = pixelDiff(files.before, files.after, files.diff);
@@ -544,6 +563,7 @@ export async function diffBrowsers(
         mb,
         browserA,
         browserB,
+        device,
       );
     }
     const result: DiffResult = {

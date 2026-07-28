@@ -547,6 +547,11 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     const mode = target.getAttribute('data-mode');
     if (mode === 'highlight' || mode === 'onion' || mode === 'scroll') setBrowserCompareMode(mode);
   });
+  delegateEvent<Event>(app, 'change', '[data-action="ws-bc-device"]', (_e, target) => {
+    const value = (target as HTMLSelectElement).value;
+    store.state.workspace.browserCompare.device = deviceByKey(value)?.key ?? null;
+    store.notify();
+  });
   delegateEvent<Event>(app, 'change', '[data-action="ws-bc-browser"]', (_e, target) => {
     const which = target.getAttribute('data-which');
     const value = (target as HTMLSelectElement).value;

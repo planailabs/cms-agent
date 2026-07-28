@@ -9,6 +9,7 @@ export const prerender = false;
 import fs from 'node:fs';
 import type { APIRoute } from 'astro';
 import { diffBrowsers, asBrowser, type ShotKind } from '@/lib/diff/screenshot';
+import { getPreviewDevice } from '@/lib/preview/devices';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -32,8 +33,14 @@ export const GET: APIRoute = async ({ url, locals }) => {
   if (!['before', 'after', 'diff', 'before-aligned', 'after-aligned'].includes(kind))
     return json({ error: 'bad kind' }, 400);
 
+  // Optional device emulation (curated preset key); unknown keys are a 400,
+  // not a silent fall-through to the default viewport.
+  const deviceKey = url.searchParams.get('device') ?? '';
+  const device = deviceKey ? await getPreviewDevice(deviceKey) : null;
+  if (deviceKey && !device) return json({ error: 'unknown device' }, 400);
+
   try {
-    const result = await diffBrowsers(branch, route, a, b);
+    const result = await diffBrowsers(branch, route, a, b, device);
     if (url.searchParams.get('meta')) {
       return json({
         route: result.route,

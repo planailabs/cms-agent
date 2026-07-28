@@ -86,6 +86,8 @@ export interface BrowserCompareState {
   mode: 'highlight' | 'onion' | 'scroll';
   overlayVisible: boolean;
   onionPercent: number;
+  /** Device preset both engines emulate (null = default 1280×900 viewport). */
+  device: string | null;
 }
 
 /** A done chat in the archive view (GET /api/chats/archived). */
@@ -413,6 +415,7 @@ export const createInitialBrowserCompareState = (): BrowserCompareState => ({
   mode: 'highlight',
   overlayVisible: true,
   onionPercent: 50,
+  device: null,
 });
 
 /** Clears the chat-scoped parts of the workspace (call on chat switch). */

@@ -13,6 +13,7 @@ import type { BrowserName } from './state';
 import { previewBranchName } from './preview';
 import { registerWindow } from './window';
 import { MODE_ICONS } from './diffViewer';
+import { deviceByKey, previewDevices } from './devices';
 
 /** Browser engine names are brand names — not translated. */
 const BROWSERS: Array<{ key: BrowserName; label: string }> = [
@@ -27,9 +28,11 @@ const shotUrl = (
   a: BrowserName,
   b: BrowserName,
   kind: 'before' | 'after' | 'diff' | 'before-aligned' | 'after-aligned',
+  device: string | null = null,
 ): string =>
   `/api/preview/browsers-shot?branch=${encodeURIComponent(branch)}` +
-  `&route=${encodeURIComponent(route)}&a=${a}&b=${b}&kind=${kind}`;
+  `&route=${encodeURIComponent(route)}&a=${a}&b=${b}&kind=${kind}` +
+  (device ? `&device=${encodeURIComponent(device)}` : '');
 
 const renderShot = (src: string, alt: string, extraClass = '', extraStyle = '', attrs = ''): string =>
   `<div class="ws-shot ${extraClass}" ${extraStyle ? `style="${extraStyle}"` : ''} ${attrs}>
@@ -44,6 +47,21 @@ const browserSelect = (which: 'a' | 'b', selected: BrowserName): string =>
     ).join('')}
   </select>`;
 
+/** Device preset both engines emulate — device names are brand names. */
+const deviceSelect = (selected: string | null): string => {
+  const title = escapeHtml(t(uiLocale(), 'workspace.bc.deviceTitle'));
+  return `<select class="dash-input ws-bc-select ws-device-select" data-action="ws-bc-device"
+      title="${title}" aria-label="${title}">
+    <option value="">${escapeHtml(t(uiLocale(), 'workspace.bc.deviceDefault'))}</option>
+    ${previewDevices()
+      .map(
+        (d) =>
+          `<option value="${escapeHtml(d.key)}" ${d.key === selected ? 'selected' : ''}>${escapeHtml(d.key)}</option>`,
+      )
+      .join('')}
+  </select>`;
+};
+
 export const renderBrowserCompare = (state: AppState): string => {
   const locale = uiLocale();
   const bc = state.workspace.browserCompare;
@@ -55,13 +73,15 @@ export const renderBrowserCompare = (state: AppState): string => {
   const content = state.workspace.compareMode === 'content';
   const bk = content ? 'before-aligned' : 'before';
   const ak = content ? 'after-aligned' : 'after';
+  const shot = (kind: Parameters<typeof shotUrl>[4]): string =>
+    shotUrl(branch, route, bc.a, bc.b, kind, bc.device);
   const body =
     bc.mode === 'onion'
       ? `<div class="ws-onion">
           <div class="ws-onion__canvas">
-            ${renderShot(shotUrl(branch, route, bc.a, bc.b, bk), bc.a, 'ws-onion__before')}
+            ${renderShot(shot(bk), bc.a, 'ws-onion__before')}
             ${renderShot(
-              shotUrl(branch, route, bc.a, bc.b, ak),
+              shot(ak),
               bc.b,
               'ws-onion__after',
               `clip-path: inset(0 0 0 ${bc.onionPercent}%);`,
@@ -77,19 +97,19 @@ export const renderBrowserCompare = (state: AppState): string => {
         ? // Side-by-side scroll: ONE scroll container, both (aligned) shots as
           // columns — pre-aligned server-side, so they scroll in lockstep.
           `<div class="ws-bc-scroll">
-            ${renderShot(shotUrl(branch, route, bc.a, bc.b, bk), bc.a, 'ws-onion__before')}
-            ${renderShot(shotUrl(branch, route, bc.a, bc.b, ak), bc.b, 'ws-onion__after')}
+            ${renderShot(shot(bk), bc.a, 'ws-onion__before')}
+            ${renderShot(shot(ak), bc.b, 'ws-onion__after')}
             <span class="ws-onion__label ws-onion__label--left">${escapeHtml(bc.a)}</span>
             <span class="ws-onion__label ws-onion__label--right">${escapeHtml(bc.b)}</span>
           </div>`
         : `<div class="ws-diff-highlight__stack">
           ${renderShot(
-            shotUrl(branch, route, bc.a, bc.b, 'after'),
+            shot('after'),
             bc.b,
             '',
             '',
             bc.overlayVisible
-              ? `data-boxhl data-before="${escapeHtml(shotUrl(branch, route, bc.a, bc.b, 'before'))}" data-after="${escapeHtml(shotUrl(branch, route, bc.a, bc.b, 'after'))}"`
+              ? `data-boxhl data-before="${escapeHtml(shot('before'))}" data-after="${escapeHtml(shot('after'))}"`
               : '',
           )}
         </div>`;
@@ -105,6 +125,7 @@ export const renderBrowserCompare = (state: AppState): string => {
         <span class="ws-chrome-dots" aria-hidden="true"><i></i><i></i></span>
         <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.bc.heading'))}</span>
         ${browserSelect('a', bc.a)}<span class="ws-bc-vs">${escapeHtml(t(locale, 'workspace.bc.vs'))}</span>${browserSelect('b', bc.b)}
+        ${deviceSelect(bc.device)}
         <span class="ws-toolbar__route ws-mono" title="${escapeHtml(route)}">${escapeHtml(route)}</span>
         <span class="ws-toolbar__spacer"></span>
         <div class="ws-seg">
@@ -136,13 +157,15 @@ registerWindow({
     a: state.workspace.browserCompare.a,
     b: state.workspace.browserCompare.b,
     mode: state.workspace.browserCompare.mode,
+    device: state.workspace.browserCompare.device,
   }),
   restore: (data) => {
-    const d = data as { a?: string; b?: string; mode?: string };
+    const d = data as { a?: string; b?: string; mode?: string; device?: string | null };
     const bc = store.state.workspace.browserCompare;
     const names = ['chromium', 'firefox', 'webkit'];
     if (d.a && names.includes(d.a)) bc.a = d.a as BrowserName;
     if (d.b && names.includes(d.b)) bc.b = d.b as BrowserName;
     if (d.mode && ['highlight', 'onion', 'scroll'].includes(d.mode)) bc.mode = d.mode as typeof bc.mode;
+    bc.device = deviceByKey(d.device)?.key ?? null;
   },
 });
