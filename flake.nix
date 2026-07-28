@@ -141,7 +141,7 @@
             installPhase = ''
               runHook preInstall
               mkdir -p $out/lib
-              cp $(find target -type f -name 'libcms_agent_proxy.so' | head -n1) \
+              cp $(find target -type f \( -name 'libcms_agent_proxy.so' -o -name 'libcms_agent_proxy.dylib' \) | head -n1) \
                 $out/lib/cms-agent-proxy.node
               runHook postInstall
             '';
@@ -382,7 +382,7 @@
 
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
-          packages = with pkgs; [
+          packages = (with pkgs; [
             nodejs_26
             pnpm
             cargo
@@ -396,12 +396,11 @@
             postgresql
             overmind
             skopeo # for docker-push.sh (copy the image to the registry)
-            # Sandbox: jail + squashfs mount/extract (launch-with-sandbox.sh
-            # builds the env squashfs on the fly via nix in dev/test).
+            squashfsTools
+          ]) ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux (with pkgs; [
             bubblewrap
             squashfuse
-            squashfsTools
-          ];
+          ]);
 
           shellHook = ''
             # Prisma on NixOS: use nixpkgs engines, never download binaries.

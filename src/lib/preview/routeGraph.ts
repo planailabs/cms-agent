@@ -21,8 +21,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 ${originalConfig ? `import originalConfig from ${JSON.stringify(`../${originalConfig}`)};` : ''}
 
-const root = '/work';
-const graphFile = '/work/.astro/${GRAPH_NAME}';
+const root = process.cwd();
+const graphFile = path.join(root, '.astro', '${GRAPH_NAME}');
 let resolvedRoutes = [];
 let server;
 let timer;

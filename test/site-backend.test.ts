@@ -95,7 +95,9 @@ describe('astro backend', () => {
       '--host', '::1',
     ]);
     expect(cmd.extraEnv).toEqual({ __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: 'branch.cms.example.com' });
-    expect(fs.existsSync(path.join(worktree, '.astro', 'cms-preview.config.mjs'))).toBe(true);
+    const graphConfig = path.join(worktree, '.astro', 'cms-preview.config.mjs');
+    expect(fs.existsSync(graphConfig)).toBe(true);
+    expect(fs.readFileSync(graphConfig, 'utf8')).toContain('const root = process.cwd();');
     expect(fs.existsSync(path.join(worktree, '.astro', 'dev.json'))).toBe(false);
   });
 
