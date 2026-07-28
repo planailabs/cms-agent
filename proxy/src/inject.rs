@@ -12,9 +12,25 @@ pub const AGENT_CMS_PATH: &str = "/injected-cms-agent.js";
 
 /// The tag injected into preview HTML. `cms_origin` (scheme://base_domain)
 /// tells the bootstrap which parent origin to trust — it can no longer derive
-/// that from its own src, which is now the preview origin.
-pub fn agent_script_tag(cms_origin: &str) -> String {
-    format!(r#"<script src="{AGENT_PROXY_PATH}" data-cms-origin="{cms_origin}" defer></script>"#)
+/// that from its own src, which is now the preview origin. `ua_override`
+/// (device preview) rides along so the bootstrap can mirror the overridden
+/// request User-Agent onto `navigator.userAgent`.
+pub fn agent_script_tag(cms_origin: &str, ua_override: Option<&str>) -> String {
+    let ua_attr = ua_override
+        .map(|ua| format!(r#" data-cms-ua="{}""#, escape_attr(ua)))
+        .unwrap_or_default();
+    format!(
+        r#"<script src="{AGENT_PROXY_PATH}" data-cms-origin="{cms_origin}"{ua_attr} defer></script>"#
+    )
+}
+
+/// Minimal HTML attribute escaping (the UA is already printable ASCII).
+fn escape_attr(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// Returns the rewritten HTML, or None when there is no injection point
@@ -43,7 +59,7 @@ mod tests {
     use super::*;
 
     fn tag() -> String {
-        agent_script_tag("http://cms.example.com")
+        agent_script_tag("http://cms.example.com", None)
     }
 
     #[test]
@@ -53,6 +69,13 @@ mod tests {
             "<script src=\"/__cms/injected-cms-agent.js\" \
              data-cms-origin=\"http://cms.example.com\" defer></script>"
         );
+    }
+
+    #[test]
+    fn ua_override_rides_as_escaped_attribute() {
+        let t = agent_script_tag("http://cms.example.com", Some(r#"Agent "X" <1&2>"#));
+        assert!(t.contains(r#" data-cms-ua="Agent &quot;X&quot; &lt;1&amp;2&gt;""#));
+        assert!(!tag().contains("data-cms-ua"));
     }
 
     #[test]

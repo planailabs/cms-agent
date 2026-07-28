@@ -22,6 +22,23 @@ import type { AgentApi } from './protocol';
 export function cmsAgentBootstrap(): void {
   'use strict';
 
+  // Device preview: when the proxy applies a per-branch User-Agent override
+  // (workspace device selector) it tags this script with the same UA — mirror
+  // it on navigator so the site's client-side device detection agrees with
+  // the request headers. Runs even unframed: the headers were overridden
+  // regardless.
+  try {
+    const ua = (document.currentScript as HTMLScriptElement | null)?.dataset.cmsUa;
+    if (ua) {
+      Object.defineProperty(Navigator.prototype, 'userAgent', {
+        get: () => ua,
+        configurable: true,
+      });
+    }
+  } catch {
+    /* never break the host page */
+  }
+
   try {
     if (window.parent === window) return; // not framed → dormant
     if ((window as { __cmsAgent?: boolean }).__cmsAgent) return; // double-inject guard

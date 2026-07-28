@@ -20,8 +20,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use pingora::http::ResponseHeader;
 use pingora::prelude::*;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 
 use napi_derive::napi;
@@ -96,6 +97,61 @@ struct CmsProxy {
     routes: Arc<RoutesStore>,
     sessions: Arc<SessionStore>,
     access: Arc<AccessTracker>,
+    /// Per-branch User-Agent override (workspace device preview). Set/cleared
+    /// by the `__cms_ua` query param on preview requests; applied to every
+    /// upstream request for that branch so in-site navigation keeps the
+    /// device UA. ponytail: last writer wins per branch — per-session
+    /// overrides if concurrent editors ever need different devices.
+    ua_overrides: RwLock<HashMap<String, String>>,
+}
+
+/// Query param carrying the preview UA override (`__cms_ua=<enc>` sets,
+/// `__cms_ua=` clears). Mirrored in src/components/workspace/devices.ts.
+const UA_PARAM: &str = "__cms_ua";
+const UA_MAX_LEN: usize = 512;
+
+/// UA-override update requested by a query string:
+/// `None` = param absent (or undecodable/unsafe — ignored),
+/// `Some(None)` = clear, `Some(Some(ua))` = set.
+fn ua_override_from_query(query: &str) -> Option<Option<String>> {
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        if key != UA_PARAM {
+            continue;
+        }
+        if value.is_empty() {
+            return Some(None);
+        }
+        let Ok(decoded) = urlencoding::decode(value) else {
+            return None;
+        };
+        let ua = decoded.into_owned();
+        // Header-safe: printable ASCII only, bounded length.
+        if ua.len() <= UA_MAX_LEN && ua.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
+            return Some(Some(ua));
+        }
+        return None;
+    }
+    None
+}
+
+/// path?query with the `__cms_ua` pair removed — `None` when the param is
+/// absent (leave the URI untouched). The previewed site never sees it.
+fn strip_ua_param(path_and_query: &str) -> Option<String> {
+    let (path, query) = path_and_query.split_once('?')?;
+    let is_ua = |pair: &&str| {
+        let key = pair.split_once('=').map_or(*pair, |(k, _)| k);
+        key == UA_PARAM
+    };
+    if !query.split('&').any(|p| is_ua(&p)) {
+        return None;
+    }
+    let rest: Vec<&str> = query.split('&').filter(|p| !is_ua(p)).collect();
+    Some(if rest.is_empty() {
+        path.to_string()
+    } else {
+        format!("{path}?{}", rest.join("&"))
+    })
 }
 
 #[derive(Default)]
@@ -111,6 +167,9 @@ struct RequestCtx {
     /// True while an HTML response body is being buffered for injection.
     buffering: bool,
     buffer: Vec<u8>,
+    /// Active UA override for this preview request (device preview) — carried
+    /// into the injected script tag so the page can mirror it on navigator.
+    ua_override: Option<String>,
 }
 
 impl CmsProxy {
@@ -214,6 +273,42 @@ impl ProxyHttp for CmsProxy {
                     session.req_header_mut().set_uri(uri);
                     ctx.upstream = Some(routes.cms.clone());
                 } else {
+                    // Device preview: the `__cms_ua` query param updates the
+                    // per-branch UA override; the param itself never reaches
+                    // the previewed site.
+                    if let Some(update) = session
+                        .req_header()
+                        .uri
+                        .query()
+                        .and_then(ua_override_from_query)
+                    {
+                        let mut map = self.ua_overrides.write().unwrap();
+                        match update {
+                            Some(ua) => {
+                                map.insert(branch.clone(), ua);
+                            }
+                            None => {
+                                map.remove(&branch);
+                            }
+                        }
+                    }
+                    let stripped = session
+                        .req_header()
+                        .uri
+                        .path_and_query()
+                        .and_then(|pq| strip_ua_param(pq.as_str()));
+                    if let Some(pq) = stripped {
+                        if let Ok(uri) = pq.parse::<http::Uri>() {
+                            session.req_header_mut().set_uri(uri);
+                        }
+                    }
+                    let ua = self.ua_overrides.read().unwrap().get(&branch).cloned();
+                    if let Some(ua) = &ua {
+                        session
+                            .req_header_mut()
+                            .insert_header(http::header::USER_AGENT, ua.as_str())?;
+                    }
+                    ctx.ua_override = ua;
                     ctx.upstream = Some(upstream);
                     ctx.is_preview = true;
                 }
@@ -359,7 +454,10 @@ impl ProxyHttp for CmsProxy {
         }
         ctx.buffering = false;
         let html = std::mem::take(&mut ctx.buffer);
-        let tag = inject::agent_script_tag(&self.cms_origin_for(ctx.host_port.as_deref()));
+        let tag = inject::agent_script_tag(
+            &self.cms_origin_for(ctx.host_port.as_deref()),
+            ctx.ua_override.as_deref(),
+        );
         let out = inject::inject_overlay(&html, &tag).unwrap_or(html);
         *body = Some(Bytes::from(out));
         Ok(None)
@@ -385,6 +483,7 @@ fn run_proxy(cfg: Config, state: Arc<ProxyState>) {
         routes: state.routes.clone(),
         sessions: state.sessions.clone(),
         access,
+        ua_overrides: RwLock::new(HashMap::new()),
     };
 
     // Short, explicit shutdown timings. Pingora's SIGTERM default sleeps a
@@ -463,6 +562,42 @@ mod native_tests {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         assert!(ensure_listen_available(&address.to_string()).is_err());
+    }
+
+    #[test]
+    fn ua_override_query_sets_clears_and_ignores() {
+        use super::ua_override_from_query;
+        assert_eq!(
+            ua_override_from_query("__cms_ua=Mozilla%2F5.0%20(iPhone)"),
+            Some(Some("Mozilla/5.0 (iPhone)".to_string()))
+        );
+        // empty value = clear
+        assert_eq!(ua_override_from_query("__cms_ua="), Some(None));
+        assert_eq!(ua_override_from_query("x=1&__cms_ua=&y=2"), Some(None));
+        // absent
+        assert_eq!(ua_override_from_query("x=1&y=2"), None);
+        assert_eq!(ua_override_from_query(""), None);
+        // unsafe values are ignored, not applied
+        assert_eq!(ua_override_from_query("__cms_ua=bad%00byte"), None);
+        assert_eq!(ua_override_from_query("__cms_ua=line%0Abreak"), None);
+        let long = format!("__cms_ua={}", "a".repeat(600));
+        assert_eq!(ua_override_from_query(&long), None);
+    }
+
+    #[test]
+    fn ua_param_is_stripped_from_the_upstream_uri() {
+        use super::strip_ua_param;
+        assert_eq!(
+            strip_ua_param("/about?__cms_ua=Mozilla%2F5.0"),
+            Some("/about".to_string())
+        );
+        assert_eq!(
+            strip_ua_param("/p?x=1&__cms_ua=ua&y=2"),
+            Some("/p?x=1&y=2".to_string())
+        );
+        assert_eq!(strip_ua_param("/p?__cms_ua="), Some("/p".to_string()));
+        assert_eq!(strip_ua_param("/p?x=1"), None);
+        assert_eq!(strip_ua_param("/p"), None);
     }
 
     #[test]
