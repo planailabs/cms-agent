@@ -230,6 +230,15 @@ async function evictForCapacity(): Promise<void> {
   }
 }
 
+/** True while a start is in flight or a live child is registered — callers
+ *  that periodically re-warm must not restart these (killing a slow start
+ *  makes it start over, and npm install is not cheap). */
+export function isInstanceActive(branch: string): boolean {
+  if (state.starting.has(branch)) return true;
+  const existing = state.instances.get(branch);
+  return !!existing && existing.child.exitCode === null;
+}
+
 /** Keep this branch's dev server running (see prewarm.warmPrimaryBranches). */
 export function pinBranch(branch: string): void {
   state.pinned.add(branch);

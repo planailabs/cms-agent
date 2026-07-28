@@ -21,6 +21,7 @@ vi.mock('@/lib/git/engine', () => ({
 }));
 vi.mock('@/lib/preview/manager', () => ({
   ensureInstance: mocks.ensureInstance,
+  isInstanceActive: () => false,
   pinBranch: mocks.pinBranch,
   unpinBranch: mocks.unpinBranch,
   pinnedBranches: () => mocks.pinned,

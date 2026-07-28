@@ -87,37 +87,54 @@ describe('ui flows', () => {
     const base = benchRun().baseUrl;
     const list = async () =>
       ((await (await s.context.request.get(`${base}/api/branches`)).json()) as {
-        branches: { id: string; chats: { id: string }[] }[];
+        branches: { id: string; chats: { id: string; kind?: string; workBranch: string }[] }[];
       }).branches;
+    // Must be a WORKFLOW chat: the sidebar also lists the deployments system
+    // chat, which has no worktree (and so no code browser or preview).
+    const workflowChat = (bs: Awaited<ReturnType<typeof list>>) =>
+      bs.flatMap((b) => b.chats).find((c) => (c.kind ?? 'workflow') === 'workflow');
     let branches = await list();
-    if (!branches.some((b) => b.chats.length > 0)) {
+    if (!workflowChat(branches)) {
       await s.context.request.post(`${base}/api/chats`, {
         data: { branchId: branches[0].id },
       });
       branches = await list();
     }
+    const chatId = workflowChat(branches)!.id;
     await bootWorkspace(s.page); // reload so the sidebar sees the new chat
     await openBranchPanel(s.page);
     // Opening a chat collapses the panel itself — toggling here would
     // re-open it and its overlay would eat every later click.
-    await dataAction(s.page, 'ws-open-chat').first().click();
+    await s.page.locator(`[data-action="ws-open-chat"][data-chat-id="${chatId}"]`).first().click();
     await expect
       .poll(() => new URL(s.page.url()).pathname, { timeout: 15_000 })
-      .toMatch(/^\/chat\//);
+      .toBe(`/chat/${chatId}`);
     ok('an existing chat opens from the sidebar', true);
     ok('opening a chat collapses the branch panel', (await s.page.locator('.ws-branch-panel').count()) === 0);
 
-    // Everything below reads the chat's worktree (code browser, preview,
-    // device UA): wait for it instead of racing the first cold checkout.
-    const chatId = new URL(s.page.url()).pathname.split('/').pop()!;
-    await expect
-      .poll(
-        async () =>
-          (await s.context.request.get(`${base}/api/files/${chatId}?path=.`)).status(),
-        { timeout: 180_000, intervals: [2_000] },
-      )
-      .toBe(200);
-    ok('the chat worktree is ready for the flows below', true);
+    // Everything below reads the chat's worktree (code browser) and its live
+    // preview (device UA, tabs). Wait for both instead of racing a cold
+    // checkout + npm install: the boot page has neither the site's markup nor
+    // the injected agent, so those tests would read a spinner.
+    const workBranch = workflowChat(branches)!.workBranch;
+    let last = '';
+    const ready = async (): Promise<boolean> => {
+      const files = await s.context.request.get(`${base}/api/files/${chatId}?path=.`);
+      const previews = await s.context.request.get(`${base}/api/admin/previews`);
+      const { instances } = (await previews.json()) as {
+        instances: Array<{ branch: string; status: string }>;
+      };
+      const preview = instances.find((i) => i.branch === workBranch);
+      last = `files=${files.status()} preview=${preview?.status ?? 'none'}`;
+      return files.status() === 200 && preview?.status === 'ready';
+    };
+    const deadline = Date.now() + 300_000;
+    let chatReady = await ready();
+    while (!chatReady && Date.now() < deadline) {
+      await s.page.waitForTimeout(3_000);
+      chatReady = await ready();
+    }
+    ok('worktree and preview are ready for the flows below', chatReady, `${workBranch} ${last}`);
   });
 
   it('redesign chrome: icon rail tools and compact header', async () => {

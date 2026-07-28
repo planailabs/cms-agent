@@ -86,7 +86,8 @@ export async function claimWorkBranch(targetBranch: string): Promise<string> {
 export async function warmPrimaryBranches(): Promise<void> {
   const { prisma } = await import('@/lib/db');
   const { defaultBranch } = await import('@/lib/git/engine');
-  const { ensureInstance, pinBranch, pinnedBranches, unpinBranch } = await import('./manager');
+  const { ensureInstance, isInstanceActive, pinBranch, pinnedBranches, unpinBranch } =
+    await import('./manager');
 
   const rows = await prisma.branch.findMany({ select: { name: true } });
   const primary = new Set(rows.map((r) => r.name));
@@ -97,9 +98,14 @@ export async function warmPrimaryBranches(): Promise<void> {
   }
   for (const branch of primary) {
     pinBranch(branch);
-    void ensureInstance(branch).catch((err) =>
-      console.warn(`[prewarm] keeping ${branch} warm failed:`, err),
-    );
+    // One at a time: concurrent `npm install`s starve each other, and a start
+    // that misses its HTTP deadline gets restarted from scratch.
+    if (isInstanceActive(branch)) continue;
+    try {
+      await ensureInstance(branch);
+    } catch (err) {
+      console.warn(`[prewarm] keeping ${branch} warm failed:`, err);
+    }
   }
 }
 
@@ -109,20 +115,27 @@ export async function warmPrimaryBranches(): Promise<void> {
  */
 export function startPrimaryBranchWarmer(): void {
   if (state.primaryTimer) return;
-  const tick = () => {
-    void warmPrimaryBranches().catch((err) =>
-      console.warn('[prewarm] primary-branch sweep failed:', err),
-    );
-    // Prime the spare too, so the FIRST chat after a restart is fast as well
-    // — no-ops once one is ready or warming.
-    ensureSpareBranch();
+  let ticking = false;
+  const tick = async (): Promise<void> => {
+    if (ticking) return; // a slow sweep must not stack up behind itself
+    ticking = true;
+    try {
+      await warmPrimaryBranches();
+      // The spare comes last and only once the branches users look at are
+      // up — it is the least urgent of the three installs.
+      ensureSpareBranch();
+    } catch (err) {
+      console.warn('[prewarm] primary-branch sweep failed:', err);
+    } finally {
+      ticking = false;
+    }
   };
-  state.primaryTimer = setInterval(tick, 60_000);
+  state.primaryTimer = setInterval(() => void tick(), 60_000);
   // Don't hold the process open for the warmer.
   if (typeof state.primaryTimer === 'object' && 'unref' in state.primaryTimer) {
     state.primaryTimer.unref();
   }
-  tick();
+  void tick();
 }
 
 /** Test seam: forget the spare without touching git. */
