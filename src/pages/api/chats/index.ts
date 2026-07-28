@@ -1,11 +1,14 @@
 /**
  * POST /api/chats — create a chat on a branch (starts in the PLAN phase).
+ * The client creates chats late (on the first message), so this is on the
+ * user's critical path: adopt a pre-warmed work branch when one is ready and
+ * get its preview server running before the browser asks for it.
  */
 export const prerender = false;
 
-import { randomBytes } from 'node:crypto';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
+import { claimWorkBranch } from '@/lib/preview/prewarm';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -28,18 +31,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
       branchId: branch.id,
       // The chat's own work branch: worktree + preview subdomain, merged
       // into the target branch on publish. DNS-safe label.
-      workBranch: `c-${randomBytes(6).toString('hex')}`,
+      workBranch: await claimWorkBranch(branch.name),
       title: body.title?.trim() || 'New chat',
       createdById: user.id,
     },
   });
 
-  // Index the branch into the codebase graph memory (fire-and-forget — the
-  // agent's graph tools work as soon as it finishes).
+  // Index the branch into the codebase graph memory and get its preview
+  // server up (fire-and-forget — both are ready before the user's first
+  // turn finishes; a claimed spare is already running, so ensureInstance
+  // returns immediately).
   void (async () => {
     const { ensureWorktree } = await import('@/lib/git/engine');
     const { indexChatWorktree } = await import('@/lib/agent/mcp/codebaseMemory');
+    const { ensureInstance } = await import('@/lib/preview/manager');
     const worktree = await ensureWorktree(chat.workBranch, branch.name);
+    void ensureInstance(chat.workBranch).catch((err) =>
+      console.warn('[preview] chat-create warm-up failed:', err),
+    );
     await indexChatWorktree(chat.id, worktree);
   })().catch((err) => console.warn('[codebase-memory] chat-create index failed:', err));
 

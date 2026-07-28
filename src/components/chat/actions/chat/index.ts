@@ -6,7 +6,7 @@
 import { store } from '../../app/store';
 import type { Branch, ChatSummary } from '../../app/state';
 import { disconnectEvents } from './sse';
-import { restoreAIChatSession } from './session';
+import { initAIChat, restoreAIChatSession } from './session';
 import { resetWorkspaceChatState } from '../../../workspace/state';
 import { loadChatTabs } from '../../../workspace/tabsSync';
 
@@ -144,8 +144,27 @@ export const switchChat = (chatId: string): void => {
 };
 
 /**
- * Ensures there is an active chat to talk to: loads branches, and creates
- * a default branch/chat if the workspace is empty, then opens the chat.
+ * Draft chat: an empty conversation on a branch with no Chat row behind it
+ * yet. The preview falls back to the target branch (nothing to build), and
+ * the row is created by the first message — see sendChatMessage.
+ */
+export const startDraftChat = (branchId: string): void => {
+  const state = store.state;
+  disconnectEvents();
+  state.chat = null;
+  state.activeChatId = null;
+  state.activeBranchId = branchId;
+  state.activeChatKind = 'workflow';
+  state.activeChatTitle = null;
+  state.activeChatArchived = false;
+  state.workflowPhase = 'plan';
+  resetWorkspaceChatState(state.workspace);
+  initAIChat([]); // notifies; the composer needs its container
+};
+
+/**
+ * Ensures there is somewhere to talk: loads branches, creates the default
+ * branch if the workspace is empty, then opens a draft chat on it.
  */
 export const ensureActiveChat = async (): Promise<void> => {
   await loadBranches();
@@ -156,12 +175,5 @@ export const ensureActiveChat = async (): Promise<void> => {
     branch = await createBranch('main');
     if (!branch) return;
   }
-
-  let chat: ChatSummary | null = branch.chats[0] ?? null;
-  if (!chat) {
-    chat = await createChat(branch.id);
-    if (!chat) return;
-  }
-
-  switchChat(chat.id);
+  startDraftChat(branch.id);
 };

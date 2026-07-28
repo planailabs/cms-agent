@@ -5,9 +5,37 @@
 
 import { store } from '../../app/store';
 import { locales } from '../../content';
+import { t, uiLocale } from '@/lib/i18n';
 import { cacheAIChatMessages, type AttachmentDisplay } from './cache';
 import { connectEvents, postMessage } from './sse';
 import type { PageContext } from '../../../workspace/state';
+
+/**
+ * Turn the open draft into a real chat: create the row (the server adopts a
+ * pre-warmed work branch and starts its preview), then point the session at
+ * it WITHOUT switchChat — that would drop the message being sent.
+ */
+const materializeDraftChat = async (): Promise<boolean> => {
+  const state = store.state;
+  if (!state.activeBranchId) return false;
+  const { createChat } = await import('./index');
+  const chat = await createChat(state.activeBranchId);
+  if (!chat) {
+    const mc = state.chat?.aiChat;
+    if (mc) {
+      mc.error = t(uiLocale(), 'workspace.error.chatCreateFailed');
+      mc.phase = 'error';
+      store.notify();
+    }
+    return false;
+  }
+  state.activeChatId = chat.id;
+  state.activeChatKind = chat.kind ?? 'workflow';
+  state.activeChatTitle = chat.title;
+  state.workflowPhase = chat.workflowPhase ?? 'plan';
+  store.notify(); // mirrors the URL to /chat/<id>
+  return true;
+};
 
 /**
  * Detaches the pending workspace context chip (if any) so its anchor is
@@ -99,12 +127,18 @@ export const sendChatMessage = async (
 ) => {
   const state = store.state;
   const mc = state.chat?.aiChat;
-  if (!mc || !state.activeChatId) return;
+  if (!mc) return;
 
   // If there's an active question, route as answer (carrying attachments)
   if (mc.phase === 'question') {
     answerChatQuestion(message, attachments);
     return;
+  }
+
+  // Draft chat (new-chat / fresh window): the Chat row is created by the
+  // first message, which also starts its worktree and preview server.
+  if (!state.activeChatId) {
+    if (!(await materializeDraftChat())) return;
   }
 
   // Attach the pending context chip (selection/element from the preview)

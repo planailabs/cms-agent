@@ -10,7 +10,12 @@ import { store } from '../chat/app/store';
 import { t, uiLocale } from '@/lib/i18n';
 import { annotationCount, type EditAnnotations, type EditTool } from '@/injected/annotate';
 import { transition } from '../chat/actions/chat/stateMachine';
-import { createChat, switchChat, createBranch, loadBranches } from '../chat/actions/chat';
+import {
+  createBranch,
+  loadBranches,
+  startDraftChat,
+  switchChat,
+} from '../chat/actions/chat';
 import { postEditStart, postEditStop, postEditTool } from './previewAgent';
 import { publishCardReducer } from './publishCard';
 import { loadPreviewRoute, scheduleTabsSave } from './tabsSync';
@@ -204,15 +209,14 @@ export const newBranchAction = async (rawName: string): Promise<void> => {
     showChatError(t(uiLocale(), 'workspace.error.branchCreateFailed', { name }));
     return;
   }
-  const chat = await createChat(branch.id);
-  if (chat) switchChat(chat.id);
+  startDraftChat(branch.id);
 };
 
-/** "New chat" button on a branch row. */
-export const newChatAction = async (branchId: string): Promise<void> => {
-  const chat = await createChat(branchId);
-  if (chat) switchChat(chat.id);
-  else showChatError(t(uiLocale(), 'workspace.error.chatCreateFailed'));
+/** "New chat" button on a branch row — opens a draft. Nothing is created
+ *  server-side until the first message; until then the preview shows the
+ *  branch itself. */
+export const newChatAction = (branchId: string): void => {
+  startDraftChat(branchId);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
