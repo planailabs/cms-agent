@@ -106,7 +106,7 @@ export const requestChangesAction = async (feedback: string): Promise<void> => {
   if (res.ok) enterWaiting();
 };
 
-/** finish_execution card → Create preview. */
+/** finish_execution card → settle the branch for review (POST /finalize). */
 export const createPreviewAction = async (): Promise<void> => {
   const chatId = store.state.activeChatId;
   if (!chatId) return;

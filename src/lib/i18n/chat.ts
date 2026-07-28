@@ -36,7 +36,7 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.plan.requestChanges': 'Request changes',
     // Execution cards
     'chat.execution.finishedTitle': 'Implementation finished',
-    'chat.execution.createPreview': 'Create preview',
+    'chat.execution.createPreview': 'Wrap up for review',
     'chat.execution.notYet': 'Not yet — keep chatting',
     'chat.execution.revertedTitle': '{sha} reverted',
     'chat.execution.undoneBy': 'Undone by {by} (revert {sha})',
@@ -115,7 +115,7 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.plan.requestChanges': 'Änderungen anfordern',
     // Execution cards
     'chat.execution.finishedTitle': 'Umsetzung abgeschlossen',
-    'chat.execution.createPreview': 'Vorschau erstellen',
+    'chat.execution.createPreview': 'Zur Prüfung abschließen',
     'chat.execution.notYet': 'Noch nicht — weiter chatten',
     'chat.execution.revertedTitle': '{sha} rückgängig gemacht',
     'chat.execution.undoneBy': 'Rückgängig gemacht von {by} (Revert {sha})',
