@@ -370,6 +370,22 @@ describe('ui flows', () => {
 
     await openRail('ws-caps-open');
     ok('capabilities window opens', true);
+    const skillTitles = await s.page.locator('.ws-caps__row .ws-git__message').allTextContents();
+    ok(
+      'Ponytail plugin origin sits beside the skill title',
+      skillTitles.includes('ponytail via ponytail plugin'),
+    );
+    ok(
+      'plugin origin combines with other plugin names beside the title',
+      skillTitles.includes('codebase-memory via codebase-memory plugin'),
+    );
+    const originMatchesDescription = await s.page.evaluate(() => {
+      const badges = [...document.querySelectorAll<HTMLElement>('.ws-caps__badge')];
+      const badge = badges.find((element) => element.textContent?.trim() === 'via ponytail plugin');
+      const description = badge?.closest('.ws-caps__row')?.querySelector<HTMLElement>('.ws-git__meta');
+      return Boolean(badge && description && getComputedStyle(badge).color === getComputedStyle(description).color);
+    });
+    ok('plugin origin uses the description text color', originMatchesDescription);
     await dataAction(s.page, 'ws-caps-close').first().click();
 
     await openRail('ws-archive-open');

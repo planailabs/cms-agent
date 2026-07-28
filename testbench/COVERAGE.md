@@ -73,7 +73,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Chat visibility setting (restricted hides foreign chats, admin bypass) | 07 | ✅ |
 | Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
 | Language switch en↔de (judged screenshot) | 02 | ✅ |
-| Commits / capabilities / archive / sessions windows (rail-opened, stage-swapped, chat stays, close returns to preview) | 02 | ✅ |
+| Commits / capabilities (including dynamic `via <name> plugin` origins beside skill titles) / archive / sessions windows | 02 | ✅ |
 | Workspace URL routing (/chat/<id>?window=…: mirror, browser back, deep-link boot) | 02 | ✅ |
 | Preview device presets (viewport-sized iframe + proxy UA override + navigator patch) | 02 | ✅ |
 | Compare window: eye button opens/closes it, flyout lists the four views, outside click closes the list only | 02 | ✅ |

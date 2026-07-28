@@ -63,15 +63,15 @@ const renderSkillRow = (s: CapabilitySkillRow, locale: string): string => {
       : s.source === 'admin'
         ? t(locale, 'workspace.caps.fromAdmin')
         : t(locale, 'workspace.caps.fromPlugin', { plugin: s.plugin });
-  const badge = s.shadowed
+  const shadowedBadge = s.shadowed
     ? `<span class="ws-caps__badge is-off">${escapeHtml(t(locale, 'workspace.caps.shadowed'))}</span>`
     : '';
+  const originBadge = `<span class="ws-caps__badge">${escapeHtml(origin)}</span>`;
   return `<div class="ws-git__row ws-caps__row ${s.shadowed ? 'is-target' : ''}">
       <span class="ws-git__info">
-        <span class="ws-git__message">${escapeHtml(s.name)} ${badge}</span>
+        <span class="ws-git__message">${escapeHtml(s.name)} ${originBadge}${shadowedBadge}</span>
         <span class="ws-git__meta">${escapeHtml(s.description)}</span>
       </span>
-      <span class="ws-git__sha">${escapeHtml(origin)}</span>
     </div>`;
 };
 
