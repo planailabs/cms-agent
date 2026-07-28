@@ -21,6 +21,7 @@ import {
 } from './messageUtils';
 import type { PersistenceAdapter } from './persistence';
 import { recordTokenUsage } from './tokenBudget';
+import { reasoningEffortParam, withEffortFallback } from './reasoningEffort';
 import { buildSystemPrompt, type PromptInput } from './prompt';
 import { createMcpBridge } from './mcp';
 import { dirStatus } from '@/lib/git/engine';
@@ -207,11 +208,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       let compacted: OpenAI.Chat.Completions.ChatCompletion;
       for (;;) {
         try {
-          compacted = await openai.chat.completions.create({
+          compacted = await withEffortFallback(() => openai.chat.completions.create({
             model: e.OPENAI_MODEL,
-            ...(e.OPENAI_REASONING_EFFORT !== 'none'
-              ? { reasoning_effort: e.OPENAI_REASONING_EFFORT }
-              : {}),
+            ...reasoningEffortParam(),
             max_tokens: Math.min(2048, e.OPENAI_MAX_TOKENS),
             messages: [
               {
@@ -224,7 +223,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
               },
               { role: 'user', content: compactionTranscript(messages, maxChars) },
             ],
-          });
+          }));
           break;
         } catch (error) {
           if (!isContextLengthError(error) || maxChars <= 8_000) throw error;
@@ -299,17 +298,15 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       let finishReason: string | null = null;
       const accumulated: ToolCall[] = [];
       try {
-        const stream = await openai.chat.completions.create({
+        const stream = await withEffortFallback(() => openai.chat.completions.create({
           model,
-          ...(e.OPENAI_REASONING_EFFORT !== 'none'
-            ? { reasoning_effort: e.OPENAI_REASONING_EFFORT }
-            : {}),
+          ...reasoningEffortParam(),
           max_tokens: e.OPENAI_MAX_TOKENS,
           messages: [{ role: 'system', content: systemPrompt }, ...chatMessages],
           tools: tools.length > 0 ? tools : undefined,
           stream: true,
           stream_options: { include_usage: true },
-        });
+        }));
 
         for await (const chunk of stream) {
           if (chunk.usage) {
