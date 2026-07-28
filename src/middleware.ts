@@ -40,6 +40,11 @@ if (process.env.VAR_DIR) {
   void import('@/lib/preview/prewarm')
     .then(({ startPrimaryBranchWarmer }) => startPrimaryBranchWarmer())
     .catch((err) => console.error('[prewarm] warmer failed to start:', err));
+  // Worktrees and sandbox homes of chats that no longer exist are pure disk
+  // cost (a checkout plus a private npm cache each) — reconcile hourly.
+  void import('@/lib/worktreeCleanup')
+    .then(({ startOrphanSweeper }) => startOrphanSweeper())
+    .catch((err) => console.error('[cleanup] sweeper failed to start:', err));
 }
 
 const PUBLIC_PATHS = [

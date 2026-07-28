@@ -79,6 +79,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Compare window: eye button opens/closes it, flyout lists the four views, outside click closes the list only | 02 | ✅ |
 | Draft chats: new-chat/one-click create no Chat row; opening an existing chat leaves the draft | 02 | ✅ |
 | Task list in the chat snapshot (agent notes stay server-side) | 01 | ✅ |
+| Orphan sweeper (hourly: worktrees + sandbox homes of deleted chats, keeps pooled/serving branches, never deletes a foreign git ref) | — | 🟡 unit-covered (test/worktree-cleanup.test.ts); bench-driving needs an hour of wall clock or an admin trigger |
 | Warm previews (pinned primary branches + adopted spare work branch) | 02 | 🟡 02 waits on `/api/admin/previews` reporting the chat's branch ready, which only passes when warming works; pinning/eviction rules are unit-covered (test/draft-chat.test.ts) |
 | Code browser (tree, open file — judged) | 02 | ✅ |
 | Code browser image preview (svg renders inline, naturalWidth > 0) | 02 | ✅ |

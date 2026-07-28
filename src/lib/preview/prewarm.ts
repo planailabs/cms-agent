@@ -23,6 +23,9 @@ interface PrewarmState {
   /** Branch ready (or warming) for the next chat; null while none exists. */
   spare: string | null;
   warming: Promise<void> | null;
+  /** Branch currently being warmed — it has no chat yet, so the orphan
+   *  sweeper must not mistake it for leftovers. */
+  warmingBranch: string | null;
   /** Ticker re-warming the primary branches; null until started. */
   primaryTimer: ReturnType<typeof setInterval> | null;
 }
@@ -32,6 +35,7 @@ const g = globalThis as unknown as { __cmsPrewarm?: PrewarmState };
 const state: PrewarmState = (g.__cmsPrewarm ??= {
   spare: null,
   warming: null,
+  warmingBranch: null,
   primaryTimer: null,
 });
 
@@ -52,6 +56,7 @@ async function warm(branch: string): Promise<void> {
 export function ensureSpareBranch(): void {
   if (state.spare || state.warming) return;
   const branch = newWorkBranch();
+  state.warmingBranch = branch;
   state.warming = warm(branch)
     .then(() => {
       state.spare = branch;
@@ -61,7 +66,13 @@ export function ensureSpareBranch(): void {
     })
     .finally(() => {
       state.warming = null;
+      state.warmingBranch = null;
     });
+}
+
+/** Branches held by the pool: chat-less on purpose, never leftovers. */
+export function reservedBranches(): string[] {
+  return [state.spare, state.warmingBranch].filter((b): b is string => !!b);
 }
 
 /**
@@ -142,6 +153,7 @@ export function startPrimaryBranchWarmer(): void {
 export function resetPrewarmForTests(): void {
   state.spare = null;
   state.warming = null;
+  state.warmingBranch = null;
   if (state.primaryTimer) clearInterval(state.primaryTimer);
   state.primaryTimer = null;
 }
