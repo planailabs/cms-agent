@@ -15,7 +15,8 @@ import { registeredWindows } from './window';
 const ICONS = {
   edit: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.2 2.3l2.5 2.5-8.2 8.2-3.2.7.7-3.2z"/><path d="M9.6 3.9l2.5 2.5"/></svg>`,
   pick: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v2.2M8 12.8V15M1 8h2.2M12.8 8H15"/></svg>`,
-  settings: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="2.3"/><circle cx="8" cy="8" r="5.8"/><path d="M8 2.2v1.5M8 12.3v1.5M2.2 8h1.5M12.3 8h1.5"/></svg>`,
+  // [ ←(|)→ ] — bracketed slider knob with outward arrows (user-sketched).
+  settings: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 3.2H2.4v9.6h1.2"/><path d="M12.4 3.2h1.2v9.6h-1.2"/><path d="M8 5.4v5.2"/><path d="M6.4 8H4.5m1.2-1.2L4.5 8l1.2 1.2"/><path d="M9.6 8h1.9m-1.2-1.2L11.5 8l-1.2 1.2"/></svg>`,
 };
 
 const railButton = (
