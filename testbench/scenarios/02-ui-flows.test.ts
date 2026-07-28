@@ -98,13 +98,26 @@ describe('ui flows', () => {
     }
     await bootWorkspace(s.page); // reload so the sidebar sees the new chat
     await openBranchPanel(s.page);
+    // Opening a chat collapses the panel itself — toggling here would
+    // re-open it and its overlay would eat every later click.
     await dataAction(s.page, 'ws-open-chat').first().click();
     await expect
       .poll(() => new URL(s.page.url()).pathname, { timeout: 15_000 })
       .toMatch(/^\/chat\//);
     ok('an existing chat opens from the sidebar', true);
-    await dataAction(s.page, 'ws-branch-list-toggle').first().click();
-    await s.page.waitForTimeout(300);
+    ok('opening a chat collapses the branch panel', (await s.page.locator('.ws-branch-panel').count()) === 0);
+
+    // Everything below reads the chat's worktree (code browser, preview,
+    // device UA): wait for it instead of racing the first cold checkout.
+    const chatId = new URL(s.page.url()).pathname.split('/').pop()!;
+    await expect
+      .poll(
+        async () =>
+          (await s.context.request.get(`${base}/api/files/${chatId}?path=.`)).status(),
+        { timeout: 180_000, intervals: [2_000] },
+      )
+      .toBe(200);
+    ok('the chat worktree is ready for the flows below', true);
   });
 
   it('redesign chrome: icon rail tools and compact header', async () => {

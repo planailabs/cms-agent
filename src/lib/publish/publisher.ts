@@ -318,9 +318,13 @@ registerAutomatism({
       async run(raw, post) {
         const data = raw as PullData;
         if (data.restorePhase) {
+          // An automatism that started before preview was merged into execute
+          // still carries the old name in its payload; the migration only
+          // touched rows at rest.
+          const phase = data.restorePhase === 'preview' ? 'execute' : data.restorePhase;
           await prisma.chat.updateMany({
             where: { id: data.workflowChatId },
-            data: { workflowPhase: data.restorePhase, entityVersion: { increment: 1 } },
+            data: { workflowPhase: phase, entityVersion: { increment: 1 } },
           });
           emitChatState(data.workflowChatId);
           data.restorePhase = undefined;

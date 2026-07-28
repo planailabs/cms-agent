@@ -11,12 +11,11 @@
  *   next chat that targets the default branch adopts it instead of paying that
  *   cost while the user waits.
  *
- * ponytail: exactly ONE spare work branch, refilled after it is claimed and
- * only warmed lazily (the first chat after a restart primes the next one).
- * Unlike the primary branches it is not pinned, so the idle sweeper may stop
- * its dev server — the expensive part, the installed worktree, survives that.
- * Grow into a real pool only if new chats start arriving faster than one
- * warms.
+ * ponytail: exactly ONE spare work branch, primed at boot and refilled after
+ * it is claimed. Unlike the primary branches it is not pinned, so the idle
+ * sweeper may stop its dev server — the expensive part, the installed
+ * worktree, survives that. Grow into a real pool only if new chats start
+ * arriving faster than one warms.
  */
 import { randomBytes } from 'node:crypto';
 
@@ -110,10 +109,14 @@ export async function warmPrimaryBranches(): Promise<void> {
  */
 export function startPrimaryBranchWarmer(): void {
   if (state.primaryTimer) return;
-  const tick = () =>
+  const tick = () => {
     void warmPrimaryBranches().catch((err) =>
       console.warn('[prewarm] primary-branch sweep failed:', err),
     );
+    // Prime the spare too, so the FIRST chat after a restart is fast as well
+    // — no-ops once one is ready or warming.
+    ensureSpareBranch();
+  };
   state.primaryTimer = setInterval(tick, 60_000);
   // Don't hold the process open for the warmer.
   if (typeof state.primaryTimer === 'object' && 'unref' in state.primaryTimer) {
