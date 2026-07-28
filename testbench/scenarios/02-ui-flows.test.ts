@@ -361,21 +361,26 @@ describe('ui flows', () => {
   });
 
   it('device preset resizes the preview and overrides the user agent', async () => {
+    // Earlier tests can leave extra (inactive, hidden) preview tabs — every
+    // iframe assertion targets the active tab's frame, which is unique.
     const select = s.page.locator('[data-action="ws-preview-device"]');
     try {
       await select.selectOption('iPhone 15');
-      const frame = s.page.locator('#preview-frame-region iframe[data-device="iPhone 15"]');
+      const frame = s.page.locator(
+        '#preview-frame-region iframe.is-active[data-device="iPhone 15"]',
+      );
       await frame.waitFor({ timeout: 15_000 });
       const width = await frame.evaluate((el) => (el as HTMLIFrameElement).style.width);
       ok('iframe is fixed to the device viewport', width === '393px', `width=${width}`);
 
       // The recreated frame carried __cms_ua → the proxy set the per-branch
       // UA override and tagged the injected script, whose bootstrap mirrors
-      // it onto navigator.userAgent inside the preview document.
+      // it onto navigator.userAgent inside the preview document. Responsive
+      // frames carry the empty clear-sentinel, so match the encoded UA value.
       let ua = '';
       const deadline = Date.now() + 20_000;
       while (Date.now() < deadline) {
-        const f = s.page.frames().find((fr) => fr.url().includes('__cms_ua='));
+        const f = s.page.frames().find((fr) => fr.url().includes('__cms_ua=Mozilla'));
         if (f) {
           ua = await f.evaluate(() => navigator.userAgent).catch(() => '');
           if (ua.includes('iPhone')) break;
@@ -387,13 +392,11 @@ describe('ui flows', () => {
       // Back to responsive — a leftover device frame would skew later tests
       await select.selectOption('');
       await s.page
-        .locator('#preview-frame-region iframe[data-device=""]')
-        .first()
+        .locator('#preview-frame-region iframe.is-active[data-device=""]')
         .waitFor({ timeout: 15_000 });
     }
     const cleared = await s.page
-      .locator('#preview-frame-region iframe')
-      .first()
+      .locator('#preview-frame-region iframe.is-active')
       .evaluate((el) => (el as HTMLIFrameElement).style.width || '(fill)');
     ok('responsive restores the fluid frame', cleared === '(fill)', cleared);
   });
