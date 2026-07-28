@@ -47,6 +47,16 @@ export default defineConfig({
   // Fully SSR app (auth middleware on every route) — never prerender.
   output: 'server',
   adapter: node({ mode: 'standalone' }),
+  security: {
+    // Astro 6 distrusts Host and X-Forwarded-Proto unless allowedDomains is
+    // set, reconstructing every request URL as http://localhost:<port> — so
+    // checkOrigin 403s all multipart POSTs behind TLS termination
+    // ("Cross-site POST form submissions are forbidden", e.g. /api/uploads).
+    // The deployment domain is runtime env (BASE_DOMAIN), unknown at build
+    // time; an empty pattern matches every host (Astro 5 behavior). Host
+    // gating is the embedded proxy's job (unknown hosts 404 there).
+    allowedDomains: [{}],
+  },
   vite: {
     envPrefix: ['VITE_', 'PUBLIC_'],
     plugins: [tailwindcss(), mcpBridge()],

@@ -153,6 +153,23 @@ describe('api probes', () => {
 
     const noFile = await client.req('POST', '/api/uploads', {});
     ok('POST /api/uploads rejects non-multipart', noFile.status === 400);
+
+    // TLS-termination shape: the browser sends an https Origin while the app
+    // sees plain http; Astro must trust X-Forwarded-Proto/-Host (config
+    // security.allowedDomains) or checkOrigin 403s every multipart POST with
+    // "Cross-site POST form submissions are forbidden".
+    const tlsForm = new FormData();
+    tlsForm.set('file', new File([new Uint8Array(PNG_FIXTURE)], 'tls.png', { type: 'image/png' }));
+    const tls = await fetch(`${client.baseUrl}/api/uploads`, {
+      method: 'POST',
+      headers: client.headers({
+        origin: 'https://bench.example',
+        'x-forwarded-proto': 'https',
+        'x-forwarded-host': 'bench.example',
+      }),
+      body: tlsForm,
+    });
+    ok('POST /api/uploads passes checkOrigin behind TLS termination', tls.status === 201);
   });
 
   it('window sessions: upsert, fetch, ownership, delete', async () => {

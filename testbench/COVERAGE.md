@@ -35,7 +35,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `GET /api/diff/[chatId]/shot` (after/diff/meta) | 03 | 🟡 kinds before/aligned/markers not probed |
 | `GET /api/preview/browsers-shot` | 05 | ✅ |
 | `GET /api/files/[chatId]` (dir/file/jail) | 01 | 🟡 mode=download/raw not probed |
-| `POST/GET /api/uploads` (+400) | 01 | ✅ |
+| `POST/GET /api/uploads` (+400, CSRF pass behind TLS termination via forwarded headers) | 01 | ✅ |
 | `GET/PUT/DELETE /api/window-sessions[/id]` (+ownership) | 01 (API), 02 (restore UX) | ✅ |
 | `GET /api/agent/capabilities` | 01 | ✅ |
 | `GET/POST /api/memory` | 01 | 🟡 approve/reject of a real candidate needs the agent to propose one |
@@ -82,6 +82,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Browser compare UI, diff-viewer modes UI | — | 🟡 endpoints covered (03/05); overlay UIs not driven |
 | Attachments upload + send with image | 01 (API upload) | 🟡 composer chip flow not driven |
 | Composer paste (image ctrl+v/context menu), long-text-as-attachment, dropzone drop | 02 | ✅ |
+| Upload-failed chip shows the server reason (incl. non-JSON bodies) | — | 🟡 unit-covered (test/attachment-upload-errors.test.ts); bench-driving needs a deterministically failing upload |
 | Hex → color-name chips in chat markdown | — | 🟡 covered by unit tests through renderMarkdown (agent must mention a hex to drive it in bench) |
 | Collapsed tool-call groups (grouping, running state, meta preview, mode gate) | — | 🟡 unit-covered (test/tool-groups.test.ts); bench-driving needs a technical-mode agent turn in a browser session |
 | Routeless-files warn chip + toggle banner (diff viewer) | — | 🟡 unit-covered (test/diff-renderer.test.ts); bench-driving needs a journey that changes non-page files |
