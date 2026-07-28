@@ -136,6 +136,28 @@ function freePort(): Promise<number> {
 }
 
 /**
+ * Serializes every npm install this process runs (see ensureDeps): warming a
+ * branch, priming a spare and creating a chat can all want one at the same
+ * time, and parallel installs only starve each other — one of them ends up
+ * killed on the 5-minute timeout.
+ */
+let installQueue: Promise<unknown> = Promise.resolve();
+
+export function queueInstall<T>(run: () => Promise<T>): Promise<T> {
+  const next = installQueue.catch(() => {}).then(run);
+  installQueue = next.catch(() => {}); // one failure must not break the queue
+  return next;
+}
+
+function readDepsStamp(stampPath: string): string | null {
+  try {
+    return fs.readFileSync(stampPath, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Site deps: install when the checkout has none, when package.json changed
  * since the last install (the agent can edit site deps mid-chat), or when
  * `force` is set (boot-page retry = repair).
@@ -150,24 +172,24 @@ async function ensureDeps(
   if (!fs.existsSync(pkgPath)) return;
   const hash = createHash('sha256').update(fs.readFileSync(pkgPath)).digest('hex');
   const stampPath = path.join(worktree, 'node_modules', '.cms-deps-hash');
-  let stamp: string | null = null;
-  try {
-    stamp = fs.readFileSync(stampPath, 'utf8');
-  } catch {
-    // no stamp — never installed by us
-  }
+  const stamp = readDepsStamp(stampPath); // null = never installed by us
   if (!force && stamp === hash) return;
-  console.log(`[preview] installing site dependencies in ${worktree}…`);
-  // --include=dev: dev servers need devDependencies (astro usually lives there)
-  const r = await runSandboxed(sb, 'npm install --no-audit --no-fund --include=dev', {
-    cwd: worktree,
-    sessionKey: branch,
-    timeoutMs: 5 * 60_000,
+  await queueInstall(async () => {
+    // The queue may have been long — another install for this worktree could
+    // have finished it meanwhile.
+    if (!force && readDepsStamp(stampPath) === hash) return;
+    console.log(`[preview] installing site dependencies in ${worktree}…`);
+    // --include=dev: dev servers need devDependencies (astro usually lives there)
+    const r = await runSandboxed(sb, 'npm install --no-audit --no-fund --include=dev', {
+      cwd: worktree,
+      sessionKey: branch,
+      timeoutMs: 5 * 60_000,
+    });
+    if (r.code !== 0) {
+      throw new Error(`npm install failed (${r.code}): ${(r.stderr || r.stdout).slice(-2000)}`);
+    }
+    fs.writeFileSync(stampPath, hash);
   });
-  if (r.code !== 0) {
-    throw new Error(`npm install failed (${r.code}): ${(r.stderr || r.stdout).slice(-2000)}`);
-  }
-  fs.writeFileSync(stampPath, hash);
 }
 
 async function waitForHttp(host: string, port: number, timeoutMs = 90_000): Promise<void> {
