@@ -545,8 +545,10 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     if (!mode) return;
     store.state.workspace.diff.mode = mode;
     store.notify();
-    // Picking a tool from the rail flyout is also how compare gets opened.
-    openWindow('compare');
+    // Picking a tool from the rail flyout is also how compare gets opened —
+    // but a draft has nothing to compare, and the view would hang on its
+    // loading state (loadDiffPages needs a chat id).
+    if (store.state.activeChatId) openWindow('compare');
   });
   delegateEvent(app, 'click', '[data-action="ws-diff-overlay-toggle"]', () => {
     store.state.workspace.diff.overlayVisible = !store.state.workspace.diff.overlayVisible;

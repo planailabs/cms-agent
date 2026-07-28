@@ -300,6 +300,9 @@ const EYE_ICON = `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" st
  *  control. Always rendered — CSS reveals it on hover, `is-open` pins it
  *  after a click (closed by the ws-compare-menu layer). */
 const renderCompareMenu = (state: AppState): string => {
+  // Nothing to compare in a draft — and the hover reveal would otherwise
+  // ignore the disabled button next to it.
+  if (!state.activeChatId) return '';
   const locale = uiLocale();
   const { diff } = state.workspace;
   const items = MODES.map(

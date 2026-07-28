@@ -86,6 +86,26 @@ describe('draft chat', () => {
     );
   });
 
+  it('does not hijack a chat the user switched to mid-creation', async () => {
+    startDraftChat('b1');
+    const draft = store.state.chat!.aiChat!;
+    // The create round trip resolves only after the user opened another chat.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        store.state.activeChatId = 'chat-user-opened';
+        store.state.chat = { ...store.state.chat!, aiChat: { messages: [], phase: 'idle' } };
+        return Response.json({ chat: { id: 'chat-late', title: 'New chat' } });
+      }),
+    );
+
+    await sendChatMessage('hello');
+
+    expect(store.state.activeChatId).toBe('chat-user-opened');
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(draft.messages).toEqual([]); // the abandoned draft is left alone
+  });
+
   it('keeps the draft when the chat cannot be created', async () => {
     startDraftChat('b1');
     vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 500 })));

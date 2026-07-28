@@ -18,13 +18,17 @@ import type { PageContext } from '../../../workspace/state';
 const materializeDraftChat = async (): Promise<boolean> => {
   const state = store.state;
   if (!state.activeBranchId) return false;
+  const draft = state.chat?.aiChat;
   const { createChat } = await import('./index');
   const chat = await createChat(state.activeBranchId);
+  // The user can open another chat while the round trip is in flight; the
+  // draft they typed into is gone, so adopting the new id here would post
+  // their message into a chat they are no longer looking at.
+  if (state.activeChatId !== null || state.chat?.aiChat !== draft) return false;
   if (!chat) {
-    const mc = state.chat?.aiChat;
-    if (mc) {
-      mc.error = t(uiLocale(), 'workspace.error.chatCreateFailed');
-      mc.phase = 'error';
+    if (draft) {
+      draft.error = t(uiLocale(), 'workspace.error.chatCreateFailed');
+      draft.phase = 'error';
       store.notify();
     }
     return false;
