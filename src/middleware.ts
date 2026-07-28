@@ -53,7 +53,7 @@ const SELF_AUTHENTICATING_PATHS = [
 ];
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  const { pathname } = new URL(context.request.url);
+  const { pathname, search } = new URL(context.request.url);
 
   if (SELF_AUTHENTICATING_PATHS.some((re) => re.test(pathname))) {
     context.locals.user = null;
@@ -142,7 +142,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    return context.redirect('/signin/');
+    // Carry the deep link (e.g. /chat/<id>?window=git) through the signin
+    // round trip; signin validates it before using it as the OAuth callback.
+    const next_ = pathname + search;
+    return context.redirect(
+      next_ === '/' ? '/signin/' : `/signin/?next=${encodeURIComponent(next_)}`,
+    );
   }
 
   const response = await next();

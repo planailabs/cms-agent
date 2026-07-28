@@ -1,0 +1,48 @@
+---
+/**
+ * CMS Workspace shell — live branch preview (left) + resizable chat sidebar
+ * (right). All UI is client-rendered by the vanilla-TS app in
+ * src/components/chat/main.ts (+ src/components/workspace/**). Served from
+ * both / and /chat/[chatId] (workspace router deep links) — the client reads
+ * the chat/window route from location itself.
+ *
+ * BASE_DOMAIN + scheme are inlined as data attributes on #app because
+ * import.meta.env.PUBLIC_* is not configured for this deployment.
+ *
+ * The build version/commit ride along the same way: this page is served only
+ * to signed-in users (middleware redirects anon to /signin), so passing them
+ * here — instead of baking them into the public client bundle — keeps the
+ * exact build identity out of anonymous hands. See src/lib/buildInfo.ts.
+ */
+import { APP_VERSION, GIT_COMMIT } from '@/lib/buildInfo';
+
+const user = Astro.locals.user!;
+const baseDomain = process.env.BASE_DOMAIN ?? 'localhost';
+const scheme =
+  process.env.PUBLIC_SCHEME ?? (Astro.url.protocol === 'https:' ? 'https' : 'http');
+const previewPort = /^(1|true)$/i.test(process.env.DEV_PORT_CARRY ?? '') ? Astro.url.port : '';
+---
+
+<!doctype html>
+<html lang={user.language} class="is-first-visit">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CMS Agent</title>
+  </head>
+  <body>
+    <div
+      id="app"
+      data-base-domain={baseDomain}
+      data-scheme={scheme}
+      data-preview-port={previewPort}
+      data-user-name={user.name}
+      data-app-version={APP_VERSION}
+      data-git-commit={GIT_COMMIT}
+    >
+    </div>
+    <script>
+      import '@/components/chat/main';
+    </script>
+  </body>
+</html>

@@ -49,6 +49,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | OAuth signin flow (full authorization-code + PKCE round trip) | 07 (instrumented mock IdP, own server boot without SKIP_AUTH) | ✅ |
 | Email allowlist (ALLOWED_EMAILS admit, domain-rule admit, reject) | 07 | ✅ |
 | Unauthenticated 401s / signin redirect / public paths / impersonate-off | 07 | ✅ |
+| Deep-link ?next= carry-through signin (validated same-origin path) | 07 | ✅ |
 | Session cookie migration to Domain=.BASE_DOMAIN | — | ⛔ migration is a no-op when BASE_DOMAIN=localhost (the bench's only hermetic domain) |
 
 ## UI flows (Playwright)
@@ -73,6 +74,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
 | Language switch en↔de (judged screenshot) | 02 | ✅ |
 | Commits / capabilities / archive / sessions windows (rail-opened, stage-swapped, chat stays, close returns to preview) | 02 | ✅ |
+| Workspace URL routing (/chat/<id>?window=…: mirror, browser back, deep-link boot) | 02 | ✅ |
 | Code browser (tree, open file — judged) | 02 | ✅ |
 | Code browser image preview (svg renders inline, naturalWidth > 0) | 02 | ✅ |
 | Preview tabs new/switch/close | 02 | ✅ |

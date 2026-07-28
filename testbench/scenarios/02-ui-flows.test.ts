@@ -330,6 +330,36 @@ describe('ui flows', () => {
     ok('re-clicking the rail opener closes the window again', true);
   });
 
+  it('URLs mirror chat and window state; deep links and back work', async () => {
+    await s.page.waitForFunction(() => /^\/chat\/[A-Za-z0-9_-]+$/.test(location.pathname), undefined, {
+      timeout: 15_000,
+    });
+    const chatPath = await s.page.evaluate(() => location.pathname);
+    ok('URL carries the active chat id', true);
+
+    await s.page.locator('.ws-rail [data-action="ws-git-open"]').click();
+    await s.page.waitForFunction(() => location.search === '?window=git', undefined, {
+      timeout: 15_000,
+    });
+    ok('open window is mirrored into the URL', true);
+
+    await s.page.goBack();
+    await s.page.locator('#preview-frame-region').waitFor({ timeout: 15_000 });
+    await s.page.waitForFunction(() => location.search === '', undefined, { timeout: 15_000 });
+    ok('browser back closes the window through the state machine', true);
+
+    // Deep link: a fresh load boots straight into the chat + window
+    await s.page.goto(`${benchRun().baseUrl}${chatPath}?window=git`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await s.page.getByText('Initial site (basic-site)').first().waitFor({ timeout: 30_000 });
+    ok('deep link boots into the chat with the git window open', true);
+
+    // Leave the stage on the preview for the following tests
+    await s.page.locator('.ws-rail [data-action="ws-git-open"]').click();
+    await s.page.locator('#preview-frame-region').waitFor({ timeout: 15_000 });
+  });
+
   it('code browser opens a file', async () => {
     await dataAction(s.page, 'ws-cb-modal-open').first().click();
     const file = s.page.locator('[data-action="ws-cb-file"]').first();

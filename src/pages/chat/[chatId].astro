@@ -1,0 +1,13 @@
+---
+/**
+ * Deep link to a chat (+ optional ?window=<kind>) — same workspace shell as
+ * /; the client-side workspace router resolves the chat from the URL. An
+ * unknown chat id simply falls back to the default chat client-side, so no
+ * per-request DB lookup here.
+ */
+export const prerender = false;
+
+import WorkspaceShell from '@/components/WorkspaceShell.astro';
+---
+
+<WorkspaceShell />

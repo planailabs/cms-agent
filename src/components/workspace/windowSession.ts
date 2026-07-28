@@ -19,6 +19,12 @@ import {
   registerWindow,
   restoreWindowState,
 } from './window';
+import {
+  applyRoute,
+  initWorkspaceRouter,
+  routeFromLocation,
+  type WorkspaceRoute,
+} from './router';
 import type { WindowKind } from './state';
 
 const KEY = 'cms-window-id';
@@ -175,14 +181,29 @@ const fetchSession = async (id: string): Promise<WindowViewState | null> => {
   }
 };
 
+/** URL route captured at boot; consumed by the FIRST bootInto so a later
+ *  adopt/start-fresh choice is not re-routed to a by-then-stale URL. */
+let bootRoute: WorkspaceRoute | null = null;
+
 /** Boot the workspace INTO a saved window (or the default chat): branches
- *  first, then the saved chat if it still exists, else the default flow. */
+ *  first, then the saved chat if it still exists, else the default flow.
+ *  A deep-linked URL (/chat/<id>[?window=…]) wins over the session blob;
+ *  URL mirroring arms only after all of it settled. */
 const bootInto = async (blob: WindowViewState | null): Promise<void> => {
   await loadBranches();
+  const route = bootRoute;
+  bootRoute = null;
+  const routeKnown = Boolean(
+    route?.chatId && store.state.branches.some((b) => b.chats.some((c) => c.id === route.chatId)),
+  );
   const known =
     blob?.chatId && store.state.branches.some((b) => b.chats.some((c) => c.id === blob.chatId));
-  if (!known) await ensureActiveChat();
+  if (!known && !routeKnown) await ensureActiveChat();
   if (blob) applyViewState(blob);
+  if (route && (routeKnown || route.window)) {
+    applyRoute({ chatId: routeKnown ? route.chatId : null, window: route.window });
+  }
+  initWorkspaceRouter();
 };
 
 /**

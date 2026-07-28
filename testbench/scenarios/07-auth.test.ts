@@ -108,6 +108,14 @@ describe('real auth (mock OIDC IdP)', () => {
       page.status >= 300 && page.status < 400 && (page.headers.get('location') ?? '').includes('/signin'),
       `${page.status} ${page.headers.get('location')}`,
     );
+    const deep = await fetch(`${baseUrl}/chat/some-chat?window=git`, { redirect: 'manual' });
+    ok(
+      'deep-link redirect carries ?next= through signin',
+      (deep.headers.get('location') ?? '').includes(
+        `next=${encodeURIComponent('/chat/some-chat?window=git')}`,
+      ),
+      `${deep.status} ${deep.headers.get('location')}`,
+    );
     const wait = await fetch(`${baseUrl}/__preview/wait/main`);
     ok('preview wait stream without session → 401', wait.status === 401, `got ${wait.status}`);
     const signin = await fetch(`${baseUrl}/signin/`);

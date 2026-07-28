@@ -1,7 +1,12 @@
 ---
 import { t } from '@/lib/i18n';
 
-if (Astro.locals.user) return Astro.redirect('/');
+// Deep-link carry-through from the middleware redirect. Same-origin absolute
+// paths only — anything else (//host, https://…) falls back to /.
+const nextRaw = Astro.url.searchParams.get('next') ?? '/';
+const nextPath = /^\/(?!\/|\\)/.test(nextRaw) ? nextRaw : '/';
+
+if (Astro.locals.user) return Astro.redirect(nextPath);
 
 // Pre-auth page — no user language yet; negotiate from Accept-Language.
 const lang = /(^|[,;\s])de\b/i.test(Astro.request.headers.get('accept-language') ?? '') ? 'de' : 'en';
@@ -49,7 +54,7 @@ const lang = /(^|[,;\s])de\b/i.test(Astro.request.headers.get('accept-language')
     <div class="card">
       <h1>{t(lang, 'pages.signin.heading')}</h1>
       <p>{t(lang, 'pages.signin.description')}</p>
-      <button id="signin">{t(lang, 'pages.signin.button')}</button>
+      <button id="signin" data-next={nextPath}>{t(lang, 'pages.signin.button')}</button>
       <p
         class="error"
         id="error"
@@ -61,11 +66,12 @@ const lang = /(^|[,;\s])de\b/i.test(Astro.request.headers.get('accept-language')
       document.getElementById('signin')!.addEventListener('click', async () => {
         const errorEl = document.getElementById('error')!;
         errorEl.textContent = '';
+        const button = document.getElementById('signin')!;
         try {
           const res = await fetch('/api/auth/sign-in/oauth2', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ providerId: 'oidc', callbackURL: '/' }),
+            body: JSON.stringify({ providerId: 'oidc', callbackURL: button.dataset.next || '/' }),
           });
           const data = await res.json();
           if (data.url) {
