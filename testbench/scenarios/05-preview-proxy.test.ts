@@ -111,6 +111,18 @@ describe('preview + proxy', () => {
     ok('browsers-shot meta JSON', meta.status === 200);
   }, 500_000);
 
+  it('cross-browser shot honors a device preset', async () => {
+    const dev = encodeURIComponent('iPhone 15');
+    const shot = await client.getBinary(
+      `/api/preview/browsers-shot?branch=main&route=/&a=chromium&b=firefox&kind=after&device=${dev}`,
+    );
+    ok('device-emulated shot PNG', shot.status === 200 && shot.type.includes('image/png'), `${shot.status} ${shot.type}`);
+    const bad = await client.get(
+      '/api/preview/browsers-shot?branch=main&route=/&a=chromium&b=firefox&kind=diff&device=Nokia%203310',
+    );
+    ok('unknown device is a 400', bad.status === 400, `got ${bad.status}`);
+  }, 500_000);
+
   it('diff viewer: browsing one pane syncs the other + tabs; address free-browses', async () => {
     const j = loadJourney();
     if (!j?.chatB) {

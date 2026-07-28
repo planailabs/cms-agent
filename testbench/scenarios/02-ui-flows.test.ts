@@ -360,6 +360,44 @@ describe('ui flows', () => {
     await s.page.locator('#preview-frame-region').waitFor({ timeout: 15_000 });
   });
 
+  it('device preset resizes the preview and overrides the user agent', async () => {
+    const select = s.page.locator('[data-action="ws-preview-device"]');
+    try {
+      await select.selectOption('iPhone 15');
+      const frame = s.page.locator('#preview-frame-region iframe[data-device="iPhone 15"]');
+      await frame.waitFor({ timeout: 15_000 });
+      const width = await frame.evaluate((el) => (el as HTMLIFrameElement).style.width);
+      ok('iframe is fixed to the device viewport', width === '393px', `width=${width}`);
+
+      // The recreated frame carried __cms_ua → the proxy set the per-branch
+      // UA override and tagged the injected script, whose bootstrap mirrors
+      // it onto navigator.userAgent inside the preview document.
+      let ua = '';
+      const deadline = Date.now() + 20_000;
+      while (Date.now() < deadline) {
+        const f = s.page.frames().find((fr) => fr.url().includes('__cms_ua='));
+        if (f) {
+          ua = await f.evaluate(() => navigator.userAgent).catch(() => '');
+          if (ua.includes('iPhone')) break;
+        }
+        await s.page.waitForTimeout(500);
+      }
+      ok('navigator.userAgent inside the preview is the device UA', ua.includes('iPhone'), ua.slice(0, 80));
+    } finally {
+      // Back to responsive — a leftover device frame would skew later tests
+      await select.selectOption('');
+      await s.page
+        .locator('#preview-frame-region iframe[data-device=""]')
+        .first()
+        .waitFor({ timeout: 15_000 });
+    }
+    const cleared = await s.page
+      .locator('#preview-frame-region iframe')
+      .first()
+      .evaluate((el) => (el as HTMLIFrameElement).style.width || '(fill)');
+    ok('responsive restores the fluid frame', cleared === '(fill)', cleared);
+  });
+
   it('code browser opens a file', async () => {
     await dataAction(s.page, 'ws-cb-modal-open').first().click();
     const file = s.page.locator('[data-action="ws-cb-file"]').first();

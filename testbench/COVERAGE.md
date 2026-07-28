@@ -33,7 +33,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `GET /api/git/commits` / `GET /api/git/commit` | 02 (UI), 03 (API) | ✅ |
 | `GET /api/diff/[chatId]/pages` | 03 | ✅ |
 | `GET /api/diff/[chatId]/shot` (after/diff/meta) | 03 | 🟡 kinds before/aligned/markers not probed |
-| `GET /api/preview/browsers-shot` | 05 | ✅ |
+| `GET /api/preview/browsers-shot` (incl. `device=` emulation + unknown-device 400) | 05 | ✅ |
 | `GET /api/files/[chatId]` (dir/file/jail) | 01 | 🟡 mode=download/raw not probed |
 | `POST/GET /api/uploads` (+400, CSRF pass behind TLS termination via forwarded headers) | 01 | ✅ |
 | `GET/PUT/DELETE /api/window-sessions[/id]` (+ownership) | 01 (API), 02 (restore UX) | ✅ |
@@ -75,6 +75,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Language switch en↔de (judged screenshot) | 02 | ✅ |
 | Commits / capabilities / archive / sessions windows (rail-opened, stage-swapped, chat stays, close returns to preview) | 02 | ✅ |
 | Workspace URL routing (/chat/<id>?window=…: mirror, browser back, deep-link boot) | 02 | ✅ |
+| Preview device presets (viewport-sized iframe + proxy UA override + navigator patch) | 02 | ✅ |
 | Code browser (tree, open file — judged) | 02 | ✅ |
 | Code browser image preview (svg renders inline, naturalWidth > 0) | 02 | ✅ |
 | Preview tabs new/switch/close | 02 | ✅ |
