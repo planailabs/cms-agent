@@ -40,7 +40,7 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
 
     case 'open_compare':
       // Same live-nudge contract as ui_language: no cache, no replay.
-      applyOpenCompare(data.mode, data.userId);
+      applyOpenCompare(data.mode, data.userId, data.chatId);
       return true;
 
     case 'execution_committed': {

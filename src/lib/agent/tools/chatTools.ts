@@ -81,7 +81,7 @@ export function registerChatTools(): void {
     phases: ['execute', 'published'],
     execute: async ({ mode }, ctx) => {
       // Live UI nudge like user_ui_change_language — no persistence, no replay.
-      broadcast(ctx.chatId, 'open_compare', { mode, userId: ctx.userId });
+      broadcast(ctx.chatId, 'open_compare', { mode, userId: ctx.userId, chatId: ctx.chatId });
       return JSON.stringify({ ok: true, opened: 'compare', mode: mode ?? 'unchanged' });
     },
   });

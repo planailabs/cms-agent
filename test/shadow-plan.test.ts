@@ -113,7 +113,10 @@ describe('open_compare', () => {
       );
       expect(JSON.parse(result)).toMatchObject({ ok: true, opened: 'compare', mode: 'onion' });
       expect(events).toEqual([
-        { event: 'open_compare', data: { mode: 'onion', userId: ACTOR.id } },
+        {
+          event: 'open_compare',
+          data: { mode: 'onion', userId: ACTOR.id, chatId: 'c-compare' },
+        },
       ]);
     } finally {
       remove();
