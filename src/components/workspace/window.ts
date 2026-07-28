@@ -20,6 +20,10 @@ export interface WindowDef {
   tooltipKey: string;
   /** Rail button data-action (kept per-window for delegation + tests). */
   railAction: string;
+  /** Optional flyout rendered next to the rail button (hover/click menu).
+   *  Its root must carry data-menu=… so a layer can close it on outside
+   *  clicks — see the compare window. */
+  railMenu?: (state: AppState) => string;
   /** Rail position (ascending). */
   order: number;
   /** Renders the window — called only while it is the active window. */

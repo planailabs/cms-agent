@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { captureRoute } from '@/lib/diff/screenshot';
 import { isScratchPath, jail } from './fsTools';
 import { registerTool, type ToolDef } from './registry';
+import { ALL_PHASES } from '../types';
 
 const screenshotPageTool: ToolDef = {
   name: 'screenshot_page',
@@ -25,7 +26,7 @@ const screenshotPageTool: ToolDef = {
       .optional()
       .describe('PNG destination — must be under .scratch/ (default .scratch/screenshots/<route>.png)'),
   }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   async execute(input, ctx) {
     const slug = input.route.replace(/^\//, '').replace(/[^a-zA-Z0-9._-]+/g, '-') || 'index';
     const out = input.outputPath ?? `.scratch/screenshots/${slug}${input.mobile ? '-mobile' : ''}.png`;

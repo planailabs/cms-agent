@@ -14,7 +14,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `POST /api/chats` (+400 no branch) | 01, 03 | ✅ |
 | `POST /api/chats/[id]/approve-plan` (+guards) | 03; guards in 01 | ✅ |
 | `POST /api/chats/[id]/request-changes` | 03 (journey B) | ✅ |
-| `POST /api/chats/[id]/to-preview` | 03 | ✅ |
+| `POST /api/chats/[id]/finalize` | 03 | ✅ |
 | `POST /api/chats/[id]/publish` (+repeat guard) | 03 | ✅ |
 | `POST /api/chats/[id]/sync` (pull automatism) | 03 (journey B) | ✅ |
 | `POST /api/chats/[id]/resume-automatism` | 06 (pull-conflict + deploy-failure pauses; user-resume or self-resume + 404 guard) | ✅ |

@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { jail } from './fsTools';
 import { registerTool, type ToolDef } from './registry';
 import { activeBackend } from '@/lib/site';
+import { ALL_PHASES } from '../types';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro', '.cms', '.scratch']);
 // .html: pages of static sites (and valid under src/pages for Astro)
@@ -99,14 +100,13 @@ export function outlineFile(root: string, rel: string): Outline {
 
 // ─── Tools ───────────────────────────────────────────────────────────────────
 
-const ALL_PHASES = ['plan', 'execute', 'preview', 'published'] as const;
 
 const siteStructureTool: ToolDef = {
   name: 'site_structure',
   description:
     'Overview of the site: pages with their routes, layouts, components (and where each is used), content collections, and dependencies. Start here to orient yourself.',
   schema: z.object({}),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   async execute(_input, ctx) {
     const root = jail(ctx, '.');
     const files = [...walk(root, root)].filter((f) => CODE_EXT.has(path.extname(f)));
@@ -165,7 +165,7 @@ const codeOutlineTool: ToolDef = {
   description:
     'Structural outline of one file: imports, exports, functions, component props, components used, headings, frontmatter keys — cheaper than reading the whole file.',
   schema: z.object({ path: z.string() }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   async execute(input, ctx) {
     const root = jail(ctx, '.');
     jail(ctx, input.path); // containment check
@@ -178,7 +178,7 @@ const findSymbolTool: ToolDef = {
   description:
     'Find where a symbol (component, function, variable, type) is defined and everywhere it is used across the repo.',
   schema: z.object({ name: z.string().min(2) }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   async execute(input, ctx) {
     const root = jail(ctx, '.');
     const name = input.name.replace(/[^A-Za-z0-9_$]/g, '');

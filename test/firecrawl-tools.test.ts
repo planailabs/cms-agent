@@ -71,7 +71,7 @@ describe('Firecrawl agent tools', () => {
       'firecrawl_convert_document', 'web_fetch_raw', 'web_fetch_firecrawl',
       'web_scrape', 'web_search', 'web_map', 'web_crawl',
     ];
-    for (const phase of ['plan', 'execute', 'preview', 'published'] as const) {
+    for (const phase of ['plan', 'execute', 'published'] as const) {
       const names = toolsForPhase(phase).map((tool) => tool.name);
       expect(names).toEqual(expect.arrayContaining(expected));
     }
@@ -91,7 +91,7 @@ describe('Firecrawl agent tools', () => {
   });
 
   it('rejects outputPath outside .scratch/ in every phase', async () => {
-    for (const phase of ['plan', 'execute', 'preview', 'published'] as const) {
+    for (const phase of ['plan', 'execute', 'published'] as const) {
       const res = JSON.parse(await executeTool('web_search', {
         query: 'example', outputPath: 'web/search.json',
       }, ctx(phase)));

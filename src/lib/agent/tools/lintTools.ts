@@ -12,6 +12,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { ensureSandbox, runSandboxed } from '@/lib/sandbox';
 import { registerTool, type ToolContext, type ToolDef } from './registry';
+import { ALL_PHASES } from '../types';
 
 const OUTPUT_CAP = 30_000;
 
@@ -80,7 +81,7 @@ const lintTool: ToolDef = {
       .describe('Which linter; auto runs everything the site has configured.'),
     paths: z.array(z.string()).optional().describe('Limit to specific files (default: whole repo).'),
   }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   async execute(input, ctx) {
     const detected = detectLinters(ctx.worktreePath);
     const wanted = input.tool;

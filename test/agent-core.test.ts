@@ -112,7 +112,7 @@ describe('message conversion', () => {
   });
 
   it('loads an approved plan in every workflow phase prompt', () => {
-    for (const phase of ['plan', 'execute', 'preview', 'published'] as const) {
+    for (const phase of ['plan', 'execute', 'published'] as const) {
       const prompt = buildSystemPrompt({
         phase,
         branchName: 'draft',

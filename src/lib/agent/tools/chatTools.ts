@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { broadcast } from '../bus';
 import { emitChatState } from '../chatState';
 import { registerTool } from './registry';
+import { ALL_PHASES } from '../types';
 
 export function registerChatTools(): void {
   registerTool({
@@ -14,7 +15,7 @@ export function registerChatTools(): void {
     schema: z.object({
       title: z.string().min(1).max(80).describe('The new chat title (3–6 words)'),
     }),
-    phases: ['plan', 'execute', 'preview', 'published'],
+    phases: ALL_PHASES,
     execute: async (input, ctx) => {
       const title = input.title.trim().replace(/\s+/g, ' ').slice(0, 80);
       if (!title) return JSON.stringify({ error: 'Title must not be empty' });
@@ -32,7 +33,7 @@ export function registerChatTools(): void {
     schema: z.object({
       locale: z.enum(['en', 'de']).describe('The detected language: English (en) or German (de)'),
     }),
-    phases: ['plan', 'execute', 'preview', 'published'],
+    phases: ALL_PHASES,
     kinds: ['workflow', 'deployment', 'deployments'],
     execute: async ({ locale }, ctx) => {
       // Deliberate SSE-only exception: this preference must not persist or replay.

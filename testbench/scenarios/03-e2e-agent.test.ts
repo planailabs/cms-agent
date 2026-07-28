@@ -121,12 +121,12 @@ describe('e2e agent journey', () => {
     expect(verdict.pass, verdict.reasoning).toBe(true);
   }, 600_000);
 
-  it('to-preview → publish → deploy pushes to the git remote', async () => {
-    const preview = await client.req('POST', `/api/chats/${J.chatId}/to-preview`, {
+  it('finalize → publish → deploy pushes to the git remote', async () => {
+    const preview = await client.req('POST', `/api/chats/${J.chatId}/finalize`, {
       summary: 'Bench journey: About headline change',
     });
     const previewJson = preview.json as { ok?: boolean; sha?: string };
-    ok('to-preview returns the reviewed sha', preview.status === 200 && !!previewJson.sha);
+    ok('finalize returns the reviewed sha', preview.status === 200 && !!previewJson.sha);
     J.previewSha = previewJson.sha;
     ok('phase is preview', (await chatState(J.chatId!)).workflowPhase === 'preview');
 
@@ -327,10 +327,10 @@ describe('e2e agent journey', () => {
       600_000,
     );
     ok('journey B execution streams without error', noError(exec));
-    const prev = await client.req('POST', `/api/chats/${J.chatB}/to-preview`, {
+    const prev = await client.req('POST', `/api/chats/${J.chatB}/finalize`, {
       summary: 'Bench journey B: annotated tagline change',
     });
-    ok('chat B to-preview accepted', prev.status === 200, String(prev.status));
+    ok('chat B finalize accepted', prev.status === 200, String(prev.status));
     // Unpublished on purpose: 05 drives the diff-viewer UI on this chat.
     ok('chat B rests in the preview phase', (await chatState(J.chatB!)).workflowPhase === 'preview');
     saveJourney({ ...loadJourney()!, chatB: J.chatB! });

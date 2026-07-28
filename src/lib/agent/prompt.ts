@@ -73,11 +73,11 @@ An approved plan exists — implement exactly that plan in the worktree, nothing
   minor implementation details or ordinary questions.
 - When done, call finish_execution with a short summary. ALL changes must be
   committed first — finish_execution is rejected while uncommitted changes exist.
-  Your commits are merged into the target branch when the user publishes.`,
-  preview: `You are in the PREVIEW phase (read-only).
-The implementation is committed and the user is reviewing the visual diff.
-Explain changes, answer questions about them, and help the user decide between
-publishing and requesting changes. You cannot edit site files in this phase (only .scratch/).`,
+  Your commits are merged into the target branch when the user publishes.
+- Reviewing happens in this phase too: once the work is committed the user
+  compares before/after in the workspace. Call open_compare to put that view on
+  their screen, explain the changes, and help them decide between publishing and
+  another round of edits — you can keep editing while they review.`,
   published: `The change was published. Help the user verify the result or start
 planning the next change (a new plan round begins automatically with the next request).`,
 };

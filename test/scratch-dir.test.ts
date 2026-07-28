@@ -76,7 +76,7 @@ describe('.scratch/ via regular file tools', () => {
       ['edit_file', { path: 'src/site.md', oldText: 'site', newText: 'x' }],
       ['remove_file', { path: 'src/site.md' }],
     ] as const) {
-      const res = await executeTool(tool, input, ctx('preview'));
+      const res = await executeTool(tool, input, ctx('published'));
       expect(JSON.parse(res).error, tool).toMatch(/Only \.scratch\/ is writable/);
     }
     // normalization is not fooled

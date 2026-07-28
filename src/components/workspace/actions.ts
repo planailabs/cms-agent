@@ -104,7 +104,7 @@ export const requestChangesAction = async (feedback: string): Promise<void> => {
 export const createPreviewAction = async (): Promise<void> => {
   const chatId = store.state.activeChatId;
   if (!chatId) return;
-  const res = await postJson(`/api/chats/${encodeURIComponent(chatId)}/to-preview`, {});
+  const res = await postJson(`/api/chats/${encodeURIComponent(chatId)}/finalize`, {});
   if (res.ok) enterWaiting();
 };
 
@@ -419,12 +419,12 @@ export const removeContextChip = (): void => {
 // Element-edit mode (annotate the preview → handoff to the agent)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Entering pick/edit mode from the diff viewer: the live preview should
- *  open on the page being reviewed, not a stale previewRoute. */
+/** Entering pick/edit mode from the compare window: the live preview should
+ *  open on the page being reviewed, not a stale previewRoute. (Both callers
+ *  close the window first, so the loaded diff is what identifies them.) */
 export const adoptDiffRoute = (): void => {
-  const s = store.state;
-  const ws = s.workspace;
-  if (s.workflowPhase !== 'preview' || !ws.diff.loaded) return;
+  const ws = store.state.workspace;
+  if (!ws.diff.loaded) return;
   const route = ws.diff.selectedRoute ?? ws.diff.pages[0]?.route;
   if (!route || ws.previewRoute === route) return;
   ws.previewRoute = route;

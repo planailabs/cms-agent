@@ -102,7 +102,7 @@ export async function publish(
   });
   if (!chat) throw new WorkflowError('Chat not found', 404);
   await assertChatVisibleTo(req.actor, chat);
-  if (chat.workflowPhase !== 'preview') {
+  if (chat.workflowPhase !== 'execute') {
     throw new WorkflowError(`Cannot publish from the ${chat.workflowPhase} phase.`);
   }
 

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db';
 import { broadcast } from '../bus';
 import { memoryContentAllowed } from '@/lib/memory';
 import { registerTool, type ToolDef } from './registry';
+import { ALL_PHASES } from '../types';
 
 const proposeMemoryTool: ToolDef = {
   name: 'propose_memory',
@@ -17,7 +18,7 @@ const proposeMemoryTool: ToolDef = {
     source: z.string().describe('Where this came from (file, conversation, observation).'),
     reason: z.string().describe('Why this is worth remembering.'),
   }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   async execute(input, ctx) {
     const denied = memoryContentAllowed(input.content);
     if (denied) return JSON.stringify({ error: denied });

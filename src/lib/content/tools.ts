@@ -22,8 +22,7 @@ import {
   jobPostingJsonLd,
   registerJobPostingAdapter,
 } from './jobposting';
-
-const ALL_PHASES = ['plan', 'execute', 'preview', 'published'] as const;
+import { ALL_PHASES } from '@/lib/agent/types';
 
 /** Jail-check a repo-relative path and return it normalized (relative). */
 function jailedRelative(ctx: ToolContext, p: string): string {
@@ -36,7 +35,7 @@ const contentInventoryTool: ToolDef = {
   description:
     'Inventory the site content: collections, entry counts, frontmatter fields (with required-by-convention markers) and example entries, per content adapter.',
   schema: z.object({}),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   async execute(_input, ctx) {
     const root = jail(ctx, '.');
     const inventories = await Promise.all(getContentAdapters().map((a) => a.inventory(root)));

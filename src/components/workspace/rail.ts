@@ -35,12 +35,16 @@ export const renderRail = (state: AppState): string => {
   const editing = ws.elementEdit.active;
 
   const windows = registeredWindows()
-    .map((def) =>
-      railButton(def.railAction, def.icon, t(locale, def.tooltipKey), {
+    .map((def) => {
+      const btn = railButton(def.railAction, def.icon, t(locale, def.tooltipKey), {
         active: ws.window === def.kind,
         disabled: def.disabled?.(state) ?? false,
-      }),
-    )
+      });
+      const menu = def.railMenu?.(state);
+      // The wrapper is the hover target for the flyout — without it the menu
+      // would close the moment the pointer left the 30px button.
+      return menu ? `<span class="ws-rail__item">${btn}${menu}</span>` : btn;
+    })
     .join('');
 
   return `

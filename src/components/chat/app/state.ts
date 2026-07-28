@@ -33,8 +33,9 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 export type CommunicationModePreference = 'default' | 'technical' | 'non-technical';
 export type CommunicationMode = Exclude<CommunicationModePreference, 'default'>;
 
-/** Workflow phase of a chat (plan → execute → preview → published) */
-export type WorkflowPhase = 'plan' | 'execute' | 'preview' | 'published';
+/** Workflow phase of a chat (plan → execute → published; reviewing is part
+ *  of execute) */
+export type WorkflowPhase = 'plan' | 'execute' | 'published';
 
 /** Signed-in user profile (from GET /api/me) */
 export interface AppUser {

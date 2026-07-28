@@ -167,10 +167,10 @@ export async function returnToPlan(chatId: string): Promise<void> {
   emitPhase(chatId, 'plan');
 }
 
-/** PLAN/PREVIEW → PLAN with feedback (revision round on the same branch). */
+/** PLAN/EXECUTE → PLAN with feedback (revision round on the same branch). */
 export async function requestChanges(opts: TransitionOpts & { feedback: string }): Promise<void> {
   const chat = await loadChat(opts.chatId, opts.actor);
-  if (chat.workflowPhase !== 'plan' && chat.workflowPhase !== 'preview') {
+  if (chat.workflowPhase !== 'plan' && chat.workflowPhase !== 'execute') {
     throw new WorkflowError(`Cannot request changes in the ${chat.workflowPhase} phase.`);
   }
   await updatePhase(opts.chatId, opts.expectedVersion ?? chat.entityVersion, {
@@ -234,15 +234,17 @@ export async function handoffToPlan(
 }
 
 /**
- * EXECUTE → PREVIEW. Stages and commits all worktree changes as ONE
- * self-contained commit under the branch mutation lock (plan §3).
+ * Finalize the execution for review: sync team knowledge, validate, and commit
+ * the leftovers as ONE self-contained commit under the branch mutation lock
+ * (plan §3). Reviewing happens IN the execute phase (preview was merged into
+ * it), so this settles the branch instead of moving the chat anywhere.
  */
-export async function toPreview(opts: TransitionOpts & { summary?: string }): Promise<{
+export async function finalizeExecution(opts: TransitionOpts & { summary?: string }): Promise<{
   sha: string | null;
 }> {
   const chat = await loadChat(opts.chatId, opts.actor);
   if (chat.workflowPhase !== 'execute') {
-    throw new WorkflowError(`Cannot move to preview from the ${chat.workflowPhase} phase.`);
+    throw new WorkflowError(`Cannot finalize work in the ${chat.workflowPhase} phase.`);
   }
 
   const pending = chat.pendingQuestion as { toolName: string; input: { summary?: string } } | null;
@@ -308,20 +310,17 @@ export async function toPreview(opts: TransitionOpts & { summary?: string }): Pr
   const changed = await changedFiles(chat.workBranch, chat.branch.name);
   const sha = changed.length > 0 ? await branchSha(chat.workBranch) : null;
 
-  await updatePhase(opts.chatId, opts.expectedVersion ?? chat.entityVersion, {
-    workflowPhase: 'preview',
-  });
-  // The snapshot from emitPhase carries the refreshed executionSha; the
-  // transcript card was already anchored by git_commit's event.
-  emitPhase(opts.chatId, 'preview', { executionSha: sha });
+  // The snapshot carries the refreshed executionSha; the transcript card was
+  // already anchored by git_commit's event.
+  emitPhase(opts.chatId, 'execute', { executionSha: sha });
 
   if (chat.turnPhase === 'waiting_for_answer') {
     resumeTurn(
       opts.chatId,
       opts.actor,
       sha
-        ? `All commits are in (HEAD ${sha.slice(0, 8)}); the chat moved to the preview phase.`
-        : 'No changes were made; the chat moved to the preview phase.',
+        ? `All commits are in (HEAD ${sha.slice(0, 8)}); the work is ready for review.`
+        : 'No changes were made; the work is ready for review.',
     );
   }
   return { sha };

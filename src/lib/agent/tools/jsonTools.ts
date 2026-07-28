@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import { jail } from './fsTools';
 import { registerTool, type ToolDef } from './registry';
+import { ALL_PHASES } from '../types';
 
 const MAX_OUTPUT_CHARS = 50_000;
 
@@ -19,7 +20,7 @@ const jsonQueryTool: ToolDef = {
     content: z.string().optional().describe('Inline JSON — only for small values already at hand'),
     query: z.string().describe('jq program, e.g. ".web[] | {title, url}"'),
   }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   async execute(input, ctx) {
     if (Boolean(input.path) === Boolean(input.content)) {
       return JSON.stringify({ error: 'Provide exactly one of path or content' });

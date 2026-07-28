@@ -165,7 +165,7 @@ describe('POST /api/chat/element-handoff', () => {
   it('routes through the pending-answer path when the turn is paused', async () => {
     vi.mocked(handleChatMessage).mockClear();
     const chat = await makeChat('c-elhand-wait', {
-      workflowPhase: 'preview',
+      workflowPhase: 'execute',
       turnPhase: 'waiting_for_answer',
       pendingQuestion: { toolName: 'propose_plan', input: {} },
     });

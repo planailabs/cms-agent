@@ -131,7 +131,7 @@ model Chat {
   createdById String?
   createdBy   User?   @relation(fields: [createdById], references: [id])
 
-  // Workflow phase: 'plan' | 'execute' | 'preview' | 'published'
+  // Workflow phase: 'plan' | 'execute' | 'published' (reviewing is part of execute)
   workflowPhase String @default("plan")
   // Turn phase: 'idle' | 'waiting_for_answer' | 'tool_pending'
   turnPhase       String  @default("idle")

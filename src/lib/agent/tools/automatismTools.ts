@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { findPausedAutomatism, resumeAutomatism } from '@/lib/automatism';
 import { registerTool } from './registry';
+import { ALL_PHASES } from '../types';
 
 export function registerAutomatismTools(): void {
   registerTool({
@@ -16,7 +17,7 @@ export function registerAutomatismTools(): void {
       'chat: the failed step re-runs and the flow continues. Call this ONLY after the cause ' +
       'of the failure is actually fixed. Progress arrives as [Automatism] events.',
     schema: z.object({}),
-    phases: ['plan', 'execute', 'preview', 'published'],
+    phases: ALL_PHASES,
     kinds: ['workflow', 'deployment', 'deployments'],
     execute: async (_input, ctx) => {
       await import('@/lib/publish/publisher'); // ensures automatism types are registered

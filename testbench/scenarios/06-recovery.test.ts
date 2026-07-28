@@ -109,7 +109,7 @@ describe('recovery paths', () => {
         'Change the main headline on the About page to exactly "Setup Bench". ' +
           'Simple content change — propose your plan right away without asking questions.',
       );
-      const preview = (await client.req('POST', `/api/chats/${setup.chatId}/to-preview`, {
+      const preview = (await client.req('POST', `/api/chats/${setup.chatId}/finalize`, {
         summary: 'Recovery setup: About headline',
       })).json as { sha?: string };
       const pub = (await client.req('POST', `/api/chats/${setup.chatId}/publish`, {
@@ -227,10 +227,10 @@ describe('recovery paths', () => {
       'Add the line "Deploy Bench was here." to the end of the main content on the home page. ' +
         'Simple content change — propose your plan right away without asking questions.',
     );
-    const preview = (await client.req('POST', `/api/chats/${chatId}/to-preview`, {
+    const preview = (await client.req('POST', `/api/chats/${chatId}/finalize`, {
       summary: 'Recovery: deploy pause/resume',
     })).json as { sha?: string };
-    ok('to-preview returns a sha', !!preview.sha);
+    ok('finalize returns a sha', !!preview.sha);
 
     // Break the deploy remote (read-only bare repo → push fails)…
     const remote = benchRun().deployRemotePath;

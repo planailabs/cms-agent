@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { skillsForChat } from '../plugins';
 import { registerTool, type ToolDef } from './registry';
+import { ALL_PHASES } from '../types';
 
 const useSkillTool: ToolDef = {
   name: 'use_skill',
@@ -16,7 +17,7 @@ const useSkillTool: ToolDef = {
   schema: z.object({
     name: z.string().min(1).describe('Skill name exactly as listed in the system prompt'),
   }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   kinds: ['workflow', 'deployment', 'deployments'],
   async execute(input, ctx) {
     // Branch-local skills (worktree .agents/skills/) shadow installed ones

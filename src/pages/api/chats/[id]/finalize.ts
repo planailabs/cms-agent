@@ -1,7 +1,7 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
-import { toPreview, WorkflowError } from '@/lib/agent/workflow';
+import { finalizeExecution, WorkflowError } from '@/lib/agent/workflow';
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
   const user = locals.user!;
@@ -12,7 +12,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     // empty body is fine
   }
   try {
-    const { sha } = await toPreview({
+    const { sha } = await finalizeExecution({
       chatId: params.id!,
       actor: user,
       summary: body.summary,

@@ -25,7 +25,7 @@ const mkState = (): AppState => {
     activeChatKind: 'workflow',
     activeChatTitle: 'Chat 1',
     activeChatArchived: false,
-    workflowPhase: 'preview',
+    workflowPhase: 'execute',
     chat: null,
     workspace: ws,
   };

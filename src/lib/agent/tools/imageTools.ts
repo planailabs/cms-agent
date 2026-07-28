@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { env } from '@/lib/env';
 import { assertWritable, isScratchPath, jail } from './fsTools';
 import { registerTool } from './registry';
+import { ALL_PHASES } from '../types';
 
 export function registerImageTools(): void {
   registerTool({
@@ -17,7 +18,7 @@ export function registerImageTools(): void {
       altText: z.string().min(1).describe('Concise accessible description for the generated image'),
       size: z.enum(['1024x1024', '1536x1024', '1024x1536']).default('1024x1024'),
     }),
-    phases: ['plan', 'execute', 'preview', 'published'],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       assertWritable(ctx, input.path);
       const destination = jail(ctx, input.path);

@@ -19,6 +19,7 @@ import {
 import { imageMimeForPath } from '../messageUtils';
 import { registerTool, type ToolContext, type ToolDef } from './registry';
 import { activeBackend } from '@/lib/site';
+import { ALL_PHASES } from '../types';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '.astro']);
 const MAX_FILE_CHARS = 50_000;
@@ -75,7 +76,6 @@ function* walk(dir: string, root: string): Generator<string> {
   }
 }
 
-const ALL_PHASES = ['plan', 'execute', 'preview', 'published'] as const;
 // Deployment chats work on the source chat's work worktree (conflict fixes)
 const REPO_KINDS = ['workflow', 'deployment'] as const;
 
@@ -83,7 +83,7 @@ const readFileTool: ToolDef = {
   name: 'read_file',
   description: 'Read a file from the site repository. Paths are relative to the repo root.',
   schema: z.object({ path: z.string() }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const p = jail(ctx, input.path);
@@ -107,7 +107,7 @@ const listDirTool: ToolDef = {
   name: 'list_dir',
   description: 'List a directory in the site repository (non-recursive). "." for the root.',
   schema: z.object({ path: z.string().default('.') }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const p = jail(ctx, input.path);
@@ -128,7 +128,7 @@ const grepTool: ToolDef = {
     pattern: z.string().describe('JavaScript regular expression'),
     glob: z.string().optional().describe('Only search files whose path contains this substring'),
   }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     const root = jail(ctx, '.');
@@ -167,7 +167,7 @@ const listPagesTool: ToolDef = {
   name: 'list_pages',
   description: 'List all page and content files of the site.',
   schema: z.object({}),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   async execute(_input, ctx) {
     const root = jail(ctx, '.');
     const backend = activeBackend();
@@ -189,7 +189,7 @@ const gitLogTool: ToolDef = {
     maxCount: z.number().int().positive().max(100).default(20),
     ref: z.string().optional().describe('Branch, tag, or sha (default: current branch)'),
   }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...GIT_KINDS],
   async execute(input, ctx) {
     if (input.ref) assertSafeRef(input.ref);
@@ -202,7 +202,7 @@ const gitShowTool: ToolDef = {
   name: 'git_show',
   description: 'Show one commit: message, changed files, and full patch.',
   schema: z.object({ ref: z.string().describe('Commit sha, branch, or tag') }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...GIT_KINDS],
   async execute(input) {
     const out = await showCommit(input.ref);
@@ -220,7 +220,7 @@ const gitDiffTool: ToolDef = {
     ref: z.string().optional().describe('Branch to diff (default: current branch)'),
     base: z.string().optional().describe('Base to diff against (default: main)'),
   }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...GIT_KINDS],
   async execute(input, ctx) {
     if (input.ref) assertSafeRef(input.ref);
@@ -234,7 +234,7 @@ const gitStatusTool: ToolDef = {
   name: 'git_status',
   description: 'Show uncommitted changes in the current branch worktree.',
   schema: z.object({}),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...GIT_KINDS],
   async execute(_input, ctx) {
     const lines = await worktreeStatus(ctx.branchName);
@@ -246,7 +246,7 @@ const gitBranchesTool: ToolDef = {
   name: 'git_branches',
   description: 'List the branches of the site repository (default branch marked).',
   schema: z.object({}),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...GIT_KINDS],
   async execute() {
     const [branches, def] = await Promise.all([listRepoBranches(), defaultBranch()]);
@@ -261,7 +261,7 @@ const writeFileTool: ToolDef = {
   description:
     'Create or overwrite a file in the repository. Outside the EXECUTE phase only paths under .scratch/ (the uncommitted scratch area) are writable.',
   schema: z.object({ path: z.string(), content: z.string() }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     assertWritable(ctx, input.path);
@@ -283,7 +283,7 @@ const editFileTool: ToolDef = {
     newText: z.string(),
     replaceAll: z.boolean().default(false),
   }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     assertWritable(ctx, input.path);
@@ -314,7 +314,7 @@ const removeFileTool: ToolDef = {
     path: z.string(),
     recursive: z.boolean().default(false).describe('Required to remove directories and their contents'),
   }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     assertWritable(ctx, input.path);
@@ -333,7 +333,7 @@ const moveFileTool: ToolDef = {
   description:
     'Move or rename a file or directory within the repository — binary-safe. Use it to promote finished .scratch/ artifacts (screenshots, downloads, drafts) into the site during EXECUTE. Outside the EXECUTE phase both source and destination must be under .scratch/.',
   schema: z.object({ from: z.string(), to: z.string() }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     // Gate the source too: moving a repo file during plan mutates the repo.
@@ -353,7 +353,7 @@ const getUserContextTool: ToolDef = {
   description:
     'Get the live user context: which preview page each connected editor is viewing, recent selections, and files modified in this chat.',
   schema: z.object({}),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   async execute(_input, ctx) {
     return JSON.stringify({
       editors: Object.fromEntries(ctx.userContext),

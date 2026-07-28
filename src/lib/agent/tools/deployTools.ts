@@ -8,8 +8,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { env } from '@/lib/env';
 import { registerTool, type ToolDef } from './registry';
-
-const ALL_PHASES = ['plan', 'execute', 'preview', 'published'] as const;
+import { ALL_PHASES } from '../types';
 
 const listPublicationsTool: ToolDef = {
   name: 'list_publications',
@@ -19,7 +18,7 @@ const listPublicationsTool: ToolDef = {
     limit: z.number().int().positive().max(100).default(20),
     status: z.enum(['running', 'succeeded', 'failed', 'external_unknown']).optional(),
   }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: ['workflow', 'deployment', 'deployments'],
   async execute(input) {
     const rows = await prisma.publication.findMany({
@@ -55,7 +54,7 @@ const getPublicationTool: ToolDef = {
   description:
     'Full detail of one publication: complete deploy log, artifact manifest summary, approval linkage. Pass the publication id or a commit sha.',
   schema: z.object({ idOrSha: z.string() }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: ['workflow', 'deployment', 'deployments'],
   async execute(input) {
     const p = await prisma.publication.findFirst({
@@ -97,7 +96,7 @@ const deploymentStatusTool: ToolDef = {
   description:
     "Re-check a publication's live status via the deploy flow's verification (e.g. GitHub CI conclusion, Cloudflare deployment state). Read-only.",
   schema: z.object({ publicationId: z.string() }),
-  phases: [...ALL_PHASES],
+  phases: ALL_PHASES,
   kinds: ['workflow', 'deployment', 'deployments'],
   async execute(input) {
     const p = await prisma.publication.findUnique({ where: { id: input.publicationId } });

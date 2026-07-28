@@ -15,6 +15,7 @@ import { env } from '@/lib/env';
 import type { ToolDef } from '@/lib/agent/tools/registry';
 import { sealArtifact } from './artifact';
 import { registerDeployFlow, type DeployFlow } from './types';
+import { ALL_PHASES } from '@/lib/agent/types';
 
 function runScript(
   command: string,
@@ -66,7 +67,7 @@ const artifactInfoTool: ToolDef = {
     'Inspect the sealed build artifact of a deploy sha: tarball path, file count, build ' +
     'metadata. Useful when the build or upload step of this deployment failed.',
   schema: z.object({ sha: z.string().regex(/^[0-9a-f]{7,40}$/) }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   async execute(input) {
     const metaPath = path.join(path.resolve(env().VAR_DIR), 'artifacts', `${input.sha}.json`);
     if (!fs.existsSync(metaPath)) {

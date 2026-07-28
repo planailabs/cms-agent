@@ -15,7 +15,6 @@ import { currentPlan } from './planModal';
 const PHASE_SHORT_KEY: Record<WorkflowPhase, string> = {
   plan: 'workspace.sidebar.phaseShort.plan',
   execute: 'workspace.sidebar.phaseShort.execute',
-  preview: 'workspace.sidebar.phaseShort.preview',
   published: 'workspace.sidebar.phaseShort.published',
 };
 
@@ -116,7 +115,6 @@ export const renderBranchSwitcher = (state: AppState): string => {
 const PHASE_STEPS: Array<{ key: WorkflowPhase; labelKey: string }> = [
   { key: 'plan', labelKey: 'workspace.phase.plan' },
   { key: 'execute', labelKey: 'workspace.phase.execute' },
-  { key: 'preview', labelKey: 'workspace.phase.preview' },
   { key: 'published', labelKey: 'workspace.phase.published' },
 ];
 

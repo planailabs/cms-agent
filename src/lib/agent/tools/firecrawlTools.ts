@@ -9,8 +9,8 @@ import {
 import { crawlWeb, mapWeb, scrapeWeb, searchWeb } from '@/lib/firecrawl/web';
 import { isScratchPath, jail } from './fsTools';
 import { registerTool, type ToolContext, type ToolDef } from './registry';
+import { ALL_PHASES } from '../types';
 
-const ALL_PHASES = ['plan', 'execute', 'preview', 'published'] as const;
 const inputPathSchema = z.object({ inputPath: z.string() });
 const scratchOutputPath = z
   .string()
@@ -44,7 +44,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_extract_base_href',
     description: 'Resolve an HTML file base URL using Firecrawl native parsing.',
     schema: inputPathSchema.extend({ url: z.string().url() }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result({ baseUrl: await firecrawlNative().extractBaseHref(readText(ctx, input.inputPath), input.url) });
     },
@@ -53,7 +53,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_extract_links',
     description: 'Extract links from an HTML file with Firecrawl native parsing.',
     schema: inputPathSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result(await firecrawlNative().extractLinks(readText(ctx, input.inputPath)));
     },
@@ -62,7 +62,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_extract_metadata',
     description: 'Extract page metadata from an HTML file with Firecrawl native parsing.',
     schema: inputPathSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result(await firecrawlNative().extractMetadata(readText(ctx, input.inputPath)));
     },
@@ -77,7 +77,7 @@ const nativeTools: ToolDef[] = [
       excludeTags: z.array(z.string()).default([]),
       onlyMainContent: z.boolean().default(true),
     }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const html = await firecrawlNative().transformHtml({
         html: readText(ctx, input.inputPath),
@@ -93,7 +93,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_get_inner_text',
     description: 'Extract body text from an HTML file and write it to a repo path.',
     schema: inputPathSchema.extend({ outputPath: scratchOutputPath }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const text = await firecrawlNative().getInnerJson(readText(ctx, input.inputPath));
       return result({ path: input.outputPath, bytes: write(ctx, input.outputPath, text) });
@@ -105,7 +105,7 @@ const nativeTools: ToolDef[] = [
     schema: inputPathSchema.extend({
       selectors: z.array(z.object({ selector: z.string(), attribute: z.string() })).min(1),
     }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result(
         await firecrawlNative().extractAttributes(readText(ctx, input.inputPath), {
@@ -118,7 +118,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_extract_images',
     description: 'Extract and resolve image URLs from an HTML file.',
     schema: inputPathSchema.extend({ baseUrl: z.string().url() }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result(await firecrawlNative().extractImages(readText(ctx, input.inputPath), input.baseUrl));
     },
@@ -127,7 +127,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_post_process_markdown',
     description: 'Post-process a Markdown file with Firecrawl and write the result to a repo path.',
     schema: inputPathSchema.extend({ outputPath: scratchOutputPath }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const markdown = await firecrawlNative().postProcessMarkdown(readText(ctx, input.inputPath));
       return result({ path: input.outputPath, bytes: write(ctx, input.outputPath, markdown) });
@@ -137,7 +137,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_filter_links',
     description: 'Run Firecrawl crawl-link filtering using a JSON input file.',
     schema: inputPathSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result(await firecrawlNative().filterLinks(JSON.parse(readText(ctx, input.inputPath))));
     },
@@ -146,7 +146,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_filter_url',
     description: 'Run Firecrawl single-URL filtering using a JSON input file.',
     schema: inputPathSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result(await firecrawlNative().filterUrl(JSON.parse(readText(ctx, input.inputPath))));
     },
@@ -155,7 +155,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_parse_sitemap',
     description: 'Parse a sitemap XML file with Firecrawl native parsing.',
     schema: inputPathSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result(await firecrawlNative().parseSitemapXml(readText(ctx, input.inputPath)));
     },
@@ -164,7 +164,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_process_sitemap',
     description: 'Turn a sitemap XML file into Firecrawl crawl instructions.',
     schema: inputPathSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result(await firecrawlNative().processSitemap(readText(ctx, input.inputPath)));
     },
@@ -177,7 +177,7 @@ const nativeTools: ToolDef[] = [
       successRateThreshold: z.number().min(0).max(1).default(0.8),
       cdpFailureThreshold: z.number().min(0).max(1).default(0.3),
     }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const data = JSON.parse(readText(ctx, input.inputPath)) as Record<string, unknown>[];
       return result(
@@ -194,7 +194,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_detect_pdf',
     description: 'Detect PDF type and metadata from a PDF file without extracting all text.',
     schema: inputPathSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       return result(firecrawlNative().detectPdf(jail(ctx, input.inputPath)));
     },
@@ -206,7 +206,7 @@ const nativeTools: ToolDef[] = [
       outputPath: scratchOutputPath,
       maxPages: z.number().int().positive().optional(),
     }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const processed = firecrawlNative().processPdf(jail(ctx, input.inputPath), input.maxPages);
       const markdown = typeof processed.markdown === 'string' ? processed.markdown : '';
@@ -218,7 +218,7 @@ const nativeTools: ToolDef[] = [
     name: 'firecrawl_convert_document',
     description: 'Convert a DOC, DOCX, RTF, ODT, or XLSX file to HTML and write it to a repo path.',
     schema: inputPathSchema.extend({ outputPath: scratchOutputPath }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const extension = path.extname(input.inputPath).toLowerCase() as keyof typeof FIRECRAWL_DOCUMENT_TYPES;
       const typeName = FIRECRAWL_DOCUMENT_TYPES[extension];
@@ -269,7 +269,7 @@ const webTools: ToolDef[] = [
     name: 'web_scrape',
     description: 'Render a public page in Chromium, clean it with Firecrawl, and write its HTML to a repo path.',
     schema: scrapeOptionsSchema.extend({ url: z.string().url(), outputPath: scratchOutputPath }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const document = await scrapeWeb(input.url, input);
       return result({
@@ -293,7 +293,7 @@ const webTools: ToolDef[] = [
       country: z.string().default('us'),
       timeout: z.number().int().positive().max(120_000).optional(),
     }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const results = await searchWeb(input);
       return result({
@@ -307,7 +307,7 @@ const webTools: ToolDef[] = [
     name: 'web_map',
     description: 'Discover links from a public site with browser rendering and write them to JSON.',
     schema: traverseSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const links = await mapWeb(input.url, { ...input, ...input.scrapeOptions });
       return result({
@@ -321,7 +321,7 @@ const webTools: ToolDef[] = [
     name: 'web_crawl',
     description: 'Crawl and render public site pages, writing Firecrawl-cleaned documents to JSON.',
     schema: traverseSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const documents = await crawlWeb(input.url, { ...input, ...input.scrapeOptions });
       return result({
@@ -335,7 +335,7 @@ const webTools: ToolDef[] = [
     name: 'web_fetch_raw',
     description: 'Fetch a public HTTP(S) URL as-is and write its exact response bytes to a repo path.',
     schema: fetchSchema,
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const fetched = await fetchPublic(input.url, input);
       return result({
@@ -355,7 +355,7 @@ const webTools: ToolDef[] = [
       excludeTags: z.array(z.string()).default([]),
       onlyMainContent: z.boolean().default(true),
     }),
-    phases: [...ALL_PHASES],
+    phases: ALL_PHASES,
     async execute(input, ctx) {
       const fetched = await fetchPublic(input.url, input);
       const source = fetched.body.toString('utf8');

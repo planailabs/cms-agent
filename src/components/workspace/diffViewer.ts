@@ -1,8 +1,8 @@
 /**
- * Diff Viewer — main-area view in the PREVIEW workflow phase.
- * Page tabs + three view modes per route:
+ * Diff Viewer — the "compare" main-area window (rail eye button), openable
+ * whenever a chat has work to review. Page tabs + four view modes per route:
  *   side-by-side (before/after iframes), highlight (after + diff overlay
- *   PNGs), onion (before/after screenshots with a draggable slider).
+ *   PNGs), onion (before/after screenshots with a draggable slider), scroll.
  */
 
 import { escapeHtml } from '../chat/utils/html';
@@ -12,6 +12,8 @@ import type { DiffPage, DiffState, DiffViewMode } from './state';
 import { branchPreviewUrl } from './config';
 import { activeBranchName, previewBranchName } from './preview';
 import { store } from '../chat/app/store';
+import { loadDiffPages } from './actions';
+import { registerWindow } from './window';
 
 /** Route-shaped pathname: leading '/', query/hash dropped. The trailing
  *  slash is PRESERVED — sites may require it (Astro trailingSlash). */
@@ -51,7 +53,7 @@ export const navigateDiffTo = (input: string): void => {
  *  page tabs and the other pane to the new route. */
 export const onDiffFrameNavigated = (route: string): void => {
   const state = store.state;
-  if (state.workflowPhase !== 'preview' || state.workspace.elementEdit.active) return;
+  if (state.workspace.window !== 'compare' || state.workspace.elementEdit.active) return;
   navigateDiffTo(route);
 };
 
@@ -289,3 +291,44 @@ const warnBanner = (files: string[]): string =>
     <div class="ws-warn-banner__head">${escapeHtml(t(uiLocale(), 'workspace.diff.unresolvedNote'))}</div>
     ${files.map((f) => `<div class="ws-warn-banner__file ws-mono">${escapeHtml(f)}</div>`).join('')}
   </div>`;
+
+// ── The compare window (rail eye button + view-mode flyout) ──────────────
+
+const EYE_ICON = `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.3 8s2.5-4.3 6.7-4.3S14.7 8 14.7 8s-2.5 4.3-6.7 4.3S1.3 8 1.3 8z"/><circle cx="8" cy="8" r="2"/></svg>`;
+
+/** Flyout beside the eye: the same view modes as the in-window segmented
+ *  control. Always rendered — CSS reveals it on hover, `is-open` pins it
+ *  after a click (closed by the ws-compare-menu layer). */
+const renderCompareMenu = (state: AppState): string => {
+  const locale = uiLocale();
+  const { diff } = state.workspace;
+  const items = MODES.map(
+    (m) => `<button type="button" class="ws-compare-menu__item ${m.key === diff.mode ? 'is-active' : ''}"
+      role="menuitem" data-action="ws-diff-mode" data-mode="${m.key}">
+      ${MODE_ICONS[m.key]}<span>${escapeHtml(t(locale, m.labelKey))}</span>
+    </button>`,
+  ).join('');
+  return `<div class="ws-compare-menu ${diff.menuOpen ? 'is-open' : ''}" role="menu">
+      <div class="ws-compare-menu__head">${escapeHtml(t(locale, 'workspace.compare.menuTitle'))}</div>
+      ${items}
+    </div>`;
+};
+
+registerWindow({
+  kind: 'compare',
+  order: 5,
+  icon: EYE_ICON,
+  tooltipKey: 'workspace.compare.openTitle',
+  railAction: 'ws-compare-open',
+  render: renderDiffViewer,
+  railMenu: renderCompareMenu,
+  // The rail item (button + flyout) is the outside-click boundary.
+  disabled: (state) => !state.activeChatId,
+  onOpen: () => {
+    const { diff } = store.state.workspace;
+    if (!diff.loaded && !diff.loading && !diff.error) void loadDiffPages();
+  },
+  onClose: () => {
+    store.state.workspace.diff.menuOpen = false;
+  },
+});

@@ -10,8 +10,12 @@ import type OpenAI from 'openai';
 /** Turn phase persisted on Chat.turnPhase (same machine as chat/). */
 export type TurnPhase = 'idle' | 'running' | 'waiting_for_answer' | 'tool_pending';
 
-/** Workflow phase persisted on Chat.workflowPhase. */
-export type WorkflowPhase = 'plan' | 'execute' | 'preview' | 'published';
+/** Workflow phase persisted on Chat.workflowPhase. Reviewing the result is
+ *  part of EXECUTE (the old separate PREVIEW phase was merged into it). */
+export type WorkflowPhase = 'plan' | 'execute' | 'published';
+
+/** Every phase — for tools available throughout the workflow. */
+export const ALL_PHASES: WorkflowPhase[] = ['plan', 'execute', 'published'];
 
 export type ToolCall = OpenAI.Chat.Completions.ChatCompletionMessageToolCall;
 

@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { registerTool, type ToolDef } from './registry';
+import { ALL_PHASES } from '../types';
 
 export const askQuestionTool: ToolDef = {
   name: 'ask_question',
@@ -15,7 +16,7 @@ export const askQuestionTool: ToolDef = {
     question: z.string().describe('The question text.'),
     options: z.array(z.string()).optional().describe('Options for multiple_choice. Omit for text.'),
   }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   kinds: ['workflow', 'deployment', 'deployments'],
 };
 
@@ -66,7 +67,7 @@ export const needsHumanAttentionTool: ToolDef = {
     reason: z.string().describe('Why human action is required.'),
     instructions: z.string().describe('Exact steps the human should perform.'),
   }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   kinds: ['workflow', 'deployment', 'deployments'],
 };
 
@@ -84,7 +85,7 @@ export const pickColorTool: ToolDef = {
       .optional()
       .describe('Current/default color as #rrggbb.'),
   }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   kinds: ['workflow', 'deployment', 'deployments'],
 };
 

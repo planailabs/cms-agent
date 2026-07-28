@@ -16,7 +16,7 @@ import { registerAllEvents } from './events';
 // Workspace (preview pane, diff viewer, phase bar, sidebar)
 import { renderPreviewSkeleton, renderPreviewToolbar } from '../workspace/preview';
 import { syncPreviewFrames } from '../workspace/previewFrames';
-import { renderDiffViewer } from '../workspace/diffViewer';
+import '../workspace/diffViewer'; // registers the 'compare' window
 import '../workspace/browserCompare'; // registers the 'browsers' window
 import { renderBranchSwitcher, renderPhaseBar } from '../workspace/sidebar';
 import { renderRail } from '../workspace/rail';
@@ -32,7 +32,6 @@ import { renderActiveWindow } from '../workspace/window';
 import { startUpdateWatcher } from '../workspace/appUpdate';
 import { renderInputModal } from '../workspace/modal';
 import { registerWorkspaceEvents } from '../workspace/events';
-import { loadDiffPages } from '../workspace/actions';
 
 /**
  * Sets innerHTML only when the markup actually changed. Prevents iframe
@@ -94,27 +93,16 @@ const initApp = () => {
       setHtmlIfChanged(railRegion, renderRail(state));
     }
 
-    // 2. Main area: diff viewer in the PREVIEW phase, live preview otherwise.
+    // 2. Main area: the active window (compare/diff, code browser, …) or the
+    //    live preview.
     if (mainRegion) {
-      // Edit mode and the armed element picker force the live preview even
-      // in the PREVIEW phase (the diff viewer returns when they end).
-      const inPreviewPhase =
-        state.workflowPhase === 'preview' &&
-        !!state.activeChatId &&
-        !ws.elementEdit.active &&
-        !ws.pickerActive;
-      if (inPreviewPhase && !ws.diff.loaded && !ws.diff.loading && !ws.diff.error) {
-        void loadDiffPages(); // lazy-load the changed pages on entering PREVIEW
-      }
-      // Workspace windows (workspace/window.ts state machine): code browser,
-      // commits, skills, archive, sessions, browser compare swap out the
-      // stage — the chat sidebar stays. The boot-time session offer (no
+      // Workspace windows (workspace/window.ts state machine): compare, code
+      // browser, commits, skills, archive, sessions, browser compare swap out
+      // the stage — the chat sidebar stays. The boot-time session offer (no
       // window id yet) remains a blocking overlay below.
       const windowView = renderActiveWindow(state);
       if (windowView !== null) {
         setHtmlIfChanged(mainRegion, windowView);
-      } else if (inPreviewPhase) {
-        setHtmlIfChanged(mainRegion, renderDiffViewer(state));
       } else {
         // Toolbar and iframe render into separate sub-regions: toolbar state
         // (picker armed, current route) must not recreate the iframe node —

@@ -19,6 +19,7 @@ import { chatGitIdentity } from '@/lib/git/identity';
 import { withBranchLock } from '../bus';
 import { jail } from './fsTools';
 import { registerTool, type ToolDef } from './registry';
+import { ALL_PHASES } from '../types';
 
 const KINDS = ['workflow', 'deployment'] as const;
 const MAX_CHARS = 50_000;
@@ -117,7 +118,7 @@ const targetFileTool: ToolDef = {
     path: z.string(),
     ref: z.string().optional().describe('Branch/sha (default: the target branch)'),
   }),
-  phases: ['plan', 'execute', 'preview', 'published'],
+  phases: ALL_PHASES,
   kinds: [...KINDS],
   async execute(input, ctx) {
     const ref = input.ref ?? ctx.targetBranchName;

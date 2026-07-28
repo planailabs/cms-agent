@@ -12,7 +12,7 @@ import { continueChatSession } from '../chat/actions/chat/session';
 import { registerDiffScrollSync } from './diffScroll';
 import { navigateDiffTo } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
-import { closeWindow, toggleWindow } from './window';
+import { closeWindow, openWindow, toggleWindow } from './window';
 import { deviceByKey } from './devices';
 import { registerLayer } from '../chat/app/layers';
 import {
@@ -263,6 +263,16 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
       store.notify();
     },
     outsideSelector: '[data-menu="diff-routes"]',
+  });
+  registerLayer({
+    id: 'ws-compare-menu',
+    priority: 90,
+    isOpen: (s) => s.workspace.diff.menuOpen,
+    close: () => {
+      store.state.workspace.diff.menuOpen = false;
+      store.notify();
+    },
+    outsideSelector: '.ws-rail__item',
   });
   registerLayer({
     id: 'ws-window',
@@ -529,14 +539,27 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
   delegateEvent(app, 'click', '[data-action="ws-diff-mode"]', (_e, target) => {
     const mode = target.getAttribute('data-mode') as DiffViewMode | null;
-    if (mode) {
-      store.state.workspace.diff.mode = mode;
-      store.notify();
-    }
+    if (!mode) return;
+    store.state.workspace.diff.mode = mode;
+    store.notify();
+    // Picking a tool from the rail flyout is also how compare gets opened.
+    openWindow('compare');
   });
   delegateEvent(app, 'click', '[data-action="ws-diff-overlay-toggle"]', () => {
     store.state.workspace.diff.overlayVisible = !store.state.workspace.diff.overlayVisible;
     store.notify();
+  });
+
+  // Compare window (rail eye): opening pins the tool flyout, a second click
+  // on the active button closes both.
+  delegateEvent(app, 'click', '[data-action="ws-compare-open"]', () => {
+    const ws = store.state.workspace;
+    if (ws.window === 'compare') {
+      closeWindow();
+      return;
+    }
+    ws.diff.menuOpen = true;
+    openWindow('compare');
   });
 
   // Cross-browser comparison overlay

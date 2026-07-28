@@ -9,7 +9,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     // ── sidebar: branch switcher + chat list ──
     'workspace.sidebar.phaseShort.plan': 'plan',
     'workspace.sidebar.phaseShort.execute': 'exec',
-    'workspace.sidebar.phaseShort.preview': 'prev',
     'workspace.sidebar.phaseShort.published': 'pub',
     'workspace.sidebar.kind.deployment': 'deploy',
     'workspace.sidebar.kind.deployments': 'deployments',
@@ -24,7 +23,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     // ── phase bar (PLAN → EXECUTE → PREVIEW → PUBLISH) + automatism bar ──
     'workspace.phase.plan': 'Plan',
     'workspace.phase.execute': 'Execute',
-    'workspace.phase.preview': 'Preview',
     'workspace.phase.published': 'Publish',
     'workspace.phase.pausedInvestigating': 'paused — agent investigating',
     'workspace.phase.paused': 'paused',
@@ -213,6 +211,8 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.window.delete': 'Delete this session',
     'workspace.window.fresh': 'Start fresh',
     'workspace.window.unnamed': 'Unnamed session',
+    'workspace.compare.openTitle': 'Compare before and after',
+    'workspace.compare.menuTitle': 'Compare view',
     'workspace.compare.height': 'Height',
     'workspace.compare.content': 'Content',
     'workspace.compare.title':
@@ -229,7 +229,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     // ── Sidebar: Branch-Umschalter + Chat-Liste ──
     'workspace.sidebar.phaseShort.plan': 'plan',
     'workspace.sidebar.phaseShort.execute': 'ausf.',
-    'workspace.sidebar.phaseShort.preview': 'vorschau',
     'workspace.sidebar.phaseShort.published': 'veröff.',
     'workspace.sidebar.kind.deployment': 'Deploy',
     'workspace.sidebar.kind.deployments': 'Deployments',
@@ -244,7 +243,6 @@ export const workspaceCatalogs: AreaCatalogs = {
     // ── Phasenleiste + Automatismus-Leiste ──
     'workspace.phase.plan': 'Planen',
     'workspace.phase.execute': 'Umsetzen',
-    'workspace.phase.preview': 'Vorschau',
     'workspace.phase.published': 'Veröffentlichen',
     'workspace.phase.pausedInvestigating': 'pausiert — der Agent untersucht das Problem',
     'workspace.phase.paused': 'pausiert',
@@ -437,6 +435,8 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.window.delete': 'Diese Sitzung löschen',
     'workspace.window.fresh': 'Neu starten',
     'workspace.window.unnamed': 'Unbenannte Sitzung',
+    'workspace.compare.openTitle': 'Vorher und Nachher vergleichen',
+    'workspace.compare.menuTitle': 'Vergleichsansicht',
     'workspace.compare.height': 'Höhe',
     'workspace.compare.content': 'Inhalt',
     'workspace.compare.title':

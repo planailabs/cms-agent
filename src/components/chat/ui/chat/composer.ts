@@ -109,14 +109,16 @@ export const renderChatComposer = (
     : '';
 };
 
-// ── Review action row (below the composer, PREVIEW phase) ───────────────
+// ── Review action row (below the composer, EXECUTE phase) ───────────────
 
 /** Publish / request-changes verdicts for the reviewed draft — they live
- *  here (single place, mockup layout) instead of the phase bar/diff header. */
+ *  here (single place, mockup layout) instead of the phase bar/diff header.
+ *  Reviewing is part of EXECUTE, so the row rides along from the first
+ *  commit; publish stays disabled until there is a sha to bind. */
 export const renderChatActionRow = (state: AppState): string => {
   if (
     state.activeChatKind !== 'workflow' ||
-    state.workflowPhase !== 'preview' ||
+    state.workflowPhase !== 'execute' ||
     !state.activeChatId ||
     state.activeChatArchived
   ) {

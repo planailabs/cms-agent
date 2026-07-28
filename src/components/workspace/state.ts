@@ -76,7 +76,14 @@ export type DiffViewMode = 'side-by-side' | 'highlight' | 'onion' | 'scroll';
 export type BrowserName = 'chromium' | 'firefox' | 'webkit';
 
 /** Exclusive main-area window (workspace/window.ts registry). */
-export type WindowKind = 'browsers' | 'code' | 'git' | 'caps' | 'archive' | 'sessions';
+export type WindowKind =
+  | 'compare'
+  | 'browsers'
+  | 'code'
+  | 'git'
+  | 'caps'
+  | 'archive'
+  | 'sessions';
 
 /** Cross-browser comparison window (main area) — preview + regular mode. */
 export interface BrowserCompareState {
@@ -239,6 +246,8 @@ export interface DiffState {
   selectedRoute: string | null;
   /** Route-chip dropdown (changed pages) expanded. */
   routesOpen: boolean;
+  /** Compare-tool flyout (rail eye button) pinned open by a click. */
+  menuOpen: boolean;
   /** Amber warn banner (files without a page route) expanded. */
   warnOpen: boolean;
   mode: DiffViewMode;
@@ -350,6 +359,7 @@ export const createInitialDiffState = (): DiffState => ({
   unresolved: [],
   selectedRoute: null,
   routesOpen: false,
+  menuOpen: false,
   warnOpen: false,
   mode: 'side-by-side',
   overlayVisible: true,

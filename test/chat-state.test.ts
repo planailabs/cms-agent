@@ -236,9 +236,9 @@ describe('streamed chat state', () => {
       expect(lastSnapshot().workflowPhase).toBe('plan');
       await expectParity();
 
-      // requestChanges is only legal from plan/preview — move to preview
-      // the direct way (toPreview needs a dirty worktree; out of scope here).
-      await prisma.chat.update({ where: { id: chat.id }, data: { workflowPhase: 'preview' } });
+      // requestChanges is legal from plan/execute — go back to execute the
+      // direct way (finalizeExecution needs a dirty worktree; out of scope).
+      await prisma.chat.update({ where: { id: chat.id }, data: { workflowPhase: 'execute' } });
       const before = events.length;
       await requestChanges({ chatId: chat.id, actor, feedback: 'tweak it' });
       await expect.poll(() => events.length, { timeout: 5000 }).toBeGreaterThan(before);
