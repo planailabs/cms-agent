@@ -216,8 +216,24 @@
 
           # fontconfig config + fonts for the diff-screenshot chromium — without
           # a fonts.conf and at least one font it FATALs in Skia's font manager.
+          # A standard system-like set so previewed sites render with the fonts
+          # a stock Linux desktop would have: metric-compatible Arial/Times
+          # (liberation), broad Unicode + CJK + emoji (noto), GNU FreeFont,
+          # Unifont as the everything-else fallback, and the common UI
+          # families (Ubuntu, Cantarell, Roboto).
           screenshotFontsConf = pkgs.makeFontsConf {
-            fontDirectories = [ pkgs.dejavu_fonts pkgs.liberation_ttf ];
+            fontDirectories = [
+              pkgs.dejavu_fonts
+              pkgs.liberation_ttf
+              pkgs.noto-fonts
+              pkgs.noto-fonts-cjk-sans
+              pkgs.noto-fonts-color-emoji
+              pkgs.freefont_ttf
+              pkgs.unifont
+              pkgs.ubuntu-classic
+              pkgs.cantarell-fonts
+              pkgs.roboto
+            ];
           };
 
           # Single-container entrypoint: migrations, then the Node process that
