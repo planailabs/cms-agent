@@ -42,6 +42,7 @@ describe("chat SSE", () => {
 
     expect(eventTypes).toContain("state");
     expect(eventTypes).toContain("ui_language");
+    expect(eventTypes).toContain("open_compare");
     disconnectEvents();
   });
 

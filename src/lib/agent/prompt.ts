@@ -55,8 +55,14 @@ Your job: analyze the site source and produce an implementation plan for the use
 - For color decisions, prefer pick_color — the user answers with a visual picker.
 - Ask concise questions (ask_question) when requirements are ambiguous — a question is
   always better than a wrong assumption.
-- When your analysis is complete, call propose_plan exactly once with the full plan.
-  The user approves it (moving to execution) or requests changes.`,
+- When your analysis is complete, record the plan exactly once — two ways:
+  * start_execution — record it and implement immediately. Use this when the
+    request is specific and there is one sensible way to do it; the user asked
+    for work, not for a form to sign.
+  * propose_plan — stop and let the user approve first. Use this when they
+    should weigh options, when the change is risky or wide-reaching (templates,
+    code, dependencies, many pages), or when anything is ambiguous.
+  Either way the plan is recorded and visible; only the approval stop differs.`,
   execute: `You are in the EXECUTE phase.
 An approved plan exists — implement exactly that plan in the worktree, nothing more.
 - Use write_file / edit_file / remove_file for changes; keep the site's existing

@@ -20,37 +20,42 @@ export const askQuestionTool: ToolDef = {
   kinds: ['workflow', 'deployment', 'deployments'],
 };
 
+/** The plan payload — shared by propose_plan (user approves it) and
+ *  start_execution (the agent records it and proceeds). */
+export const planSchema = z.object({
+  summary: z.string().describe('One-paragraph summary of what will change and why.'),
+  steps: z.array(z.string()).min(1).describe('Ordered implementation steps.'),
+  files: z
+    .array(
+      z.object({
+        path: z.string(),
+        action: z.enum(['create', 'modify', 'delete']),
+        reason: z.string(),
+      }),
+    )
+    .describe('Files that will be touched.'),
+  pages: z
+    .array(z.object({ url: z.string(), expectedEffect: z.string() }))
+    .describe('Site pages affected and how.'),
+  risk: z.enum(['content', 'template', 'code', 'dependency']).describe('Highest-risk change type.'),
+  questions: z.array(z.string()).optional().describe('Open questions, if any.'),
+});
+
 export const proposePlanTool: ToolDef = {
   name: 'propose_plan',
   description:
     'Present the implementation plan for approval. Call this exactly once when your analysis is complete. The user reviews it and either approves (moving to execution) or requests changes.',
-  schema: z.object({
-    summary: z.string().describe('One-paragraph summary of what will change and why.'),
-    steps: z.array(z.string()).min(1).describe('Ordered implementation steps.'),
-    files: z
-      .array(
-        z.object({
-          path: z.string(),
-          action: z.enum(['create', 'modify', 'delete']),
-          reason: z.string(),
-        }),
-      )
-      .describe('Files that will be touched.'),
-    pages: z
-      .array(z.object({ url: z.string(), expectedEffect: z.string() }))
-      .describe('Site pages affected and how.'),
-    risk: z.enum(['content', 'template', 'code', 'dependency']).describe('Highest-risk change type.'),
-    questions: z.array(z.string()).optional().describe('Open questions, if any.'),
-  }),
+  schema: planSchema,
   phases: ['plan'],
 };
 
 export const finishExecutionTool: ToolDef = {
   name: 'finish_execution',
   description:
-    'Signal that the implementation is complete and ready for preview. Every change ' +
+    'Signal that the implementation is complete and ready for review. Every change ' +
     'must already be committed with git_commit — this call is rejected while the ' +
-    'worktree has uncommitted changes. The user then confirms the switch to preview.',
+    'worktree has uncommitted changes. The user then confirms, which settles the ' +
+    'branch and puts the compare view in front of them.',
   schema: z.object({
     summary: z.string().describe('Short summary of what was implemented.'),
   }),

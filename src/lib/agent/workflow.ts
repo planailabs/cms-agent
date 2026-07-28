@@ -157,6 +157,49 @@ export async function approvePlan(opts: TransitionOpts): Promise<void> {
   }
 }
 
+/**
+ * PLAN → EXECUTE without an approval card ("shadow plan"): the agent records
+ * the plan it would have proposed and keeps going in the same turn. Explicit
+ * approval stays available (propose_plan) for changes the user should weigh
+ * in on; this path is for requests where the plan holds no real choices.
+ * Audited like any approval, with the requesting user as the actor.
+ */
+export async function startExecution(opts: {
+  chatId: string;
+  actorId: string;
+  plan: object;
+}): Promise<void> {
+  const chat = await loadChat(opts.chatId);
+  if (chat.workflowPhase !== 'plan') {
+    throw new WorkflowError(`Cannot start execution from the ${chat.workflowPhase} phase.`);
+  }
+  const planHash = createHash('sha256').update(JSON.stringify(opts.plan)).digest('hex');
+  // Same ordering as approvePlan: git prep before the phase flip.
+  await ensureBranch(chat.workBranch, chat.branch.name);
+  const baseSha = await branchSha(chat.workBranch);
+  await updatePhase(opts.chatId, chat.entityVersion, {
+    workflowPhase: 'execute',
+    planJson: opts.plan,
+  });
+  try {
+    await prisma.approval.create({
+      data: {
+        chatId: chat.id,
+        actorId: opts.actorId,
+        action: 'plan',
+        planHash,
+        baseSha,
+        idempotencyKey: randomUUID(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+  } catch (err) {
+    // Audit record only — failing to write it must not strand the transition.
+    console.error('[workflow] shadow-plan approval record failed:', err);
+  }
+  emitPhase(opts.chatId, 'execute');
+}
+
 /** EXECUTE → PLAN without starting another turn or discarding worktree changes. */
 export async function returnToPlan(chatId: string): Promise<void> {
   const chat = await loadChat(chatId);

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { broadcast } from '../bus';
 import { emitChatState } from '../chatState';
 import { registerTool } from './registry';
+import { planSchema } from './clientTools';
 import { ALL_PHASES } from '../types';
 
 export function registerChatTools(): void {
@@ -39,6 +40,49 @@ export function registerChatTools(): void {
       // Deliberate SSE-only exception: this preference must not persist or replay.
       broadcast(ctx.chatId, 'ui_language', { locale, userId: ctx.userId });
       return JSON.stringify({ ok: true, locale, persisted: false });
+    },
+  });
+
+  registerTool({
+    name: 'start_execution',
+    description:
+      'Record your plan and start implementing it right away, without stopping for ' +
+      'approval. Use this for requests where the plan holds no real choices — the ' +
+      'user asked for something specific and there is one sensible way to do it. ' +
+      'Call propose_plan instead when the user should weigh options, when the change ' +
+      'is risky or wide-reaching, or when anything about the request is ambiguous. ' +
+      'The plan is recorded either way; only the approval stop differs.',
+    schema: planSchema,
+    phases: ['plan'],
+    execute: async (plan, ctx) => {
+      const { startExecution } = await import('../workflow');
+      await startExecution({ chatId: ctx.chatId, actorId: ctx.userId, plan });
+      // The bridge lives for the whole turn; unlock the write tools now so the
+      // implementation continues without another round trip.
+      ctx.workflowPhase = 'execute';
+      return JSON.stringify({ ok: true, phase: 'execute', plan });
+    },
+  });
+
+  registerTool({
+    name: 'open_compare',
+    description:
+      "Put the before/after comparison on the user's screen — the same view the eye " +
+      'button in the tool rail opens. Use it when you have committed changes worth ' +
+      'looking at, or when the user asks to see what changed. Optionally pick the ' +
+      'view: side-by-side (live pages), scroll (synced screenshots), highlight ' +
+      '(changed regions marked) or onion (before/after slider).',
+    schema: z.object({
+      mode: z
+        .enum(['side-by-side', 'scroll', 'highlight', 'onion'])
+        .optional()
+        .describe('Which comparison view to show. Omit to keep the current one.'),
+    }),
+    phases: ['execute', 'published'],
+    execute: async ({ mode }, ctx) => {
+      // Live UI nudge like user_ui_change_language — no persistence, no replay.
+      broadcast(ctx.chatId, 'open_compare', { mode, userId: ctx.userId });
+      return JSON.stringify({ ok: true, opened: 'compare', mode: mode ?? 'unchanged' });
     },
   });
 
