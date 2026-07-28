@@ -40,6 +40,9 @@ const schema = z.object({
   // back to OPENAI_MODEL when unset.
   JUDGE_MODEL: z.string().min(1).optional(),
   OPENAI_MAX_TOKENS: z.coerce.number().int().positive().default(4096),
+  // Reasoning effort forwarded to chat completions (reasoning models).
+  // 'none' omits the parameter for backends that reject it.
+  OPENAI_REASONING_EFFORT: z.enum(['low', 'medium', 'high', 'none']).default('medium'),
   DEFAULT_COMMUNICATION_MODE: z.enum(['technical', 'non-technical']).default('non-technical'),
 
   // Domains / networking

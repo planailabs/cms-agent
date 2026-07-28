@@ -209,6 +209,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
         try {
           compacted = await openai.chat.completions.create({
             model: e.OPENAI_MODEL,
+            ...(e.OPENAI_REASONING_EFFORT !== 'none'
+              ? { reasoning_effort: e.OPENAI_REASONING_EFFORT }
+              : {}),
             max_tokens: Math.min(2048, e.OPENAI_MAX_TOKENS),
             messages: [
               {
@@ -298,6 +301,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
       try {
         const stream = await openai.chat.completions.create({
           model,
+          ...(e.OPENAI_REASONING_EFFORT !== 'none'
+            ? { reasoning_effort: e.OPENAI_REASONING_EFFORT }
+            : {}),
           max_tokens: e.OPENAI_MAX_TOKENS,
           messages: [{ role: 'system', content: systemPrompt }, ...chatMessages],
           tools: tools.length > 0 ? tools : undefined,

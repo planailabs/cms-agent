@@ -19,7 +19,7 @@ const first = () => getStagedAttachments()[0];
 beforeEach(() => {
   vi.stubGlobal('document', { querySelector: () => null, documentElement: { lang: 'en' } });
   store.state.activeChatId = 'chat';
-  store.state.chat = { aiChat: true } as typeof store.state.chat;
+  store.state.chat = { aiChat: true } as unknown as typeof store.state.chat;
 });
 
 afterEach(() => {

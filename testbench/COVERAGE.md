@@ -91,6 +91,10 @@ locally booted production build (see `launcher.mjs`). Status legend:
 
 ## Agent tool paths (implicit via e2e prompts)
 
+Every e2e agent turn sends `reasoning_effort` (OPENAI_REASONING_EFFORT,
+default medium; `none` omits) — env default unit-tested in
+test/model-effort.test.ts.
+
 Read tools + write_file/edit_file + git commit (03 journey), propose_plan /
 ask_question / finish_execution client tools (03; pick_color registered +
 UI unit-tested — bench-driving it needs a prompt that makes the agent call it), conflict tools +
