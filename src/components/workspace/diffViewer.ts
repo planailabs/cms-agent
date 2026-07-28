@@ -69,9 +69,9 @@ export const MODE_ICONS: Record<DiffViewMode, string> = {
   'side-by-side': `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.6" y="3" width="5.4" height="10" rx="1.2"/><rect x="9" y="3" width="5.4" height="10" rx="1.2"/></svg>`,
   scroll: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.4" y="2" width="11.2" height="12" rx="1.6"/><path d="M8 5.2v5.6M6 8.8L8 10.8l2-2"/></svg>`,
   highlight: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.6"/><rect x="4" y="5" width="8" height="2.4" rx="0.8" fill="currentColor" stroke="none" opacity="0.55"/><path d="M4 10.4h5.6"/></svg>`,
-  // [ ←(|)→ ] (user-sketched): compare-slider knob with outward arrows in
-  // bracket caps — replaces the overlapping-circles "onion" glyph.
-  onion: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 3H2.2v10h1.2"/><path d="M12.6 3h1.2v10h-1.2"/><path d="M8 4.6v6.8"/><path d="M6.4 8H4.3m1.2-1.2L4.3 8l1.2 1.2"/><path d="M9.6 8h2.1m-1.2-1.2L11.7 8l-1.2 1.2"/></svg>`,
+  // compare-slider knob with outward arrows, framed by the same rounded rect
+  // the scroll glyph uses so the segmented control reads as one family.
+  onion: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.4" y="2" width="11.2" height="12" rx="1.6"/><path d="M8 4.6v6.8"/><path d="M6.4 8H4.6m1.2-1.2L4.6 8l1.2 1.2"/><path d="M9.6 8h1.8m-1.2-1.2L11.4 8l-1.2 1.2"/></svg>`,
 };
 
 const shotUrl = (chatId: string, route: string, kind: 'before' | 'after' | 'diff' | 'before-aligned' | 'after-aligned'): string =>
