@@ -1700,6 +1700,59 @@ html.is-first-visit #app {
     margin: 6px 0;
   }
 
+  /* Agent task list under the phase bar */
+  .ws-tasks {
+    padding: 8px 12px 10px;
+    border-bottom: 1px solid color-mix(in lab, var(--border-muted) 70%, transparent);
+  }
+
+  .ws-tasks__head {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+  }
+
+  .ws-tasks__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .ws-task {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  .ws-task__mark {
+    flex: none;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+  }
+
+  .ws-task.is-working {
+    color: var(--text-primary);
+  }
+
+  .ws-task.is-working .ws-task__mark {
+    color: var(--accent);
+  }
+
+  .ws-task.is-done {
+    color: var(--text-muted);
+  }
+
+  .ws-task.is-done .ws-task__text {
+    text-decoration: line-through;
+  }
+
   /* Rail button with a flyout (compare tools). The wrapper is both the hover
      target and the outside-click boundary of the ws-compare-menu layer. */
   .ws-rail__item {

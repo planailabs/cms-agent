@@ -39,6 +39,7 @@ export interface ChatStateSnapshot {
   branchId: string;
   workBranch: string;
   planJson: unknown;
+  tasks?: Array<{ id: string; text: string; status: string }>;
   executionSha: string | null;
   executions: HistoryExecution[];
   publication: {
@@ -127,6 +128,7 @@ export const applyChatState = (
   // Reset the diff viewer so it reloads on (re-)entering PREVIEW.
   if (phaseChanged) ws.diff = createInitialDiffState();
   ws.plan = (snapshot.planJson as typeof ws.plan) ?? null;
+  ws.tasks = snapshot.tasks ?? [];
   ws.executions = snapshot.executions.map((e) => ({
     sha: e.sha,
     summary: e.summary,

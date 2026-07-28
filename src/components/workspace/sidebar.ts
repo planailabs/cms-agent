@@ -208,5 +208,28 @@ export const renderPhaseBar = (state: AppState): string => {
   return `<div class="ws-phase-bar">
       <div class="ws-phase-steps">${steps}</div>
       ${actions}
-    </div>${renderAutomatismBar(state)}`;
+    </div>${renderTaskList(state)}${renderAutomatismBar(state)}`;
+};
+
+/** The agent's task list — what it said it would do, and where it is. */
+const TASK_MARK: Record<string, string> = { todo: '○', working: '◐', done: '●' };
+
+export const renderTaskList = (state: AppState): string => {
+  const tasks = state.workspace.tasks;
+  if (tasks.length === 0) return '';
+  const done = tasks.filter((task) => task.status === 'done').length;
+  const items = tasks
+    .map(
+      (task) => `<li class="ws-task is-${escapeHtml(task.status)}">
+        <span class="ws-task__mark" aria-hidden="true">${TASK_MARK[task.status] ?? '○'}</span>
+        <span class="ws-task__text">${escapeHtml(task.text)}</span>
+      </li>`,
+    )
+    .join('');
+  return `<div class="ws-tasks">
+      <div class="ws-tasks__head">${escapeHtml(
+        t(uiLocale(), 'workspace.tasks.title', { done: String(done), total: String(tasks.length) }),
+      )}</div>
+      <ul class="ws-tasks__list">${items}</ul>
+    </div>`;
 };

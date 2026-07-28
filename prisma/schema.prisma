@@ -155,6 +155,7 @@ model Chat {
   memoryCandidates MemoryCandidate[]
   publications     Publication[]
   tabs             ChatTabs[]
+  tasks            ChatTask[]
   automatisms      Automatism[]
   uploads          Upload[]
 
@@ -207,6 +208,29 @@ model WindowSession {
 
   @@index([userId, updatedAt])
   @@map("window_session")
+}
+
+// A chat's task list: what the agent committed to doing, in order. Written
+// by the agent while planning and executing; the display text is shown to the
+// user, the note is the agent's own working memory.
+model ChatTask {
+  id     String @id @default(cuid())
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  // What the user sees in the chat's task list
+  text   String
+  // Agent-only working note (implementation detail, file, gotcha) — never shown
+  note   String?
+  // 'todo' | 'working' | 'done'
+  status String @default("todo")
+  // Manual ordering; ties break by createdAt
+  order  Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chatId])
+  @@map("chat_task")
 }
 
 // Per-user open preview tabs of a chat (synced across sessions via SSE)

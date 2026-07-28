@@ -37,6 +37,8 @@ export interface ChatStateSnapshot {
   branchId: string;
   workBranch: string;
   planJson: unknown;
+  /** Agent task list (display text + status; notes stay server-side). */
+  tasks: Array<{ id: string; text: string; status: string }>;
   /** Latest publishable (non-reverted) execution sha, or null. */
   executionSha: string | null;
   executions: Array<{
@@ -103,6 +105,10 @@ export async function buildChatState(
     where: { id: chatId },
     include: {
       executions: { orderBy: { createdAt: 'asc' } },
+      tasks: {
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, text: true, status: true },
+      },
       branch: { select: { name: true } },
     },
   });
@@ -143,6 +149,8 @@ export async function buildChatState(
     branchId: chat.branchId,
     workBranch: chat.workBranch,
     planJson: chat.planJson,
+    // Notes are the agent's own working memory — never leave the server.
+    tasks: chat.tasks,
     executionSha: publishable[publishable.length - 1]?.sha ?? null,
     executions: chat.executions.map((e) => ({
       sha: e.sha,

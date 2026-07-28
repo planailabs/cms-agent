@@ -291,6 +291,9 @@ export interface WorkspaceState {
   /** Approved plan (chat.planJson from history / captured on approval) —
    *  viewable in every phase, archived chats included. */
   plan: ProposedPlan | null;
+  /** The agent's task list for this chat (server snapshot; notes stay
+   *  server-side). Chat-scoped — cleared on switch. */
+  tasks: Array<{ id: string; text: string; status: string }>;
   planModalOpen: boolean;
 
   /** Compare alignment for onion views + diff scroll sync: 'height'
@@ -379,6 +382,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   pickerActive: false,
   elementEdit: createInitialElementEditState(),
   plan: null,
+  tasks: [],
   planModalOpen: false,
   // Height is the predictable default; content alignment remains opt-in and
   // is restored when an existing window session selected it explicitly.
@@ -435,6 +439,7 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.previewTabIds = [crypto.randomUUID()];
   ws.activeTabIndex = 0;
   ws.plan = null;
+  ws.tasks = [];
   ws.planModalOpen = false;
   ws.codeBrowser = createInitialCodeBrowserState();
   ws.executionSha = null;
@@ -445,7 +450,9 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.browserCompare = createInitialBrowserCompareState();
   // Chat-scoped windows close on switch; branch-level ones (git/caps/
   // archive/sessions) survive it, as before the window machine.
-  if (ws.window === 'code' || ws.window === 'browsers') ws.window = null;
+  if (ws.window === 'code' || ws.window === 'browsers' || ws.window === 'compare') {
+    ws.window = null;
+  }
   ws.automatism = null;
   ws.targetAhead = false;
   ws.pickerActive = false;

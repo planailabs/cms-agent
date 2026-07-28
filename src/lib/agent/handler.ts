@@ -24,6 +24,7 @@ import { registerLintTools } from './tools/lintTools';
 import { registerStructureTools } from './tools/structureTools';
 import { registerDeployTools } from './tools/deployTools';
 import { registerChatTools } from './tools/chatTools';
+import { registerTaskTools, taskListForPrompt } from './tools/taskTools';
 import { registerJsonTools } from './tools/jsonTools';
 import { registerScreenshotTools } from './tools/screenshotTools';
 import { registerCommitTools } from './tools/commitTools';
@@ -54,6 +55,7 @@ registerLintTools();
 registerStructureTools();
 registerDeployTools();
 registerChatTools();
+registerTaskTools();
 registerJsonTools();
 registerScreenshotTools();
 registerCommitTools();
@@ -255,12 +257,13 @@ export async function handleChatMessage(
     modifiedPaths: new Set(),
   };
 
-  const [extension, approvedMemories, communicationMode] = opts.skipPersistence
-    ? [undefined, undefined, 'non-technical' as const]
+  const [extension, approvedMemories, communicationMode, taskList] = opts.skipPersistence
+    ? [undefined, undefined, 'non-technical' as const, null]
     : await Promise.all([
         prisma.systemPromptExtension.findUnique({ where: { userId } }).then((r) => r?.content),
         getApprovedMemories(),
         communicationModeForUser(userId),
+        taskListForPrompt(chatId),
       ]);
 
   await runToolLoop({
@@ -278,6 +281,7 @@ export async function handleChatMessage(
       extension,
       approvedMemories,
       needsTitle,
+      taskList,
       worktreePath,
       hasAttachments: messages.some((m) => m.role === 'user' && !!m.attachments?.length),
       communicationMode,

@@ -26,6 +26,8 @@ export interface PromptInput {
   worktreePath?: string;
   /** Guidance lines for external MCP tools that attached this turn. */
   mcpHints?: string[];
+  /** Rendered task list (taskTools.taskListForPrompt), when the chat has one. */
+  taskList?: string | null;
   communicationMode?: CommunicationMode;
 }
 
@@ -53,6 +55,9 @@ Your job: analyze the site source and produce an implementation plan for the use
 - You can read files, list directories, search, and inspect git history. You
   cannot write to the site — only .scratch/ is writable.
 - For color decisions, prefer pick_color — the user answers with a visual picker.
+- For anything with more than one step, call add_tasks with the steps you intend
+  to take (short user-facing text; put file paths and gotchas in the optional
+  note). It is the checklist the user watches while you work.
 - Ask concise questions (ask_question) when requirements are ambiguous — a question is
   always better than a wrong assumption.
 - When your analysis is complete, record the plan exactly once — two ways:
@@ -71,6 +76,9 @@ An approved plan exists — implement exactly that plan in the worktree, nothing
   in a sandbox where the repo is the cwd — use it when a tool doesn't suffice.
 - generate_image creates PNG assets in the worktree; use its returned alt text
   when adding the image to a page.
+- Work your task list: update_task the task to "working" when you start it and
+  to "done" when it is finished, one working task at a time. add_tasks when new
+  work appears mid-implementation.
 - Commit your work with git_commit at every completed step (one coherent change
   per commit, with a message saying what and why). git_revert undoes a completed
   commit (new revert commit, found via git_log) when a change must be rolled back.
@@ -171,6 +179,12 @@ export function buildSystemPrompt(input: PromptInput): string {
     prompt += `\n\nApproved workflow plan (always authoritative across context compactions):\n${JSON.stringify(input.planJson, null, 2)}`;
   } else if (input.phase === 'execute') {
     prompt += '\n\nApproved workflow plan: (missing — ask the user)';
+  }
+
+  if (input.taskList) {
+    prompt += `\n\nYour task list for this chat (id, then text; ~ = working, x = done):
+${input.taskList}
+Keep it current with update_task as you go, and add_tasks when new work appears.`;
   }
 
   if (input.needsTitle) {
