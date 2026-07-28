@@ -101,7 +101,8 @@ explicitly in the PR/commit and justify it. Rules:
   (`transcriptSeqAtStart`); after an SSE reconnect, `resyncChatHistory`
   applies the fetched messages server-wins.
 - Workflow decisions are POST transitions (`approve-plan`,
-  `request-changes`, `to-preview`), never chat text. The message API
+  `request-changes`, `finalize`), never chat text — the exceptions are the
+  agent's own `start_execution` (shadow plan) and `return_to_plan`. The message API
   converts a typed answer to a pending `propose_plan` into a
   `requestChanges` — don't add paths that resolve workflow client tools
   as plain answers.

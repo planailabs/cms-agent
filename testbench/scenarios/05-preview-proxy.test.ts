@@ -139,6 +139,9 @@ describe('preview + proxy', () => {
         .first()
         .click();
 
+      // Reviewing is no longer a phase: open the compare window from the rail.
+      await s.page.locator('[data-action="ws-compare-open"]').click();
+
       // Frames are recreated on every route change — always re-query.
       const paneFrame = async (id: string) => {
         const el = await s.page.$(`#${id}`);
@@ -257,7 +260,7 @@ describe('preview + proxy', () => {
     }
   }, 300_000);
 
-  it('element picker works from the diff viewer (preview phase)', async () => {
+  it('element picker works from the compare window', async () => {
     const j = loadJourney();
     if (!j?.chatB) {
       recordAssert(SCENARIO, 'diff picker', true, 'n/a — e2e group not run');
@@ -272,8 +275,9 @@ describe('preview + proxy', () => {
         .locator(`[data-action="ws-open-chat"][data-chat-id="${j.chatB}"]`)
         .first()
         .click();
-      // Diff controls render once the changed pages load; the picker entry
-      // point lives in the icon rail (redesign).
+      // Diff controls render once the compare window is open and the changed
+      // pages load; the picker entry point lives in the icon rail (redesign).
+      await s.page.locator('[data-action="ws-compare-open"]').click();
       await s.page.locator('.ws-route-chip').waitFor({ timeout: 60_000 });
       const pick = s.page.locator('.ws-rail [data-action="ws-element-pick"]');
       await pick.waitFor({ timeout: 10_000 });

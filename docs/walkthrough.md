@@ -38,15 +38,18 @@ file now — the write tool is rejected: plan phase is read-only.
 
 ## 4. Execute
 
-Click **Approve plan**. The agent writes
+Click **Approve plan** (or, for a plan the agent judged unambiguous, it never
+stopped to ask — `start_execution` records the plan and continues). The agent
+writes
 `src/content/blog/summer-office-hours.md` in the branch worktree — the
 preview at `summer-posts.cms.localtest.me:8080` updates live via HMR. When
-the agent calls `finish_execution`, click **Create preview**: all changes
-become one commit (card with sha + **Undo**).
+the agent calls `finish_execution`, confirm it: whatever is left becomes one
+commit (card with sha + **Undo**).
 
-## 5. Preview & visual diff
+## 5. Review the visual diff
 
-The main area switches to the diff viewer: the changed pages (`/` and
+Click the eye in the tool rail (the agent can also open it for you) — the main
+area switches to the compare window: the changed pages (`/` and
 `/blog/summer-office-hours/` via ROUTE_MAPPINGS) as side-by-side live frames,
 a screenshot overlay with changed regions highlighted, and the draggable
 onion slider. Select text in the preview → **Chat about this** quotes it into

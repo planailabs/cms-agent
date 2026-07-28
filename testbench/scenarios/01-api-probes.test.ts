@@ -100,6 +100,14 @@ describe('api probes', () => {
 
     const history = await client.get(`/api/chat/history?chatId=${state.chatId}`);
     ok('GET /api/chat/history', history.status === 200);
+    // The snapshot carries the agent's task list (empty until it writes one);
+    // agent-only notes must never appear in it.
+    const snap = (history.json as { state?: { tasks?: unknown[] } }).state;
+    ok(
+      'chat snapshot exposes the task list',
+      Array.isArray(snap?.tasks) && !JSON.stringify(snap).includes('"note"'),
+      JSON.stringify(snap?.tasks),
+    );
 
     const context = await client.req('POST', '/api/chat/context', {
       chatId: state.chatId,

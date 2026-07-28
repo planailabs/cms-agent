@@ -6,8 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  ensureBranch: vi.fn(async () => {}),
-  ensureInstance: vi.fn(async () => ({})),
+  ensureBranch: vi.fn(async (_branch: string, _base?: string) => {}),
+  ensureInstance: vi.fn(async (_branch: string) => ({})),
   postMessage: vi.fn(),
 }));
 const { ensureBranch, ensureInstance, postMessage } = mocks;
@@ -97,7 +97,7 @@ describe('pre-warmed work branch', () => {
   it('adopts the warm branch for a chat on the default branch', async () => {
     ensureSpareBranch();
     await vi.waitFor(() => expect(ensureInstance).toHaveBeenCalled());
-    const warmed = ensureInstance.mock.calls[0][0] as unknown as string;
+    const warmed = ensureInstance.mock.calls[0][0];
     expect(warmed).toMatch(/^c-[0-9a-f]{12}$/);
     expect(ensureBranch).toHaveBeenCalledWith(warmed, 'main');
 
@@ -110,7 +110,7 @@ describe('pre-warmed work branch', () => {
   it('never hands a main-based spare to a chat targeting another branch', async () => {
     ensureSpareBranch();
     await vi.waitFor(() => expect(ensureInstance).toHaveBeenCalled());
-    const warmed = ensureInstance.mock.calls[0][0] as unknown as string;
+    const warmed = ensureInstance.mock.calls[0][0];
 
     const claimed = await claimWorkBranch('release');
     expect(claimed).not.toBe(warmed);

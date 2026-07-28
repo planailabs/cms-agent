@@ -128,7 +128,7 @@ describe('e2e agent journey', () => {
     const previewJson = preview.json as { ok?: boolean; sha?: string };
     ok('finalize returns the reviewed sha', preview.status === 200 && !!previewJson.sha);
     J.previewSha = previewJson.sha;
-    ok('phase is preview', (await chatState(J.chatId!)).workflowPhase === 'preview');
+    ok('chat stays in execute for review', (await chatState(J.chatId!)).workflowPhase === 'execute');
 
     const publish = await client.req('POST', `/api/chats/${J.chatId}/publish`, {
       sha: J.previewSha,
@@ -332,7 +332,7 @@ describe('e2e agent journey', () => {
     });
     ok('chat B finalize accepted', prev.status === 200, String(prev.status));
     // Unpublished on purpose: 05 drives the diff-viewer UI on this chat.
-    ok('chat B rests in the preview phase', (await chatState(J.chatB!)).workflowPhase === 'preview');
+    ok('chat B rests in execute, reviewable', (await chatState(J.chatB!)).workflowPhase === 'execute');
     saveJourney({ ...loadJourney()!, chatB: J.chatB! });
   }, 900_000);
 

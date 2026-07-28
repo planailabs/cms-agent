@@ -24,6 +24,7 @@ import {
   type BrowserName,
   type ContextChip,
   type DiffPage,
+  type WindowKind,
 } from './state';
 import { closeWindow, openWindow } from './window';
 
@@ -423,6 +424,24 @@ export const removeContextChip = (): void => {
 // Element-edit mode (annotate the preview → handoff to the agent)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Stage tools (element picker, edit mode) need the live preview, so any open
+ * window yields — and comes back when the tool ends. Without this, arming the
+ * picker from the compare view would strand the reviewer on the preview.
+ */
+let windowBeforeStageTool: WindowKind | null = null;
+
+export const yieldStageWindow = (): void => {
+  windowBeforeStageTool = store.state.workspace.window;
+  closeWindow();
+};
+
+export const restoreStageWindow = (): void => {
+  const kind = windowBeforeStageTool;
+  windowBeforeStageTool = null;
+  if (kind) openWindow(kind);
+};
+
 /** Entering pick/edit mode from the compare window: the live preview should
  *  open on the page being reviewed, not a stale previewRoute. (Both callers
  *  close the window first, so the loaded diff is what identifies them.) */
@@ -437,7 +456,7 @@ export const adoptDiffRoute = (): void => {
 
 export const startEditMode = (): void => {
   const ws = store.state.workspace;
-  closeWindow(); // edit mode is a stage tool — any open window yields
+  yieldStageWindow(); // edit mode is a stage tool — any open window yields
   ws.elementEdit = createInitialElementEditState();
   ws.elementEdit.active = true;
   ws.pickerActive = false;
@@ -454,6 +473,7 @@ export const stopEditMode = (opts: { notifyIframe?: boolean } = {}): void => {
   if (opts.notifyIframe !== false) postEditStop();
   ws.elementEdit = createInitialElementEditState();
   store.notify();
+  restoreStageWindow();
 };
 
 export const setEditTool = (tool: EditTool): void => {

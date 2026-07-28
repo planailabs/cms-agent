@@ -3,7 +3,8 @@
 Chat-agent CMS for Astro sites. An AI agent manages a target Astro repository
 through git branches: every draft branch gets a live dev-server preview at
 `<branch>.your-domain.tld` (behind a Rust reverse proxy this app controls),
-and every change cycles through **plan → execute → preview → publish** with
+and every change cycles through **plan → execute → publish** (reviewing is
+part of execute) with
 explicit approvals, one self-contained commit per execution, visual page
 diffs, and pluggable deployment flows.
 

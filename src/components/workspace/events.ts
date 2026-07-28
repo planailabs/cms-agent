@@ -35,6 +35,8 @@ import {
   attachContextChip,
   removeContextChip,
   adoptDiffRoute,
+  yieldStageWindow,
+  restoreStageWindow,
   startEditMode,
   stopEditMode,
   setEditTool,
@@ -471,8 +473,9 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     if (ws.pickerActive) {
       cancelElementPick(); // module replies cms:pick-cancel, but un-arm now
       ws.pickerActive = false;
+      restoreStageWindow();
     } else {
-      closeWindow(); // picking happens on the live preview — windows yield
+      yieldStageWindow(); // picking happens on the live preview — windows yield
       ws.pickerActive = true;
       // From the diff viewer the live preview mounts on notify — open it on
       // the reviewed page; the module push re-arms the pick there.

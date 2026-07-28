@@ -49,19 +49,23 @@ describe('ui flows', () => {
     ok('example prompts render on the empty chat', prompts > 0, `${prompts} prompts`);
   });
 
-  it('new chat via the branch panel makes a workflow chat active', async () => {
+  it('new chat via the branch panel opens a draft on the branch', async () => {
     await openBranchPanel(s.page);
     await dataAction(s.page, 'ws-new-chat').first().click();
-    // The new workflow chat has a worktree — the code browser opener appears
-    // usable and the composer stays interactive.
+    // A draft is client-only: the composer is live, the URL carries no chat.
     await dataAction(s.page, 'machine-config-input').first().waitFor({ timeout: 30_000 });
+    ok('draft chat has a live composer', true);
+    ok(
+      'draft chat is not addressable as a chat yet',
+      !/\/chat\//.test(new URL(s.page.url()).pathname),
+      s.page.url(),
+    );
     // Collapse the panel again — expanded it overlays the header dropdowns.
     await dataAction(s.page, 'ws-branch-list-toggle').first().click();
     await s.page.waitForTimeout(300);
-    ok('new chat created from the sidebar', true);
   });
 
-  it('one-click new chat from the collapsed switcher header', async () => {
+  it('one-click new chat creates nothing server-side until a message', async () => {
     const base = benchRun().baseUrl;
     const chatCount = async () =>
       ((await (await s.context.request.get(`${base}/api/branches`)).json()) as {
@@ -72,14 +76,41 @@ describe('ui flows', () => {
     ok('switcher + button visible without opening the panel', await plus.isVisible());
     await plus.click();
     await dataAction(s.page, 'machine-config-input').first().waitFor({ timeout: 30_000 });
-    await expect.poll(chatCount, { timeout: 15_000 }).toBe(before + 1);
-    ok('one-click chat created on the active branch', true);
+    // The old behavior created a Chat row (and a worktree) per click.
+    await s.page.waitForTimeout(1500);
+    ok('clicking + leaves no empty chat behind', (await chatCount()) === before);
+  });
+
+  it('opening a chat from the sidebar leaves the draft behind', async () => {
+    // Everything below needs a real chat (worktree-backed windows, picker).
+    // With drafts, boot no longer creates one — open or make one here.
+    const base = benchRun().baseUrl;
+    const list = async () =>
+      ((await (await s.context.request.get(`${base}/api/branches`)).json()) as {
+        branches: { id: string; chats: { id: string }[] }[];
+      }).branches;
+    let branches = await list();
+    if (!branches.some((b) => b.chats.length > 0)) {
+      await s.context.request.post(`${base}/api/chats`, {
+        data: { branchId: branches[0].id },
+      });
+      branches = await list();
+    }
+    await bootWorkspace(s.page); // reload so the sidebar sees the new chat
+    await openBranchPanel(s.page);
+    await dataAction(s.page, 'ws-open-chat').first().click();
+    await expect
+      .poll(() => new URL(s.page.url()).pathname, { timeout: 15_000 })
+      .toMatch(/^\/chat\//);
+    ok('an existing chat opens from the sidebar', true);
+    await dataAction(s.page, 'ws-branch-list-toggle').first().click();
+    await s.page.waitForTimeout(300);
   });
 
   it('redesign chrome: icon rail tools and compact header', async () => {
-    // Icon rail: 2 stage tools + 6 registered windows + settings
+    // Icon rail: 2 stage tools + 7 registered windows (compare included) + settings
     const railButtons = await s.page.locator('.ws-rail .ws-rail__btn').count();
-    ok('icon rail renders all nine tools', railButtons === 9, `${railButtons} buttons`);
+    ok('icon rail renders all ten tools', railButtons === 10, `${railButtons} buttons`);
     await s.page.locator('.ws-rail [data-action="settings-link"]').click();
     try {
       await s.page.locator('.settings-panel').waitFor({ timeout: 10_000 });
@@ -399,6 +430,41 @@ describe('ui flows', () => {
       .locator('#preview-frame-region iframe.is-active')
       .evaluate((el) => (el as HTMLIFrameElement).style.width || '(fill)');
     ok('responsive restores the fluid frame', cleared === '(fill)', cleared);
+  });
+
+  it('eye button opens compare and its tool flyout', async () => {
+    const eye = dataAction(s.page, 'ws-compare-open').first();
+    await eye.waitFor({ timeout: 15_000 });
+    const menu = s.page.locator('.ws-compare-menu');
+    ok('compare tools are listed for hover', (await menu.count()) === 1);
+    ok('flyout stays hidden until asked for', !(await menu.first().isVisible()));
+
+    await eye.click();
+    await menu.first().waitFor({ state: 'visible', timeout: 10_000 });
+    const tools = await s.page.locator('.ws-compare-menu__item').count();
+    ok('flyout lists every compare view', tools === 4, `${tools} items`);
+    ok('eye marks compare as the active window', (await s.page.locator('.ws-rail__btn.is-active[data-action="ws-compare-open"]').count()) === 1);
+
+    // Clicking a tool switches the view and keeps the list open.
+    await s.page.locator('.ws-compare-menu__item[data-mode="onion"]').click();
+    ok('picked tool is marked active', (await s.page.locator('.ws-compare-menu__item.is-active[data-mode="onion"]').count()) === 1);
+    ok('list stays open after picking', await menu.first().isVisible());
+
+    // A click outside closes the list but leaves compare open.
+    await s.page.locator('#sidebar-region').click({ position: { x: 5, y: 5 } });
+    await expect.poll(() => menu.first().isVisible(), { timeout: 10_000 }).toBe(false);
+    ok('outside click closes the list', !(await menu.first().isVisible()));
+    ok(
+      'compare stays open after the outside click',
+      (await s.page.locator('.ws-rail__btn.is-active[data-action="ws-compare-open"]').count()) === 1,
+    );
+
+    // Clicking the active eye turns compare off again.
+    await eye.click();
+    await expect
+      .poll(() => s.page.locator('.ws-rail__btn.is-active[data-action="ws-compare-open"]').count(), { timeout: 10_000 })
+      .toBe(0);
+    ok('second click leaves compare mode', true);
   });
 
   it('code browser opens a file', async () => {

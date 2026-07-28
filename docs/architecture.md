@@ -48,7 +48,7 @@
   the chat's persisted workflow phase; a disallowed tool call is rejected in
   the executor, not merely hidden from the model.
 - **One commit per execution.** The agent edits a dirty worktree; the CMS
-  stages and commits everything at the execute→preview transition. Undo is
+  stages and commits what is left when the execution is finalized. Undo is
   `git revert` of that commit — history is never rewritten.
 - **Approvals bind content.** A publish approval stores the exact reviewed
   sha; if the branch moves, publishing refuses. Approval rows are immutable

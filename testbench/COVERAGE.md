@@ -11,7 +11,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `GET /api/version` | 01 | ✅ |
 | `GET/PATCH /api/me` | 01, 02 (theme/language persist) | ✅ |
 | `GET/POST /api/dev/impersonate` (+400) | 01 | ✅ |
-| `POST /api/chats` (+400 no branch) | 01, 03 | ✅ |
+| `POST /api/chats` (+400 no branch, warm-branch adoption) | 01, 03 | ✅ |
 | `POST /api/chats/[id]/approve-plan` (+guards) | 03; guards in 01 | ✅ |
 | `POST /api/chats/[id]/request-changes` | 03 (journey B) | ✅ |
 | `POST /api/chats/[id]/finalize` | 03 | ✅ |
@@ -68,7 +68,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Composer element-picker button (arms/disarms) | 02 | ✅ |
 | Publish / request-changes action row under the composer (preview phase) | 05 | ✅ |
 | Chat transcript scroll preserved across rerenders (tool-use jump fix) | 05 | ✅ |
-| Element picker from the icon rail in the diff phase (arm → live preview on diff route → cancel) | 05 | ✅ |
+| Element picker from the icon rail in the compare window (arm → live preview on diff route → cancel returns to compare) | 05 | ✅ |
 | Edit mode from the icon rail; toolbar offers swap tool; exit returns to diff viewer | 05 | ✅ |
 | Chat visibility setting (restricted hides foreign chats, admin bypass) | 07 | ✅ |
 | Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
@@ -76,6 +76,9 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Commits / capabilities / archive / sessions windows (rail-opened, stage-swapped, chat stays, close returns to preview) | 02 | ✅ |
 | Workspace URL routing (/chat/<id>?window=…: mirror, browser back, deep-link boot) | 02 | ✅ |
 | Preview device presets (viewport-sized iframe + proxy UA override + navigator patch) | 02 | ✅ |
+| Compare window: eye button opens/closes it, flyout lists the four views, outside click closes the list only | 02 | ✅ |
+| Draft chats: new-chat/one-click create no Chat row; opening an existing chat leaves the draft | 02 | ✅ |
+| Task list in the chat snapshot (agent notes stay server-side) | 01 | ✅ |
 | Code browser (tree, open file — judged) | 02 | ✅ |
 | Code browser image preview (svg renders inline, naturalWidth > 0) | 02 | ✅ |
 | Preview tabs new/switch/close | 02 | ✅ |
@@ -98,7 +101,11 @@ test/model-effort.test.ts.
 
 Read tools + write_file/edit_file + git commit (03 journey), propose_plan /
 ask_question / finish_execution client tools (03; pick_color registered +
-UI unit-tested — bench-driving it needs a prompt that makes the agent call it), conflict tools +
+UI unit-tested — bench-driving it needs a prompt that makes the agent call it),
+start_execution / open_compare / add_tasks / update_task (unit-tested in
+test/shadow-plan.test.ts + test/task-tools.test.ts — which of them a live
+agent picks is its judgement call, so the bench cannot demand any one of
+them), conflict tools +
 resume_automatism (06 pull-conflict resolution turn), screenshot/diff
 pipeline (03/05). Web tools, generate_image, run_command, use_skill,
 propose_memory: ⛔ not deterministically triggerable — would need
