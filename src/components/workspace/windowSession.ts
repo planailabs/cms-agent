@@ -26,6 +26,7 @@ import {
   type WorkspaceRoute,
 } from './router';
 import type { WindowKind } from './state';
+import { deviceByKey } from './devices';
 
 const KEY = 'cms-window-id';
 const SAVE_DEBOUNCE_MS = 800;
@@ -36,6 +37,8 @@ interface WindowViewState {
   branchId: string | null;
   diffMode: string;
   compareMode: 'height' | 'content';
+  /** Device preset the preview emulates (null/absent = responsive). */
+  previewDevice?: string | null;
   sidebarWidth: number;
   sidebarCollapsed: boolean;
   /** v1 blobs carried these two hardcoded — kept optional for restore. */
@@ -64,6 +67,7 @@ const captureViewState = (state: AppState): WindowViewState => {
     branchId: state.activeBranchId,
     diffMode: ws.diff.mode,
     compareMode: ws.compareMode,
+    previewDevice: ws.previewDevice,
     sidebarWidth: ws.sidebarWidth,
     sidebarCollapsed: ws.sidebarCollapsed,
     window: ws.window,
@@ -86,6 +90,7 @@ const applyViewState = (blob: WindowViewState): void => {
   }
   ws.diff.mode = blob.diffMode as typeof ws.diff.mode;
   ws.compareMode = blob.compareMode === 'content' ? 'content' : 'height';
+  ws.previewDevice = deviceByKey(blob.previewDevice)?.key ?? null;
   if (blob.sidebarWidth >= 280) ws.sidebarWidth = blob.sidebarWidth;
   ws.sidebarCollapsed = Boolean(blob.sidebarCollapsed);
   // Window restore: each registered window seeds its state from the blob's

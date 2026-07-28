@@ -13,6 +13,7 @@ import { registerDiffScrollSync } from './diffScroll';
 import { navigateDiffTo } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
 import { closeWindow, toggleWindow } from './window';
+import { deviceByKey } from './devices';
 import { registerLayer } from '../chat/app/layers';
 import {
   approvePlanAction,
@@ -552,6 +553,13 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     if ((which === 'a' || which === 'b') && (value === 'chromium' || value === 'firefox' || value === 'webkit')) {
       setBrowserCompareBrowser(which, value);
     }
+  });
+
+  // Device preset for the main preview (viewport + user-agent override)
+  delegateEvent<Event>(app, 'change', '[data-action="ws-preview-device"]', (_e, target) => {
+    const value = (target as HTMLSelectElement).value;
+    store.state.workspace.previewDevice = deviceByKey(value)?.key ?? null;
+    store.notify();
   });
 
   registerAgentEvents();

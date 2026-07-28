@@ -2112,6 +2112,24 @@ html.is-first-visit #app {
     pointer-events: none;
   }
 
+  /* Device preview: iframe fixed to the device viewport (inline size/position
+     from previewFrames.ts), scaled to fit and centered over a muted stage. */
+  .ws-preview__frame.is-device {
+    background: color-mix(in lab, var(--border-muted) 35%, transparent);
+  }
+
+  .ws-preview__frame.is-device iframe {
+    inset: auto;
+    transform-origin: top left;
+    background: #fff;
+    border-radius: 6px;
+    box-shadow: 0 2px 14px rgb(0 0 0 / 0.18);
+  }
+
+  .ws-device-select {
+    max-width: 200px;
+  }
+
   /* ── Branch switcher ── */
 
   .ws-switcher {

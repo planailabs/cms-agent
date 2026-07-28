@@ -268,6 +268,10 @@ export interface WorkspaceState {
    *  iframes, so reorders/closes never remount (= reload) other tabs. */
   previewTabIds: string[];
   activeTabIndex: number;
+  /** Device preset the preview emulates (playwright registry key from
+   *  workspace/devices.ts); null = responsive (fill the pane, real UA).
+   *  A viewer preference — survives chat switches, like compareMode. */
+  previewDevice: string | null;
   /** Element picker armed (waiting for a click inside the preview). */
   pickerActive: boolean;
   /** Element-edit mode (annotate the preview, then hand off to the agent). */
@@ -359,6 +363,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   previewTabs: ['/'],
   previewTabIds: [crypto.randomUUID()],
   activeTabIndex: 0,
+  previewDevice: null,
   pickerActive: false,
   elementEdit: createInitialElementEditState(),
   plan: null,

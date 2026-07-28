@@ -9,6 +9,7 @@ import { t, uiLocale } from '@/lib/i18n';
 import { annotationCount } from '@/injected/annotate';
 import type { AppState, ChatSummary } from '../chat/app/state';
 import { branchPreviewUrl } from './config';
+import { previewDevices } from './devices';
 
 export const activeBranchName = (state: AppState): string =>
   state.branches.find((b) => b.id === state.activeBranchId)?.name ?? 'main';
@@ -95,6 +96,23 @@ const renderEditToolbar = (state: AppState): string => {
     </div>`;
 };
 
+/** Device preset selector — device names are brand names, not translated. */
+const renderDeviceSelect = (selected: string | null): string => {
+  const locale = uiLocale();
+  const title = escapeHtml(t(locale, 'workspace.preview.deviceTitle'));
+  const options = previewDevices()
+    .map(
+      (d) => `<option value="${escapeHtml(d.key)}" ${d.key === selected ? 'selected' : ''}>
+        ${escapeHtml(d.key)} · ${d.width}×${d.height}</option>`,
+    )
+    .join('');
+  return `<select class="dash-input ws-bc-select ws-device-select" data-action="ws-preview-device"
+      title="${title}" aria-label="${title}">
+      <option value="">${escapeHtml(t(locale, 'workspace.preview.deviceResponsive'))}</option>
+      ${options}
+    </select>`;
+};
+
 export const renderPreviewToolbar = (state: AppState): string => {
   const locale = uiLocale();
   const target = activeBranchName(state);
@@ -120,6 +138,7 @@ export const renderPreviewToolbar = (state: AppState): string => {
             ? `<span class="ws-toolbar__picking">${escapeHtml(t(locale, 'workspace.preview.picking'))}</span>`
             : ''
         }
+        ${renderDeviceSelect(ws.previewDevice)}
         <a class="ws-mini-button" href="${escapeHtml(branchPreviewUrl(branch, ws.previewRoute))}"
           target="_blank" rel="noopener" title="${escapeHtml(t(locale, 'workspace.preview.openNewTab'))}">↗</a>
       </div>`;
