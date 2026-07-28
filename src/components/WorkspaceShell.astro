@@ -15,8 +15,10 @@
  * exact build identity out of anonymous hands. See src/lib/buildInfo.ts.
  */
 import { APP_VERSION, GIT_COMMIT } from '@/lib/buildInfo';
+import { previewDeviceList } from '@/lib/preview/devices';
 
 const user = Astro.locals.user!;
+const previewDevices = JSON.stringify(await previewDeviceList());
 const baseDomain = process.env.BASE_DOMAIN ?? 'localhost';
 const scheme =
   process.env.PUBLIC_SCHEME ?? (Astro.url.protocol === 'https:' ? 'https' : 'http');
@@ -41,6 +43,7 @@ const previewPort = /^(1|true)$/i.test(process.env.DEV_PORT_CARRY ?? '') ? Astro
       data-git-commit={GIT_COMMIT}
     >
     </div>
+    <script type="application/json" id="cms-preview-devices" set:html={previewDevices} />
     <script>
       import '@/components/chat/main';
     </script>
