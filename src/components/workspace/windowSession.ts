@@ -214,12 +214,20 @@ const bootInto = async (blob: WindowViewState | null): Promise<void> => {
  */
 export const bootWindowSession = async (): Promise<void> => {
   store.subscribe(scheduleSave);
+  bootRoute = routeFromLocation(location);
 
   const existing = sessionStorage.getItem(KEY);
   if (existing) {
     // Same-tab reload: this window IS that session — boot straight into it.
     windowId = existing;
     await bootInto(await fetchSession(existing));
+    return;
+  }
+
+  // A deep-linked chat is explicit intent — boot fresh into it instead of
+  // offering the saved windows.
+  if (bootRoute.chatId) {
+    startFreshWindow();
     return;
   }
 
