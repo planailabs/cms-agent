@@ -67,5 +67,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const branch = await prisma.branch.create({
     data: { name, createdById: user.id },
   });
+  // Chats can be started from it right away, so its preview must be up — the
+  // warmer's next sweep would be up to a minute late.
+  void import('@/lib/preview/prewarm')
+    .then(({ warmPrimaryBranches }) => warmPrimaryBranches())
+    .catch((err) => console.warn('[prewarm] warming the new branch failed:', err));
   return json({ branch }, 201);
 };

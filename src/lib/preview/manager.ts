@@ -40,6 +40,9 @@ interface ManagerState {
   startErrors: Map<string, { message: string; at: number }>;
   /** Current phase of an in-flight start, streamed to the boot page. */
   startPhases: Map<string, 'deps' | 'server'>;
+  /** Branches kept running regardless of idleness (the branches chats fork
+   *  from — a cold one would make every new chat wait). */
+  pinned: Set<string>;
 }
 
 // Survive Vite HMR module reloads in dev
@@ -53,7 +56,9 @@ const state: ManagerState =
     routesListeners: new Set(),
     startErrors: new Map(),
     startPhases: new Map(),
+    pinned: new Set(),
   });
+state.pinned ??= new Set();
 state.startErrors ??= new Map();
 state.startPhases ??= new Map();
 state.routesListeners ??= new Set();
@@ -196,6 +201,7 @@ async function sweepIdle(): Promise<void> {
   }
   const now = Date.now();
   for (const [branch, { info }] of [...state.instances]) {
+    if (state.pinned.has(branch)) continue; // pinned branches never idle out
     const lastSeen = Math.max(access[branch] ?? 0, info.lastUsedAt);
     if (info.status === 'ready' && now - lastSeen > PREVIEW_IDLE_TIMEOUT_MS) {
       console.log(`[preview] stopping idle instance ${branch} (idle ${now - lastSeen}ms)`);
@@ -210,15 +216,32 @@ async function evictForCapacity(): Promise<void> {
     let lru: string | null = null;
     let lruTime = Infinity;
     for (const [branch, { info }] of state.instances) {
+      if (state.pinned.has(branch)) continue; // pinned ones are the floor
       if (info.lastUsedAt < lruTime) {
         lruTime = info.lastUsedAt;
         lru = branch;
       }
     }
+    // Only pinned instances left: run over the cap rather than kill a branch
+    // we promised to keep warm.
     if (!lru) break;
     console.log(`[preview] evicting LRU instance ${lru}`);
     await stopInstance(lru);
   }
+}
+
+/** Keep this branch's dev server running (see prewarm.warmPrimaryBranches). */
+export function pinBranch(branch: string): void {
+  state.pinned.add(branch);
+}
+
+/** Stop keeping it warm (branch deleted / renamed). */
+export function unpinBranch(branch: string): void {
+  state.pinned.delete(branch);
+}
+
+export function pinnedBranches(): string[] {
+  return [...state.pinned];
 }
 
 /**

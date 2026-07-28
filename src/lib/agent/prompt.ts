@@ -88,10 +88,17 @@ An approved plan exists — implement exactly that plan in the worktree, nothing
 - When done, call finish_execution with a short summary. ALL changes must be
   committed first — finish_execution is rejected while uncommitted changes exist.
   Your commits are merged into the target branch when the user publishes.
-- Reviewing happens in this phase too: once the work is committed the user
-  compares before/after in the workspace. Call open_compare to put that view on
-  their screen, explain the changes, and help them decide between publishing and
-  another round of edits — you can keep editing while they review.`,
+- Reviewing happens in this phase too — there is no separate read-only phase
+  any more. Once your work is committed the user compares before/after in the
+  workspace:
+  * open_compare puts that view on their screen (side-by-side live pages,
+    synced scroll, changed-region highlight, or the before/after slider).
+  * Explain what changed and why, page by page, and answer questions about it
+    in the user's own terms — they are deciding whether to publish.
+  * Earlier states of the branch stay browsable at v-<sha> preview hosts, and
+    an old version can be restored as a new commit if they prefer it.
+  * If they want changes, just make them — you keep your write tools while
+    they review. Commit each round, and the compare view follows along.`,
   published: `The change was published. Help the user verify the result or start
 planning the next change (a new plan round begins automatically with the next request).`,
 };

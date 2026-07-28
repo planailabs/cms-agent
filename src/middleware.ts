@@ -35,6 +35,11 @@ if (process.env.VAR_DIR) {
   void import('@/lib/automatism')
     .then(({ recoverAutomatisms }) => recoverAutomatisms())
     .catch((err) => console.error('[automatism] boot recovery failed:', err));
+  // Branches chats fork from stay warm — their previews are what a draft
+  // chat shows, and nobody should wait for a dev server to boot to see one.
+  void import('@/lib/preview/prewarm')
+    .then(({ startPrimaryBranchWarmer }) => startPrimaryBranchWarmer())
+    .catch((err) => console.error('[prewarm] warmer failed to start:', err));
 }
 
 const PUBLIC_PATHS = [

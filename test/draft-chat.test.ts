@@ -8,15 +8,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   ensureBranch: vi.fn(async (_branch: string, _base?: string) => {}),
   ensureInstance: vi.fn(async (_branch: string) => ({})),
+  pinBranch: vi.fn((_branch: string) => {}),
+  unpinBranch: vi.fn((_branch: string) => {}),
+  pinned: [] as string[],
   postMessage: vi.fn(),
 }));
-const { ensureBranch, ensureInstance, postMessage } = mocks;
+const { ensureBranch, ensureInstance, pinBranch, unpinBranch, postMessage } = mocks;
 
 vi.mock('@/lib/git/engine', () => ({
   defaultBranch: async () => 'main',
   ensureBranch: mocks.ensureBranch,
 }));
-vi.mock('@/lib/preview/manager', () => ({ ensureInstance: mocks.ensureInstance }));
+vi.mock('@/lib/preview/manager', () => ({
+  ensureInstance: mocks.ensureInstance,
+  pinBranch: mocks.pinBranch,
+  unpinBranch: mocks.unpinBranch,
+  pinnedBranches: () => mocks.pinned,
+}));
 vi.mock('@/components/chat/actions/chat/sse', () => ({
   connectEvents: vi.fn(async () => {}),
   disconnectEvents: vi.fn(),
@@ -30,7 +38,9 @@ import {
   claimWorkBranch,
   ensureSpareBranch,
   resetPrewarmForTests,
+  warmPrimaryBranches,
 } from '@/lib/preview/prewarm';
+import { prisma } from '@/lib/db';
 
 describe('draft chat', () => {
   beforeEach(() => {
@@ -117,5 +127,46 @@ describe('pre-warmed work branch', () => {
     expect(claimed).toMatch(/^c-[0-9a-f]{12}$/);
     // The spare stays available for the next default-branch chat.
     expect(await claimWorkBranch('main')).toBe(warmed);
+  });
+});
+
+describe('primary branch warmer', () => {
+  beforeEach(() => {
+    resetPrewarmForTests();
+    ensureInstance.mockClear();
+    pinBranch.mockClear();
+    unpinBranch.mockClear();
+    mocks.pinned = [];
+  });
+
+  it('pins and starts every branch a chat can be created from', async () => {
+    await prisma.branch.upsert({
+      where: { name: 'main' },
+      update: {},
+      create: { name: 'main' },
+    });
+    await prisma.branch.upsert({
+      where: { name: 'warm-release' },
+      update: {},
+      create: { name: 'warm-release' },
+    });
+
+    await warmPrimaryBranches();
+
+    const started = ensureInstance.mock.calls.map((c) => c[0]);
+    expect(started).toContain('main');
+    expect(started).toContain('warm-release');
+    expect(pinBranch.mock.calls.map((c) => c[0])).toEqual(expect.arrayContaining(started));
+    // Work branches are not primary — they warm through the spare instead.
+    expect(started.some((b) => b.startsWith('c-'))).toBe(false);
+
+    await prisma.branch.delete({ where: { name: 'warm-release' } });
+  });
+
+  it('drops the pin when a branch goes away', async () => {
+    mocks.pinned = ['main', 'deleted-branch'];
+    await warmPrimaryBranches();
+    expect(unpinBranch).toHaveBeenCalledWith('deleted-branch');
+    expect(unpinBranch).not.toHaveBeenCalledWith('main');
   });
 });
