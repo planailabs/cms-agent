@@ -176,6 +176,9 @@ html.is-first-visit #app {
     top: 50%;
     left: 100%;
     transform: translate(1rem, -50%);
+    /* Rail tooltips open into the same strip as the compare flyout (z-index
+       60) and must stay readable while it is expanded. */
+    z-index: 70;
   }
 
   @media (any-hover: hover) and (pointer: fine) {
@@ -1758,6 +1761,12 @@ html.is-first-visit #app {
   .ws-rail__item {
     position: relative;
     display: flex;
+  }
+
+  /* The flyout opens where this button's own tooltip would sit, and names the
+     tool anyway — show one label, not two stacked on each other. */
+  .ws-rail__item:hover .ws-rail__btn::after {
+    opacity: 0;
   }
 
   .ws-compare-menu {

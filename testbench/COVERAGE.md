@@ -94,6 +94,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Hex → color-name chips in chat markdown | — | 🟡 covered by unit tests through renderMarkdown (agent must mention a hex to drive it in bench) |
 | Collapsed tool-call groups (grouping, running state, meta preview, mode gate) | — | 🟡 unit-covered (test/tool-groups.test.ts); bench-driving needs a technical-mode agent turn in a browser session |
 | Routeless-files warn chip + toggle banner (diff viewer) | — | 🟡 unit-covered (test/diff-renderer.test.ts); bench-driving needs a journey that changes non-page files |
+| Rail tooltips paint over the expanded compare flyout (and the flyout's own button shows one label) | — | 🟡 unit-covered by pixel probe (test/rail-tooltip-realbrowser.test.ts); the bench asserts DOM, not paint order |
 
 ## Agent tool paths (implicit via e2e prompts)
 
