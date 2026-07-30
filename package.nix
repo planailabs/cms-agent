@@ -94,7 +94,7 @@ stdenv.mkDerivation (finalAttrs: {
         exit 1
       fi
     '';
-    hash = "sha256-7BSXIG0hB58FDSZSCodGoaz2OJz09KnOhKLrvO186nk=";
+    hash = "sha256-JPWr1QaI60L2HDLCoYSK2hr6d7VnYvbZBeM8KhUbcSs=";
   };
 
   env = {
