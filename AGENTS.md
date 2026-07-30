@@ -45,6 +45,15 @@ things need to stay true:
   rule, a deploy flow, an operational failure mode, or the NixOS module, and
   the matching guide is wrong until you say so.
 
+The tree also builds on its own — `pnpm build:architecture` emits flat HTML
+into `dist-architecture/`, which CI keeps as an artifact beside the container
+image. That build uses `astro.config.architecture.mjs` with
+`srcDir: site-architecture/`, whose `pages/architecture` is a symlink to the
+real pages: Astro finds no middleware there, so nothing of the app (adapter,
+Prisma, better-auth, the proxy addon) enters a build that has no database or
+environment. Adding a page under `src/pages/architecture/` needs no work here;
+adding an import that reaches into app runtime code will break it.
+
 **Timing: this is a single pass at the END of the work, after the code is
 finished and the tests pass.** Do not update a diagram in the middle of a
 change — the design is still moving, and documenting each intermediate step

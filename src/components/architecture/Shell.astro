@@ -132,6 +132,39 @@ const meta =
         overflow-y: auto;
         font-size: 0.9rem;
       }
+      /* Closed: the list is gone, so give its column back to the prose. */
+      body.toc-closed .page {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      body.toc-closed .toc {
+        position: static;
+        max-height: none;
+      }
+      .toc summary {
+        cursor: pointer;
+        list-style: none;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--fg-muted);
+        padding: 0.35rem 0;
+        user-select: none;
+      }
+      .toc summary::-webkit-details-marker {
+        display: none;
+      }
+      .toc summary::before {
+        content: '▾';
+        display: inline-block;
+        width: 1em;
+        transition: transform 0.15s;
+      }
+      .toc:not([open]) summary::before {
+        transform: rotate(-90deg);
+      }
+      .toc summary:hover {
+        color: var(--fg);
+      }
       .toc h2 {
         font-size: 0.75rem;
         text-transform: uppercase;
@@ -333,41 +366,71 @@ const meta =
         <p class="meta" set:html={meta} />
       </header>
 
-      <nav class="toc" aria-label="Contents">
-        {
-          CHAPTERS.map((chapter) => (
-            <>
-              <h2>{chapter.title}</h2>
-              <ol>
-                {chapter.sections.map((section) => (
-                  <li>
-                    <a href={`/architecture#${section.id}`}>{section.title}</a>
-                  </li>
-                ))}
-              </ol>
-            </>
-          ))
-        }
-        <h2>Guides</h2>
-        <ol>
+      <details class="toc" open>
+        <summary aria-label="Toggle the contents">Contents</summary>
+        <nav aria-label="Contents">
           {
-            GUIDES.map((guide) => (
-              <li>
-                <a
-                  href={`/architecture/${guide.slug}`}
-                  aria-current={isGuide && frontmatter?.title === guide.title ? 'page' : undefined}
-                >
-                  {guide.title}
-                </a>
-              </li>
+            CHAPTERS.map((chapter) => (
+              <>
+                <h2>{chapter.title}</h2>
+                <ol>
+                  {chapter.sections.map((section) => (
+                    <li>
+                      <a href={`/architecture#${section.id}`}>{section.title}</a>
+                    </li>
+                  ))}
+                </ol>
+              </>
             ))
           }
-        </ol>
-      </nav>
+          <h2>Guides</h2>
+          <ol>
+            {
+              GUIDES.map((guide) => (
+                <li>
+                  <a
+                    href={`/architecture/${guide.slug}`}
+                    aria-current={isGuide && frontmatter?.title === guide.title ? 'page' : undefined}
+                  >
+                    {guide.title}
+                  </a>
+                </li>
+              ))
+            }
+          </ol>
+        </nav>
+      </details>
 
       <main class={isGuide ? 'guide' : undefined}>
         <slot />
       </main>
     </div>
+
+    <script is:inline>
+      // The list is long; on a phone it buries the page. <details> already
+      // collapses without any of this — the script only picks the starting
+      // state, remembers the choice, and lets the prose reclaim the column.
+      (() => {
+        const toc = document.querySelector('details.toc');
+        if (!toc) return;
+        let stored = null;
+        try {
+          stored = localStorage.getItem('cmsagent-arch-toc');
+        } catch {
+          /* storage unavailable (private mode) — fall back to the viewport */
+        }
+        const sync = () => document.body.classList.toggle('toc-closed', !toc.open);
+        toc.open = stored === null ? window.innerWidth > 980 : stored === '1';
+        sync();
+        toc.addEventListener('toggle', () => {
+          sync();
+          try {
+            localStorage.setItem('cmsagent-arch-toc', toc.open ? '1' : '0');
+          } catch {
+            /* ignore */
+          }
+        });
+      })();
+    </script>
   </body>
 </html>

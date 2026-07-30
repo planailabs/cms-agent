@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "build:architecture": "astro build --config astro.config.architecture.mjs",
+    "build:architecture": "astro build --config astro.config.architecture.mjs",
     "start": "node server.mjs",
     "preview": "astro preview",
     "test": "node scripts/prepare-test-db.mjs && vitest run --no-file-parallelism --exclude 'test/integration/**' --exclude 'test/sandbox.test.ts'",

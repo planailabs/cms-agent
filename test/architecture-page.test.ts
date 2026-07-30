@@ -103,6 +103,23 @@ describe('architecture guides', () => {
     }
   });
 
+  it('the standalone build root sees the real pages and no middleware', () => {
+    // `pnpm build:architecture` ships the tree as flat HTML. It works only
+    // because Astro finds no middleware under this srcDir — otherwise the auth
+    // middleware (and Prisma, better-auth, the proxy addon behind it) would be
+    // dragged into a build that has no adapter, database or environment.
+    const link = 'site-architecture/pages/architecture';
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(existsSync(path.join(link, 'index.astro'))).toBe(true);
+    expect(readdirSync('site-architecture').filter((f) => f.startsWith('middleware.'))).toEqual([]);
+
+    const config = readFileSync('astro.config.architecture.mjs', 'utf8');
+    expect(config).toContain("srcDir: './site-architecture'");
+    expect(config).toContain("output: 'static'");
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+    expect(pkg.scripts['build:architecture']).toContain('astro.config.architecture.mjs');
+  });
+
   it('docs/ still resolves — it is a symlink to the route directory', () => {
     // Anything reading docs/setup.md from the repo root (README, AGENTS.md,
     // source comments) keeps working after the move.

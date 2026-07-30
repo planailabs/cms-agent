@@ -14,6 +14,10 @@ test:
     - nix develop -c pnpm exec tsc --noEmit
     # Self-contained: throwaway SQLite DB, no services needed (prepare-test-db).
     - nix develop -c pnpm test
+    # The standalone docs build carries none of the app (no adapter, no DB, no
+    # env), so a break here is a config/symlink problem — catch it before the
+    # deploy job, which ships the same output as an artifact.
+    - nix develop -c pnpm build:architecture
     # Builds the app + proxy (cargo test runs as its checkPhase) and
     # evaluates the NixOS module.
     - nix flake check -L
@@ -29,6 +33,15 @@ deploy:
     # Build the OCI image (CMS + proxy) with nix's dockerTools and copy it
     # to the registry.
     - nix develop -c bash docker-push.sh
+    # The /architecture tree as flat HTML — publishable on its own, next to
+    # the image it documents. Needs no adapter, database or environment.
+    - nix develop -c pnpm install --frozen-lockfile
+    - nix develop -c pnpm build:architecture
+  artifacts:
+    name: "architecture-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - dist-architecture/
+    expire_in: 90 days
   timeout: 2h
   environment: production
   resource_group: production
