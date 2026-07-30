@@ -16,19 +16,17 @@
  *  - 'known'  — codebase-memory and Context7: narrowly scoped integrations we
  *    ship and configure ourselves. Attached in every phase.
  *  - 'custom' — the admin `mcp.json` servers and the branch's `.mcp.json`.
- *    Offered from EXECUTE on; in PLAN (and after publishing) they are not
- *    started at all, so a mutating tool cannot even be listed to the model
- *    while the phase is read-only. The gate here is the workflow phase, not
- *    trust: a repo-defined server is deliberately allowed to exist, because
- *    the site repository holds what the client themselves put there, and in
- *    production it runs behind the sandbox regardless.
+ *    Their full tool set arrives with EXECUTE. While the phase is read-only
+ *    they are still attached, narrowed to the tools that declare themselves
+ *    read-only: a docs search or a lookup server is exactly what planning
+ *    wants, and taking the declaration at its word is what makes that
+ *    possible. The gate here is the workflow phase, not trust — a
+ *    repo-defined server is deliberately allowed to exist, because the site
+ *    repository holds what the client themselves put there, and in production
+ *    it runs behind the sandbox regardless.
  *
  * The deployment monitor observes deployments, it never changes them, so
- * every source is reduced to tools that explicitly declare MCP's
- * readOnlyHint. Note that custom servers reach us through the mcporter bridge
- * (bridgeEntry.ts), whose listTools() drops annotations — so in the monitor
- * they contribute nothing. That is the intended restrictive default for a
- * server whose side effects we cannot see, not an oversight.
+ * every source is reduced the same way, whatever the phase says.
  *
  * The gate is the phase, never the sandbox mode: SANDBOX_MODE=none is a
  * development fallback, and the tool set must not differ between dev and
@@ -55,5 +53,5 @@ export function mcpAccess(
   if (source === 'known') return { attach: true, readOnlyOnly: false };
   // Deployment chats resolve conflicts and commit — the handler runs them
   // with workflowPhase 'execute', so they land here with full access.
-  return { attach: ctx.phase === 'execute', readOnlyOnly: false };
+  return { attach: true, readOnlyOnly: ctx.phase !== 'execute' };
 }

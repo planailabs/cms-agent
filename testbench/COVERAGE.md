@@ -97,7 +97,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Rail tooltips paint over the expanded compare flyout (and the flyout's own button shows one label) | — | 🟡 unit-covered by pixel probe (test/rail-tooltip-realbrowser.test.ts); the bench asserts DOM, not paint order |
 | `/architecture` reference page (public, mermaid diagrams) | 07 (reachable without a session) | 🟡 07 checks the route is public and ships diagram markup; that every diagram *renders* is unit-covered (test/architecture-page.test.ts) |
 | Workflow-phase run boundary (start_execution / return_to_plan end the run; the next one gets the new phase's prompt + tools) | — | 🟡 unit-covered (test/phase-run-boundary.test.ts); bench-driving needs a live agent to pick start_execution over propose_plan, which is its judgement call |
-| External MCP phase gate (custom/repo servers only from EXECUTE; deployment monitor limited to declared read-only tools) | — | 🟡 unit-covered (test/mcp-policy.test.ts); bench-driving needs a configured custom MCP server in the bench environment |
+| External MCP phase gate (custom/repo servers full only in EXECUTE, declared read-only tools while planning; deployment monitor always reduced) | — | 🟡 unit-covered (test/mcp-policy.test.ts); readOnlyHint surviving the jailed bridge is covered in test/integration/custom-mcp.test.ts; bench-driving needs a configured custom MCP server in the bench environment |
 
 ## Agent tool paths (implicit via e2e prompts)
 

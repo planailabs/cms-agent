@@ -80,8 +80,6 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
     known.attach
       ? Promise.all([attachCodebaseMemory(ctx), attachContext7()])
       : Promise.resolve([]),
-    // Not merely filtered afterwards — a blocked source is never started, so
-    // a third-party server cannot run at all while the phase is read-only.
     custom.attach
       ? attachCustomMcps(
           ctx.worktreePath ? { worktreePath: ctx.worktreePath, chatId: ctx.chatId } : undefined,

@@ -31,6 +31,34 @@ interface Entry {
   tool: string;
   description: string;
   inputSchema: unknown;
+  annotations?: unknown;
+}
+
+/**
+ * Tool annotations, straight from the server.
+ *
+ * mcporter's listTools() projects each tool down to name/description/schemas
+ * and drops `annotations`, but the app gates on readOnlyHint — that is what
+ * lets a declared-read-only tool be offered during the read-only PLAN phase
+ * (see agent/mcp/policy.ts). The raw MCP client keeps the full tool, and
+ * connect() reuses the same cached connection listTools() just used, so this
+ * costs one extra request and no extra process.
+ */
+async function annotationsFor(
+  runtime: Awaited<ReturnType<typeof createRuntime>>,
+  server: string,
+): Promise<Map<string, unknown>> {
+  try {
+    const { client } = await runtime.connect(server, { disableOAuth: true });
+    const { tools } = await client.listTools();
+    return new Map(tools.filter((t) => t.annotations).map((t) => [t.name, t.annotations]));
+  } catch (err) {
+    // Non-fatal: without annotations the tool is simply treated as mutating.
+    console.error(
+      `[mcp-bridge] annotations for "${server}" unavailable (${err instanceof Error ? err.message : err})`,
+    );
+    return new Map();
+  }
 }
 
 async function main(): Promise<void> {
@@ -46,12 +74,14 @@ async function main(): Promise<void> {
   for (const def of defs) {
     try {
       const list = await runtime.listTools(def.name, { includeSchema: true, disableOAuth: true });
+      const annotations = await annotationsFor(runtime, def.name);
       for (const t of list) {
         tools.set(`mcp_${safe(def.name)}_${safe(t.name)}`, {
           server: def.name,
           tool: t.name,
           description: `${t.description ?? ''} (MCP server "${def.name}")`,
           inputSchema: t.inputSchema ?? { type: 'object' },
+          annotations: annotations.get(t.name),
         });
       }
     } catch (err) {
@@ -70,6 +100,7 @@ async function main(): Promise<void> {
       name,
       description: e.description,
       inputSchema: e.inputSchema as { type: 'object' },
+      ...(e.annotations ? { annotations: e.annotations as Record<string, unknown> } : {}),
     })),
   }));
   server.setRequestHandler(CallToolRequestSchema, async (req) => {

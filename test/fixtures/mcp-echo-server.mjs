@@ -29,6 +29,9 @@ rl.on('line', (line) => {
         {
           name: 'echo',
           description: 'Echo back the input.',
+          // Declared read-only — the bridge must carry this through, it is
+          // what lets the tool be offered in the read-only PLAN phase.
+          annotations: { readOnlyHint: true },
           inputSchema: {
             type: 'object',
             properties: { text: { type: 'string' } },

@@ -58,6 +58,14 @@ describe('custom MCP bridge (sandboxed)', () => {
     expect(await bridge.callTool('mcp_echo_echo', { text: 'hi' })).toBe('echo:hi');
   }, 120_000);
 
+  it('carries readOnlyHint through the bridge', async () => {
+    // mcporter's listTools() projects annotations away, so the bridge reads
+    // them off the raw client. Without that, every custom tool would count as
+    // mutating and none would be offered while planning (agent/mcp/policy.ts).
+    const [bridge] = await custom.attachCustomMcps();
+    expect(bridge.readOnlyToolNames).toEqual(new Set(['mcp_echo_echo']));
+  }, 60_000);
+
   it('runs the servers inside the jail — clean env, jail HOME', async () => {
     const [bridge] = await custom.attachCustomMcps();
     const envJson = JSON.parse(await bridge.callTool('mcp_echo_env', {})) as Record<

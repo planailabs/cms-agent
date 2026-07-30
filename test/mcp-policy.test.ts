@@ -86,17 +86,19 @@ beforeEach(() => {
 });
 
 describe('external MCP access policy', () => {
-  it('offers custom servers from EXECUTE on', () => {
+  it('gives custom servers their full tool set only in EXECUTE', () => {
+    // Planning still gets the read-only ones — a lookup server is exactly
+    // what it wants — but nothing that could write.
     expect(mcpAccess('custom', { phase: 'plan', kind: 'workflow' })).toEqual({
-      attach: false,
-      readOnlyOnly: false,
+      attach: true,
+      readOnlyOnly: true,
     });
     expect(mcpAccess('custom', { phase: 'execute', kind: 'workflow' })).toEqual({
       attach: true,
       readOnlyOnly: false,
     });
-    // Nothing to change after publishing either.
-    expect(mcpAccess('custom', { phase: 'published', kind: 'workflow' }).attach).toBe(false);
+    // Nothing left to change after publishing either.
+    expect(mcpAccess('custom', { phase: 'published', kind: 'workflow' }).readOnlyOnly).toBe(true);
   });
 
   it('keeps the known integrations available in every phase', () => {
@@ -126,10 +128,10 @@ describe('external MCP access policy', () => {
     expect(restricted.openAiTools.map((t) => t.function.name)).toEqual(['search']);
   });
 
-  it('never starts a custom server while the phase is read-only', async () => {
-    expect(await toolNames(ctx('plan'))).toEqual(['probe_tool']);
-    // Not merely filtered out of the list — the server is not spawned at all.
-    expect(attachCustomMcps).not.toHaveBeenCalled();
+  it('offers a custom server its read-only tools while planning, all of them in EXECUTE', async () => {
+    // 'deploy' declares readOnlyHint: false, 'mystery' declares nothing —
+    // neither may be reachable from a read-only phase.
+    expect(await toolNames(ctx('plan'))).toEqual(['probe_tool', 'search']);
 
     expect(await toolNames(ctx('execute'))).toEqual([
       'probe_tool',
@@ -137,7 +139,6 @@ describe('external MCP access policy', () => {
       'deploy',
       'mystery',
     ]);
-    expect(attachCustomMcps).toHaveBeenCalledTimes(1);
   });
 
   it('gives the deployment monitor only the tools that declare read-only', async () => {

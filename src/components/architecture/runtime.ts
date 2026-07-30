@@ -194,23 +194,22 @@ flowchart TD
   checks -->|"all pass"| exec["Execute against the chat worktree"]
 
   ext["External MCP servers<br/>admin-global and repo-local"] --> access{"mcpAccess for the phase<br/>and the chat kind"}
-  access -->|"blocked"| never["Never started for this turn"]
   access -->|"read-only only"| filter["Keep the tools that<br/>declare readOnlyHint"]
-  access -->|"allowed"| bridged
+  access -->|"full access"| bridged
   filter --> bridged["Merged into the tool namespace,<br/>inside the jail"]
   bridged -.-> bridge
 `,
       },
       {
-        caption: 'Which external servers a turn gets',
+        caption: 'Which external tools a turn gets',
         code: `
 flowchart LR
   q0{"Chat kind"} -->|"deployments monitor"| ro["Every source, but only<br/>declared read-only tools"]
   q0 -->|"workflow or deployment"| q1{"Source"}
-  q1 -->|"codebase-memory, Context7"| all["Attached in every phase"]
+  q1 -->|"codebase-memory, Context7"| all["Every tool, in every phase"]
   q1 -->|"admin mcp.json, repo .mcp.json"| q2{"Phase"}
-  q2 -->|"EXECUTE"| full["Attached with all their tools"]
-  q2 -->|"PLAN or PUBLISHED"| none["Not attached at all"]
+  q2 -->|"EXECUTE"| full["Every tool"]
+  q2 -->|"PLAN or PUBLISHED"| partial["Only the tools that<br/>declare readOnlyHint"]
 `,
       },
     ],
@@ -238,18 +237,22 @@ flowchart LR
       <li><strong>The phase boundary covers them too.</strong> The sandbox
         protects the host and the secrets; it cannot know that PLAN means
         read-only, so a mutating third-party server used to be reachable while
-        the phase was read-only. Custom and repo servers are therefore offered
-        from EXECUTE on — blocked means not started, not merely hidden, so
-        nothing of theirs can run during planning. The two integrations we ship
-        and configure ourselves, the codebase graph and Context7, stay
-        available in every phase.</li>
-      <li><strong>A server's declaration is taken at face value.</strong> Where
-        a surface is read-only by definition — the deployments monitor — the
-        tools that declare MCP's <code>readOnlyHint</code> are kept on that
-        word alone. Silence is not a declaration, so a tool that says nothing
-        is left out. Custom servers reach us through the mcporter bridge, whose
-        tool listing drops annotations entirely, so they contribute nothing
-        there.</li>
+        the phase was. A custom server's full tool set now arrives with
+        EXECUTE, and while the phase is read-only it contributes only the tools
+        that say they are. The two integrations we ship and configure
+        ourselves, the codebase graph and Context7, stay available
+        throughout.</li>
+      <li><strong>A server's declaration is taken at face value.</strong> A
+        tool that declares MCP's <code>readOnlyHint</code> is treated as
+        read-only on that word alone — which is what lets a docs or lookup
+        server be useful during planning. Silence is not a declaration, so a
+        tool that says nothing waits for EXECUTE. The same reduction is what
+        the deployments monitor runs on, in every phase.</li>
+      <li><strong>The bridge has to carry the annotation.</strong> Custom
+        servers reach the agent through the mcporter bridge, whose tool listing
+        projects annotations away; the bridge therefore reads them off the raw
+        MCP client and re-attaches them. Without that one step every custom
+        tool would count as mutating and planning would see none of them.</li>
       <li><strong>Repo-defined servers are trusted on purpose.</strong> A
         branch's <code>.mcp.json</code> is content the client put into their
         own site repository, so the question it raises is when a server may
@@ -265,6 +268,7 @@ flowchart LR
       'src/lib/agent/mcp/index.ts',
       'src/lib/agent/mcp/policy.ts',
       'src/lib/agent/mcp/custom.ts',
+      'src/lib/agent/mcp/bridgeEntry.ts',
       'src/lib/agent/prompt.ts',
     ],
   },
