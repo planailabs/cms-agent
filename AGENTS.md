@@ -210,6 +210,12 @@ default); never call these ops without threading an identity through.
 
 ## Verify
 
+Dependency changes (`package.json` dependency fields or `pnpm-lock.yaml`) must
+also refresh `pnpmDeps.hash` in `package.nix`: set it to `""`, run
+`nix build .#default`, then replace it with the reported `got: sha256-...`
+value and rerun the build. Do not commit a dependency change until that build
+passes.
+
 ```bash
 pnpm test                                 # unit — must stay dependency-free
 pnpm test:integration                     # real dev servers + deploy flows

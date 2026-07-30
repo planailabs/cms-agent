@@ -57,7 +57,14 @@ stdenv.mkDerivation (finalAttrs: {
   ];
 
   pnpmDeps = fetchPnpmDeps {
-    inherit (finalAttrs) pname version src;
+    inherit (finalAttrs) pname version;
+    src = lib.fileset.toSource {
+      root = ./.;
+      fileset = lib.fileset.unions [
+        ./package.json
+        ./pnpm-lock.yaml
+      ];
+    };
     fetcherVersion = 3;
     # NOTE: fetchPnpmDeps runs `pnpm install --force`, which is supposed to
     # fetch optional deps for *all* platforms — but pnpm silently drops
