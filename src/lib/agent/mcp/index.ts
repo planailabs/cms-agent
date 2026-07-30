@@ -14,7 +14,8 @@ import { executeTool, isClientSideTool, toolsForPhase, type ToolContext } from '
 import { attachCodebaseMemory } from './codebaseMemory';
 import { attachContext7 } from './context7';
 import { attachCustomMcps } from './custom';
-import type { ExternalMcp } from './external';
+import { readOnlyView, type ExternalMcp } from './external';
+import { mcpAccess, type McpAccess } from './policy';
 
 /** In-process tools include image generation, builds and deploys — the SDK's
  *  60s default request timeout (-32001) kills them mid-run. */
@@ -28,6 +29,18 @@ export interface McpBridge {
   /** Dispatch a model tool call through MCP; returns the tool result string. */
   callTool(name: string, input: Record<string, unknown>): Promise<string>;
   close(): Promise<void>;
+}
+
+/**
+ * Apply an access decision to what a source actually attached: drop the
+ * failures, narrow to read-only where required, and forget a server whose
+ * tools were all filtered away — its prompt hint would advertise nothing.
+ */
+function applyAccess(attachments: Array<ExternalMcp | null>, access: McpAccess): ExternalMcp[] {
+  return attachments
+    .filter((e): e is ExternalMcp => e !== null)
+    .map((e) => (access.readOnlyOnly ? readOnlyView(e) : e))
+    .filter((e) => e.toolNames.size > 0);
 }
 
 export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
@@ -56,19 +69,29 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
 
   // External MCPs (sandboxed codebase graph, Context7 docs, custom servers
   // from the admin config + the branch's .mcp.json) — merged into the tool
-  // set. Order matters: on tool-name collisions the earlier source wins
-  // (asOpenAiTools dedupes, callTool matches first).
-  const externals = (
-    await Promise.all([
-      attachCodebaseMemory(ctx),
-      attachContext7(),
-      attachCustomMcps(
-        ctx.worktreePath ? { worktreePath: ctx.worktreePath, chatId: ctx.chatId } : undefined,
-      ),
-    ])
-  )
-    .flat()
-    .filter((e): e is ExternalMcp => e !== null);
+  // set, but under the same phase boundary the in-process registry enforces:
+  // policy.ts decides whether a source attaches at all and whether it is
+  // reduced to its declared read-only tools. Order matters: on tool-name
+  // collisions the earlier source wins (asOpenAiTools dedupes, callTool
+  // matches first).
+  const known = mcpAccess('known', { phase: ctx.workflowPhase, kind: ctx.chatKind });
+  const custom = mcpAccess('custom', { phase: ctx.workflowPhase, kind: ctx.chatKind });
+  const [knownAttachments, customAttachments] = await Promise.all([
+    known.attach
+      ? Promise.all([attachCodebaseMemory(ctx), attachContext7()])
+      : Promise.resolve([]),
+    // Not merely filtered afterwards — a blocked source is never started, so
+    // a third-party server cannot run at all while the phase is read-only.
+    custom.attach
+      ? attachCustomMcps(
+          ctx.worktreePath ? { worktreePath: ctx.worktreePath, chatId: ctx.chatId } : undefined,
+        )
+      : Promise.resolve([]),
+  ]);
+  const externals = [
+    ...applyAccess(knownAttachments, known),
+    ...applyAccess(customAttachments, custom),
+  ];
 
   return {
     async asOpenAiTools() {
