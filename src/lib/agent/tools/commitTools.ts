@@ -81,13 +81,22 @@ const gitRevertTool: ToolDef = {
     // If the reverted commit was an execution, mark its card as reverted.
     // Scoped to THIS chat: shared object store means the sha (or a short
     // prefix) can also match executions of unrelated chats/branches.
-    const reverted = await prisma.execution.updateMany({
+    await prisma.execution.updateMany({
       where: { chatId: ctx.chatId, sha: { startsWith: input.sha.toLowerCase() }, revertedBySha: null },
       data: { revertedBySha: revertSha },
     });
-    if (reverted.count > 0) {
-      emitChatState(ctx.chatId);
-    }
+    // The revert commit IS the branch head now, and a head with no Execution
+    // row is unpublishable: publish binds the newest non-reverted row, so it
+    // would keep offering a sha the branch has moved past ("the work branch
+    // moved since you reviewed it") with no way forward except another edit.
+    const summary = `Revert ${input.sha.slice(0, 8)}`;
+    await prisma.execution.create({ data: { chatId: ctx.chatId, sha: revertSha, summary } });
+    broadcast(ctx.chatId, 'execution_committed', {
+      type: 'execution_committed',
+      sha: revertSha,
+      summary,
+    });
+    emitChatState(ctx.chatId);
     return JSON.stringify({ success: true, revertSha });
   },
 };

@@ -20,6 +20,7 @@ import { WorkflowError } from '@/lib/agent/workflow';
 import {
   abortMerge,
   beginConflictMerge,
+  branchCommits,
   branchSha,
   continueRebase,
   defaultBranch,
@@ -214,6 +215,63 @@ interface PullData extends AutomatismData {
   restorePhase?: string;
 }
 
+/**
+ * Move the chat's execution rows onto the commits a rebase rewrote them into.
+ *
+ * Sync rebases the work branch onto the target, which gives every commit a new
+ * sha. The execution rows keep the old ones, so they point at commits the
+ * branch no longer contains — including the row publish binds, which is why a
+ * sync used to leave a chat stuck on "the work branch moved since you reviewed
+ * it" with nothing able to advance it: only git_commit writes that table, and
+ * a chat with no further changes to make never calls it again.
+ *
+ * Commits are matched by subject in rebase order — a rebase preserves the
+ * message, and the exclusive commits of a work branch are the chat's own. Any
+ * row that finds no match keeps its old sha rather than being pointed at the
+ * wrong commit; the head check below is what still guarantees the branch can
+ * be published after the human reviews it again.
+ */
+export async function reanchorExecutions(
+  chatId: string,
+  workBranch: string,
+  targetName: string,
+  head: string,
+): Promise<void> {
+  const rows = await prisma.execution.findMany({
+    where: { chatId },
+    orderBy: { createdAt: 'asc' },
+  });
+  // Oldest first — the order the rebase replayed them in.
+  const rewritten = (await branchCommits(workBranch, targetName, 200))
+    .filter((c) => !c.onTarget)
+    .reverse();
+  if (rows.length === 0 || rewritten.length === 0) return;
+
+  // A commit already claimed by an unchanged row is not a candidate for another.
+  const claimed = new Set(rows.map((r) => r.sha).filter((sha) => rewritten.some((c) => c.sha === sha)));
+  for (const row of rows) {
+    if (claimed.has(row.sha)) continue;
+    const subject = row.summary.split('\n')[0];
+    const match = rewritten.find((c) => c.message === subject && !claimed.has(c.sha));
+    if (!match) continue;
+    claimed.add(match.sha);
+    await prisma.execution.update({ where: { id: row.id }, data: { sha: match.sha } });
+  }
+
+  // Whatever the matching achieved, the branch head must be publishable: it is
+  // the state the human is being asked to review.
+  const newest = await prisma.execution.findFirst({
+    where: { chatId, revertedBySha: null },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (newest?.sha !== head) {
+    await prisma.execution.create({
+      data: { chatId, sha: head, summary: `Synced with ${targetName}` },
+    });
+  }
+  emitChatState(chatId);
+}
+
 /** In-flight startPull chatIds — the DB guard below is check-then-create,
  *  so a double-click could otherwise start two pulls. */
 const pullStarting = new Set<string>();
@@ -301,6 +359,14 @@ registerAutomatism({
                 rebaseOnto(data.workBranch, data.targetName, identity),
               );
           if (result.conflicts?.length) await pauseWithConflicts(result.conflicts);
+          // The rebase gave every commit a new sha — carry the execution rows
+          // (and with them the publishable head) onto the rewritten history.
+          await reanchorExecutions(
+            data.workflowChatId,
+            data.workBranch,
+            data.targetName,
+            result.sha!,
+          );
           await post(
             tmsg('pull.rebased', { target: data.targetName, sha: result.sha!.slice(0, 8) }),
           );

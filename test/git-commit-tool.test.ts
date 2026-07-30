@@ -128,6 +128,15 @@ describe('git_revert', () => {
     expect(await dirStatus(repo)).toEqual([]);
     const row = await prisma.execution.findFirst({ where: { chatId: CHAT_ID, sha: committed.sha } });
     expect(row?.revertedBySha).toBe(res.revertSha);
+
+    // The revert commit is the branch head now, so it needs a row of its own:
+    // publish binds the newest non-reverted one, and without this the chat is
+    // stuck on "the work branch moved since you reviewed it".
+    const revertRow = await prisma.execution.findFirst({
+      where: { chatId: CHAT_ID, sha: res.revertSha },
+    });
+    expect(revertRow?.revertedBySha).toBeNull();
+    expect(revertRow?.summary).toBe(`Revert ${committed.sha.slice(0, 8)}`);
   });
 
   it('aborts a conflicting revert and leaves the worktree clean', async () => {

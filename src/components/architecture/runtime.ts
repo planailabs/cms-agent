@@ -68,7 +68,18 @@ flowchart LR
       <li><strong>Undo is a revert.</strong> Reverting an execution creates a
         revert commit under the work branch lock and marks the original row with
         the sha that undid it. Nothing is rebased away, so a published history
-        can always be read back.</li>
+        can always be read back. The revert commit gets an
+        <code>Execution</code> row of its own — see the next point for why.</li>
+      <li><strong>Every publishable head is a row.</strong> Publishing binds the
+        exact sha the human reviewed, and the sha the workspace offers is the
+        newest non-reverted <code>Execution</code>. So any commit that becomes
+        the work-branch head has to be recorded, or the chat is stuck: it keeps
+        offering a sha the branch has moved past, and only a further change
+        would ever advance it. Two paths move the head without the agent
+        committing — a revert, and the sync rebase, which rewrites every commit
+        and invalidates every recorded sha at once. Sync therefore re-anchors
+        the rows onto the rewritten commits (matched by subject, in rebase
+        order) and records the new head if nothing else claims it.</li>
       <li><strong>Branch names are DNS-safe by validation.</strong> They are
         hostnames, so the name check runs before anything is created; work
         branches use a generated hex suffix, which is also how branch listings
@@ -78,7 +89,13 @@ flowchart LR
         git ref of generated work branches — a branch someone pushed minutes ago
         has regenerable working files and irreplaceable commits.</li>
     </ul>`,
-    source: ['src/lib/git/engine.ts', 'src/lib/git/identity.ts', 'src/lib/branchSync.ts'],
+    source: [
+      'src/lib/git/engine.ts',
+      'src/lib/git/identity.ts',
+      'src/lib/branchSync.ts',
+      'src/lib/agent/tools/commitTools.ts',
+      'src/lib/publish/publisher.ts',
+    ],
   },
 
   {
