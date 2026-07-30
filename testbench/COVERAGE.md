@@ -88,7 +88,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Plan/execution/publish cards | — | 🟡 exercised via API in 03; card DOM not driven (approve via endpoint, not button) |
 | Element-edit overlay (draw/move/comment in-iframe) | — | 🟡 handoff covered API-side in 03; in-iframe drawing not driven |
 | Browser compare UI, diff-viewer modes UI | — | 🟡 endpoints covered (03/05); overlay UIs not driven |
-| Attachments upload + send with image | 01 (API upload) | 🟡 composer chip flow not driven |
+| Attachments upload + send with image; upload from a draft materializes the chat | 01 (API), 02 (draft composer) | ✅ |
 | Composer paste (image ctrl+v/context menu), long-text-as-attachment, dropzone drop | 02 | ✅ |
 | Upload-failed chip shows the server reason (incl. non-JSON bodies) | — | 🟡 unit-covered (test/attachment-upload-errors.test.ts); bench-driving needs a deterministically failing upload |
 | Hex → color-name chips in chat markdown | — | 🟡 covered by unit tests through renderMarkdown (agent must mention a hex to drive it in bench) |

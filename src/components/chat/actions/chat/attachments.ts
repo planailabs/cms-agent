@@ -13,6 +13,7 @@ import { store } from '../../app/store';
 import { escapeHtml } from '../../utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AttachmentDisplay } from './cache';
+import { materializeDraftChat } from './stateMachine';
 
 // ponytail: mirrors the server allow-list in src/lib/uploads.ts;
 // the server is the gate, this only filters the file picker / drop.
@@ -75,11 +76,13 @@ const isAllowed = (file: File): boolean =>
 
 /**
  * Stage and upload files. Enforces the one-per-message cap when the admin
- * setting is on (server re-checks). Returns immediately; uploads run async.
+ * setting is on (server re-checks). Draft chats are materialized first;
+ * uploads then continue in the background.
  */
-export const stageFiles = (files: Iterable<File>): void => {
-  const chatId = store.state.activeChatId;
-  if (!chatId || !store.state.chat?.aiChat) return;
+export const stageFiles = async (files: Iterable<File>): Promise<void> => {
+  if (!store.state.chat?.aiChat) return;
+  if (!store.state.activeChatId && !(await materializeDraftChat())) return;
+  const chatId = store.state.activeChatId!;
   const onePerMessage = store.state.attachmentsOnePerMessage;
 
   for (const file of files) {
