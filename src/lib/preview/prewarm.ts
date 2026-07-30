@@ -18,6 +18,7 @@
  * arriving faster than one warms.
  */
 import { randomBytes } from 'node:crypto';
+import { startTicker, stopTicker } from '@/lib/ticker';
 
 interface PrewarmState {
   /** Branch ready (or warming) for the next chat; null while none exists. */
@@ -26,8 +27,6 @@ interface PrewarmState {
   /** Branch currently being warmed — it has no chat yet, so the orphan
    *  sweeper must not mistake it for leftovers. */
   warmingBranch: string | null;
-  /** Ticker re-warming the primary branches; null until started. */
-  primaryTimer: ReturnType<typeof setInterval> | null;
 }
 
 // Survive Vite HMR module reloads in dev, like the preview manager.
@@ -36,7 +35,6 @@ const state: PrewarmState = (g.__cmsPrewarm ??= {
   spare: null,
   warming: null,
   warmingBranch: null,
-  primaryTimer: null,
 });
 
 /** Same shape as a chat work branch, so branch listings keep hiding it. */
@@ -125,28 +123,17 @@ export async function warmPrimaryBranches(): Promise<void> {
  * created later (and dev servers that died) come back without a visitor.
  */
 export function startPrimaryBranchWarmer(): void {
-  if (state.primaryTimer) return;
-  let ticking = false;
-  const tick = async (): Promise<void> => {
-    if (ticking) return; // a slow sweep must not stack up behind itself
-    ticking = true;
-    try {
+  startTicker(
+    'prewarm',
+    60_000,
+    async () => {
       await warmPrimaryBranches();
       // The spare comes last and only once the branches users look at are
       // up — it is the least urgent of the three installs.
       ensureSpareBranch();
-    } catch (err) {
-      console.warn('[prewarm] primary-branch sweep failed:', err);
-    } finally {
-      ticking = false;
-    }
-  };
-  state.primaryTimer = setInterval(() => void tick(), 60_000);
-  // Don't hold the process open for the warmer.
-  if (typeof state.primaryTimer === 'object' && 'unref' in state.primaryTimer) {
-    state.primaryTimer.unref();
-  }
-  void tick();
+    },
+    { immediate: true },
+  );
 }
 
 /** Test seam: forget the spare without touching git. */
@@ -154,6 +141,5 @@ export function resetPrewarmForTests(): void {
   state.spare = null;
   state.warming = null;
   state.warmingBranch = null;
-  if (state.primaryTimer) clearInterval(state.primaryTimer);
-  state.primaryTimer = null;
+  stopTicker('prewarm');
 }

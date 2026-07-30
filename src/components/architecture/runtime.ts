@@ -147,7 +147,10 @@ flowchart TB
         spare has no chat by design and a running preview may outlive its row,
         and both would look exactly like garbage to a pattern matcher.</li>
       <li><strong>One failure does not stop the sweep.</strong> A locked worktree
-        is logged and skipped; the rest of the pass continues.</li>
+        is logged and skipped; the rest of the pass continues. Both loops run on
+        named tickers that skip a tick while the previous one is still going —
+        see <a href="#locks">locks and concurrency guards</a> for why the newest
+        module evaluation owns them.</li>
       <li><strong>Sandbox homes are keyed twice.</strong> Preview installs key by
         branch, while command runs, linting and codebase memory key by chat id —
         so both namespaces are reconciled.</li>
@@ -469,7 +472,20 @@ flowchart TD
     <p>All of the in-process guards hang off the global object rather than
       module scope, for the same reason the connection registry does: the
       development server reloads module graphs, and a split lock map is a lock
-      that does not lock.</p>`,
-    source: ['src/lib/agent/bus.ts', 'src/lib/agent/workflow.ts', 'src/lib/preview/manager.ts'],
+      that does not lock.</p>
+    <p><strong>Background tickers invert that rule.</strong> The handle is
+      global, but the callback belongs to the module evaluation that created
+      it — and after a reload that evaluation's dynamic imports only throw
+      <code>module runner has been closed</code>. So a ticker is keyed by name
+      and the newest evaluation <em>replaces</em> the old one, and a ticker
+      whose graph is already gone cancels itself on its next tick. Returning
+      early because a timer already existed is what silently stopped preview
+      warming and orphan cleanup after the first dev reload.</p>`,
+    source: [
+      'src/lib/agent/bus.ts',
+      'src/lib/agent/workflow.ts',
+      'src/lib/preview/manager.ts',
+      'src/lib/ticker.ts',
+    ],
   },
 ];

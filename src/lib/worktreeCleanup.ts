@@ -16,18 +16,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { prisma } from '@/lib/db';
 import { env } from '@/lib/env';
+import { startTicker, stopTicker } from '@/lib/ticker';
 
 /** ponytail: one hour — worktrees are big but not urgent. */
 const SWEEP_INTERVAL_MS = 60 * 60_000;
-
-interface SweeperState {
-  timer: ReturnType<typeof setInterval> | null;
-  running: boolean;
-}
-
-// Survive Vite HMR module reloads in dev, like the preview manager.
-const g = globalThis as unknown as { __cmsOrphanSweeper?: SweeperState };
-const state: SweeperState = (g.__cmsOrphanSweeper ??= { timer: null, running: false });
 
 const varDir = (): string => path.resolve(env().VAR_DIR);
 
@@ -134,22 +126,12 @@ export async function sweepOrphans(): Promise<{ worktrees: string[]; homes: stri
  *  boot — a restart mid-chat-creation would otherwise race the worktree that
  *  chat is about to get. */
 export function startOrphanSweeper(): void {
-  if (state.timer) return;
-  state.timer = setInterval(() => {
-    if (state.running) return; // a slow sweep must not stack up
-    state.running = true;
-    void sweepOrphans()
-      .catch((err) => console.warn('[cleanup] orphan sweep failed:', err))
-      .finally(() => {
-        state.running = false;
-      });
-  }, SWEEP_INTERVAL_MS);
-  if (typeof state.timer === 'object' && 'unref' in state.timer) state.timer.unref();
+  startTicker('cleanup', SWEEP_INTERVAL_MS, async () => {
+    await sweepOrphans();
+  });
 }
 
 /** Test seam. */
 export function stopOrphanSweeper(): void {
-  if (state.timer) clearInterval(state.timer);
-  state.timer = null;
-  state.running = false;
+  stopTicker('cleanup');
 }
