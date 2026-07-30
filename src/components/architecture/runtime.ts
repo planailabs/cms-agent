@@ -122,8 +122,11 @@ flowchart TD
   mint --> doneA
 
   claim(["New chat created"]) --> adopt{"Targets the default branch?"}
-  adopt -->|"yes, spare ready"| take["Adopt it — no install to wait for"]
+  adopt -->|"yes, spare ready"| behind{"Target moved since it was warmed?"}
   adopt -->|"no"| cold["Mint a cold branch name"]
+  behind -->|"yes"| reset["Reset it onto the target<br/>node_modules survives"]
+  behind -->|"no"| take
+  reset --> take["Adopt it — no install to wait for"]
   take --> refill["Start warming the next spare"]
 `,
       },
@@ -159,6 +162,16 @@ flowchart TB
       <li><strong>Only default-branch chats may adopt it.</strong> The spare is
         branched off the default branch, so a chat targeting anything else would
         start from the wrong content.</li>
+      <li><strong>A spare catches up before it is adopted.</strong> It was
+        branched off the target when it was warmed and then waited, so every
+        publish in between left it a commit further behind — a chat starting on
+        it would edit stale content, diff against the wrong base, and have to
+        sync before it could publish, which is the very wait the pool exists to
+        remove. Claiming resets it onto the target first. Nothing has been
+        committed to a spare, so there is nothing to preserve, and
+        <code>node_modules</code> is gitignored: the expensive half of the
+        warm-up survives the reset. A reset that fails is logged and the branch
+        handed over anyway — no worse than before the attempt.</li>
       <li><strong>Cleanup is keep-list driven, never pattern driven.</strong>
         A name nobody claims is leftovers. That ordering matters: the pool's
         spare has no chat by design and a running preview may outlive its row,

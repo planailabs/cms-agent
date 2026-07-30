@@ -84,7 +84,34 @@ export async function claimWorkBranch(targetBranch: string): Promise<string> {
   const claimed = adoptable ? state.spare : null;
   if (claimed) state.spare = null;
   if (adoptable) ensureSpareBranch(); // refill for the chat after this one
-  return claimed ?? newWorkBranch();
+  if (!claimed) return newWorkBranch();
+  await catchUpWithTarget(claimed, targetBranch);
+  return claimed;
+}
+
+/**
+ * A spare is branched off the target when it is warmed and then sits there,
+ * so every publish in the meantime leaves it a commit further behind. A chat
+ * that starts behind its own target edits stale content, shows a diff against
+ * the wrong base, and has to sync before it can publish — which is precisely
+ * the wait the pool exists to remove.
+ *
+ * Reset it forward at the moment it is claimed. Nothing has been committed to
+ * a spare (it has no chat yet), so there is nothing to preserve, and
+ * node_modules is gitignored — the expensive part of the warm-up survives the
+ * reset untouched. A failure here is not worth failing chat creation over: the
+ * chat is then merely as stale as it would have been anyway.
+ */
+export async function catchUpWithTarget(branch: string, target: string): Promise<void> {
+  try {
+    const { branchAheadCount, resetBranchOnto } = await import('@/lib/git/engine');
+    if ((await branchAheadCount(branch, target)) === 0) return;
+    const { withBranchLock } = await import('@/lib/agent/bus');
+    await withBranchLock(branch, () => resetBranchOnto(branch, target));
+    console.log(`[prewarm] ${branch} reset onto ${target} before adoption`);
+  } catch (err) {
+    console.warn(`[prewarm] could not catch ${branch} up with ${target}:`, err);
+  }
 }
 
 /**
