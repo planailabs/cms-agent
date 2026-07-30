@@ -63,7 +63,7 @@ beforeAll(async () => {
 });
 
 describe('start_execution', () => {
-  it('records the plan, flips to execute and unlocks write tools mid-turn', async () => {
+  it('records the plan and moves the context to execute', async () => {
     const chat = await makeChat('c-shadow-1');
     const toolCtx = ctx(chat.id);
 
@@ -73,7 +73,9 @@ describe('start_execution', () => {
     const after = await prisma.chat.findUniqueOrThrow({ where: { id: chat.id } });
     expect(after.workflowPhase).toBe('execute');
     expect(after.planJson).toMatchObject({ summary: 'Fix the footer year' });
-    // The running turn keeps its bridge — execute-only tools must work now.
+    // The phase on the context is what ends the run: the tool loop sees it
+    // change and hands the turn to a fresh EXECUTE run with the EXECUTE
+    // prompt and the write tools (test/phase-run-boundary.test.ts).
     expect(toolCtx.workflowPhase).toBe('execute');
 
     // Audited exactly like a user approval, with the requesting user as actor.

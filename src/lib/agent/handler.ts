@@ -66,6 +66,9 @@ registerSkillTools();
 registerImageTools();
 registerFirecrawlTools();
 
+/** Phase flips per turn before we stop granting fresh runs. */
+const MAX_PHASE_RUNS = 4;
+
 export interface HandleOptions {
   /** In-memory persistence for integration tests (no DB writes). */
   skipPersistence?: boolean;
@@ -266,28 +269,67 @@ export async function handleChatMessage(
         taskListForPrompt(chatId),
       ]);
 
-  await runToolLoop({
-    chatId,
-    userId,
-    messages,
-    phase,
-    toolContext,
-    promptInput: {
-      kind: chatKind,
-      phase: workflowPhase,
-      branchName: opts.skipPersistence ? branchName : `${branchName} (merges into ${targetBranchName})`,
-      locale,
-      planJson,
-      extension,
-      approvedMemories,
-      needsTitle,
-      taskList,
-      worktreePath,
-      hasAttachments: messages.some((m) => m.role === 'user' && !!m.attachments?.length),
-      communicationMode,
-    },
-    setPhase,
-    appendMsg,
-    skipTokenAccounting: opts.skipPersistence,
-  });
+  // ── Run the turn ──────────────────────────────────────────────────────────
+  // A workflow-phase change ends the run and starts a new one. The system
+  // prompt and the tool set are built once per run, so a phase flip mid-run
+  // (start_execution, return_to_plan) would leave the agent planning with
+  // EXECUTE tools, or promising an implementation with none. Each run gets a
+  // contract for exactly one phase; the user sees one uninterrupted turn,
+  // because nothing here broadcasts 'done' between runs.
+  let taskListForRun = taskList;
+  for (let run = 1; ; run++) {
+    const outcome = await runToolLoop({
+      chatId,
+      userId,
+      messages,
+      phase,
+      toolContext,
+      promptInput: {
+        kind: chatKind,
+        phase: workflowPhase,
+        branchName: opts.skipPersistence
+          ? branchName
+          : `${branchName} (merges into ${targetBranchName})`,
+        locale,
+        planJson,
+        extension,
+        approvedMemories,
+        needsTitle,
+        taskList: taskListForRun,
+        worktreePath,
+        hasAttachments: messages.some((m) => m.role === 'user' && !!m.attachments?.length),
+        communicationMode,
+      },
+      setPhase,
+      appendMsg,
+      skipTokenAccounting: opts.skipPersistence,
+    });
+    if (outcome.type !== 'phase_changed') return;
+
+    if (run >= MAX_PHASE_RUNS) {
+      // Guard against a plan↔execute ping-pong: end the turn instead of
+      // handing out another run.
+      const msg =
+        'I kept switching between planning and implementing without settling. ' +
+        'Could you tell me which part to do first?';
+      await appendMsg({ role: 'assistant', content: msg });
+      await setPhase('idle');
+      broadcast(chatId, 'text_done', { type: 'text_done', content: msg });
+      broadcast(chatId, 'done', { type: 'done' });
+      return;
+    }
+
+    // Re-read what the transition wrote: the new phase's prompt needs the
+    // recorded plan, and the agent may have added tasks on the way here.
+    workflowPhase = outcome.phase;
+    toolContext.workflowPhase = workflowPhase;
+    if (!opts.skipPersistence) {
+      const [chat, tasks] = await Promise.all([
+        prisma.chat.findUnique({ where: { id: chatId }, select: { planJson: true } }),
+        taskListForPrompt(chatId),
+      ]);
+      planJson = chat?.planJson ?? undefined;
+      taskListForRun = tasks;
+    }
+  }
 }

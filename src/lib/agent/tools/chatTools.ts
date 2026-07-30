@@ -57,8 +57,11 @@ export function registerChatTools(): void {
     execute: async (plan, ctx) => {
       const { startExecution } = await import('../workflow');
       await startExecution({ chatId: ctx.chatId, actorId: ctx.userId, plan });
-      // The bridge lives for the whole turn; unlock the write tools now so the
-      // implementation continues without another round trip.
+      // The phase on the context is the signal the tool loop watches: it ends
+      // this run once the round finishes, and the handler starts an EXECUTE
+      // run with the EXECUTE prompt and the write tools. Flipping it without
+      // that restart would leave the agent in a PLAN run that has been told
+      // to implement — with read-only tools and a read-only prompt.
       ctx.workflowPhase = 'execute';
       return JSON.stringify({ ok: true, phase: 'execute', plan });
     },
@@ -90,7 +93,8 @@ export function registerChatTools(): void {
     name: 'return_to_plan',
     description:
       'Return the workflow from execution to planning when the approved plan needs a material revision. ' +
-      'Keeps all worktree changes. After calling this, stop the current turn.',
+      'Keeps all worktree changes. Make it the last call of the round: you continue in the PLAN phase, ' +
+      'with read-only tools, and plan again from there.',
     schema: z.object({
       reason: z.string().min(1).describe('Why the approved plan needs to be revised'),
     }),
@@ -98,7 +102,8 @@ export function registerChatTools(): void {
     execute: async ({ reason }, ctx) => {
       const { returnToPlan } = await import('../workflow');
       await returnToPlan(ctx.chatId);
-      // The bridge lives for the whole turn; revoke execute-only tools immediately.
+      // Same run boundary as start_execution, in the other direction: the run
+      // ends here and planning resumes under the PLAN contract.
       ctx.workflowPhase = 'plan';
       return JSON.stringify({ ok: true, phase: 'plan', reason });
     },

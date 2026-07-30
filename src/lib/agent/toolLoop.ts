@@ -26,7 +26,14 @@ import { buildSystemPrompt, type PromptInput } from './prompt';
 import { createMcpBridge } from './mcp';
 import { dirStatus } from '@/lib/git/engine';
 import { isClientSideTool, type ToolContext } from './tools/registry';
-import type { ClientToolPrompt, StoredMessage, ToolCall, ToolResult, TurnPhase } from './types';
+import type {
+  ClientToolPrompt,
+  StoredMessage,
+  ToolCall,
+  ToolResult,
+  TurnPhase,
+  WorkflowPhase,
+} from './types';
 
 const MAX_TOOL_ROUNDS = 250;
 const LOOP_WINDOW = 5;
@@ -116,7 +123,18 @@ export interface ToolLoopInput {
   skipTokenAccounting?: boolean;
 }
 
-export async function runToolLoop(input: ToolLoopInput): Promise<void> {
+/**
+ * How a run ended. 'phase_changed' is not a finished turn: the workflow phase
+ * moved under us (start_execution / return_to_plan), so this run's contract —
+ * its system prompt and its tool set, both built once before the loop — no
+ * longer describes what the agent may do. The handler starts a fresh run in
+ * the new phase; the user sees one continuous turn.
+ */
+export type ToolLoopOutcome =
+  | { type: 'finished' }
+  | { type: 'phase_changed'; phase: WorkflowPhase };
+
+export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome> {
   const e = env();
   const { chatId, messages, toolContext, setPhase, appendMsg } = input;
 
@@ -271,8 +289,20 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
     }
 
     // ── Main loop ────────────────────────────────────────────────────────────
+    // The phase this run was built for: `tools` and `systemPrompt` above are
+    // snapshots of it. A tool that moves the workflow (start_execution,
+    // return_to_plan) invalidates both, so the run ends at the next loop head
+    // instead of continuing to plan with EXECUTE tools — or worse, promising
+    // an implementation it has no write tools to carry out.
+    const runPhase = toolContext.workflowPhase;
     let rounds = 0;
     while (rounds < MAX_TOOL_ROUNDS) {
+      if (toolContext.workflowPhase !== runPhase) {
+        console.log(
+          `[agent] chat=${chatId} phase ${runPhase} → ${toolContext.workflowPhase}, restarting the run`,
+        );
+        return { type: 'phase_changed', phase: toolContext.workflowPhase };
+      }
       rounds++;
 
       const chatMessages = sanitizeMessages(
@@ -376,7 +406,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
         await setPhase('idle');
         broadcast(chatId, 'done', { type: 'done' });
         await flushTokens();
-        return;
+        return { type: 'finished' };
       }
 
       // Store full assistant response including tool calls
@@ -427,7 +457,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
           input: prompt.input,
         });
         await flushTokens();
-        return;
+        return { type: 'finished' };
       }
 
       // ── Server-side tools ──────────────────────────────────────────────────
@@ -458,6 +488,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<void> {
     broadcast(chatId, 'text_done', { type: 'text_done', content: msg });
     broadcast(chatId, 'done', { type: 'done' });
     await flushTokens();
+    return { type: 'finished' };
   } finally {
     await flushTokens();
     await bridge.close();

@@ -149,7 +149,30 @@ flowchart TD
   loopdet -->|"no"| run["Execute through the MCP bridge"]
   warn --> append
   run --> append["Append results, phase back to running"]
-  append --> start
+  append --> moved{"Workflow phase moved?"}
+  moved -->|"no"| start
+  moved -->|"yes"| boundary["End the run — the handler starts<br/>a new one in the new phase"]
+`,
+      },
+      {
+        caption: 'A phase change is a run boundary, not a mid-run switch',
+        code: `
+sequenceDiagram
+  autonumber
+  participant H as Handler
+  participant R1 as PLAN run
+  participant R2 as EXECUTE run
+  participant DB as Database
+
+  H->>R1: prompt + tools built for PLAN
+  R1->>R1: read, search, decide
+  R1->>DB: start_execution — record the plan, phase to execute
+  R1-->>H: phase_changed
+  Note over H,R1: the run stops here — the browser is never told the turn ended
+  H->>DB: re-read the recorded plan and the task list
+  H->>R2: prompt + tools built for EXECUTE
+  R2->>R2: write, commit, finish
+  R2-->>H: finished
 `,
       },
     ],
@@ -173,6 +196,15 @@ flowchart TD
         <code>compaction</code> message and becomes the new start of the
         model-facing window; the original rows stay in the database, so the
         transcript a human reads is never truncated.</li>
+      <li><strong>A workflow-phase change ends the run.</strong> The system
+        prompt and the tool set are built once, before the loop, from one
+        phase. When <code>start_execution</code> or <code>return_to_plan</code>
+        moves the phase, that snapshot stops describing what the agent may do —
+        so the run returns <code>phase_changed</code> and the handler starts a
+        fresh one whose prompt and tools match the new phase. Nothing is
+        broadcast in between, so a single turn is what the user sees. Four
+        flips in one turn is treated as a plan/execute ping-pong and ends the
+        turn with a question instead of a fifth run.</li>
       <li><strong>Streaming is accumulated by hand.</strong> Some
         OpenAI-compatible backends resend the full tool-argument JSON on every
         fragment instead of streaming deltas; concatenating those would corrupt
