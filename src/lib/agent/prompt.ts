@@ -13,6 +13,8 @@ export interface PromptInput {
   /** Non-workflow kinds get their own prompt, phase-independent. */
   kind?: 'workflow' | 'deployment' | 'deployments';
   phase: WorkflowPhase;
+  /** Explicit plan mode (the /plan command): propose and wait for approval. */
+  planMode?: boolean;
   branchName: string;
   locale: string;
   planJson?: unknown;
@@ -105,6 +107,26 @@ An approved plan exists — implement exactly that plan in the worktree, nothing
 planning the next change (a new plan round begins automatically with the next request).`,
 };
 
+/**
+ * PLAN with the /plan command active. The user asked to see the plan before
+ * anything is implemented, so the turn ends on the proposal — start_execution
+ * is not even offered here.
+ */
+const EXPLICIT_PLAN_PROMPT = `You are in the PLAN phase (read-only), and the user asked to approve the plan before you implement it.
+Your job: analyze the site source and produce an implementation plan for the user's request.
+- You can read files, list directories, search, and inspect git history. You
+  cannot write to the site — only .scratch/ is writable.
+- For color decisions, prefer pick_color — the user answers with a visual picker.
+- For anything with more than one step, call add_tasks with the steps you intend
+  to take (short user-facing text; put file paths and gotchas in the optional
+  note). It is the checklist the user watches while you work.
+- Ask concise questions (ask_question) when requirements are ambiguous — a question is
+  always better than a wrong assumption.
+- When your analysis is complete, call propose_plan exactly once and stop. The
+  user reads it and either approves it — which starts the implementation — or
+  asks for changes, which brings you back here with their feedback. Do not
+  implement anything before that approval.`;
+
 const DEPLOYMENTS_PROMPT = `You are the deployment monitor of a CMS that manages {site}.
 Answer questions about deployments and publications using your tools:
 list_publications, get_publication (full logs), check_deployment_status
@@ -193,7 +215,7 @@ export function buildSystemPrompt(input: PromptInput): string {
       .replace('{branch}', input.branchName) +
     (backend.promptGuidance ? `\n\n${backend.promptGuidance}` : '') +
     '\n\n' +
-    PHASE_PROMPTS[input.phase] +
+    (input.phase === 'plan' && input.planMode ? EXPLICIT_PLAN_PROMPT : PHASE_PROMPTS[input.phase]) +
     `\n\n${TOOL_BATCHING}`;
 
   if (input.planJson) {

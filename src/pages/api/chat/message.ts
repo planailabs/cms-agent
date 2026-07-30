@@ -11,6 +11,7 @@ import { acquireTurnLock, broadcast, releaseTurnLock } from '@/lib/agent/bus';
 import { handleChatMessage } from '@/lib/agent/handler';
 import { prisma } from '@/lib/db';
 import { chatAccessDenied } from '@/lib/chatAccess';
+import { parseMessage } from '@/lib/commands';
 import type { IncomingChatMessage } from '@/lib/agent/types';
 
 const json = (data: unknown, status = 200) =>
@@ -43,6 +44,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return json({ error: 'One or more attachments are invalid for this chat.' }, 400);
     }
     body.attachmentIds = ids;
+  }
+
+  // A leading /command switches something on for the chat and is stripped
+  // from the text the agent sees. Parsed server-side: the composer's chip is
+  // a preview of this decision, never the decision itself. Only typed
+  // messages carry commands — an answer resolves a pending tool call.
+  let command: string | undefined;
+  if (body.type === 'message') {
+    const parsed = parseMessage(body.text);
+    if (parsed.command) {
+      command = parsed.command.name;
+      body.text = parsed.text;
+      body.command = command;
+    }
   }
 
   // Archived chats are done — nothing may start a turn on them again.
@@ -81,6 +96,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
   }
 
+  // The effect lands on the chat before the turn starts, so the very turn
+  // the command was typed on already runs under it.
+  if (command) {
+    const { findCommand } = await import('@/lib/commands');
+    const effect = findCommand(command)?.effect;
+    if (effect) await prisma.chat.update({ where: { id: body.chatId }, data: effect });
+  }
+
   // While an automatism is actively running its steps, its chat takes no
   // user messages — wait for it to finish or pause (then the agent engages).
   if (body.type === 'message') {
@@ -102,14 +125,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
     body.uiLocale === 'en' || body.uiLocale === 'de' ? body.uiLocale : (user.language ?? 'en');
 
   void (async () => {
-    let turnOk = false;
     try {
       // A starting turn clears the previous failure (Retry sends 'continue')
       await prisma.chat
         .updateMany({ where: { id: body.chatId, lastError: { not: null } }, data: { lastError: null } })
         .catch(() => {});
       await handleChatMessage(user.id, locale, body);
-      turnOk = true;
     } catch (err) {
       console.error('[chat/message] Handler error:', err);
       const message = err instanceof Error ? err.message : 'Internal error';
@@ -122,18 +143,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
       emitChatState(body.chatId);
     } finally {
       releaseTurnLock(body.chatId, lockId);
-    }
-    // Autonomy grants may auto-approve a plan the turn just proposed. This
-    // must run AFTER the turn lock is released: approvePlan resumes the turn
-    // via acquireTurnLock, which silently no-ops while this request still
-    // holds the lock — stranding the chat in execute + waiting_for_answer.
-    if (turnOk) {
-      try {
-        const { maybeAutoApprovePlan } = await import('@/lib/autonomy');
-        await maybeAutoApprovePlan(body.chatId, user.id);
-      } catch (err) {
-        console.error('[chat/message] autonomy error:', err);
-      }
     }
   })();
 

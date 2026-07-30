@@ -1,7 +1,7 @@
 /**
  * Client-side tools — pause the turn, rendered by the browser.
- * ask_question is ported from chat/'s clientTools.ts; finish_execution drives
- * the workflow-phase card.
+ * ask_question is ported from chat/'s clientTools.ts; propose_plan (explicit
+ * plan mode only) and finish_execution drive the workflow-phase cards.
  */
 import { z } from 'zod';
 import { registerTool, type ToolDef } from './registry';
@@ -20,7 +20,8 @@ export const askQuestionTool: ToolDef = {
   kinds: ['workflow', 'deployment', 'deployments'],
 };
 
-/** The plan payload start_execution records before it implements. */
+/** The plan payload — recorded by start_execution, or submitted for approval
+ *  by propose_plan when the chat is in explicit plan mode. */
 export const planSchema = z.object({
   summary: z.string().describe('One-paragraph summary of what will change and why.'),
   steps: z.array(z.string()).min(1).describe('Ordered implementation steps.'),
@@ -39,6 +40,21 @@ export const planSchema = z.object({
   risk: z.enum(['content', 'template', 'code', 'dependency']).describe('Highest-risk change type.'),
   questions: z.array(z.string()).optional().describe('Open questions, if any.'),
 });
+
+/**
+ * Only reachable in explicit plan mode (the /plan command). Without it a plan
+ * is recorded and carried out, not submitted — see chatTools.start_execution.
+ */
+export const proposePlanTool: ToolDef = {
+  name: 'propose_plan',
+  description:
+    'Present the implementation plan for approval and stop. The user reviews it and ' +
+    'either approves it (which starts the implementation) or asks for changes. Call ' +
+    'it exactly once, when your analysis is complete.',
+  schema: planSchema,
+  phases: ['plan'],
+  planMode: 'only',
+};
 
 export const finishExecutionTool: ToolDef = {
   name: 'finish_execution',
@@ -88,6 +104,7 @@ export const pickColorTool: ToolDef = {
 export function registerClientTools(): void {
   registerTool(askQuestionTool);
   registerTool(pickColorTool);
+  registerTool(proposePlanTool);
   registerTool(finishExecutionTool);
   registerTool(needsHumanAttentionTool);
 }

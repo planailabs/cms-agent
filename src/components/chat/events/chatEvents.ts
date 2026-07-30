@@ -5,6 +5,14 @@ import {
   cancelChatQuestion,
 } from '../actions/chat';
 import {
+  activeCommandOption,
+  applyCommand,
+  closeCommandMenu,
+  moveCommandHighlight,
+  syncCommandMenu,
+  syncComposerChip,
+} from '../ui/chat/commands';
+import {
   clearAttachments,
   composerHasContent,
   readyAttachmentMeta,
@@ -22,6 +30,7 @@ export const registerChatEvents = (app: HTMLElement) => {
 
   const clearMachineConfigInput = (input: HTMLElement) => {
     input.textContent = '';
+    syncComposerChip(input);
     input.setAttribute('data-empty', 'true');
     const btn = app.querySelector<HTMLButtonElement>(
       '[data-action="machine-config-send"]',
@@ -54,19 +63,50 @@ export const registerChatEvents = (app: HTMLElement) => {
     },
   );
 
-  // Chat: Enter Key (Shift+Enter inserts newline)
+  // Chat: Enter Key (Shift+Enter inserts newline). While the command menu is
+  // open it owns Enter/Tab/Arrows — picking a command must not send the
+  // half-typed message underneath it.
   delegateEvent(
     app,
     'keydown',
     '[data-action="machine-config-input"]',
     (event) => {
       const keyEvent = event as KeyboardEvent;
+      const input = keyEvent.target as HTMLElement;
+      const highlighted = activeCommandOption(input);
+      if (highlighted) {
+        if (keyEvent.key === 'ArrowDown' || keyEvent.key === 'ArrowUp') {
+          keyEvent.preventDefault();
+          moveCommandHighlight(input, keyEvent.key === 'ArrowDown' ? 1 : -1);
+          return;
+        }
+        if (keyEvent.key === 'Enter' || keyEvent.key === 'Tab') {
+          keyEvent.preventDefault();
+          applyCommand(input, highlighted);
+          return;
+        }
+        if (keyEvent.key === 'Escape') {
+          keyEvent.preventDefault();
+          closeCommandMenu(input);
+          return;
+        }
+      }
       if (keyEvent.key !== 'Enter') return;
       if (keyEvent.shiftKey) return; // allow default newline insertion
       keyEvent.preventDefault();
-      submitComposer(keyEvent.target as HTMLElement);
+      closeCommandMenu(input);
+      submitComposer(input);
     },
   );
+
+  // Chat: pick a command with the mouse
+  delegateEvent(app, 'mousedown', '[data-command-option]', (event) => {
+    event.preventDefault(); // keep the caret in the composer
+    const name = (event.target as HTMLElement).closest<HTMLElement>('[data-command-option]')
+      ?.dataset.commandOption;
+    const input = getMachineConfigInput();
+    if (name && input) applyCommand(input, name);
+  });
 
   // Chat: sync empty state and send button (text OR ready attachments enable)
   delegateEvent(
@@ -85,8 +125,21 @@ export const registerChatEvents = (app: HTMLElement) => {
         btn.disabled = !enabled;
         btn.setAttribute('aria-disabled', String(!enabled));
       }
+      syncCommandMenu(input);
+      syncComposerChip(input);
     },
   );
+
+  // Moving the caret changes whether a /fragment is being typed at all.
+  delegateEvent(app, 'keyup', '[data-action="machine-config-input"]', (event) => {
+    const key = (event as KeyboardEvent).key;
+    if (key.startsWith('Arrow') || key === 'Home' || key === 'End') {
+      syncCommandMenu(event.target as HTMLElement);
+    }
+  });
+  delegateEvent(app, 'blur', '[data-action="machine-config-input"]', (event) => {
+    closeCommandMenu(event.target as HTMLElement);
+  });
 
   // Chat: paste into the composer — files (ctrl+v or the context menu both
   // fire 'paste') become attachments; very long text becomes a text

@@ -12,7 +12,7 @@ import { ALL_PHASES } from '../types';
 const proposeMemoryTool: ToolDef = {
   name: 'propose_memory',
   description:
-    'Propose a reusable project convention you discovered or the team confirmed (naming, frontmatter rules, tone). It only takes effect after an editor approves it. Secrets, approval rules, and autonomy changes are never learnable.',
+    'Propose a reusable project convention you discovered or the team confirmed (naming, frontmatter rules, tone). It only takes effect after an editor approves it. Secrets and approval rules are never learnable.',
   schema: z.object({
     content: z.string().describe('The convention, one concise sentence or rule.'),
     source: z.string().describe('Where this came from (file, conversation, observation).'),

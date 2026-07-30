@@ -46,7 +46,7 @@ function applyAccess(attachments: Array<ExternalMcp | null>, access: McpAccess):
 export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   const server = new McpServer({ name: 'cms-agent', version: '1.0.0' });
 
-  for (const tool of toolsForPhase(ctx.workflowPhase, ctx.chatKind, ctx.deployFlowId)) {
+  for (const tool of toolsForPhase(ctx.workflowPhase, ctx.chatKind, ctx.deployFlowId, ctx.planMode)) {
     const shape =
       tool.schema instanceof z.ZodObject ? (tool.schema as z.AnyZodObject).shape : undefined;
     server.registerTool(

@@ -6,7 +6,7 @@
  * (Astro.locals.user.role === 'admin'), so there is no client-side auth
  * check or loading gate. Tabs are URL-driven and lazily initialized by
  * tabs.ts. Impersonation, messages, pings and customer tokens from chat/
- * are not ported; grants and memory are new.
+ * are not ported; memory is new.
  */
 import '../chat/style.css';
 import { t } from '@/lib/i18n';
@@ -64,7 +64,6 @@ const { lang = 'en' } = Astro.props;
         <button type="button" data-tab="tokens" class="dash-tab">{t(lang, 'dashboard.tabs.tokens')}</button>
         <button type="button" data-tab="users" class="dash-tab">{t(lang, 'dashboard.tabs.users')}</button>
         <button type="button" data-tab="prompts" class="dash-tab">{t(lang, 'dashboard.tabs.prompts')}</button>
-        <button type="button" data-tab="grants" class="dash-tab">{t(lang, 'dashboard.tabs.grants')}</button>
         <button type="button" data-tab="memory" class="dash-tab">{t(lang, 'dashboard.tabs.memory')}</button>
         <button type="button" data-tab="uploads" class="dash-tab">{t(lang, 'dashboard.tabs.uploads')}</button>
         <button type="button" data-tab="system" class="dash-tab">{t(lang, 'dashboard.tabs.system')}</button>
@@ -193,86 +192,6 @@ const { lang = 'en' } = Astro.props;
             <button type="button" class="prompt-clear-btn dash-btn dash-btn--danger">{t(lang, 'dashboard.prompts.remove')}</button>
             <button type="button" class="prompt-save-btn dash-btn dash-btn--primary">{t(lang, 'dashboard.prompts.save')}</button>
           </div>
-        </div>
-
-        <div class="dash-status hidden"></div>
-      </div>
-
-      <!-- Grants Tab -->
-      <div id="tab-grants" class="tab-panel hidden dash-stack">
-        <div class="grant-form dash-card dash-stack">
-          <h3 class="dash-card-title">{t(lang, 'dashboard.grants.formTitle')}</h3>
-          <div class="dash-form-grid">
-            <label class="dash-field">
-              <span>{t(lang, 'dashboard.grants.user')}</span>
-              <select class="grant-user dash-input">
-                <option value="">{t(lang, 'dashboard.grants.allUsers')}</option>
-              </select>
-            </label>
-            <div class="dash-field">
-              <span>{t(lang, 'dashboard.grants.actions')}</span>
-              <div class="dash-checks">
-                <label><input type="checkbox" class="grant-action" value="implement" checked /> {t(lang, 'dashboard.grants.actionImplement')}</label>
-                <label><input type="checkbox" class="grant-action" value="publish" /> {t(lang, 'dashboard.grants.actionPublish')}</label>
-              </div>
-            </div>
-            <label class="dash-field">
-              <span>{t(lang, 'dashboard.grants.maxRisk')}</span>
-              <select class="grant-risk dash-input">
-                <option value="content" selected>{t(lang, 'dashboard.grants.riskContent')}</option>
-                <option value="template">{t(lang, 'dashboard.grants.riskTemplate')}</option>
-                <option value="code">{t(lang, 'dashboard.grants.riskCode')}</option>
-                <option value="dependency">{t(lang, 'dashboard.grants.riskDependency')}</option>
-              </select>
-            </label>
-            <label class="dash-field">
-              <span>{t(lang, 'dashboard.grants.maxExecutions')}</span>
-              <input type="number" class="grant-executions dash-input" min="1" max="100" value="1" />
-            </label>
-            <label class="dash-field">
-              <span>{t(lang, 'dashboard.grants.validUntil')}</span>
-              <input type="datetime-local" class="grant-until dash-input" />
-            </label>
-            <label class="dash-field">
-              <span>{t(lang, 'dashboard.grants.onError')}</span>
-              <select class="grant-onerror dash-input">
-                <option value="stop" selected>{t(lang, 'dashboard.grants.onErrorStop')}</option>
-                <option value="notify">{t(lang, 'dashboard.grants.onErrorNotify')}</option>
-              </select>
-            </label>
-          </div>
-          <label class="dash-field">
-            <span>{t(lang, 'dashboard.grants.pathScope')}</span>
-            <textarea
-              class="grant-scope dash-input dash-textarea"
-              rows="3"
-              placeholder="src/content/**"></textarea>
-          </label>
-          <div class="dash-row dash-row--end">
-            <button type="button" class="grant-create-btn dash-btn dash-btn--primary">{t(lang, 'dashboard.grants.create')}</button>
-          </div>
-        </div>
-
-        <div class="dash-table-wrap">
-          <table class="dash-table">
-            <thead>
-              <tr>
-                <th>{t(lang, 'dashboard.grants.colUser')}</th>
-                <th>{t(lang, 'dashboard.grants.colActions')}</th>
-                <th>{t(lang, 'dashboard.grants.colScope')}</th>
-                <th>{t(lang, 'dashboard.grants.colMaxRisk')}</th>
-                <th class="dash-num">{t(lang, 'dashboard.grants.colExecutionsLeft')}</th>
-                <th>{t(lang, 'dashboard.grants.colValidUntil')}</th>
-                <th>{t(lang, 'dashboard.grants.colStatus')}</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody class="grants-table-body">
-              <tr class="animate-pulse">
-                <td class="dash-td-muted" colspan="8">{t(lang, 'dashboard.common.loadingData')}</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
 
         <div class="dash-status hidden"></div>

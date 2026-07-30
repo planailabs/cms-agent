@@ -25,6 +25,8 @@ export interface ToolContext {
   targetBranchName?: string;
   /** Deploy flow of the chat's automatism (deployment chats). */
   deployFlowId?: string;
+  /** The chat is in explicit plan mode (see lib/commands). */
+  planMode?: boolean;
   /** Live user context per connected editor (fed by the preview overlay). */
   userContext: Map<string, unknown>;
   /** Paths written by tools during this chat's EXECUTE phase. */
@@ -42,6 +44,9 @@ export interface ToolDef<Schema extends z.ZodTypeAny = z.ZodTypeAny> {
   /** Deploy-flow scoping: only exposed when the chat's automatism runs one
    *  of these flows (set by registerDeployFlow for flow tools). */
   flows?: string[];
+  /** Explicit plan mode (the /plan command) — 'only' exposes the tool just
+   *  in that mode, 'never' hides it there. Unset: exposed either way. */
+  planMode?: 'only' | 'never';
   /** Client-side tools have no execute — they pause the turn for the browser. */
   execute?: (input: z.infer<Schema>, ctx: ToolContext) => Promise<string>;
 }
@@ -60,14 +65,19 @@ export function toolsForPhase(
   phase: WorkflowPhase,
   kind: ChatKind = 'workflow',
   deployFlowId?: string,
+  planMode = false,
 ): ToolDef[] {
   return [...registry.values()].filter(
     (t) =>
       t.phases.includes(phase) &&
       (t.kinds ?? ['workflow']).includes(kind) &&
-      (!t.flows || (deployFlowId != null && t.flows.includes(deployFlowId))),
+      (!t.flows || (deployFlowId != null && t.flows.includes(deployFlowId))) &&
+      allowedInMode(t, planMode),
   );
 }
+
+const allowedInMode = (tool: ToolDef, planMode: boolean): boolean =>
+  tool.planMode === 'only' ? planMode : tool.planMode === 'never' ? !planMode : true;
 
 export function isClientSideTool(name: string): boolean {
   const t = registry.get(name);
@@ -90,6 +100,13 @@ export async function executeTool(
   }
   if (tool.flows && (!ctx.deployFlowId || !tool.flows.includes(ctx.deployFlowId))) {
     return JSON.stringify({ error: `Tool "${name}" belongs to another deploy flow.` });
+  }
+  if (!allowedInMode(tool, ctx.planMode ?? false)) {
+    return JSON.stringify({
+      error: ctx.planMode
+        ? `Tool "${name}" is not available while this chat is in plan mode — propose_plan instead.`
+        : `Tool "${name}" needs the /plan command to be active in this chat.`,
+    });
   }
   if (!tool.phases.includes(ctx.workflowPhase)) {
     return JSON.stringify({

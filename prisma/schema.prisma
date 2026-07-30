@@ -38,8 +38,6 @@ model User {
   tokenUsage             TokenUsage[]
   uploads                Upload[]
   approvals              Approval[]
-  autonomyGrants         AutonomyGrant[]         @relation("GrantSubject")
-  createdAutonomyGrants  AutonomyGrant[]         @relation("GrantCreator")
   approvedMemories       ApprovedMemory[]
   systemPromptExtensions SystemPromptExtension[]
   chatTabs               ChatTabs[]
@@ -139,6 +137,9 @@ model Chat {
   // Last failed turn's error — shown with a Retry button until cleared
   lastError       String?
   planJson        Json?
+  // Explicit plan mode (the /plan command): the agent proposes a plan and
+  // waits for approval instead of recording it and carrying on.
+  planMode        Boolean @default(false)
   // Optimistic concurrency for phase transitions (no last-writer-wins)
   entityVersion   Int     @default(0)
   // Set when the chat is done (published / deployment finished): hidden from
@@ -260,7 +261,9 @@ model Message {
   // 'user' | 'assistant' | 'cancel' | 'tool' | 'automatism'
   role          String
   content       String @default("")
+  // Command the message was sent with (see lib/commands) — rendered as a chip
   contentBlocks Json?
+  command       String?
   pageContext   Json?
   ordinal       Int
 
@@ -287,7 +290,7 @@ model TokenUsage {
   @@map("token_usage")
 }
 
-// ─── Executions, approvals, autonomy ─────────────────────────────────────────
+// ─── Executions and approvals ────────────────────────────────────────────────
 
 model Execution {
   id            String   @id @default(cuid())
@@ -308,7 +311,7 @@ model Approval {
   chat           Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   actorId        String
   actor          User     @relation(fields: [actorId], references: [id])
-  // 'plan' | 'publish' | 'autonomy'
+  // 'plan' | 'publish'
   action         String
   planHash       String?
   baseSha        String
@@ -319,26 +322,6 @@ model Approval {
 
   @@index([chatId, action])
   @@map("approval")
-}
-
-model AutonomyGrant {
-  id            String    @id @default(cuid())
-  // Null = applies to all users
-  userId        String?
-  user          User?     @relation("GrantSubject", fields: [userId], references: [id], onDelete: Cascade)
-  actions       Json // e.g. ["implement"] or ["implement","publish"]
-  pathScope     Json // glob allowlist
-  maxRisk       String    @default("content") // 'content' | 'template' | 'code' | 'dependency'
-  maxExecutions Int       @default(1)
-  validFrom     DateTime
-  validUntil    DateTime
-  onError       String    @default("stop") // 'stop' | 'notify'
-  createdById   String
-  createdBy     User      @relation("GrantCreator", fields: [createdById], references: [id])
-  createdAt     DateTime  @default(now())
-  revokedAt     DateTime?
-
-  @@map("autonomy_grant")
 }
 
 // ─── Memory ──────────────────────────────────────────────────────────────────

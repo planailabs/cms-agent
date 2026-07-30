@@ -3,6 +3,7 @@
  */
 
 import { escapeHtml } from '../../utils/html';
+import { commandMenuHtml } from './commands';
 import { SEND_ICON_SVG } from '../icons';
 import { t, uiLocale } from '@/lib/i18n';
 import { store } from '../../app/store';
@@ -59,7 +60,9 @@ export const renderChatComposer = (
 
   return showComposer
     ? `<div class="composer-card" data-form="machine-config-composer" data-action="chat-dropzone">
+          ${commandMenuHtml()}
           <div class="composer-chips" data-attach-chips>${renderAttachmentChipsHtml()}</div>
+          <div class="composer-command" data-command-chip></div>
           <div class="composer-wrapper">
             ${isTextQuestion
               ? `<button

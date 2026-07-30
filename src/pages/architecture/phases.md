@@ -36,6 +36,24 @@ Recording the plan ends the agent's PLAN run: the system prompt and tool set
 are built once per run, so the turn continues in a fresh EXECUTE run with the
 write tools. The user sees one uninterrupted turn.
 
+### Asking to approve first: the `/plan` command
+
+Sending a message that starts with `/plan` turns on **explicit plan mode** for
+that chat. From then on:
+
+- `propose_plan` **replaces** `start_execution` in the tool set — not alongside
+  it, so the agent cannot slip past the stop even if it tries.
+- The turn ends on the proposal. The browser renders it as an approval card.
+- **Approve** (`POST /api/chats/:id/approve-plan`) records the `Approval`,
+  moves the phase to EXECUTE and resumes the paused turn, which then
+  implements. **Request changes** sends feedback back and the agent proposes
+  again.
+
+The mode is a column on the chat, so it survives restarts and holds for the
+whole conversation, later planning rounds included. Commands are parsed
+server-side from the text that actually arrives; the chip the composer shows
+while you type is a preview of that, never the decision itself.
+
 The agent also keeps a **task list** (`add_tasks`) — the checklist the user
 watches while it works. Each task has display text and an optional note only
 the agent reads; every turn's system prompt gets the current list back.
@@ -83,11 +101,17 @@ chat returns to PLAN for the next request. On failure main stays merged, the
 publication is marked failed, and retrying reuses the same sha and sealed
 artifact — no blind re-uploads (flows reconcile by commit sha first).
 
-## Autonomy grants
+## Commands
 
-Admins may create grants (actions, path-scope globs, max risk, execution
-budget, validity window). These were the way a plan could clear an approval
-card without a human; with plans no longer submitted for approval, nothing
-currently consumes them — the grant machinery is inert until it is either
-removed or rebound to a decision that still exists (publishing is the obvious
-candidate).
+A message may start with a `/command`, which switches something on for the
+chat. They are parameterless by design — a command is a mode switch you can
+type, not an argument syntax. Typing `/` in the composer opens an autocomplete;
+the command a message was sent with is kept and shown as a chip beside it in
+the transcript.
+
+| Command | Effect |
+|---|---|
+| `/plan` | Explicit plan mode: the agent proposes a plan and waits for your approval before implementing. |
+
+Adding one is a single entry in `src/lib/commands/index.ts` — the parser, the
+autocomplete and the server-side validation all read the same registry.

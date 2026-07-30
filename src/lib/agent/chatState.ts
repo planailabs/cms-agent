@@ -37,6 +37,8 @@ export interface ChatStateSnapshot {
   branchId: string;
   workBranch: string;
   planJson: unknown;
+  /** Explicit plan mode (the /plan command) is active for this chat. */
+  planMode: boolean;
   /** Agent task list (display text + status; notes stay server-side). */
   tasks: Array<{ id: string; text: string; status: string }>;
   /** Latest publishable (non-reverted) execution sha, or null. */
@@ -149,6 +151,7 @@ export async function buildChatState(
     branchId: chat.branchId,
     workBranch: chat.workBranch,
     planJson: chat.planJson,
+    planMode: chat.planMode,
     // Notes are the agent's own working memory — never leave the server.
     tasks: chat.tasks,
     executionSha: publishable[publishable.length - 1]?.sha ?? null,

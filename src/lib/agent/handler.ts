@@ -108,6 +108,7 @@ export async function handleChatMessage(
   let chatKind: ChatKind = 'workflow';
   let needsTitle = false;
   let workflowPhase: WorkflowPhase = 'plan';
+  let planMode = false;
   let planJson: unknown;
   let nextOrdinal = 0;
 
@@ -137,13 +138,14 @@ export async function handleChatMessage(
       prisma.branch.findUniqueOrThrow({ where: { id: record.branchId } }),
       prisma.chat.findUniqueOrThrow({
         where: { id: chatId },
-        select: { planJson: true, workBranch: true, kind: true, title: true },
+        select: { planJson: true, planMode: true, workBranch: true, kind: true, title: true },
       }),
     ]);
     targetBranchName = branch.name;
     branchName = chat.workBranch; // the chat's own work branch
     chatKind = chat.kind as ChatKind;
     planJson = chat.planJson ?? undefined;
+    planMode = chat.planMode;
     needsTitle = chat.title === 'New chat';
   }
 
@@ -203,7 +205,13 @@ export async function handleChatMessage(
       });
       return;
     }
-    await appendMsg({ role: 'user', content: body.text, pageContext: body.pageContext, attachments });
+    await appendMsg({
+      role: 'user',
+      content: body.text,
+      pageContext: body.pageContext,
+      attachments,
+      command: body.command,
+    });
     await setPhase('idle');
   } else if (body.type === 'continue') {
     // Resume after a failed turn or a server restart: nothing is appended —
@@ -255,6 +263,7 @@ export async function handleChatMessage(
     chatKind,
     targetBranchName,
     deployFlowId,
+    planMode,
     worktreePath,
     userContext: getUserContextStore(chatId),
     modifiedPaths: new Set(),
@@ -287,6 +296,7 @@ export async function handleChatMessage(
       promptInput: {
         kind: chatKind,
         phase: workflowPhase,
+        planMode,
         branchName: opts.skipPersistence
           ? branchName
           : `${branchName} (merges into ${targetBranchName})`,
@@ -325,10 +335,14 @@ export async function handleChatMessage(
     toolContext.workflowPhase = workflowPhase;
     if (!opts.skipPersistence) {
       const [chat, tasks] = await Promise.all([
-        prisma.chat.findUnique({ where: { id: chatId }, select: { planJson: true } }),
+        prisma.chat.findUnique({ where: { id: chatId }, select: { planJson: true, planMode: true } }),
         taskListForPrompt(chatId),
       ]);
       planJson = chat?.planJson ?? undefined;
+      if (chat) {
+        planMode = chat.planMode;
+        toolContext.planMode = planMode;
+      }
       taskListForRun = tasks;
     }
   }

@@ -424,7 +424,7 @@ sequenceDiagram
         <code>execution_committed</code>, <code>execution_reverted</code>,
         <code>validation_result</code>, <code>publish_log</code>,
         <code>publish_done</code>, <code>memory_proposed</code>,
-        <code>autonomy_applied</code>, <code>version_restored</code>,
+        <code>version_restored</code>,
         <code>done</code>, <code>error</code>. Everything that is not in the
         append-only list above is derivable from the snapshot.</li>
       <li><strong>Sequence and epoch are a stale-drop guard, nothing more.</strong>

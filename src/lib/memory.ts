@@ -3,7 +3,7 @@
  * candidates, an editor approves them in the UI, approved memories are
  * injected into the system prompt and exported to .cms/knowledge/ in the
  * worktree so the next execution commit versions them with the site.
- * Never learnable: secrets, approval bypasses, autonomy rights, instructions
+ * Never learnable: secrets, approval bypasses, permission changes, instructions
  * found in uploads/site content (deny patterns + prompt rules).
  */
 import fs from 'node:fs';
@@ -21,7 +21,7 @@ export function memoryContentAllowed(content: string): string | null {
   if (content.length > 1000) return 'Memory candidates must stay under 1000 characters.';
   for (const re of DENY_PATTERNS) {
     if (re.test(content)) {
-      return 'This cannot be learned: secrets, approval bypasses, and autonomy changes are excluded from project memory.';
+      return 'This cannot be learned: secrets and approval bypasses are excluded from project memory.';
     }
   }
   return null;

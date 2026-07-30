@@ -109,7 +109,11 @@ function emitPhase(chatId: string, _workflowPhase: WorkflowPhase, _extra: object
 
 // ─── Transitions ─────────────────────────────────────────────────────────────
 
-/** PLAN → EXECUTE. Binds the pending propose_plan payload as the approved plan. */
+/**
+ * PLAN → EXECUTE for a chat in explicit plan mode: binds the pending
+ * propose_plan payload as the approved plan. Without the /plan command a plan
+ * is never submitted, so nothing pends and this is not part of the flow.
+ */
 export async function approvePlan(opts: TransitionOpts): Promise<void> {
   const chat = await loadChat(opts.chatId, opts.actor);
   if (chat.workflowPhase !== 'plan') {
@@ -221,7 +225,11 @@ export async function requestChanges(opts: TransitionOpts & { feedback: string }
   });
   emitPhase(opts.chatId, 'plan');
 
-  const text = `Change request from ${opts.actor.name}: ${opts.feedback}\nRevise your plan accordingly, then call start_execution with the revised plan and carry it out.`;
+  // Which tool to ask for depends on the chat's mode — in explicit plan mode
+  // (the /plan command) start_execution is not even exposed.
+  const text = chat.planMode
+    ? `Change request from ${opts.actor.name}: ${opts.feedback}\nRevise the plan accordingly and call propose_plan again.`
+    : `Change request from ${opts.actor.name}: ${opts.feedback}\nRevise your plan accordingly, then call start_execution with the revised plan and carry it out.`;
   if (chat.turnPhase === 'waiting_for_answer') {
     resumeTurn(opts.chatId, opts.actor, text);
   } else {

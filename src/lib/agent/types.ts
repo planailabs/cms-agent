@@ -59,7 +59,15 @@ export interface AttachmentMeta {
 }
 
 export type StoredMessage =
-  | { id?: string; role: 'user'; content: string; pageContext?: PageContext; attachments?: AttachmentMeta[] }
+  | {
+      id?: string;
+      role: 'user';
+      content: string;
+      pageContext?: PageContext;
+      attachments?: AttachmentMeta[];
+      /** Command the message was sent with (lib/commands) — a chip in the UI. */
+      command?: string;
+    }
   | { id?: string; role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { id?: string; role: 'tool'; results: ToolResult[] }
   | { id?: string; role: 'cancel'; content: string }
@@ -85,4 +93,6 @@ export interface IncomingChatMessage {
   pageContext?: PageContext;
   /** Ids of uploads (chat-scoped) attached to this message. */
   attachmentIds?: string[];
+  /** Command parsed off the text by the endpoint (lib/commands). */
+  command?: string;
 }

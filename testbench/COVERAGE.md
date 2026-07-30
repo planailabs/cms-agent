@@ -12,7 +12,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `GET/PATCH /api/me` | 01, 02 (theme/language persist) | ✅ |
 | `GET/POST /api/dev/impersonate` (+400) | 01 | ✅ |
 | `POST /api/chats` (+400 no branch, warm-branch adoption) | 01, 03 | ✅ |
-| `POST /api/chats/[id]/approve-plan` (+guards) | 03; guards in 01 | ✅ |
+| `POST /api/chats/[id]/approve-plan` (+guards) | guards in 01 | 🟡 only reachable in explicit plan mode (`/plan`) since plans are otherwise recorded, not submitted — 03's journeys need reworking for it |
 | `POST /api/chats/[id]/request-changes` | 03 (journey B) | ✅ |
 | `POST /api/chats/[id]/finalize` | 03 | ✅ |
 | `POST /api/chats/[id]/publish` (+repeat guard) | 03 | ✅ |
@@ -41,6 +41,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `GET/POST /api/memory` | 01 | 🟡 approve/reject of a real candidate needs the agent to propose one |
 | `GET /api/publications` (list + detail) | 01, 03 | ✅ |
 | `/api/admin/*` (all routes, editor 403) | 01 (403), 04 (admin) | ✅ |
+| `/api/admin/grants` | 04 (asserts it 404s) | ⛔ removed with autonomy grants |
 | `GET /dashboard` (admin gate) | 04 | ✅ |
 | `/injected-cms-agent.js`, `/injected-agent-module.js`, `/injected-annotate.js` | 01 | ✅ |
 | `/__preview/boot/<branch>` (CMS-host redirect) | 05 | ✅ |
@@ -95,6 +96,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Collapsed tool-call groups (grouping, running state, meta preview, mode gate) | — | 🟡 unit-covered (test/tool-groups.test.ts); bench-driving needs a technical-mode agent turn in a browser session |
 | Routeless-files warn chip + toggle banner (diff viewer) | — | 🟡 unit-covered (test/diff-renderer.test.ts); bench-driving needs a journey that changes non-page files |
 | Rail tooltips paint over the expanded compare flyout (and the flyout's own button shows one label) | — | 🟡 unit-covered by pixel probe (test/rail-tooltip-realbrowser.test.ts); the bench asserts DOM, not paint order |
+| `/plan` command: chip in the transcript, explicit plan mode, propose_plan replaces start_execution | — | 🟡 unit-covered (test/commands.test.ts) + the autocomplete driven with real keystrokes (test/command-autocomplete-realbrowser.test.ts); bench-driving needs a live agent turn under the mode |
 | `/architecture` reference page (public, mermaid diagrams) | 07 (reachable without a session) | 🟡 07 checks the route is public and ships diagram markup; that every diagram *renders* is unit-covered (test/architecture-page.test.ts) |
 | Workflow-phase run boundary (start_execution / return_to_plan end the run; the next one gets the new phase's prompt + tools) | — | 🟡 unit-covered (test/phase-run-boundary.test.ts); bench-driving needs a live agent to pick start_execution over propose_plan, which is its judgement call |
 | External MCP phase gate (custom/repo servers full only in EXECUTE, declared read-only tools while planning; deployment monitor always reduced) | — | 🟡 unit-covered (test/mcp-policy.test.ts); readOnlyHint surviving the jailed bridge is covered in test/integration/custom-mcp.test.ts; bench-driving needs a configured custom MCP server in the bench environment |

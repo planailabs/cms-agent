@@ -109,30 +109,16 @@ describe('admin surface', () => {
     );
   });
 
-  it('usage and grants', async () => {
+  it('usage', async () => {
     const usage = await admin.get('/api/admin/usage?days=7');
     ok('usage aggregates', usage.status === 200);
     if (loadJourney()) {
       const perUser = (usage.json as { perUser?: { inputTokens?: number }[] }).perUser ?? [];
       ok('usage shows journey tokens', perUser.length > 0);
     }
-
-    const users = (await admin.get('/api/admin/users?q=admin@localhost')).json as {
-      users?: { id: string }[];
-    };
-    const created = await admin.req('POST', '/api/admin/grants', {
-      userId: users.users?.[0]?.id,
-      actions: ['implement'],
-      pathScope: ['src/content/**'],
-      maxRisk: 'content',
-      validUntil: new Date(Date.now() + 86_400_000).toISOString(),
-    });
-    const grantId = (created.json as { grant?: { id: string } }).grant?.id;
-    ok('grant created', created.status === 201 && !!grantId);
-    const list = (await admin.get('/api/admin/grants')).json as { grants?: { id: string }[] };
-    ok('grant listed', (list.grants ?? []).some((g) => g.id === grantId));
-    const revoked = await admin.req('DELETE', `/api/admin/grants?id=${grantId}`);
-    ok('grant revoked', revoked.status === 200);
+    // Autonomy grants were removed with the plan-approval default; the
+    // endpoint they used is gone too.
+    ok('grants endpoint is gone', (await admin.get('/api/admin/grants')).status === 404);
   });
 
   it('dashboard is admin-only', async () => {

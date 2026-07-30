@@ -95,6 +95,7 @@ export async function loadChatRecord(chatId: string): Promise<{
       role: 'user',
       content: row.content,
       pageContext: (row.pageContext as PageContext | null) ?? undefined,
+      command: row.command ?? undefined,
     };
   });
 
@@ -175,6 +176,7 @@ export function createDbAdapter(
               content: stripNul(extractDisplayText(msg)),
               contentBlocks: contentBlocks ? stripNul(contentBlocks) : undefined,
               pageContext: msg.role === 'user' ? (stripNul(msg.pageContext as object | undefined) ?? undefined) : undefined,
+              command: msg.role === 'user' ? msg.command ?? null : null,
               ordinal,
             },
           });

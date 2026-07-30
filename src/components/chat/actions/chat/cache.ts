@@ -35,6 +35,8 @@ export type StoredMessage = {
   tm?: TranslatedMessage;
   /** role 'user': files attached to the message. */
   attachments?: AttachmentDisplay[];
+  /** role 'user': the /command it was sent with (lib/commands) — a chip. */
+  command?: string;
   tool?: ToolCallInfo;
   /** role 'execution': commit sha, resolved against workspace.executions. */
   sha?: string;

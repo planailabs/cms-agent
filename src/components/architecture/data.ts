@@ -82,7 +82,6 @@ erDiagram
   USER ||--o{ TOKEN_USAGE : spends
   USER ||--o{ WINDOW_SESSION : restores
   USER ||--o{ UPLOAD : uploads
-  USER ||--o{ AUTONOMY_GRANT : "granted to"
   USER ||--o{ SYSTEM_PROMPT_EXTENSION : "personal instructions"
   USER ||--o{ APPROVED_MEMORY : approves
   BRANCH ||--o{ CHAT : hosts
@@ -97,12 +96,11 @@ erDiagram
         <code>workflowPhase</code>, <code>turnPhase</code>, the automatism
         status and the publication status are the persisted forms of the
         diagrams above. Migrations change them; nothing else may.</li>
-      <li><strong>An autonomy grant is a small policy row.</strong> Allowed
-        actions, a glob allowlist of paths, a maximum risk class
-        (<code>content</code> below <code>template</code> below <code>code</code>
-        below <code>dependency</code>), an execution budget, a validity window,
-        and what to do on error. A plan covered entirely by an active,
-        unrevoked grant approves itself.</li>
+      <li><strong>A chat carries its own mode.</strong> <code>planMode</code>
+        is set by the <code>/plan</code> command and decides whether the agent
+        proposes a plan for approval or records one and implements it; the
+        message that switched it on keeps the command, so the transcript
+        explains the change of behaviour that follows it.</li>
       <li><strong>Uploads are quarantined.</strong> Files are magic-byte checked
         and stored outside any web root. The import tool is the only path from
         there into a worktree, and it demands alt text for images.</li>
@@ -141,6 +139,7 @@ flowchart LR
     adapters["Content adapters<br/>registerContentAdapter"]
     autos["Automatism types<br/>registerAutomatism"]
     mcp["MCP servers<br/>admin-global and repo-local config"]
+    cmds["Chat commands<br/>COMMANDS"]
   end
 
   subgraph client["Browser"]
@@ -155,6 +154,8 @@ flowchart LR
   windows -->|"icon, tooltip, order, optional flyout"| rail["Icon rail and stage renderer"]
   layers -->|"priority and outside-click root"| esc["One Escape and one outside-click listener"]
   mcp --> tools
+  cmds -->|"parser, autocomplete, server-side validation"| composer["Composer and message endpoint"]
+  cmds -->|"chat columns the effect sets"| tools
 `,
       },
     ],
@@ -176,6 +177,17 @@ flowchart LR
         tooltip, order, renderer, open and close hooks, and what survives a
         reload. The rail and the main area both derive from the registry, so
         adding a window touches exactly one file.</li>
+      <li><strong>Chat commands.</strong> A <code>/name</code> prefix on a sent
+        message that switches something on for the chat — parameterless, because
+        a command is a mode switch the user can type, not an argument syntax.
+        One entry carries the name, the one-line description the composer's
+        autocomplete shows, and the chat columns its effect sets, so a new
+        command needs no other wiring. The parser is deliberately strict: only
+        an exact known command at the very start counts, and it runs on the
+        server against whatever text arrives — the chip in the composer is a
+        preview of that decision, never the decision itself. The message keeps
+        the command it was sent with, so the transcript still explains later why
+        the chat behaved differently from that point on.</li>
       <li><strong>UI layers.</strong> Dialogs, menus and popovers register a
         priority and an outside-click root; one Escape listener closes the
         topmost open layer and one document listener closes outside-clicked
@@ -183,6 +195,8 @@ flowchart LR
     </ul>`,
     source: [
       'src/lib/publish/types.ts',
+      'src/lib/commands/index.ts',
+      'src/components/chat/ui/chat/commands.ts',
       'src/lib/site/backend.ts',
       'src/lib/content/adapter.ts',
       'src/components/workspace/window.ts',

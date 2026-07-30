@@ -105,6 +105,8 @@ export const GET: APIRoute = async ({ url, locals }) => {
       ...(m.role === 'user' && attachmentsByMsg.has(m.id)
         ? { attachments: attachmentsByMsg.get(m.id) }
         : {}),
+      // The /command the message was sent with — rendered as a chip beside it.
+      ...(m.role === 'user' && m.command ? { command: m.command } : {}),
     });
   }
 

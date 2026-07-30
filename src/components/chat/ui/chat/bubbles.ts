@@ -6,6 +6,7 @@
 import { escapeHtml } from '../../utils/html';
 import { renderMarkdown } from '../../utils/markdown';
 import { renderExecutionCard } from './cards';
+import { commandChipHtml } from './commands';
 import { resolveTranslated, t, uiLocale } from '@/lib/i18n';
 
 import type { ChatState } from '../../app/state';
@@ -144,9 +145,13 @@ const renderMessage = (
                 ${escapeHtml(msg.content)}
               </p>`
       : '';
+    // The /command the message was sent with, beside it — so the transcript
+    // still explains why the chat behaved differently from here on.
+    const commandRow = msg.command ? `<div class="msg-command">${commandChipHtml(msg.command)}</div>` : '';
     return `
             <div class="flex flex-col items-end gap-1">
               ${attachmentsRow}
+              ${commandRow}
               ${textRow}
             </div>
           `;

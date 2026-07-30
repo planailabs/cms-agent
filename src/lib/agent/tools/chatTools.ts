@@ -53,6 +53,9 @@ export function registerChatTools(): void {
       "user's to make, ask_question before recording rather than planning around a guess.",
     schema: planSchema,
     phases: ['plan'],
+    // In explicit plan mode the user asked to approve first — propose_plan
+    // takes over and this one disappears.
+    planMode: 'never',
     execute: async (plan, ctx) => {
       const { startExecution } = await import('../workflow');
       await startExecution({ chatId: ctx.chatId, actorId: ctx.userId, plan });

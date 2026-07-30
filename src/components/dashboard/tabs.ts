@@ -3,7 +3,7 @@
  *
  * URL-driven tabs (/dashboard/<tab>/) with history.pushState navigation and
  * lazy per-tab module initialization. Supabase-era tabs (messages, pings,
- * impersonate, customer tokens) are dropped; grants + memory are new.
+ * impersonate, customer tokens) are dropped; memory is new.
  */
 
 const TAB_NAMES = [
@@ -11,7 +11,6 @@ const TAB_NAMES = [
   'tokens',
   'users',
   'prompts',
-  'grants',
   'memory',
   'uploads',
   'system',
@@ -67,11 +66,6 @@ async function initTabModule(tab: TabName) {
     case 'prompts': {
       const { initPrompts } = await import('./prompts');
       initPrompts(document.getElementById('tab-prompts')!);
-      break;
-    }
-    case 'grants': {
-      const { initGrants } = await import('./grants');
-      void initGrants(document.getElementById('tab-grants')!);
       break;
     }
     case 'memory': {

@@ -14,7 +14,8 @@ export const machineSections: ArchSection[] = [
       model cannot talk its way into write access. Two exceptions are
       deliberate and both are audited: <code>start_execution</code>, which
       moves forward inside a running turn, and <code>return_to_plan</code>,
-      which only ever moves backwards.`,
+      which only ever moves backwards. A chat can also be put in explicit plan
+      mode, where the agent proposes and a human approves instead.`,
     diagrams: [
       {
         caption: 'Phases and their transitions',
@@ -27,6 +28,7 @@ stateDiagram-v2
   [*] --> plan: chat created
   plan --> plan: request-changes
   plan --> execute: start_execution
+  plan --> execute: approve-plan (only with /plan)
   execute --> plan: request-changes
   execute --> plan: return_to_plan
   execute --> plan: element handoff
@@ -63,12 +65,20 @@ sequenceDiagram
       },
     ],
     notes: `<ul>
-      <li><strong>The plan is recorded, never submitted.</strong> There is one
-        way out of PLAN: <code>start_execution</code>. The agent writes the plan
-        it intends to follow and implements it — the user reads it as it happens
-        and steers with request-changes, rather than being handed a form to sign
+      <li><strong>By default the plan is recorded, not submitted.</strong> The
+        way out of PLAN is <code>start_execution</code>: the agent writes the
+        plan it intends to follow and implements it, and the user reads it as it
+        happens and steers with request-changes rather than signing a form
         before anything can start. Where a decision genuinely belongs to them,
         the agent asks a question instead.</li>
+      <li><strong>Unless the user asked to approve first.</strong> Sending a
+        message with the <code>/plan</code> command turns on explicit plan mode
+        for that chat: <code>propose_plan</code> replaces
+        <code>start_execution</code> in the tool set — not alongside it, so the
+        agent cannot slip past the stop — the turn ends on the proposal, and
+        <code>approve-plan</code> is what starts the work. The mode is a chat
+        column, so it survives restarts and holds for the whole conversation,
+        including later planning rounds.</li>
       <li><strong>Ordering is a correctness property.</strong> Branch creation
         and sha reads run before the phase update. A git failure after the flip
         would leave a chat in EXECUTE with no approval row behind it.</li>
@@ -91,7 +101,11 @@ sequenceDiagram
         if they were in EXECUTE, because that is where merge conflicts get
         resolved.</li>
     </ul>`,
-    source: ['src/lib/agent/workflow.ts', 'src/lib/autonomy.ts', 'src/pages/api/chats/[id]'],
+    source: [
+      'src/lib/agent/workflow.ts',
+      'src/lib/commands/index.ts',
+      'src/pages/api/chats/[id]',
+    ],
   },
 
   {
