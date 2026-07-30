@@ -26,7 +26,6 @@ stateDiagram-v2
 
   [*] --> plan: chat created
   plan --> plan: request-changes
-  plan --> execute: approve-plan
   plan --> execute: start_execution
   execute --> plan: request-changes
   execute --> plan: return_to_plan
@@ -37,37 +36,42 @@ stateDiagram-v2
 `,
       },
       {
-        caption: 'Approving a plan resolves the paused turn',
+        caption: 'Recording a plan does not stop the turn',
         code: `
 sequenceDiagram
   autonumber
-  participant U as Editor
-  participant A as API — approve-plan
+  participant M as Agent (PLAN run)
+  participant W as startExecution
   participant DB as Database
   participant G as Git engine
-  participant T as Turn machine
+  participant E as Agent (EXECUTE run)
 
-  U->>A: POST approve-plan
-  A->>DB: load chat, read pending propose_plan payload
-  A->>G: ensureBranch + read base sha
-  Note over A,G: git prep happens BEFORE the phase flip
-  A->>DB: phase to execute, guarded on entityVersion
+  M->>W: start_execution with the plan
+  W->>G: ensureBranch + read base sha
+  Note over W,G: git prep happens BEFORE the phase flip
+  W->>DB: phase to execute, guarded on entityVersion
   alt version moved
-    DB-->>A: 0 rows updated
-    A-->>U: 409 — reload and retry
+    DB-->>W: 0 rows updated
+    W-->>M: 409 — the chat changed, reload
   else accepted
-    A->>DB: immutable Approval — plan hash, base sha, idempotency key
-    A->>U: state snapshot broadcast
-    A->>T: resume the paused turn with the approval as the tool result
+    W->>DB: immutable Approval — plan hash, base sha, idempotency key
+    W->>DB: state snapshot broadcast — the user sees the plan
+    W-->>M: the run ends here
+    M->>E: fresh run, EXECUTE prompt and write tools
   end
 `,
       },
     ],
     notes: `<ul>
+      <li><strong>The plan is recorded, never submitted.</strong> There is one
+        way out of PLAN: <code>start_execution</code>. The agent writes the plan
+        it intends to follow and implements it — the user reads it as it happens
+        and steers with request-changes, rather than being handed a form to sign
+        before anything can start. Where a decision genuinely belongs to them,
+        the agent asks a question instead.</li>
       <li><strong>Ordering is a correctness property.</strong> Branch creation
         and sha reads run before the phase update. A git failure after the flip
-        would leave a chat in EXECUTE with no approval and a paused turn nobody
-        resumes.</li>
+        would leave a chat in EXECUTE with no approval row behind it.</li>
       <li><strong>Optimistic concurrency, not last-writer-wins.</strong> Every
         transition is a conditional update on <code>Chat.entityVersion</code>.
         Two editors deciding at once means one of them gets "the chat changed
@@ -77,15 +81,11 @@ sequenceDiagram
         transition still stands — stranding a chat mid-flip to protect a log
         entry would be the worse failure. Idempotency keys are unique, so a
         retried request cannot double-record.</li>
-      <li><strong>Approvals bind content.</strong> A plan approval stores the
-        hash of the exact plan and the base sha; a publish approval stores the
-        exact reviewed sha. If the branch moves afterwards, publishing refuses
-        and asks for a fresh review.</li>
-      <li><strong>Autonomy grants can stand in for a human.</strong> When a
-        proposed plan falls entirely inside an active grant — allowed actions,
-        path globs, risk ceiling, execution budget, validity window — it
-        auto-approves, recorded as an autonomy approval and announced in the
-        chat.</li>
+      <li><strong>Approvals bind content.</strong> The <code>Approval</code>
+        row is an audit record, not a gate: a recorded plan stores the hash of
+        the exact plan and the base sha, a publish stores the exact reviewed
+        sha. Publishing is where a human still decides, and if the branch moves
+        after they reviewed it, it refuses and asks for a fresh look.</li>
       <li><strong>Deployment chats are a separate kind.</strong> Their persisted
         phase is a static <code>published</code>, but their tools are gated as
         if they were in EXECUTE, because that is where merge conflicts get

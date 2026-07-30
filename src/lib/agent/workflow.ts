@@ -221,7 +221,7 @@ export async function requestChanges(opts: TransitionOpts & { feedback: string }
   });
   emitPhase(opts.chatId, 'plan');
 
-  const text = `Change request from ${opts.actor.name}: ${opts.feedback}\nRevise the plan accordingly and call propose_plan again.`;
+  const text = `Change request from ${opts.actor.name}: ${opts.feedback}\nRevise your plan accordingly, then call start_execution with the revised plan and carry it out.`;
   if (chat.turnPhase === 'waiting_for_answer') {
     resumeTurn(opts.chatId, opts.actor, text);
   } else {

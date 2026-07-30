@@ -46,12 +46,11 @@ export function registerChatTools(): void {
   registerTool({
     name: 'start_execution',
     description:
-      'Record your plan and start implementing it right away, without stopping for ' +
-      'approval. Use this for requests where the plan holds no real choices — the ' +
-      'user asked for something specific and there is one sensible way to do it. ' +
-      'Call propose_plan instead when the user should weigh options, when the change ' +
-      'is risky or wide-reaching, or when anything about the request is ambiguous. ' +
-      'The plan is recorded either way; only the approval stop differs.',
+      'Record your plan and start implementing it right away. This is the only way ' +
+      'out of the PLAN phase — there is no approval to wait for. The plan is stored ' +
+      'and shown to the user, who follows along and can ask for changes at any time. ' +
+      'Call it once, when your analysis is complete; if a decision is genuinely the ' +
+      "user's to make, ask_question before recording rather than planning around a guess.",
     schema: planSchema,
     phases: ['plan'],
     execute: async (plan, ctx) => {

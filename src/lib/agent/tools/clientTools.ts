@@ -1,7 +1,7 @@
 /**
  * Client-side tools — pause the turn, rendered by the browser.
- * ask_question is ported from chat/'s clientTools.ts; propose_plan and
- * finish_execution drive the workflow-phase cards.
+ * ask_question is ported from chat/'s clientTools.ts; finish_execution drives
+ * the workflow-phase card.
  */
 import { z } from 'zod';
 import { registerTool, type ToolDef } from './registry';
@@ -20,8 +20,7 @@ export const askQuestionTool: ToolDef = {
   kinds: ['workflow', 'deployment', 'deployments'],
 };
 
-/** The plan payload — shared by propose_plan (user approves it) and
- *  start_execution (the agent records it and proceeds). */
+/** The plan payload start_execution records before it implements. */
 export const planSchema = z.object({
   summary: z.string().describe('One-paragraph summary of what will change and why.'),
   steps: z.array(z.string()).min(1).describe('Ordered implementation steps.'),
@@ -40,14 +39,6 @@ export const planSchema = z.object({
   risk: z.enum(['content', 'template', 'code', 'dependency']).describe('Highest-risk change type.'),
   questions: z.array(z.string()).optional().describe('Open questions, if any.'),
 });
-
-export const proposePlanTool: ToolDef = {
-  name: 'propose_plan',
-  description:
-    'Present the implementation plan for approval. Call this exactly once when your analysis is complete. The user reviews it and either approves (moving to execution) or requests changes.',
-  schema: planSchema,
-  phases: ['plan'],
-};
 
 export const finishExecutionTool: ToolDef = {
   name: 'finish_execution',
@@ -97,7 +88,6 @@ export const pickColorTool: ToolDef = {
 export function registerClientTools(): void {
   registerTool(askQuestionTool);
   registerTool(pickColorTool);
-  registerTool(proposePlanTool);
   registerTool(finishExecutionTool);
   registerTool(needsHumanAttentionTool);
 }

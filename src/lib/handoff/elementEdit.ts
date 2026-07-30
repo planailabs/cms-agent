@@ -109,6 +109,6 @@ export const handoffMessageText = (opts: {
     `\nThe user annotated the live preview in element-edit mode. Annotation metadata (JSON):\n${summary}` +
     `\nAn annotated screenshot of the page is attached as upload ${opts.uploadId} — call read_upload with that id to view it: ` +
     `numbered pins = comments, red strokes = drawings, a dashed outline with an arrow = an element moved from its ghost (old position) to its new position, a teal double-headed arrow = two elements to swap with each other.` +
-    `\nAnalyze the screenshot together with the metadata and call propose_plan with a plan that implements the intended changes.`
+    `\nAnalyze the screenshot together with the metadata and call start_execution with a plan that implements the intended changes.`
   );
 };

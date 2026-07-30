@@ -159,7 +159,7 @@ describe('POST /api/chat/element-handoff', () => {
     expect(msg).toMatchObject({ chatId: chat.id, type: 'message', attachmentIds: [upload.id] });
     expect(msg.text).toContain('Note: header first');
     expect(msg.text).toContain(upload.id);
-    expect(msg.text).toContain('propose_plan');
+    expect(msg.text).toContain('start_execution');
   });
 
   it('routes through the pending-answer path when the turn is paused', async () => {

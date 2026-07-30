@@ -249,7 +249,7 @@ flowchart LR
         a hallucinated write in the read-only phase fails as data, not as a
         crash.</li>
       <li><strong>Client-side tools are the ones with no implementation.</strong>
-        <code>ask_question</code>, <code>propose_plan</code> and
+        <code>ask_question</code>, <code>pick_color</code> and
         <code>finish_execution</code> exist only as schemas; reaching one pauses
         the turn and hands the payload to the browser to render as a card.</li>
       <li><strong>Errors come back as results.</strong> Schema failures and

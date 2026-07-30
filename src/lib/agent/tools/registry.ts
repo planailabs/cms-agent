@@ -1,7 +1,7 @@
 /**
  * Tool registry — CMS tools with zod input schemas, executed via the
  * in-process MCP bridge. Client-side tools pause the turn and wait for the
- * browser (ask_question / propose_plan / finish_execution).
+ * browser (ask_question / pick_color / finish_execution).
  */
 import type { z } from 'zod';
 import type { WorkflowPhase } from '../types';

@@ -17,21 +17,24 @@ prose behind them.
 The agent analyzes the site (read/search/git tools only — write tools are
 rejected server-side) and asks clarifying questions. When ready it records the
 plan — summary, ordered steps, file list with actions, affected pages, risk
-class (`content < template < code < dependency`), open questions — one of two
-ways:
+class (`content < template < code < dependency`), open questions — with
+**`start_execution`**, and implements it.
 
-- **`propose_plan`** — the turn pauses and the browser renders an approval
-  card. For changes the user should weigh in on: options worth choosing
-  between, risky or wide-reaching work, anything ambiguous.
-  - **Approve** (`POST /api/chats/:id/approve-plan`) → records an immutable
-    `Approval` (plan hash + base sha + idempotency key), phase → EXECUTE, the
-    paused turn resumes with the approval as its tool result.
-  - **Request changes** → feedback goes back into the same chat; a new plan
-    round starts.
-- **`start_execution`** — a "shadow plan": the same payload is recorded and
-  the phase flips to EXECUTE inside the running turn, so implementation
-  continues without a stop. For requests that hold no real choices. It writes
-  the same audited `Approval` row, with the requesting user as actor.
+There is no approval card and no approve step: a plan is something the user
+reads while the work happens, not a form they sign before it can start. The
+call still writes the immutable `Approval` row (plan hash + base sha +
+idempotency key) with the requesting user as actor, so the audit trail is
+unchanged. Steering happens through the conversation instead:
+
+- **Request changes** (`POST /api/chats/:id/request-changes`) → feedback goes
+  into the chat, the phase returns to PLAN, and the agent plans again.
+- Where a decision is genuinely the user's — options worth choosing between,
+  something ambiguous — the agent is told to `ask_question` *before* recording
+  a plan rather than planning around a guess.
+
+Recording the plan ends the agent's PLAN run: the system prompt and tool set
+are built once per run, so the turn continues in a fresh EXECUTE run with the
+write tools. The user sees one uninterrupted turn.
 
 The agent also keeps a **task list** (`add_tasks`) — the checklist the user
 watches while it works. Each task has display text and an optional note only
@@ -83,6 +86,8 @@ artifact — no blind re-uploads (flows reconcile by commit sha first).
 ## Autonomy grants
 
 Admins may create grants (actions, path-scope globs, max risk, execution
-budget, validity window). When a proposed plan is fully covered by an active
-grant, it auto-approves — audited as an autonomy approval and announced in
-the chat.
+budget, validity window). These were the way a plan could clear an approval
+card without a human; with plans no longer submitted for approval, nothing
+currently consumes them — the grant machinery is inert until it is either
+removed or rebound to a decision that still exists (publishing is the obvious
+candidate).

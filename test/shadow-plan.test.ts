@@ -88,7 +88,8 @@ describe('start_execution', () => {
   it('is offered in plan and rejected once execution started', async () => {
     const planTools = toolsForPhase('plan', 'workflow').map((t) => t.name);
     expect(planTools).toContain('start_execution');
-    expect(planTools).toContain('propose_plan');
+    // The only way to record a plan — there is no approval variant.
+    expect(planTools).not.toContain('propose_plan');
     expect(toolsForPhase('execute', 'workflow').map((t) => t.name)).not.toContain(
       'start_execution',
     );

@@ -188,7 +188,9 @@ describe('phase gating', () => {
     const planTools = toolsForPhase('plan').map((t) => t.name);
     const execTools = toolsForPhase('execute').map((t) => t.name);
     expect(planTools).toContain('read_file');
-    expect(planTools).toContain('propose_plan');
+    expect(planTools).toContain('start_execution');
+    // Plans are recorded and implemented, never submitted for approval.
+    expect(planTools).not.toContain('propose_plan');
     // Write tools are listed in all phases; outside execute they only accept
     // .scratch/ paths (enforced inside execute()).
     expect(planTools).toContain('write_file');
@@ -233,7 +235,7 @@ describe('phase gating', () => {
   it('identifies client-side tools', () => {
     expect(isClientSideTool('ask_question')).toBe(true);
     expect(isClientSideTool('pick_color')).toBe(true);
-    expect(isClientSideTool('propose_plan')).toBe(true);
+    expect(isClientSideTool('finish_execution')).toBe(true);
     expect(isClientSideTool('read_file')).toBe(false);
   });
 });
