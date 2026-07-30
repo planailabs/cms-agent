@@ -125,6 +125,13 @@ describe('message conversion', () => {
     }
   });
 
+  it('asks every agent kind to batch independent tool calls', () => {
+    const base = { phase: 'plan' as const, branchName: 'draft', locale: 'en' };
+    for (const kind of [undefined, 'deployment', 'deployments'] as const) {
+      expect(buildSystemPrompt({ ...base, kind })).toContain('ONE round with three calls');
+    }
+  });
+
   it('uses plain website language by default but not in technical mode', () => {
     const input = {
       phase: 'plan' as const,
