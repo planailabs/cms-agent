@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sync Version"
+  short_description: "Keep displayed app version current on Git writes"
+  default_prompt: "Use $sync-version before committing or pushing changes."
