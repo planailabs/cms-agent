@@ -1,5 +1,9 @@
 # Architecture
 
+The running app serves a diagrammed version of everything below — every state
+machine, the git model, the sandbox and the data model — at **`/architecture`**
+(a public route; content lives in `src/components/architecture/`).
+
 ```
                  ┌────────────────────────────────────────────────────┐
  Browser ───────►│ Node process + native Pingora public listener      │

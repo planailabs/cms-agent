@@ -1,0 +1,464 @@
+/**
+ * Architecture page — chapter 3: the runtime pieces the state machines sit on.
+ * Git model, warm previews, tool gating, the jail, state streaming, the
+ * preview overlay, and every lock in the system.
+ */
+import type { ArchSection } from './types';
+
+export const runtimeSections: ArchSection[] = [
+  {
+    id: 'git-model',
+    title: 'Git and branch model',
+    intro: `Branch equals subdomain equals draft. Every chat owns a private work
+      branch based on the target branch it will merge into, so chats on the same
+      target never block each other; the target is locked only for the moment of
+      the publish merge. History is append-only — undo is a revert commit, never
+      a rewrite.`,
+    diagrams: [
+      {
+        caption: 'One chat, from first edit to published',
+        code: `
+gitGraph
+  commit id: "site history"
+  commit id: "someone else published"
+  branch c-4f2a1b
+  checkout c-4f2a1b
+  commit id: "execution: write the post"
+  commit id: "execution: link it from the index"
+  commit id: "undo of the second one" type: REVERSE
+  commit id: "execution: link it properly"
+  commit id: "sync team knowledge"
+  checkout main
+  merge c-4f2a1b id: "publish"
+  commit id: "deploy flow ran" type: HIGHLIGHT
+`,
+      },
+      {
+        caption: 'Naming and storage',
+        code: `
+flowchart LR
+  subgraph names["Names are the API"]
+    target["Target branch<br/>main, or a long-lived branch"]
+    work["Work branch — c-hex<br/>one per chat, hidden from listings"]
+    hist["v-sha<br/>read-only historical preview"]
+  end
+
+  subgraph disk["On disk, under VAR_DIR"]
+    wt["worktrees/branch"]
+    home["sandbox/home/key<br/>npm cache, per branch and per chat"]
+    art["artifacts/sha<br/>tarball + checksum manifest"]
+  end
+
+  target -->|"chat created — branch off"| work
+  work -->|"publish merge"| target
+  work -->|"after publish — reset onto the new target"| work
+  target --> hist
+  work --> wt
+  target --> wt
+  work --> home
+  target --> art
+`,
+      },
+    ],
+    notes: `<ul>
+      <li><strong>One commit per execution.</strong> The agent commits each
+        completed step itself; finalize validates and commits whatever is left —
+        typically only the synced team knowledge — as one self-contained commit
+        recorded as an <code>Execution</code> row.</li>
+      <li><strong>Undo is a revert.</strong> Reverting an execution creates a
+        revert commit under the work branch lock and marks the original row with
+        the sha that undid it. Nothing is rebased away, so a published history
+        can always be read back.</li>
+      <li><strong>Branch names are DNS-safe by validation.</strong> They are
+        hostnames, so the name check runs before anything is created; work
+        branches use a generated hex suffix, which is also how branch listings
+        know to hide them.</li>
+      <li><strong>A stray real branch keeps its commits.</strong> Cleanup may
+        reclaim a checkout it cannot account for, but it only ever deletes the
+        git ref of generated work branches — a branch someone pushed minutes ago
+        has regenerable working files and irreplaceable commits.</li>
+    </ul>`,
+    source: ['src/lib/git/engine.ts', 'src/lib/git/identity.ts', 'src/lib/branchSync.ts'],
+  },
+
+  {
+    id: 'warm-pool',
+    title: 'Warm previews and orphan cleanup',
+    intro: `Two background loops keep the stage from being cold and the disk
+      from filling up. One keeps the branches chats fork from running and a
+      single spare work branch installed ahead of the next chat; the other
+      reconciles what is on disk against what the database still claims.`,
+    diagrams: [
+      {
+        caption: 'Warming',
+        code: `
+flowchart TD
+  tick(["Every 60 seconds"]) --> primary["Pin every branch a chat can start from"]
+  primary --> drop["Unpin branches that disappeared"]
+  drop --> each{"For each primary branch"}
+  each -->|"already starting or running"| skip["Leave it alone — killing a slow start<br/>makes it begin again"]
+  each -->|"cold"| warmup["ensureInstance — one at a time"]
+  skip --> spare
+  warmup --> spare{"Spare work branch present?"}
+  spare -->|"yes, or warming"| doneA(["Wait for the next tick"])
+  spare -->|"no"| mint["Mint c-hex off the default branch<br/>worktree, install, dev server"]
+  mint --> doneA
+
+  claim(["New chat created"]) --> adopt{"Targets the default branch?"}
+  adopt -->|"yes, spare ready"| take["Adopt it — no install to wait for"]
+  adopt -->|"no"| cold["Mint a cold branch name"]
+  take --> refill["Start warming the next spare"]
+`,
+      },
+      {
+        caption: 'Hourly orphan sweep',
+        code: `
+flowchart TB
+  scan(["Directories under VAR_DIR"]) --> keep{"Claimed by anything live?"}
+
+  subgraph keeplist["The keep list"]
+    direction TB
+    k1["Work branch of an existing chat"]
+    k2["A Branch row, or the default branch"]
+    k3["A spare or warming pool branch"]
+    k4["A preview serving right now"]
+    k5["A live chat id, or the shared home"]
+  end
+
+  keeplist -.-> keep
+  keep -->|"yes"| stay["Left untouched"]
+  keep -->|"no"| kind{"Generated work branch?"}
+  kind -->|"yes"| full["Stop the preview, remove the worktree,<br/>delete the ref, drop the sandbox home"]
+  kind -->|"no"| partial["Remove the checkout only —<br/>the git ref is never deleted"]
+`,
+      },
+    ],
+    notes: `<ul>
+      <li><strong>Exactly one spare, on purpose.</strong> Creating a worktree is
+        cheap; the first install in it is not. One pre-installed branch removes
+        that wait for the next chat. It is deliberately not pinned — the idle
+        sweeper may stop its dev server, and the installed worktree, the part
+        that cost time, survives that.</li>
+      <li><strong>Only default-branch chats may adopt it.</strong> The spare is
+        branched off the default branch, so a chat targeting anything else would
+        start from the wrong content.</li>
+      <li><strong>Cleanup is keep-list driven, never pattern driven.</strong>
+        A name nobody claims is leftovers. That ordering matters: the pool's
+        spare has no chat by design and a running preview may outlive its row,
+        and both would look exactly like garbage to a pattern matcher.</li>
+      <li><strong>One failure does not stop the sweep.</strong> A locked worktree
+        is logged and skipped; the rest of the pass continues.</li>
+      <li><strong>Sandbox homes are keyed twice.</strong> Preview installs key by
+        branch, while command runs, linting and codebase memory key by chat id —
+        so both namespaces are reconciled.</li>
+    </ul>`,
+    source: ['src/lib/preview/prewarm.ts', 'src/lib/worktreeCleanup.ts'],
+  },
+
+  {
+    id: 'tools',
+    title: 'Tool registry and phase gating',
+    intro: `Tools are declared once — name, description, zod schema, the phases
+      they belong to, and optionally the chat kinds or deploy flows they are
+      scoped to. The set offered to the model for a turn is derived from the
+      chat's persisted phase, and the same predicate is checked again when a
+      call actually arrives.`,
+    diagrams: [
+      {
+        code: `
+flowchart TD
+  reg["registerTool — schema, phases, kinds, flows"] --> registry[("Tool registry")]
+
+  turn(["Turn starts"]) --> derive["toolsForPhase: persisted phase,<br/>chat kind, deploy flow"]
+  registry --> derive
+  derive --> bridge["In-process MCP server<br/>over an in-memory transport"]
+  bridge --> asfn["Exposed as OpenAI function tools"]
+  asfn --> model(["Model"])
+
+  model -->|"tool call"| dispatch{"Client-side tool?"}
+  dispatch -->|"yes — no execute function"| pause["Pause the turn, ask the browser"]
+  dispatch -->|"no"| checks
+
+  subgraph checks["executeTool re-checks, in order"]
+    c1{"Known name?"}
+    c2{"Allowed for this chat kind?"}
+    c3{"Belongs to this deploy flow?"}
+    c4{"Allowed in this phase?"}
+    c5{"Input matches the schema?"}
+  end
+
+  checks -->|"any check fails"| refuse["Return an error as the tool result —<br/>the turn continues"]
+  checks -->|"all pass"| exec["Execute against the chat worktree"]
+
+  ext["External MCP servers<br/>admin-global and repo-local"] -.->|"bridged in, inside the jail"| bridge
+`,
+      },
+    ],
+    notes: `<ul>
+      <li><strong>Hiding is not enforcement.</strong> A tool outside the current
+        phase is rejected in the executor even if the model invents the call, so
+        a hallucinated write in the read-only phase fails as data, not as a
+        crash.</li>
+      <li><strong>Client-side tools are the ones with no implementation.</strong>
+        <code>ask_question</code>, <code>propose_plan</code> and
+        <code>finish_execution</code> exist only as schemas; reaching one pauses
+        the turn and hands the payload to the browser to render as a card.</li>
+      <li><strong>Errors come back as results.</strong> Schema failures and
+        thrown exceptions are serialized into the tool result rather than
+        aborting the turn — the agent can read what went wrong and try
+        something else.</li>
+      <li><strong>Deployment chats borrow the EXECUTE tool set.</strong> Their
+        stored phase is <code>published</code>, but the context handed to the
+        registry says execute, which is what lets them resolve conflicts.</li>
+      <li><strong>External MCP servers are first-class but jailed.</strong>
+        Servers defined in an admin-global config and in the branch's own repo
+        config are bridged into the same tool namespace; the whole runtime for
+        them executes inside the sandbox, and the global config wins name
+        collisions.</li>
+    </ul>`,
+    source: [
+      'src/lib/agent/tools/registry.ts',
+      'src/lib/agent/mcp/index.ts',
+      'src/lib/agent/mcp/custom.ts',
+      'src/lib/agent/prompt.ts',
+    ],
+  },
+
+  {
+    id: 'sandbox',
+    title: 'The sandbox jail',
+    intro: `Everything the managed site can influence runs inside a bubblewrap
+      jail: dependency installs, the preview dev server, publish builds, the
+      command tool, and any MCP server the repository defines. The jail starts
+      from an empty root — only what is explicitly bound in exists.`,
+    diagrams: [
+      {
+        code: `
+flowchart TB
+  subgraph host["On the host"]
+    squash[("Nix-built squashfs<br/>one store per node major")]
+    wtdir[("The chat's worktree")]
+    homedir[("Per-session HOME")]
+  end
+
+  squash -->|"squashfuse, or extracted<br/>when /dev/fuse is missing"| store
+  wtdir --> work
+  homedir --> home
+
+  subgraph jailbox["bwrap jail — empty root, deny by default"]
+    direction LR
+    store["/nix/store<br/>bound OVER the app's"]
+    work["/work"]
+    home["/home/sandbox"]
+    etc["minimal /etc — DNS"]
+    tmp["tmpfs, proc, dev"]
+  end
+
+  jailbox --> inside
+
+  subgraph inside["Everything the site can influence"]
+    direction LR
+    npm["npm install"]
+    dev["Preview dev server"]
+    build["Publish builds"]
+    cmd["run_command"]
+    mcpsrv["Repo-defined MCP servers"]
+  end
+
+  major(["SANDBOX_NODE_MAJOR"]) -.->|"picks the store"| store
+  net(["SANDBOX_ALLOW_NETWORK"]) -.->|"installs need it"| inside
+`,
+      },
+    ],
+    notes: `<ul>
+      <li><strong>"Read-only" tools are not exempt.</strong> Linters, formatters
+        and framework checks execute the repository's own config files as code.
+        Running one on the host with the inherited environment would be remote
+        code execution plus credential exfiltration in the same call — so they
+        are jailed like everything else, and no child ever receives a copy of the
+        server's environment.</li>
+      <li><strong>Repo-defined MCP servers are acceptable only because of the
+        jail.</strong> They get exactly the privileges the command tool already
+        has: the worktree, a clean environment, and the sandbox toolset.</li>
+      <li><strong>The container needs a targeted seccomp profile.</strong>
+        bubblewrap has to create user and mount namespaces and mount a fresh
+        <code>/proc</code>; the shipped profile allows precisely that and nothing
+        broader.</li>
+      <li><strong>Environment binaries are absolute store symlinks.</strong> They
+        resolve inside the jail and nowhere else, so host-side checks have to
+        inspect the link itself rather than follow it.</li>
+      <li><strong>Several node majors ship in one image.</strong> Each is a
+        self-contained store inside the squashfs, deduplicated at build time;
+        only the selected major is materialized at runtime.</li>
+    </ul>`,
+    source: ['src/lib/sandbox/index.ts', 'src/lib/agent/mcp/bridgeEntry.ts', 'deploy/seccomp'],
+  },
+
+  {
+    id: 'state-sync',
+    title: 'Streamed chat state',
+    intro: `Workflow and side state — phase, plan, executions, publish card,
+      automatism step bar, task list, title, turn state — is one server-computed
+      snapshot. It is rebuilt and broadcast in full after any mutation, and the
+      client applies it by plain replacement. There is no patch protocol and no
+      merge.`,
+    diagrams: [
+      {
+        code: `
+sequenceDiagram
+  autonumber
+  participant M as Any mutation
+  participant E as emitChatState
+  participant B as buildChatState
+  participant DB as Database
+  participant S as SSE subscribers
+  participant C as Client
+
+  M->>E: chat id
+  E->>E: coalesce same-tick calls into one
+  E->>B: build
+  B->>DB: chat, executions, tasks, publication, automatism, target-ahead
+  B-->>E: snapshot
+  E->>E: stamp the next seq for this chat
+  E->>S: broadcast state
+  S-->>C: state event
+  C->>C: drop it if seq is older than the applied one
+  C->>C: otherwise replace wholesale — server wins
+
+  Note over B,C: /api/chat/history and the SSE connect replay<br/>call the same builder, so they cannot drift
+`,
+      },
+    ],
+    notes: `<ul>
+      <li><strong>Add state by adding it to the snapshot.</strong> Anything
+        persisted server-side and included in the builder reaches history, the
+        live stream and reconnect replay for free. A card rendered only from a
+        bespoke event vanishes on reload.</li>
+      <li><strong>Only append-only things bypass it.</strong> Transcript tokens,
+        publish log lines, automatism messages and the commit anchor are streams,
+        not state, and a snapshot genuinely cannot express them.</li>
+      <li><strong>Sequence and epoch are a stale-drop guard, nothing more.</strong>
+        The sequence is per chat and per process; the epoch is regenerated on
+        restart so clients reset with it. History snapshots carry sequence zero
+        and are skipped when a live one arrived during the fetch.</li>
+      <li><strong>Tabs are per user.</strong> A snapshot carries tab state only
+        when the change that triggered it was a tab write, and it names the
+        owning user — other clients ignore it. Absent means "no information",
+        never "no tabs".</li>
+      <li><strong>Emission is fail-soft.</strong> A snapshot that cannot be built
+        is logged and dropped; state broadcasting must never break the mutation
+        that triggered it.</li>
+      <li><strong>The registry lives on the global object.</strong> In
+        development the server module graph is hot-reloaded, and a plain
+        module-level map would split into old and new instances — live
+        connections stranded in the old one, every broadcast silently going
+        nowhere. Connections, locks, sequence counters and preview instances all
+        avoid that the same way.</li>
+    </ul>`,
+    source: ['src/lib/agent/chatState.ts', 'src/lib/agent/bus.ts', 'src/pages/api/chat/events.ts'],
+  },
+
+  {
+    id: 'overlay',
+    title: 'Preview overlay protocol',
+    intro: `The preview is a live iframe of the branch's own dev server, with a
+      small bundle injected by the proxy. It reports what the user is looking at
+      and what they select, which is how "chat about this" and element picking
+      work without the CMS ever scraping the page.`,
+    diagrams: [
+      {
+        code: `
+sequenceDiagram
+  autonumber
+  participant W as Workspace
+  participant F as Preview iframe
+  participant API as /api/chat/context
+  participant AG as Agent
+
+  F->>W: cms:navigation — url and matched route
+  W->>W: update the route chip and diff pane
+  F->>W: cms:selection — the selected text and its anchor
+  W->>W: offer "chat about this" as a context chip
+
+  W->>F: cms:start-element-pick
+  F->>F: highlight elements under the cursor
+  alt the user picks one
+    F->>W: cms:element — selector, text, geometry
+  else the user presses escape
+    F->>W: cms:pick-cancel
+  end
+
+  W->>API: post the chip as page context
+  API->>AG: attached to the next message
+
+  Note over W,F: the workspace only accepts messages whose source<br/>is the preview iframe's own window
+`,
+      },
+    ],
+    notes: `<ul>
+      <li><strong>The origin check is a source check.</strong> Messages are
+        matched against the iframe's <code>contentWindow</code>, not merely an
+        origin string — preview hosts are user-created subdomains, so identity by
+        window reference is the property that actually holds.</li>
+      <li><strong>Element edits become a handoff, not a tool call.</strong>
+        Drawing or commenting on an element produces an annotated screenshot
+        uploaded as an attachment and posted as a message that moves the chat back
+        to planning — legal from every pre-publish phase.</li>
+      <li><strong>Edit mode is the same bundle.</strong> The injected module also
+        carries the inline edit toolbar and the hint banner, so the preview stays
+        a single script rather than a set of variants.</li>
+      <li><strong>The compare view uses the same live frames.</strong> Before and
+        after are two preview iframes with synchronized scrolling, plus a
+        screenshot overlay with changed regions highlighted and an onion slider —
+        screenshots are only for the highlight layer, not for the content.</li>
+    </ul>`,
+    source: ['src/injected/protocol.ts', 'src/injected/module', 'src/lib/handoff/elementEdit.ts'],
+  },
+
+  {
+    id: 'locks',
+    title: 'Locks and concurrency guards',
+    intro: `Nothing in the system takes a global lock. Each guard is scoped to
+      exactly the resource it protects, which is what lets several chats plan,
+      execute and preview at the same time while a publish is merging.`,
+    diagrams: [
+      {
+        code: `
+flowchart TD
+  subgraph inproc["In-process, on the global object"]
+    turn["Turn lock — per chat<br/>one conversation turn at a time"]
+    branch["Branch mutation lock — per work branch<br/>commit, revert, rebase"]
+    targetl["Target branch lock<br/>held only for the publish merge"]
+    installq["Install queue<br/>one npm install at a time"]
+    pullflag["Starting-sync set<br/>survives a double click"]
+  end
+
+  subgraph durable["In the database"]
+    ver["Chat.entityVersion<br/>conditional updates, 409 on a lost race"]
+    idem["Approval.idempotencyKey<br/>unique — retries cannot double-record"]
+    autos["Automatism status and step<br/>resume is exact"]
+  end
+
+  hmr["Development hot reload"] -.->|"would fork a module-level map"| inproc
+`,
+      },
+    ],
+    notes: `<p>What each one actually protects:</p>
+    <table>
+      <thead><tr><th>Guard</th><th>Scope</th><th>Blocks</th></tr></thead>
+      <tbody>
+        <tr><td>Turn lock</td><td>One chat</td><td>A second turn in the same chat. Automatism agent invocations wait for it, up to two minutes, rather than skipping the fix.</td></tr>
+        <tr><td>Branch mutation lock</td><td>One work branch</td><td>Concurrent commits, reverts and rebases on that worktree.</td></tr>
+        <tr><td>Target branch lock</td><td>One target branch</td><td>Two publishes merging into the same branch. Held for the merge only, not for the deploy.</td></tr>
+        <tr><td>Install queue</td><td>The whole process</td><td>Parallel dependency installs, which only starve each other into the timeout.</td></tr>
+        <tr><td>Entity version</td><td>One chat row</td><td>Two editors deciding at once. The loser is told the chat moved.</td></tr>
+        <tr><td>Idempotency key</td><td>One approval</td><td>Duplicate audit rows from a retried request.</td></tr>
+      </tbody>
+    </table>
+    <p>All of the in-process guards hang off the global object rather than
+      module scope, for the same reason the connection registry does: the
+      development server reloads module graphs, and a split lock map is a lock
+      that does not lock.</p>`,
+    source: ['src/lib/agent/bus.ts', 'src/lib/agent/workflow.ts', 'src/lib/preview/manager.ts'],
+  },
+];

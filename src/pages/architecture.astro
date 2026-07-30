@@ -1,0 +1,343 @@
+---
+/**
+ * Architecture reference — the whole system as diagrams, one page.
+ *
+ * PUBLIC route (see PUBLIC_PATHS in src/middleware.ts): it renders only the
+ * checked-in prose in src/components/architecture/. Never add runtime state
+ * here — no version or commit, no env values, nothing that describes this
+ * particular deployment.
+ *
+ * English only, on purpose: it documents code identifiers and mirrors docs/,
+ * which are English. The rest of the app is en/de through the i18n catalogs.
+ */
+export const prerender = false;
+
+import { CHAPTERS, SECTIONS } from '@/components/architecture';
+
+const diagramCount = SECTIONS.reduce((n, s) => n + s.diagrams.length, 0);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture — CMS Agent</title>
+    <meta
+      name="description"
+      content="How the CMS agent is put together: topology, state machines, git model, sandbox, data model."
+    />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --bg-soft: #f4f6f8;
+        --fg: #1a1d21;
+        --fg-muted: #5b6472;
+        --line: #dde2e8;
+        --accent: #2f6feb;
+        --code-bg: #eef1f5;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0d10;
+          --bg-soft: #12151a;
+          --fg: #e6e8ea;
+          --fg-muted: #98a2b0;
+          --line: #2a2f36;
+          --accent: #6ea0ff;
+          --code-bg: #171b21;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        line-height: 1.65;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9em;
+        background: var(--code-bg);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+
+      .page {
+        max-width: 1680px;
+        margin: 0 auto;
+        padding: 2.5rem 1.5rem 6rem;
+        display: grid;
+        grid-template-columns: 15rem minmax(0, 1fr);
+        gap: 2.5rem;
+        align-items: start;
+      }
+      @media (max-width: 980px) {
+        .page {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 1.5rem;
+        }
+        .toc {
+          position: static !important;
+          max-height: none !important;
+        }
+      }
+
+      /* ── Masthead ─────────────────────────────────────────────────────── */
+      .masthead {
+        grid-column: 1 / -1;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 1.5rem;
+      }
+      .masthead h1 {
+        margin: 0 0 0.4rem;
+        font-size: 2rem;
+        letter-spacing: -0.02em;
+      }
+      .masthead p {
+        margin: 0;
+        color: var(--fg-muted);
+        max-width: 60ch;
+      }
+      .masthead .meta {
+        margin-top: 0.9rem;
+        font-size: 0.85rem;
+        color: var(--fg-muted);
+      }
+
+      /* ── Table of contents ────────────────────────────────────────────── */
+      .toc {
+        position: sticky;
+        top: 2rem;
+        max-height: calc(100vh - 4rem);
+        overflow-y: auto;
+        font-size: 0.9rem;
+      }
+      .toc h2 {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--fg-muted);
+        margin: 1.4rem 0 0.5rem;
+      }
+      .toc h2:first-child {
+        margin-top: 0;
+      }
+      .toc ol {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .toc a {
+        display: block;
+        padding: 0.25rem 0;
+        text-decoration: none;
+        color: var(--fg-muted);
+        border-left: 2px solid transparent;
+        padding-left: 0.7rem;
+      }
+      .toc a:hover {
+        color: var(--fg);
+        border-left-color: var(--accent);
+      }
+
+      /* ── Sections ─────────────────────────────────────────────────────── */
+      section {
+        scroll-margin-top: 1.5rem;
+        margin-bottom: 4rem;
+      }
+      section h2 {
+        font-size: 1.45rem;
+        margin: 0 0 0.6rem;
+        letter-spacing: -0.01em;
+      }
+      section h2 a.anchor {
+        text-decoration: none;
+        color: var(--fg-muted);
+        opacity: 0;
+        font-weight: 400;
+        margin-left: 0.4rem;
+      }
+      section h2:hover a.anchor {
+        opacity: 1;
+      }
+      .intro {
+        color: var(--fg-muted);
+        max-width: 72ch;
+        margin: 0 0 1.5rem;
+      }
+      .notes ul {
+        max-width: 78ch;
+        padding-left: 1.2rem;
+      }
+      .notes li {
+        margin-bottom: 0.55rem;
+      }
+      .notes table {
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 0.92rem;
+        width: 100%;
+      }
+      .notes th,
+      .notes td {
+        border: 1px solid var(--line);
+        padding: 0.45rem 0.7rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .notes th {
+        background: var(--bg-soft);
+      }
+
+      /* ── Diagrams ─────────────────────────────────────────────────────── */
+      .diagram {
+        margin: 0 0 1.75rem;
+      }
+      .diagram figcaption {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--fg-muted);
+        margin-bottom: 0.4rem;
+      }
+      .canvas {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--bg-soft);
+        padding: 1.25rem;
+        overflow-x: auto;
+      }
+      /* Until mermaid has run, the source is the fallback — readable, and
+         still there if the script never loads. */
+      pre.mermaid {
+        margin: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+        color: var(--fg-muted);
+        white-space: pre;
+      }
+      pre.mermaid[data-processed] {
+        color: inherit;
+      }
+      /* Rendered at natural size and scrolled inside .canvas — fitting a wide
+         diagram to the column shrinks its labels past readable. */
+      pre.mermaid svg {
+        height: auto;
+      }
+
+      .sources {
+        font-size: 0.82rem;
+        color: var(--fg-muted);
+        border-top: 1px solid var(--line);
+        padding-top: 0.6rem;
+        margin-top: 1.5rem;
+      }
+      .sources code {
+        background: none;
+        padding: 0;
+      }
+      .sources code + code::before {
+        content: ' · ';
+        color: var(--line);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <h1>CMS Agent — architecture</h1>
+        <p>
+          A chat-driven CMS for a git-backed site: the agent plans, edits a branch worktree,
+          previews it live on its own subdomain, and publishes it through a deploy flow. This page
+          is the whole design in one place — every state machine, the git model, the sandbox, and
+          the data behind them.
+        </p>
+        <p class="meta">
+          {SECTIONS.length} sections · {diagramCount} diagrams · wide ones scroll sideways · English
+          only (it documents code identifiers) · <a href="/">open the CMS</a>
+        </p>
+      </header>
+
+      <nav class="toc" aria-label="Table of contents">
+        {
+          CHAPTERS.map((chapter) => (
+            <>
+              <h2>{chapter.title}</h2>
+              <ol>
+                {chapter.sections.map((section) => (
+                  <li>
+                    <a href={`#${section.id}`}>{section.title}</a>
+                  </li>
+                ))}
+              </ol>
+            </>
+          ))
+        }
+      </nav>
+
+      <main>
+        {
+          SECTIONS.map((section) => (
+            <section id={section.id}>
+              <h2>
+                {section.title}
+                <a class="anchor" href={`#${section.id}`} aria-label="Link to this section">
+                  #
+                </a>
+              </h2>
+              <p class="intro" set:html={section.intro} />
+
+              {section.diagrams.map((diagram) => (
+                <figure class="diagram">
+                  {diagram.caption && <figcaption>{diagram.caption}</figcaption>}
+                  <div class="canvas">
+                    <pre class="mermaid">{diagram.code.trim()}</pre>
+                  </div>
+                </figure>
+              ))}
+
+              <div class="notes" set:html={section.notes} />
+
+              <p class="sources">
+                Code: {section.source.map((path) => <code>{path}</code>)}
+              </p>
+            </section>
+          ))
+        }
+      </main>
+    </div>
+
+    <script>
+      // Lazy: mermaid is a large dependency and this is the only route that
+      // wants it, so Vite emits it as a chunk nothing else pulls in. If it
+      // never loads, every diagram stays readable as its own source text.
+      const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const mermaid = (await import('mermaid')).default;
+      // useMaxWidth false everywhere: mermaid otherwise scales a diagram down
+      // to the column width, which makes the big ones illegible. .canvas
+      // scrolls instead.
+      const natural = { useMaxWidth: false };
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: dark ? 'dark' : 'default',
+        securityLevel: 'strict',
+        fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif',
+        flowchart: natural,
+        sequence: natural,
+        state: natural,
+        er: natural,
+        gitGraph: natural,
+      });
+      await mermaid.run({ querySelector: 'pre.mermaid' });
+    </script>
+  </body>
+</html>

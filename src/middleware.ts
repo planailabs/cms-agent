@@ -52,6 +52,9 @@ const PUBLIC_PATHS = [
   /^\/signin\/?$/,
   /^\/_astro\//,
   /^\/favicon/,
+  // Architecture reference: checked-in prose about the design, nothing about
+  // this deployment (see src/components/architecture/index.ts).
+  /^\/architecture\/?$/,
 ];
 
 // The injected-agent bundles are public by design. Skip them before env/session

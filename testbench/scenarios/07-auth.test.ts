@@ -122,6 +122,13 @@ describe('real auth (mock OIDC IdP)', () => {
     ok('signin page is public', signin.status === 200 && (await signin.text()).includes('signin'));
     const injected = await fetch(`${baseUrl}/injected-cms-agent.js`);
     ok('injected bundle stays public', injected.status === 200);
+    const arch = await fetch(`${baseUrl}/architecture`, { redirect: 'manual' });
+    const archBody = arch.status === 200 ? await arch.text() : '';
+    ok(
+      'architecture page is public and renders its diagrams',
+      arch.status === 200 && archBody.includes('class="mermaid"'),
+      `${arch.status} ${arch.headers.get('location') ?? ''}`,
+    );
     const imp = await fetch(`${baseUrl}/api/dev/impersonate`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: baseUrl },
