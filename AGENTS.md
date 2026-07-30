@@ -19,6 +19,22 @@ continue with normal search and file reads without treating that as an error.
 Never require contributors to install codebase-memory-mcp, and verify affected
 files normally before editing.
 
+## First-time local setup
+
+Before the first start, create `.env` and fill in its required values. Without
+it the dev server starts but every request fails with an environment-validation
+error.
+
+```bash
+cp .env.example .env
+nix develop --command pnpm prisma:generate
+nix develop --command overmind s
+```
+
+Use `http://localhost:8080` once Astro reports that it is ready. Port `4321`
+is only Astro's internal upstream; developers should access the app through
+the embedded proxy on port `8080`.
+
 ## Ground rules
 
 - `chat/` is the **read-only reference app** the UI/loop was extracted from —

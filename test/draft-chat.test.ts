@@ -36,6 +36,11 @@ import { store } from '@/components/chat/app/store';
 import { startDraftChat } from '@/components/chat/actions/chat';
 import { sendChatMessage } from '@/components/chat/actions/chat/stateMachine';
 import {
+  clearAttachments,
+  getStagedAttachments,
+  stageFiles,
+} from '@/components/chat/actions/chat/attachments';
+import {
   claimWorkBranch,
   ensureSpareBranch,
   resetPrewarmForTests,
@@ -56,7 +61,10 @@ describe('draft chat', () => {
     postMessage.mockClear();
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    clearAttachments();
+    vi.unstubAllGlobals();
+  });
 
   it('opens with no chat row behind it', () => {
     startDraftChat('b1');
@@ -84,6 +92,22 @@ describe('draft chat', () => {
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'message', text: 'make the footer bigger' }),
     );
+  });
+
+  it('creates the chat before uploading the first attachment', async () => {
+    startDraftChat('b1');
+    const fetchMock = vi.fn(async (url: string) =>
+      url === '/api/chats'
+        ? Response.json({ chat: { id: 'chat-new', title: 'New chat', workflowPhase: 'plan' } })
+        : Response.json({ upload: { id: 'upload-1' } }, { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await stageFiles([new File(['hello'], 'notes.md', { type: 'text/plain' })]);
+    await vi.waitFor(() => expect(getStagedAttachments()[0]?.status).toBe('ready'));
+
+    expect(store.state.activeChatId).toBe('chat-new');
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/chats', '/api/uploads']);
   });
 
   it('does not hijack a chat the user switched to mid-creation', async () => {

@@ -65,6 +65,23 @@ describe('ui flows', () => {
     await s.page.waitForTimeout(300);
   });
 
+  it('uploading in a draft creates the chat and stages the file', async () => {
+    await dataAction(s.page, 'chat-attach-input').setInputFiles({
+      name: 'draft.md',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('# draft'),
+    });
+    await expect
+      .poll(() => new URL(s.page.url()).pathname, { timeout: 15_000 })
+      .toMatch(/^\/chat\//);
+    await expect
+      .poll(() => s.page.locator('[data-attach-chips] .composer-chip:not(.is-uploading)').count(), {
+        timeout: 15_000,
+      })
+      .toBe(1);
+    ok('draft attachment materializes the chat and uploads', true);
+  });
+
   it('one-click new chat creates nothing server-side until a message', async () => {
     const base = benchRun().baseUrl;
     const chatCount = async () =>

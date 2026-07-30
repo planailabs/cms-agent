@@ -15,7 +15,7 @@ import type { PageContext } from '../../../workspace/state';
  * pre-warmed work branch and starts its preview), then point the session at
  * it WITHOUT switchChat — that would drop the message being sent.
  */
-const materializeDraftChat = async (): Promise<boolean> => {
+export const materializeDraftChat = async (): Promise<boolean> => {
   const state = store.state;
   if (!state.activeBranchId) return false;
   const draft = state.chat?.aiChat;
