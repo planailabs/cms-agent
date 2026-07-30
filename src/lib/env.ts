@@ -1,6 +1,7 @@
 /**
  * Server-side configuration, validated once at startup.
- * All knobs documented in .env.example and docs/setup.md.
+ * All knobs documented in .env.example and docs/setup.md
+ * (served at /architecture/setup).
  *
  * dotenv/config: Vite only exposes .env via import.meta.env — we read
  * process.env (shared with non-Vite code paths like server.mjs), so load

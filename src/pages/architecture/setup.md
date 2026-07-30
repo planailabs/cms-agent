@@ -1,4 +1,8 @@
-# Setup
+---
+layout: ../../components/architecture/Shell.astro
+title: Setup
+lead: Prerequisites, every environment variable, DNS, the first admin, and how to run it in development.
+---
 
 ## Prerequisites
 

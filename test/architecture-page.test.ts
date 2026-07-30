@@ -1,20 +1,23 @@
 /**
- * The /architecture page. Two things can silently rot here: a diagram whose
- * syntax breaks (mermaid renders a red "Syntax error" box instead of failing
- * the build), and prose that still describes files which have been renamed.
- * Both are checked. The page is also PUBLIC, so a third check makes sure no
- * deployment specifics found their way into it.
+ * The /architecture tree — the diagram reference and the markdown guides that
+ * used to live in docs/. Three things can silently rot: a diagram whose syntax
+ * breaks (mermaid renders a red "Syntax error" box instead of failing the
+ * build), prose that still cites files which have been renamed, and — because
+ * the whole tree is a PUBLIC route — deployment specifics leaking into it.
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, lstatSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Browser, Page } from 'playwright';
 import { CHAPTERS, SECTIONS } from '@/components/architecture';
+import { GUIDES } from '@/components/architecture/guides';
 
 process.env.PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = '1';
 
 const MERMAID_BUNDLE = 'node_modules/mermaid/dist/mermaid.min.js';
-const PAGE_FILE = 'src/pages/architecture.astro';
+const PAGE_DIR = 'src/pages/architecture';
+const PAGE_FILE = `${PAGE_DIR}/index.astro`;
+const SHELL_FILE = 'src/components/architecture/Shell.astro';
 
 describe('architecture page content', () => {
   it('has unique, non-empty section ids that the chapters cover exactly', () => {
@@ -44,8 +47,15 @@ describe('architecture page content', () => {
     expect(missing).toEqual([]);
   });
 
-  it('leaks nothing about this deployment (the route is public)', () => {
-    const prose = JSON.stringify(SECTIONS) + readFileSync(PAGE_FILE, 'utf8');
+  it('leaks nothing about this deployment (the whole tree is public)', () => {
+    // The guides moved out of docs/ onto a public route — scan them too, so a
+    // real hostname pasted into a runbook fails here instead of going live.
+    const guides = GUIDES.map((g) => readFileSync(`${PAGE_DIR}/${g.slug}.md`, 'utf8')).join('\n');
+    const prose =
+      JSON.stringify(SECTIONS) +
+      readFileSync(PAGE_FILE, 'utf8') +
+      readFileSync(SHELL_FILE, 'utf8') +
+      guides;
     // Runtime values and build identity are authenticated-only by policy; the
     // page may name env VARIABLES, never their values, and never read them.
     for (const forbidden of [
@@ -53,14 +63,52 @@ describe('architecture page content', () => {
       /process\.env/,
       /import\.meta\.env/,
       /@\/lib\/(env|buildInfo)/,
-      /https?:\/\/(?!(www\.)?w3\.org)[a-z0-9.-]+/i, // no concrete hosts
     ]) {
       expect(prose, `forbidden pattern ${forbidden}`).not.toMatch(forbidden);
     }
+
+    // Documentation may name placeholder and vendor hosts; it may not name a
+    // real deployment. Catches pasted URLs, which is how a real host gets in.
+    const allowed =
+      /^(localhost|127\.0\.0\.1|(?:[a-z0-9-]+\.)*(?:example\.(?:com|org|net)|localtest\.me|w3\.org)|api\.openai\.com|mcp\.context7\.com)$/;
+    const hosts = [...prose.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)].map((m) => m[1].toLowerCase());
+    expect([...new Set(hosts)].filter((h) => !allowed.test(h))).toEqual([]);
   });
 
   it('is a server-rendered route like every other page', () => {
     expect(readFileSync(PAGE_FILE, 'utf8')).toContain('export const prerender = false');
+  });
+});
+
+describe('architecture guides', () => {
+  it('every markdown page is registered, and every registration has a page', () => {
+    const onDisk = readdirSync(PAGE_DIR)
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => f.replace(/\.md$/, ''))
+      .sort();
+    // A guide missing from GUIDES is a page the navigation never links to.
+    expect(onDisk).toEqual(GUIDES.map((g) => g.slug).sort());
+  });
+
+  it('every guide renders through the shared shell with a title and lead', () => {
+    for (const guide of GUIDES) {
+      const src = readFileSync(`${PAGE_DIR}/${guide.slug}.md`, 'utf8');
+      const frontmatter = /^---\n([\s\S]*?)\n---\n/.exec(src)?.[1];
+      expect(frontmatter, guide.slug).toBeTruthy();
+      expect(frontmatter, guide.slug).toContain('components/architecture/Shell.astro');
+      // The shell prints the title; a leading H1 in the body would repeat it.
+      expect(frontmatter, guide.slug).toContain(`title: ${guide.title}`);
+      expect(frontmatter, guide.slug).toMatch(/\nlead: \S/);
+      expect(src.slice(frontmatter!.length), guide.slug).not.toMatch(/\n# /);
+    }
+  });
+
+  it('docs/ still resolves — it is a symlink to the route directory', () => {
+    // Anything reading docs/setup.md from the repo root (README, AGENTS.md,
+    // source comments) keeps working after the move.
+    expect(lstatSync('docs').isSymbolicLink()).toBe(true);
+    expect(readlinkSync('docs').replace(/\/$/, '')).toBe(PAGE_DIR);
+    for (const guide of GUIDES) expect(existsSync(path.join('docs', `${guide.slug}.md`))).toBe(true);
   });
 });
 

@@ -1,4 +1,8 @@
-# End-to-end walkthrough (examples/blog-site)
+---
+layout: ../../components/architecture/Shell.astro
+title: End-to-end walkthrough
+lead: Plan, execute, review the visual diff and publish — end to end against examples/blog-site.
+---
 
 ## 1. Prepare the target site
 
@@ -8,7 +12,7 @@ scripts/setup-dev-site.sh blog-site   # git-inited copy at ./local/dev-site
 
 ## 2. Configure and start the CMS
 
-`.env` (see docs/setup.md for the rest):
+`.env` (see [Setup](/architecture/setup) for the rest):
 
 ```ini
 REPO_PATH=./local/dev-site

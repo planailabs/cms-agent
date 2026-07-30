@@ -1,7 +1,12 @@
 # cms-agent — agent notes
 
-Chat-agent CMS for Astro sites. Full docs in `docs/` (architecture, phases,
-setup, runbooks); start with `docs/architecture.md`.
+Chat-agent CMS for Astro sites. The documentation lives in
+`src/pages/architecture/` and is served by the app at `/architecture`
+(public): the diagram reference is built from `src/components/architecture/`,
+the guides are the markdown next to `index.astro`. `docs/` is a symlink to
+that directory, so `docs/setup.md`, `docs/phases.md`, `docs/runbooks.md`,
+`docs/walkthrough.md` and `docs/nixos.md` still read the same on disk. Start
+with `/architecture` (or read the section files directly).
 
 ## Ground rules
 
@@ -21,6 +26,33 @@ setup, runbooks); start with `docs/architecture.md`.
 - New deploy targets: implement `DeployFlow` in `src/lib/publish/` and
   register it — don't special-case the publisher.
 - New site-type behaviors: implement `ContentAdapter` in `src/lib/content/`.
+
+## Documentation upkeep (do this LAST)
+
+The docs are part of the app, so they go stale the same way code does. Two
+things need to stay true:
+
+- **The diagram reference** (`src/components/architecture/*.ts`). Every section
+  declares the files it describes in its `source` array. That array is the
+  index: `grep -rn "<path you changed>" src/components/architecture/` names
+  every section your change can invalidate. If a section's diagram or notes now
+  describe something that no longer happens — a transition you added, a guard
+  you removed, a step renamed — update it. Renaming or deleting a cited file
+  means fixing the `source` entry too; `test/architecture-page.test.ts` fails
+  on a path that no longer exists, and feeds every diagram to mermaid so a
+  syntax error cannot ship as a red box.
+- **The guides** (`src/pages/architecture/*.md`). Change an env var, a phase
+  rule, a deploy flow, an operational failure mode, or the NixOS module, and
+  the matching guide is wrong until you say so.
+
+**Timing: this is a single pass at the END of the work, after the code is
+finished and the tests pass.** Do not update a diagram in the middle of a
+change — the design is still moving, and documenting each intermediate step
+means writing it two or three times and reviewing a diff that mixes both. Land
+the behaviour first, then do one documentation sweep over everything the change
+touched. Nothing here is public-facing prose about *this* deployment: the whole
+`/architecture` tree is a public route, so it stays free of runtime state, env
+values, hostnames and build identity (the test pins that too).
 
 ## Sandbox (all site shell calls)
 

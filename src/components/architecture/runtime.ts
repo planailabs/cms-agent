@@ -337,6 +337,17 @@ sequenceDiagram
       <li><strong>Only append-only things bypass it.</strong> Transcript tokens,
         publish log lines, automatism messages and the commit anchor are streams,
         not state, and a snapshot genuinely cannot express them.</li>
+      <li><strong>The full event vocabulary</strong> on the per-chat stream:
+        <code>state</code>, <code>thinking</code>, <code>text_delta</code>,
+        <code>text_done</code>, <code>tool_start</code>, <code>tool_end</code>,
+        <code>question</code>, <code>compaction_start</code>,
+        <code>compaction</code>, <code>automatism</code>,
+        <code>execution_committed</code>, <code>execution_reverted</code>,
+        <code>validation_result</code>, <code>publish_log</code>,
+        <code>publish_done</code>, <code>memory_proposed</code>,
+        <code>autonomy_applied</code>, <code>version_restored</code>,
+        <code>done</code>, <code>error</code>. Everything that is not in the
+        append-only list above is derivable from the snapshot.</li>
       <li><strong>Sequence and epoch are a stale-drop guard, nothing more.</strong>
         The sequence is per chat and per process; the epoch is regenerated on
         restart so clients reset with it. History snapshots carry sequence zero

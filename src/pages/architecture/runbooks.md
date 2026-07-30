@@ -1,4 +1,8 @@
-# Runbooks & operations
+---
+layout: ../../components/architecture/Shell.astro
+title: Runbooks and operations
+lead: Correlating logs, the runbook for each failure mode, and the checklist to walk before going live.
+---
 
 ## Correlation
 

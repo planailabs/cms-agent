@@ -91,7 +91,7 @@ sequenceDiagram
         if they were in EXECUTE, because that is where merge conflicts get
         resolved.</li>
     </ul>`,
-    source: ['src/lib/agent/workflow.ts', 'src/lib/autonomy.ts', 'docs/phases.md'],
+    source: ['src/lib/agent/workflow.ts', 'src/lib/autonomy.ts', 'src/pages/api/chats/[id]'],
   },
 
   {

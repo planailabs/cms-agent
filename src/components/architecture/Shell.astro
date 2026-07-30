@@ -1,32 +1,44 @@
 ---
 /**
- * Architecture reference — the whole system as diagrams, one page.
+ * Shared chrome for the whole /architecture tree: the diagram index and every
+ * markdown guide. Markdown pages use it as their `layout`, so they arrive with
+ * an `Astro.props.frontmatter` instead of explicit props.
  *
- * PUBLIC route (see PUBLIC_PATHS in src/middleware.ts): it renders only the
- * checked-in prose in src/components/architecture/. Never add runtime state
- * here — no version or commit, no env values, nothing that describes this
- * particular deployment.
- *
- * English only, on purpose: it documents code identifiers and mirrors docs/,
- * which are English. The rest of the app is en/de through the i18n catalogs.
+ * PUBLIC routes (see PUBLIC_PATHS in src/middleware.ts). Nothing here or in
+ * the pages it wraps may read runtime state — no version or commit, no env
+ * values, nothing that names this particular deployment.
  */
-export const prerender = false;
+import { CHAPTERS } from './index';
+import { GUIDES } from './guides';
 
-import { CHAPTERS, SECTIONS } from '@/components/architecture';
+interface Props {
+  title?: string;
+  /** Verbatim <title>; defaults to "<title> — CMS Agent". */
+  docTitle?: string;
+  /** Lead paragraph under the title. */
+  lead?: string;
+  /** Small print under the lead (HTML). */
+  meta?: string;
+  frontmatter?: { title?: string; lead?: string };
+}
 
-const diagramCount = SECTIONS.reduce((n, s) => n + s.diagrams.length, 0);
+const { frontmatter } = Astro.props as Props;
+// A guide arrives through the markdown `layout` hook; the index passes props.
+const isGuide = Boolean(frontmatter);
+const title = frontmatter?.title ?? Astro.props.title ?? 'Architecture';
+const lead = frontmatter?.lead ?? Astro.props.lead ?? '';
+const meta =
+  Astro.props.meta ??
+  '<a href="/architecture">back to the diagrams</a> · <a href="/">open the CMS</a>';
 ---
 
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Architecture — CMS Agent</title>
-    <meta
-      name="description"
-      content="How the CMS agent is put together: topology, state machines, git model, sandbox, data model."
-    />
-    <style>
+    <title>{Astro.props.docTitle ?? `${title} — CMS Agent`}</title>
+    <meta name="description" content={lead || 'CMS Agent architecture reference.'} />
+    <style is:global>
       :root {
         color-scheme: light dark;
         --bg: #ffffff;
@@ -147,8 +159,12 @@ const diagramCount = SECTIONS.reduce((n, s) => n + s.diagrams.length, 0);
         color: var(--fg);
         border-left-color: var(--accent);
       }
+      .toc a[aria-current='page'] {
+        color: var(--fg);
+        border-left-color: var(--accent);
+      }
 
-      /* ── Sections ─────────────────────────────────────────────────────── */
+      /* ── Diagram sections ─────────────────────────────────────────────── */
       section {
         scroll-margin-top: 1.5rem;
         margin-bottom: 4rem;
@@ -248,26 +264,76 @@ const diagramCount = SECTIONS.reduce((n, s) => n + s.diagrams.length, 0);
         content: ' · ';
         color: var(--line);
       }
+
+      /* ── Markdown guides ──────────────────────────────────────────────── */
+      .guide {
+        max-width: 80ch;
+      }
+      .guide h2 {
+        font-size: 1.35rem;
+        margin: 2.5rem 0 0.6rem;
+        letter-spacing: -0.01em;
+      }
+      .guide h3 {
+        font-size: 1.05rem;
+        margin: 1.8rem 0 0.4rem;
+      }
+      .guide table {
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+        width: 100%;
+        display: block;
+        overflow-x: auto;
+      }
+      .guide th,
+      .guide td {
+        border: 1px solid var(--line);
+        padding: 0.4rem 0.65rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .guide th {
+        background: var(--bg-soft);
+      }
+      .guide pre {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.9rem 1rem;
+        overflow-x: auto;
+        font-size: 0.85rem;
+      }
+      .guide :not(pre) > code {
+        white-space: nowrap;
+      }
+      .guide blockquote {
+        margin: 1rem 0;
+        padding-left: 1rem;
+        border-left: 3px solid var(--line);
+        color: var(--fg-muted);
+      }
+      .guide input[type='checkbox'] {
+        margin-right: 0.4rem;
+      }
+      .guide ul,
+      .guide ol {
+        padding-left: 1.3rem;
+      }
+      .guide li {
+        margin-bottom: 0.35rem;
+      }
     </style>
   </head>
 
   <body>
     <div class="page">
       <header class="masthead">
-        <h1>CMS Agent — architecture</h1>
-        <p>
-          A chat-driven CMS for a git-backed site: the agent plans, edits a branch worktree,
-          previews it live on its own subdomain, and publishes it through a deploy flow. This page
-          is the whole design in one place — every state machine, the git model, the sandbox, and
-          the data behind them.
-        </p>
-        <p class="meta">
-          {SECTIONS.length} sections · {diagramCount} diagrams · wide ones scroll sideways · English
-          only (it documents code identifiers) · <a href="/">open the CMS</a>
-        </p>
+        <h1>{title}</h1>
+        {lead && <p>{lead}</p>}
+        <p class="meta" set:html={meta} />
       </header>
 
-      <nav class="toc" aria-label="Table of contents">
+      <nav class="toc" aria-label="Contents">
         {
           CHAPTERS.map((chapter) => (
             <>
@@ -275,69 +341,33 @@ const diagramCount = SECTIONS.reduce((n, s) => n + s.diagrams.length, 0);
               <ol>
                 {chapter.sections.map((section) => (
                   <li>
-                    <a href={`#${section.id}`}>{section.title}</a>
+                    <a href={`/architecture#${section.id}`}>{section.title}</a>
                   </li>
                 ))}
               </ol>
             </>
           ))
         }
+        <h2>Guides</h2>
+        <ol>
+          {
+            GUIDES.map((guide) => (
+              <li>
+                <a
+                  href={`/architecture/${guide.slug}`}
+                  aria-current={isGuide && frontmatter?.title === guide.title ? 'page' : undefined}
+                >
+                  {guide.title}
+                </a>
+              </li>
+            ))
+          }
+        </ol>
       </nav>
 
-      <main>
-        {
-          SECTIONS.map((section) => (
-            <section id={section.id}>
-              <h2>
-                {section.title}
-                <a class="anchor" href={`#${section.id}`} aria-label="Link to this section">
-                  #
-                </a>
-              </h2>
-              <p class="intro" set:html={section.intro} />
-
-              {section.diagrams.map((diagram) => (
-                <figure class="diagram">
-                  {diagram.caption && <figcaption>{diagram.caption}</figcaption>}
-                  <div class="canvas">
-                    <pre class="mermaid">{diagram.code.trim()}</pre>
-                  </div>
-                </figure>
-              ))}
-
-              <div class="notes" set:html={section.notes} />
-
-              <p class="sources">
-                Code: {section.source.map((path) => <code>{path}</code>)}
-              </p>
-            </section>
-          ))
-        }
+      <main class={isGuide ? 'guide' : undefined}>
+        <slot />
       </main>
     </div>
-
-    <script>
-      // Lazy: mermaid is a large dependency and this is the only route that
-      // wants it, so Vite emits it as a chunk nothing else pulls in. If it
-      // never loads, every diagram stays readable as its own source text.
-      const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const mermaid = (await import('mermaid')).default;
-      // useMaxWidth false everywhere: mermaid otherwise scales a diagram down
-      // to the column width, which makes the big ones illegible. .canvas
-      // scrolls instead.
-      const natural = { useMaxWidth: false };
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: dark ? 'dark' : 'default',
-        securityLevel: 'strict',
-        fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif',
-        flowchart: natural,
-        sequence: natural,
-        state: natural,
-        er: natural,
-        gitGraph: natural,
-      });
-      await mermaid.run({ querySelector: 'pre.mermaid' });
-    </script>
   </body>
 </html>

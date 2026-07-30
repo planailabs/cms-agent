@@ -1,0 +1,109 @@
+---
+/**
+ * Architecture reference — the whole system as diagrams. The prose guides that
+ * used to live in docs/ are siblings of this file, rendered by Astro through
+ * the same shell.
+ *
+ * PUBLIC route (see PUBLIC_PATHS in src/middleware.ts): it renders only the
+ * checked-in prose in src/components/architecture/. Never add runtime state
+ * here — no version or commit, no env values, nothing that describes this
+ * particular deployment.
+ *
+ * English only, on purpose: it documents code identifiers. The rest of the app
+ * is en/de through the i18n catalogs.
+ */
+export const prerender = false;
+
+import Shell from '@/components/architecture/Shell.astro';
+import { SECTIONS } from '@/components/architecture';
+import { GUIDES } from '@/components/architecture/guides';
+
+const diagramCount = SECTIONS.reduce((n, s) => n + s.diagrams.length, 0);
+const meta =
+  `${SECTIONS.length} sections · ${diagramCount} diagrams · wide ones scroll sideways · ` +
+  `English only (it documents code identifiers) · <a href="/">open the CMS</a>`;
+---
+
+<Shell
+  title="CMS Agent — architecture"
+  docTitle="Architecture — CMS Agent"
+  lead="A chat-driven CMS for a git-backed site: the agent plans, edits a branch worktree, previews it live on its own subdomain, and publishes it through a deploy flow. This page is the whole design in one place — every state machine, the git model, the sandbox, and the data behind them."
+  meta={meta}
+>
+  {
+    SECTIONS.map((section) => (
+      <section id={section.id}>
+        <h2>
+          {section.title}
+          <a class="anchor" href={`#${section.id}`} aria-label="Link to this section">
+            #
+          </a>
+        </h2>
+        <p class="intro" set:html={section.intro} />
+
+        {section.diagrams.map((diagram) => (
+          <figure class="diagram">
+            {diagram.caption && <figcaption>{diagram.caption}</figcaption>}
+            <div class="canvas">
+              <pre class="mermaid">{diagram.code.trim()}</pre>
+            </div>
+          </figure>
+        ))}
+
+        <div class="notes" set:html={section.notes} />
+
+        <p class="sources">
+          Code: {section.source.map((path) => <code>{path}</code>)}
+        </p>
+      </section>
+    ))
+  }
+
+  <section id="guides">
+    <h2>
+      Guides
+      <a class="anchor" href="#guides" aria-label="Link to this section">#</a>
+    </h2>
+    <p class="intro">
+      The step-by-step documentation, rendered from the markdown next to this page.
+    </p>
+    <div class="notes">
+      <ul>
+        {
+          GUIDES.map((guide) => (
+            <li>
+              <a href={`/architecture/${guide.slug}`}>
+                <strong>{guide.title}</strong>
+              </a>{' '}
+              — {guide.blurb}
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <script>
+    // Lazy: mermaid is a large dependency and this is the only route that
+    // wants it, so Vite emits it as a chunk nothing else pulls in. If it
+    // never loads, every diagram stays readable as its own source text.
+    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const mermaid = (await import('mermaid')).default;
+    // useMaxWidth false everywhere: mermaid otherwise scales a diagram down
+    // to the column width, which makes the big ones illegible. .canvas
+    // scrolls instead.
+    const natural = { useMaxWidth: false };
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: dark ? 'dark' : 'default',
+      securityLevel: 'strict',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif',
+      flowchart: natural,
+      sequence: natural,
+      state: natural,
+      er: natural,
+      gitGraph: natural,
+    });
+    await mermaid.run({ querySelector: 'pre.mermaid' });
+  </script>
+</Shell>

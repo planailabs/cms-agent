@@ -1,4 +1,8 @@
-# NixOS deployment
+---
+layout: ../../components/architecture/Shell.astro
+title: NixOS deployment
+lead: The flake outputs, the NixOS module options, and what the host has to provide.
+---
 
 The flake provides `packages.default` (CMS plus embedded Pingora),
 `packages.proxy-native`, and `nixosModules.default`.

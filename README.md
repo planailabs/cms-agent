@@ -31,9 +31,20 @@ overmind start                   # Procfile: CMS (SKIP_AUTH dev mode) + proxy
 
 Without Nix you need Node 22, pnpm 11, and a Rust toolchain, then run the two
 Procfile processes yourself (`pnpm dev` and
-`cargo run --manifest-path proxy/Cargo.toml`). See **docs/setup.md** for every
-environment variable, **docs/walkthrough.md** for an end-to-end tour with
-`examples/blog-site`, and **docs/nixos.md** for the NixOS module.
+`cargo run --manifest-path proxy/Cargo.toml`).
+
+## Documentation
+
+The running app serves it all at **`/architecture`** — a public page with the
+whole design as diagrams (topology, every state machine, the git model, the
+sandbox, the data model), plus the guides. The same files read fine on disk:
+`docs/` is a symlink to `src/pages/architecture/`.
+
+- **docs/setup.md** — every environment variable, DNS, first admin
+- **docs/walkthrough.md** — end-to-end tour with `examples/blog-site`
+- **docs/phases.md** — the workflow phases and what each one allows
+- **docs/runbooks.md** — operations, failure runbooks, go-live checklist
+- **docs/nixos.md** — the NixOS module
 
 ## Tests
 

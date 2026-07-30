@@ -77,7 +77,7 @@ flowchart TB
       'src/lib/proxyNative.ts',
       'src/lib/preview/manager.ts',
       'proxy/src',
-      'docs/architecture.md',
+      'server.mjs',
     ],
   },
 

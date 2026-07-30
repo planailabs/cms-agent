@@ -129,6 +129,14 @@ describe('real auth (mock OIDC IdP)', () => {
       arch.status === 200 && archBody.includes('class="mermaid"'),
       `${arch.status} ${arch.headers.get('location') ?? ''}`,
     );
+    // The guides moved out of docs/ onto this route — they are public too.
+    const guide = await fetch(`${baseUrl}/architecture/setup`, { redirect: 'manual' });
+    const guideBody = guide.status === 200 ? await guide.text() : '';
+    ok(
+      'architecture guides are public and rendered as HTML',
+      guide.status === 200 && guideBody.includes('Environment variables'),
+      `${guide.status} ${guide.headers.get('location') ?? ''}`,
+    );
     const imp = await fetch(`${baseUrl}/api/dev/impersonate`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', origin: baseUrl },

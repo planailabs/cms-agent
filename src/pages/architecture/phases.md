@@ -1,17 +1,16 @@
-# Workflow phases and approvals
+---
+layout: ../../components/architecture/Shell.astro
+title: Workflow phases and approvals
+lead: What the agent may do in each phase, how a plan becomes an immutable approval, and the one transition the model drives itself.
+---
 
 Every chat cycles through three phases. Transitions are **HTTP endpoints,
 never chat text** — with one exception noted below, the model cannot advance
 the workflow by itself.
 
-```
- PLAN ──approve-plan──► EXECUTE ──publish──► PUBLISHED
-  │  └──start_execution────▲ │                   │
-  ▲                        │ │                   │
-  └── request-changes ◄────┘ └── review here ────┘
-  ▲                                              │
-  └────── success: branch resets onto new main ──┘
-```
+The transitions are drawn in
+[the workflow phase machine](/architecture#workflow-phase); this page is the
+prose behind them.
 
 ## PLAN (read-only)
 
