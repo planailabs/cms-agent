@@ -31,6 +31,25 @@ pub fn verify_session_cookie(value: &str, secret: &[u8]) -> Result<String, AuthE
     Ok(token.to_string())
 }
 
+/// Header the upstream CMS requires as proof a request came through here, and
+/// the token it carries. Derived from the shared BETTER_AUTH_SECRET so the
+/// secret itself never travels upstream, and domain-separated so the value is
+/// good for nothing else.
+///
+/// Mirror of `proxyToken` in src/lib/proxyGuard.ts — the two are pinned to the
+/// same output by PROXY_TOKEN_VECTOR in both test suites.
+pub const PROXY_HEADER: &str = "x-cms-proxy";
+
+pub fn proxy_token(secret: &[u8]) -> String {
+    let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC accepts any key length");
+    mac.update(b"cms-proxy");
+    mac.finalize()
+        .into_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
 pub fn cookie_value<'a>(cookie_header: &'a str, name: &str) -> Option<&'a str> {
     cookie_header.split(';').find_map(|pair| {
         let (key, value) = pair.split_once('=')?;
@@ -79,6 +98,16 @@ mod tests {
         assert_eq!(
             verify_session_cookie(".%3D", SECRET),
             Err(AuthError::Malformed)
+        );
+    }
+
+    /// Same secret and expected token as test/proxy-guard.test.ts. If this
+    /// vector changes, the CMS stops accepting the proxy's requests.
+    #[test]
+    fn proxy_token_matches_the_typescript_implementation() {
+        assert_eq!(
+            proxy_token(b"proxy-guard-test-secret"),
+            "e9f2f9ca5aeaab408356cbae9972bf8414a656f13788758c84ca142ad54ecddc"
         );
     }
 

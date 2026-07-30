@@ -90,6 +90,9 @@ struct CmsProxy {
     base_domain: String,
     require_auth: bool,
     auth_secret: Vec<u8>,
+    /// Proof-of-proxy token stamped on every upstream request; the CMS refuses
+    /// anything without it, so nobody reaches its port around this listener.
+    proxy_token: String,
     /// scheme://BASE_DOMAIN — the public CMS origin WITHOUT a port. Requests
     /// append the port their Host header carried (the CMS is reached through
     /// this same proxy, so the port is shared); standard ports carry none.
@@ -359,6 +362,18 @@ impl ProxyHttp for CmsProxy {
         Ok(false)
     }
 
+    /// Stamp the proof-of-proxy header. `insert_header` REPLACES whatever the
+    /// client sent under that name, so a request cannot smuggle its own token
+    /// through this listener — the only value upstream ever sees is ours.
+    async fn upstream_request_filter(
+        &self,
+        _session: &mut Session,
+        upstream_request: &mut RequestHeader,
+        _ctx: &mut Self::CTX,
+    ) -> Result<()> {
+        upstream_request.insert_header(auth::PROXY_HEADER, self.proxy_token.as_str())
+    }
+
     async fn upstream_peer(
         &self,
         _session: &mut Session,
@@ -479,6 +494,7 @@ fn run_proxy(cfg: Config, state: Arc<ProxyState>) {
         cms_origin: format!("{}://{}", cfg.public_scheme, cfg.base_domain),
         base_domain: cfg.base_domain,
         require_auth: cfg.require_auth,
+        proxy_token: auth::proxy_token(&cfg.auth_secret),
         auth_secret: cfg.auth_secret,
         routes: state.routes.clone(),
         sessions: state.sessions.clone(),

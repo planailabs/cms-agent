@@ -4,6 +4,7 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 import net from 'node:net';
 import { afterAll, describe, expect, it } from 'vitest';
+import { PROXY_HEADER, proxyToken } from '@/lib/proxyGuard';
 
 const nativePath = process.env.PROXY_NATIVE_PATH;
 const suite = nativePath ? describe : describe.skip;
@@ -17,14 +18,19 @@ function listen(server: http.Server | net.Server): Promise<number> {
   });
 }
 
-function request(port: number, host: string, cookie?: string): Promise<{ status: number; body: string }> {
+function request(
+  port: number,
+  host: string,
+  cookie?: string,
+  extraHeaders: Record<string, string> = {},
+): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = http.get(
       {
         hostname: '127.0.0.1',
         port,
         path: '/',
-        headers: { Host: host, ...(cookie ? { Cookie: cookie } : {}) },
+        headers: { Host: host, ...(cookie ? { Cookie: cookie } : {}), ...extraHeaders },
       },
       (response) => {
         const chunks: Buffer[] = [];
@@ -44,7 +50,9 @@ afterAll(async () => {
 
 suite('embedded native proxy', () => {
   it('runs Pingora, applies routes directly, and validates Better Auth sessions', async () => {
-    const upstream = http.createServer((_request, response) => {
+    let lastUpstreamHeaders: http.IncomingHttpHeaders = {};
+    const upstream = http.createServer((request_, response) => {
+      lastUpstreamHeaders = request_.headers;
       response.setHeader('content-type', 'text/html');
       response.end('<html><head></head><body>upstream</body></html>');
     });
@@ -100,5 +108,15 @@ suite('embedded native proxy', () => {
     expect(allowed.body).toContain('/__cms/injected-cms-agent.js');
     expect(missing.status).toBe(302);
     expect(unknown.status).toBe(302);
+
+    // Proof-of-proxy header: the Rust side must stamp exactly what the TS
+    // side derives, or the CMS rejects every proxied request as if it had
+    // come in around the proxy (src/lib/proxyGuard.ts).
+    expect(lastUpstreamHeaders[PROXY_HEADER]).toBe(proxyToken(secret));
+
+    // And a client cannot smuggle its own value through: insert_header
+    // replaces whatever arrived under that name.
+    await request(proxyPort, 'cms.test', undefined, { [PROXY_HEADER]: 'forged' });
+    expect(lastUpstreamHeaders[PROXY_HEADER]).toBe(proxyToken(secret));
   });
 });

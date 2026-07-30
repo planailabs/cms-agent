@@ -12,6 +12,7 @@ import { BOOT_PATH_RE, cleanBootOrigin, handlePreviewBoot } from '@/lib/preview/
 import { WAIT_PATH_RE, handlePreviewWait } from '@/lib/preview/waitStream';
 import { currentRoutesJson, initRoutesFile } from '@/lib/preview/manager';
 import { startEmbeddedProxy, updateProxySession } from '@/lib/proxyNative';
+import { isFromProxy, proxyRequiredResponse } from '@/lib/proxyGuard';
 import { env } from '@/lib/env';
 
 // Publish the routing table, start the embedded proxy, and recover automatisms
@@ -67,6 +68,13 @@ const SELF_AUTHENTICATING_PATHS = [
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname, search } = new URL(context.request.url);
+
+  // Front door first: everything below assumes the proxy already routed,
+  // authorized the preview host and rewrote the path. A request that reached
+  // this port directly gets the public address instead of a page.
+  if (!isFromProxy(context.request.headers, env().BETTER_AUTH_SECRET)) {
+    return proxyRequiredResponse(pathname);
+  }
 
   if (SELF_AUTHENTICATING_PATHS.some((re) => re.test(pathname))) {
     context.locals.user = null;

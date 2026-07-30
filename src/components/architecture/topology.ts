@@ -107,8 +107,12 @@ flowchart TD
   kind -->|"WebSocket upgrade"| pass["Pass through — site HMR"]
   kind -->|"anything else"| raw["Untouched"]
 
-  rewrite --> mw["Astro middleware"]
-  mw --> authed{"Signed in?"}
+  rewrite --> stamp["Stamp X-Cms-Proxy<br/>on the upstream request"]
+  cms --> stamp
+  stamp --> mw["Astro middleware"]
+  mw --> front{"X-Cms-Proxy valid?"}
+  front -->|"no — reached the app port directly"| note["403 with the public address"]
+  front -->|"yes"| authed{"Signed in?"}
   authed -->|"no"| signin["Redirect to /signin/"]
   authed -->|"yes"| bootpage["Boot page + ensureInstance"]
 `,
@@ -148,6 +152,20 @@ sequenceDiagram
         belongs. Asking the CMS host for the internal boot path would refresh-loop
         forever, so the middleware bounces the browser to the real preview host
         and lets the listener rewrite it from there.</li>
+      <li><strong>The app answers only through its front door.</strong>
+        Everything the middleware does assumes the listener already routed the
+        host, authorized the preview and rewrote the path — so a request that
+        arrives at the app's own port skipped all of it. The listener stamps
+        <code>X-Cms-Proxy</code> with a token derived from the shared
+        <code>BETTER_AUTH_SECRET</code>, replacing any value the client sent;
+        without it the CMS returns 403 and the public address instead of a
+        page. Deriving the token rather than forwarding the secret keeps it out
+        of upstream logs. There is no opt-out, development included: a CMS
+        reached on its own port cannot route a preview host or inject the
+        overlay, so what it serves is a half-working workspace whose failures
+        read as application bugs. The two implementations are pinned to one
+        token by a shared test vector — they ship in the same image, and a
+        mismatch would refuse every request.</li>
       <li><strong>The boot page is authenticated.</strong> Both it and its SSE
         wait stream require a session — an anonymous visitor is redirected to
         sign-in, and the stream answers 401.</li>
@@ -163,6 +181,8 @@ sequenceDiagram
     </ul>`,
     source: [
       'src/middleware.ts',
+      'src/lib/proxyGuard.ts',
+      'proxy/src/auth.rs',
       'src/lib/preview/bootPage.ts',
       'src/lib/preview/waitStream.ts',
       'src/lib/injected/bundle.ts',
