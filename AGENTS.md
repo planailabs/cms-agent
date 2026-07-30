@@ -8,6 +8,17 @@ that directory, so `docs/setup.md`, `docs/phases.md`, `docs/runbooks.md`,
 `docs/walkthrough.md` and `docs/nixos.md` still read the same on disk. Start
 with `/architecture` (or read the section files directly).
 
+## Optional code knowledge graph
+
+When codebase-memory-mcp tools are available, use them for unfamiliar
+architecture, symbol relationships, call or data-flow tracing, and
+cross-cutting impact analysis. Skip them for localized edits and exact text,
+config, or documentation searches. A user opt-out always wins. If the tools
+are unavailable, indexing fails, or graph results are stale or insufficient,
+continue with normal search and file reads without treating that as an error.
+Never require contributors to install codebase-memory-mcp, and verify affected
+files normally before editing.
+
 ## Ground rules
 
 - `chat/` is the **read-only reference app** the UI/loop was extracted from —
