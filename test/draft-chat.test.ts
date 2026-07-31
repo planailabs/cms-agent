@@ -110,6 +110,31 @@ describe('draft chat', () => {
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/chats', '/api/uploads']);
   });
 
+  // The composer's change handler calls stageFiles and then resets
+  // input.value to allow re-picking the same file — which empties the LIVE
+  // FileList it just handed over. From a draft the chat is created first, so
+  // the loop ran after that reset and staged nothing: the chat appeared, the
+  // chip never did, and the file was silently dropped.
+  it('keeps the picked file when the input is reset before the chat exists', async () => {
+    startDraftChat('b1');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url === '/api/chats'
+          ? Response.json({ chat: { id: 'chat-new', title: 'New chat', workflowPhase: 'plan' } })
+          : Response.json({ upload: { id: 'upload-1' } }, { status: 201 }),
+      ),
+    );
+
+    const live = [new File(['hello'], 'notes.md', { type: 'text/plain' })];
+    const staging = stageFiles(live);
+    live.length = 0; // input.value = '' — the FileList empties in place
+    await staging;
+
+    await vi.waitFor(() => expect(getStagedAttachments()[0]?.status).toBe('ready'));
+    expect(getStagedAttachments().map((a) => a.filename)).toEqual(['notes.md']);
+  });
+
   it('does not hijack a chat the user switched to mid-creation', async () => {
     startDraftChat('b1');
     const draft = store.state.chat!.aiChat!;

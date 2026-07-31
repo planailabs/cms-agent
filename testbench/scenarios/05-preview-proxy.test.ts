@@ -324,6 +324,9 @@ describe('preview + proxy', () => {
         .locator(`[data-action="ws-open-chat"][data-chat-id="${j.chatB}"]`)
         .first()
         .click();
+      // Reviewing is no longer a phase: the diff viewer IS the compare window,
+      // and opening a chat no longer opens it — edit mode starts from there.
+      await s.page.locator('[data-action="ws-compare-open"]').click();
       await s.page.locator('.ws-diff').first().waitFor({ timeout: 60_000 });
       const editBtn = s.page.locator('.ws-rail [data-action="ws-edit-mode"]:not([disabled])');
       await editBtn.waitFor({ timeout: 60_000 });

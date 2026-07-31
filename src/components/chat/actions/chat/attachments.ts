@@ -80,12 +80,17 @@ const isAllowed = (file: File): boolean =>
  * uploads then continue in the background.
  */
 export const stageFiles = async (files: Iterable<File>): Promise<void> => {
+  // Snapshot before anything can await. `input.files` is a LIVE FileList and
+  // the change handler resets `input.value` the moment this is called — from
+  // a draft, where creating the chat is awaited first, the list is empty by
+  // the time we get here and the picked file vanishes without a trace.
+  const picked = [...files];
   if (!store.state.chat?.aiChat) return;
   if (!store.state.activeChatId && !(await materializeDraftChat())) return;
   const chatId = store.state.activeChatId!;
   const onePerMessage = store.state.attachmentsOnePerMessage;
 
-  for (const file of files) {
+  for (const file of picked) {
     if (onePerMessage && items.length >= 1) break;
     if (!isAllowed(file)) continue;
 
