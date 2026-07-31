@@ -40,7 +40,7 @@ import { store } from '@/components/chat/app/store';
 import { startDraftChat } from '@/components/chat/actions/chat';
 import { sendChatMessage } from '@/components/chat/actions/chat/stateMachine';
 import { renderRail } from '@/components/workspace/rail';
-import { canEnterEditMode } from '@/components/workspace/preview';
+import { canEnterEditMode, renderPreviewToolbar } from '@/components/workspace/preview';
 import {
   clearAttachments,
   getStagedAttachments,
@@ -94,17 +94,36 @@ describe('draft chat', () => {
     }
   });
 
-  it('moves edit controls into the active rail button flyout', () => {
+  it('splits edit controls between the rail flyout and toolbar', () => {
     startDraftChat('b1');
     store.state.workspace.elementEdit.active = true;
     store.state.workspace.elementEdit.tool = 'swap';
+    store.state.workspace.elementEdit.undoDepth = 2;
 
     const rail = renderRail(store.state);
     expect(rail).toContain('ws-edit-menu');
     expect(rail).toContain('ws-edit-menu__item is-active');
-    for (const action of ['ws-edit-tool', 'ws-edit-undo', 'ws-edit-clear', 'ws-edit-exit']) {
+    for (const action of ['ws-edit-tool', 'ws-edit-exit']) {
       expect(rail).toContain(`data-action="${action}"`);
     }
+    expect(rail).not.toContain('data-action="ws-edit-undo"');
+    expect(rail).not.toContain('data-action="ws-edit-clear"');
+
+    const toolbar = renderPreviewToolbar(store.state);
+    expect(toolbar).toContain('class="ws-mini-button is-active" data-edit-active-tool="swap"');
+    expect(toolbar).toContain('data-action="ws-edit-undo"');
+    expect(toolbar).toContain('data-action="ws-edit-clear"');
+    expect(toolbar).toContain('data-action="ws-edit-clear"><svg');
+    expect(toolbar).toContain('Undo all');
+    expect(toolbar).toContain('data-action="ws-edit-handoff"');
+
+    store.state.workspace.elementEdit.undoDepth = 0;
+    expect(renderPreviewToolbar(store.state)).not.toContain('data-action="ws-edit-undo"');
+    store.state.workspace.elementEdit.undoDepth = 1;
+    expect(renderPreviewToolbar(store.state)).toContain('data-action="ws-edit-undo"');
+    expect(renderPreviewToolbar(store.state)).not.toContain('data-action="ws-edit-clear"');
+    store.state.workspace.elementEdit.canRedo = true;
+    expect(renderPreviewToolbar(store.state)).toContain('data-action="ws-edit-redo"><svg');
 
     store.state.workspace.elementEdit.active = false;
   });

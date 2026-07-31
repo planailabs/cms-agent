@@ -76,7 +76,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Stop button while the agent works (composer card → turn ends, transcript note) | — | 🟡 the endpoint and loop behaviour are covered in 03 + test/turn-stop.test.ts; the button itself is not clicked in a browser |
 | Chat transcript scroll preserved across rerenders (tool-use jump fix) | 05 | ✅ |
 | Element picker from the icon rail in the compare window (arm → live preview on diff route → cancel returns to compare) | 05 | ✅ |
-| Edit mode from the icon rail; hover flyout offers tools/undo/clear/exit while handoff stays visible; comment target highlights blue; comments have a paper-plane submit button and can be edited; exit returns to diff viewer | 05 | ✅ |
+| Edit mode from the icon rail; hover flyout offers tools/exit while highlighted active tool and handoff stay visible; undo appears after one edit, undo-all after two, and redo restores either; comment target highlights blue; comments have a paper-plane submit button and can be edited; exit returns to diff viewer | 05 | ✅ |
 | Chat visibility setting (restricted hides foreign chats, admin bypass) | 07 | ✅ |
 | Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
 | Language switch en↔de (judged screenshot) | 02 | ✅ |

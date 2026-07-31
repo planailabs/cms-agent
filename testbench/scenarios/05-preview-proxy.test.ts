@@ -360,11 +360,15 @@ describe('preview + proxy', () => {
       await editMenu.waitFor({ state: 'visible', timeout: 10_000 });
       const tools = await editMenu.locator('[data-action="ws-edit-tool"]').count();
       ok('edit icon flyout lists all five tools', tools === 5, `${tools} tools`);
+      ok('undo controls stay hidden before the first edit', (await s.page.locator('#preview-toolbar-region [data-action^="ws-edit-"]').filter({ hasText: 'Undo' }).count()) === 0);
       const handoffSecondary = await s.page
         .locator('.ws-mini-button--handoff[data-action="ws-edit-handoff"]')
         .count();
       ok('handoff stays visible in the toolbar', handoffSecondary === 1);
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="comment"]').click();
+      const activeTool = s.page.locator('[data-edit-active-tool="comment"]');
+      ok('toolbar shows the active comment mode', (await activeTool.count()) === 1);
+      ok('active mode uses the highlighted button style', await activeTool.evaluate((el) => getComputedStyle(el).color !== getComputedStyle(el.parentElement!).color));
       const preview = await s.page.locator('#preview-frame-region iframe').first().elementHandle();
       const frame = await preview?.contentFrame();
       const target = frame?.locator('main, body > *').first();
@@ -381,6 +385,14 @@ describe('preview + proxy', () => {
       const submitComment = frame?.getByRole('button', { name: 'Submit' });
       ok('comment input exposes an icon submit button', (await submitComment?.locator('svg').isVisible()) === true);
       await submitComment?.click();
+      await s.page.locator('#preview-toolbar-region [data-action="ws-edit-undo"]').waitFor({ state: 'visible' });
+      ok('undo appears after the first edit', (await s.page.getByRole('button', { name: 'Undo' }).count()) === 1);
+      ok('undo all stays hidden after one edit', (await s.page.getByRole('button', { name: 'Undo all' }).count()) === 0);
+      await s.page.getByRole('button', { name: 'Undo' }).click();
+      const redo = s.page.getByRole('button', { name: 'Redo' });
+      await redo.waitFor({ state: 'visible' });
+      ok('redo with a forward-history icon appears after undo', (await redo.locator('svg').isVisible()) === true);
+      await redo.click();
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="cursor"]').click();
       const editComment = frame?.getByRole('button', { name: 'Edit comment' });
       ok('comments expose a pencil edit button', (await editComment?.isVisible()) === true);
@@ -388,6 +400,13 @@ describe('preview + proxy', () => {
       ok('comment edit pre-fills the old text', (await commentInput?.inputValue()) === 'Bench comment');
       await commentInput?.fill('Updated bench comment');
       await commentInput?.press('Enter');
+      const undoAll = s.page.getByRole('button', { name: 'Undo all' });
+      await undoAll.waitFor({ state: 'visible' });
+      ok('undo all appears after the second edit with its reset-history icon', (await undoAll.locator('svg').isVisible()) === true);
+      await undoAll.click();
+      await redo.waitFor({ state: 'visible' });
+      ok('redo appears after undo all', true);
+      await redo.click();
       ok(
         'comment edit saves the new text',
         (await frame?.locator('.cms-ov-bubble').filter({ hasText: 'Updated bench comment' }).count()) === 1,

@@ -496,10 +496,12 @@ export const setEditTool = (tool: EditTool): void => {
 };
 
 /** cms:edit-changed — the module posts the full set after every mutation. */
-export const onEditChanged = (annotations: EditAnnotations): void => {
+export const onEditChanged = (annotations: EditAnnotations, undoDepth: number, canRedo: boolean): void => {
   const ws = store.state.workspace;
   if (!ws.elementEdit.active) return;
   ws.elementEdit.annotations = annotations;
+  ws.elementEdit.undoDepth = undoDepth;
+  ws.elementEdit.canRedo = canRedo;
   store.notify();
 };
 

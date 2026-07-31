@@ -18,9 +18,9 @@
  *
  * Element-edit mode (module/editMode.ts):
  *   parent → child  {type:'cms:edit-start', annotations?, tool?}
- *   parent → child  {type:'cms:edit-stop'|'cms:edit-undo'|'cms:edit-clear'}
+ *   parent → child  {type:'cms:edit-stop'|'cms:edit-undo'|'cms:edit-clear'|'cms:edit-redo'}
  *   parent → child  {type:'cms:edit-tool', tool:'move'|'draw'|'comment'}
- *   child → parent  {type:'cms:edit-changed', annotations}   full set, every mutation
+ *   child → parent  {type:'cms:edit-changed', annotations, undoDepth, canRedo} full set, every mutation
  *   child → parent  {type:'cms:edit-stopped'}                Esc inside the page
  *
  * Deliberately one-way eval: the parent evaluates code in the preview, never

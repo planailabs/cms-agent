@@ -12,6 +12,9 @@ import { branchPreviewUrl } from './config';
 import { renderNavigation } from './navigation';
 import { previewDevices } from './devices';
 
+const UNDO_ALL_ICON = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 5.8A5.3 5.3 0 1 1 2.8 10"/><path d="M3.2 2.8v3h3"/></svg>`;
+const REDO_ICON = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.8 5.8A5.3 5.3 0 1 0 13.2 10"/><path d="M12.8 2.8v3h-3"/></svg>`;
+
 export const activeBranchName = (state: AppState): string =>
   state.branches.find((b) => b.id === state.activeBranchId)?.name ?? 'main';
 
@@ -79,7 +82,11 @@ const renderEditToolbar = (state: AppState): string => {
   const canHandoff = !!ee.annotations && annotationCount(ee.annotations) > 0 && !ee.busy;
   return `<div class="ws-toolbar">
       <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.preview.editMode'))}</span>
+      <span class="ws-mini-button is-active" data-edit-active-tool="${ee.tool}">${escapeHtml(t(locale, `workspace.preview.tool.${ee.tool}`))}</span>
       <span class="ws-toolbar__spacer"></span>
+      ${ee.undoDepth >= 1 ? `<button type="button" class="ws-mini-button" data-action="ws-edit-undo">${escapeHtml(t(locale, 'workspace.preview.editUndo'))}</button>` : ''}
+      ${ee.undoDepth >= 2 ? `<button type="button" class="ws-mini-button" data-action="ws-edit-clear">${UNDO_ALL_ICON}${escapeHtml(t(locale, 'workspace.preview.editClear'))}</button>` : ''}
+      ${ee.canRedo ? `<button type="button" class="ws-mini-button" data-action="ws-edit-redo">${REDO_ICON}${escapeHtml(t(locale, 'workspace.preview.editRedo'))}</button>` : ''}
       <button type="button" class="ws-mini-button ws-mini-button--handoff" data-action="ws-edit-handoff"
         title="${escapeHtml(t(locale, 'workspace.preview.handoffTitle'))}" ${canHandoff ? '' : 'disabled aria-disabled="true"'}>
         ${escapeHtml(t(locale, 'workspace.preview.handoff'))}${ee.busy ? '…' : ''}

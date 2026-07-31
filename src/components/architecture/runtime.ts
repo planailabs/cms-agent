@@ -613,7 +613,8 @@ sequenceDiagram
         to planning — legal from every pre-publish phase.</li>
       <li><strong>Edit mode is the same bundle.</strong> The injected module carries
         the editing behavior and hint banner; workspace tools live in the edit
-        rail flyout while the handoff action stays visible above the preview.</li>
+        rail flyout while the active tool, undo, undo-all, redo and handoff stay
+        visible above the preview.</li>
       <li><strong>The compare view uses the same live frames.</strong> Before and
         after are two preview iframes with synchronized scrolling, plus a
         screenshot overlay with changed regions highlighted and an onion slider —

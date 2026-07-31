@@ -41,8 +41,6 @@ const renderEditMenu = (state: AppState): string => {
   return `<div class="ws-edit-menu" role="menu">
       <div class="ws-edit-menu__head">${escapeHtml(t(locale, 'workspace.preview.editMode'))}</div>
       ${items}
-      <button type="button" class="ws-edit-menu__item" role="menuitem" data-action="ws-edit-undo">${escapeHtml(t(locale, 'workspace.preview.editUndo'))}</button>
-      <button type="button" class="ws-edit-menu__item" role="menuitem" data-action="ws-edit-clear">${escapeHtml(t(locale, 'workspace.preview.editClear'))}</button>
       <button type="button" class="ws-edit-menu__item" role="menuitem" data-action="ws-edit-exit">${escapeHtml(t(locale, 'workspace.preview.exitEdit'))}</button>
     </div>`;
 };

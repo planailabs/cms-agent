@@ -233,6 +233,10 @@ export interface ElementEditState {
   /** Latest full annotation set (cms:edit-changed) — the handoff payload.
    *  Kept in the parent so an iframe reload mid-edit restores it. */
   annotations: EditAnnotations | null;
+  /** Number of reversible edits currently held by the injected module. */
+  undoDepth: number;
+  /** An undo can be restored until the next edit. */
+  canRedo: boolean;
   /** Handoff POST in flight. */
   busy: boolean;
 }
@@ -241,6 +245,8 @@ export const createInitialElementEditState = (): ElementEditState => ({
   active: false,
   tool: 'cursor',
   annotations: null,
+  undoDepth: 0,
+  canRedo: false,
   busy: false,
 });
 

@@ -93,7 +93,8 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.preview.tool.draw': '✎ Draw',
     'workspace.preview.tool.comment': '💬 Comment',
     'workspace.preview.editUndo': '↩ Undo',
-    'workspace.preview.editClear': 'Clear',
+    'workspace.preview.editClear': 'Undo all',
+    'workspace.preview.editRedo': 'Redo',
     'workspace.preview.handoff': '🤝 Handoff to agent',
     'workspace.preview.handoffTitle':
       'Send a screenshot + your annotations to the agent to plan the change',
@@ -326,7 +327,8 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.preview.tool.draw': '✎ Zeichnen',
     'workspace.preview.tool.comment': '💬 Kommentar',
     'workspace.preview.editUndo': '↩ Rückgängig',
-    'workspace.preview.editClear': 'Leeren',
+    'workspace.preview.editClear': 'Alles rückgängig',
+    'workspace.preview.editRedo': 'Wiederholen',
     'workspace.preview.handoff': '🤝 An Agent übergeben',
     'workspace.preview.handoffTitle':
       'Screenshot + Annotationen an den Agenten senden, damit er die Änderung plant',

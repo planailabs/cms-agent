@@ -54,11 +54,13 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   let ann: EditAnnotations = emptyAnnotations();
   /** Snapshot undo stack — one deep copy per mutation. */
   const history: EditAnnotations[] = [];
+  const redoHistory: Array<{ annotations: EditAnnotations; history: EditAnnotations[] }> = [];
 
   let banner: HelpBanner | null = null;
   let hlBox: HTMLDivElement | null = null;
 
   const snapshot = (): void => {
+    redoHistory.length = 0;
     history.push(JSON.parse(JSON.stringify(ann)) as EditAnnotations);
   };
 
@@ -237,7 +239,9 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     syncCanvasMode();
     if (tool === 'cursor') showAllChrome();
     else hideAllChrome();
-    if (post) agent.post({ type: 'cms:edit-changed', annotations: ann });
+    if (post) {
+      agent.post({ type: 'cms:edit-changed', annotations: ann, undoDepth: history.length, canRedo: redoHistory.length > 0 });
+    }
   };
 
   const showHl = (el: Element): void => {
@@ -465,6 +469,12 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   // ── Undo / clear ───────────────────────────────────────────────────────────
 
   const undo = (): void => {
+    if (history.length > 0) {
+      redoHistory.push({
+        annotations: JSON.parse(JSON.stringify(ann)) as EditAnnotations,
+        history: history.map((entry) => JSON.parse(JSON.stringify(entry)) as EditAnnotations),
+      });
+    }
     const prev = history.pop();
     if (!prev) return;
     ann = prev;
@@ -473,10 +483,23 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   };
 
   const clear = (): void => {
-    snapshot();
+    redoHistory.push({
+      annotations: JSON.parse(JSON.stringify(ann)) as EditAnnotations,
+      history: history.map((entry) => JSON.parse(JSON.stringify(entry)) as EditAnnotations),
+    });
     ann.moves = [];
     ann.strokes = [];
     ann.comments = [];
+    history.length = 0;
+    hideBubble();
+    render();
+  };
+
+  const redo = (): void => {
+    const next = redoHistory.pop();
+    if (!next) return;
+    ann = next.annotations;
+    history.splice(0, history.length, ...next.history);
     hideBubble();
     render();
   };
@@ -511,6 +534,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     ann.url = location.href;
     ann.route = location.pathname;
     history.length = 0;
+    redoHistory.length = 0;
     banner?.remove();
     banner = createHelpBanner('edit', cfg.labels.editInstruction);
     render(false);
@@ -754,6 +778,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
   );
   agent.on('cms:edit-undo', agent.safe(() => active && undo()));
   agent.on('cms:edit-clear', agent.safe(() => active && clear()));
+  agent.on('cms:edit-redo', agent.safe(() => active && redo()));
 
   agent.onTeardown(() => stop(false));
 };

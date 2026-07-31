@@ -183,6 +183,10 @@ export const postEditClear = (): void => {
   postToPreview({ type: 'cms:edit-clear' });
 };
 
+export const postEditRedo = (): void => {
+  postToPreview({ type: 'cms:edit-redo' });
+};
+
 // ── Event routing (module → workspace) ───────────────────────────────────────
 
 type AgentEventHandler = (data: AgentEnvelope) => void;

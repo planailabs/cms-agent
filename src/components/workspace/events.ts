@@ -62,6 +62,7 @@ import {
   cancelElementPick,
   postEditUndo,
   postEditClear,
+  postEditRedo,
 } from './previewAgent';
 import { closeArchive, deleteArchivedChat, openArchivedChat } from './archive';
 import { closeGitModal, loadGitCommits, selectGitCommit, backToGitList } from './gitModal';
@@ -128,7 +129,13 @@ const registerAgentEvents = (): void => {
 
   onPreviewAgentEvent('cms:edit-changed', (data) => {
     const annotations = data.annotations as EditAnnotations | undefined;
-    if (annotations && Array.isArray(annotations.moves)) onEditChanged(annotations);
+    if (annotations && Array.isArray(annotations.moves)) {
+      onEditChanged(
+        annotations,
+        typeof data.undoDepth === 'number' ? data.undoDepth : 0,
+        data.canRedo === true,
+      );
+    }
   });
 
   onPreviewAgentEvent('cms:edit-stopped', () => {
@@ -537,6 +544,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
   delegateEvent(app, 'click', '[data-action="ws-edit-undo"]', () => postEditUndo());
   delegateEvent(app, 'click', '[data-action="ws-edit-clear"]', () => postEditClear());
+  delegateEvent(app, 'click', '[data-action="ws-edit-redo"]', () => postEditRedo());
   delegateEvent(app, 'click', '[data-action="ws-edit-handoff"]', () =>
     openInputModal(
       {

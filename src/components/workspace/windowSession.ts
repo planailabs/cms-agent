@@ -115,6 +115,8 @@ const applyViewState = (blob: WindowViewState): void => {
         ? ee.tool
         : 'cursor',
       annotations: ee.annotations ?? null,
+      undoDepth: 0,
+      canRedo: false,
       busy: false,
     };
   }
