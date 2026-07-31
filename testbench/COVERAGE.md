@@ -108,6 +108,9 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Workflow-phase run boundary (start_execution / return_to_plan end the run; the next one gets the new phase's prompt + tools) | — | 🟡 unit-covered (test/phase-run-boundary.test.ts); bench-driving needs a live agent to pick start_execution over propose_plan, which is its judgement call |
 | External MCP phase gate (custom/repo servers full only in EXECUTE, declared read-only tools while planning; deployment monitor always reduced) | — | 🟡 unit-covered (test/mcp-policy.test.ts); readOnlyHint surviving the jailed bridge is covered in test/integration/custom-mcp.test.ts; bench-driving needs a configured custom MCP server in the bench environment |
 
+| Capability router (SKILL_ROUTER_MODEL picks the skills/MCP groups the prompt carries; a failure fails the turn, never falls back to the full list) | — | 🟡 unit-covered (test/skill-router.test.ts, test/capability-tools.test.ts); every bench turn exercises it implicitly — a broken router fails 01/03 outright, which is the intended visibility |
+| Lazy MCP loading (defaults only at turn start; load_mcp/unload_mcp per group; an unloaded group's server never starts; phase policy still narrows a freshly loaded group) | — | 🟡 unit-covered (test/mcp-lazy-load.test.ts, test/mcp-groups.test.ts); bench-driving needs a configured custom MCP server in the bench environment, same blocker as the phase gate above |
+
 ## Agent tool paths (implicit via e2e prompts)
 
 Every e2e agent turn sends `reasoning_effort` (OPENAI_REASONING_EFFORT,

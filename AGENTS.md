@@ -143,6 +143,21 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
   fallback for third-party skills whose headers are not valid YAML (an
   unquoted `description:` containing a colon is common). Structured values
   like `scripts:` are NOT recovered by the fallback.
+- Capabilities are demand-driven, and both halves are load-bearing:
+  * The prompt lists the skills the router picked, not the install
+    (`src/lib/agent/skillRouter.ts`, `SKILL_ROUTER_MODEL`); `query_skills`
+    searches the rest. The router has NO fallback — a failed or unparseable
+    routing answer fails the turn on purpose, because "list everything
+    again" is invisible from the outside and restores the whole cost.
+  * MCP tools arrive per GROUP (`src/lib/agent/mcp/groups.ts`): a server is
+    always its own group, and servers join a shared set with `"groups": []`
+    in `mcp.json` / `.mcp.json` (extra keys mcporter ignores). Only
+    `DEFAULT_GROUPS` attaches by itself; `load_mcp` does the rest, and a
+    group nobody loaded never starts its server. Loads persist on
+    `Chat.loadedMcpGroups`. `toolLoop` rebuilds the tool list every round —
+    that is how a mid-run load reaches the model.
+  * The group gate is not the phase gate: `mcp/policy.ts` still narrows a
+    freshly loaded group to declared-read-only tools outside EXECUTE.
 
 ## Client state: streamed snapshots
 

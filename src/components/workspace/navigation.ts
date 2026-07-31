@@ -12,13 +12,18 @@ import { t, uiLocale } from '@/lib/i18n';
 export type NavScope = 'preview' | 'diff';
 
 const RELOAD_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 1 1-1.5-3.7"/><path d="M13.4 2.8v3.1h-3.1"/></svg>`;
+/** Power symbol — the server behind the page, not the page. */
+const RESTART_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.2v5"/><path d="M4.6 4.2a5.4 5.4 0 1 0 6.8 0"/></svg>`;
 
 export const renderNavigation = (scope: NavScope, route: string): string => {
   const locale = uiLocale();
   const reload = escapeHtml(t(locale, 'workspace.preview.reload'));
+  const restart = escapeHtml(t(locale, 'workspace.preview.restart'));
   return `<div class="ws-nav" data-nav="${scope}">
       <button type="button" class="ws-mini-button ws-nav__reload" data-action="ws-nav-reload"
         data-scope="${scope}" title="${reload}" aria-label="${reload}">${RELOAD_ICON}</button>
+      <button type="button" class="ws-mini-button ws-nav__restart" data-action="ws-nav-restart"
+        data-scope="${scope}" title="${restart}" aria-label="${restart}">${RESTART_ICON}</button>
       <form class="ws-address" data-action="ws-nav-go" data-scope="${scope}"
         title="${escapeHtml(t(locale, 'workspace.preview.addressTitle'))}">
         <input class="ws-address__input ws-mono" type="text" spellcheck="false" autocomplete="off"

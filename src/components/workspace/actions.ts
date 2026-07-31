@@ -515,3 +515,16 @@ export const handoffEditAction = async (note: string): Promise<void> => {
     store.notify();
   }
 };
+
+/**
+ * Restart the dev server behind the chat's preview, then reload what is on
+ * screen. The reload lands on the boot page, which is where the wait and any
+ * start error are already shown — so this needs no progress UI of its own.
+ * A draft chat has no branch yet and nothing to restart.
+ */
+export const restartPreviewServer = async (reload: () => void): Promise<void> => {
+  const chatId = store.state.activeChatId;
+  if (!chatId) return;
+  const res = await postJson('/api/preview/restart', { chatId });
+  if (res.ok) reload();
+};

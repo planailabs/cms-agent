@@ -30,6 +30,7 @@ lead: Prerequisites, every environment variable, DNS, the first admin, and how t
 | `OPENAI_BASE_URL` | yes | OpenAI-compatible API base (e.g. `https://api.openai.com/v1`) |
 | `OPENAI_API_KEY` | yes | API key for that endpoint |
 | `OPENAI_MODEL` | yes | Model name |
+| `SKILL_ROUTER_MODEL` | yes | Small model that picks the skills and MCP groups each turn is hinted with; a routing failure fails the turn (no full-list fallback) |
 | `OPENAI_IMAGE_MODEL` | no | Image generation model (default `gpt-image-1`) |
 | `OPENAI_MAX_TOKENS` | no | Response cap (default 4096) |
 | `DEFAULT_COMMUNICATION_MODE` | no | `non-technical` (default) or `technical`; used when a user selects “Default” |
@@ -47,7 +48,7 @@ lead: Prerequisites, every environment variable, DNS, the first admin, and how t
 | `PUBLISH_COMMAND` | flow | web-agency script; receives `TARBALL_PATH`, `DIST_DIR`, `GIT_SHA` (runs through a shell) |
 | `GITHUB_TOKEN` / `GITHUB_REPO` | flow | github-ci check polling (`owner/repo`) |
 | `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_PAGES_PROJECT` | flow | cloudflare-pages direct upload |
-| `CONTEXT7_API_KEY` | no | Attach the Context7 docs MCP (mcp.context7.com) to agent chats |
+| `CONTEXT7_API_KEY` | no | Offer the Context7 docs MCP (mcp.context7.com) as a loadable group in agent chats |
 | `VAR_DIR` | yes | Runtime state: worktrees, previews, artifacts, uploads, proxy files |
 | `INPUT_TOKEN_BUDGET_PER_HOUR` / `OUTPUT_TOKEN_BUDGET_PER_HOUR` | no | Per-user hourly budgets (0 = unlimited) |
 | `PREVIEW_IDLE_TIMEOUT_MS` | no | Stop idle previews (default 10 min) |

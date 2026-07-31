@@ -227,7 +227,9 @@ flowchart TD
   checks -->|"any check fails"| refuse["Return an error as the tool result —<br/>the turn continues"]
   checks -->|"all pass"| exec["Execute against the chat worktree"]
 
-  ext["External MCP servers<br/>admin-global and repo-local"] --> access{"mcpAccess for the phase<br/>and the chat kind"}
+  ext["External MCP servers<br/>admin-global and repo-local"] --> group{"Is its group loaded?"}
+  group -->|"no"| never["Never attached —<br/>the server does not start"]
+  group -->|"yes"| access{"mcpAccess for the phase<br/>and the chat kind"}
   access -->|"read-only only"| filter["Keep the tools that<br/>declare readOnlyHint"]
   access -->|"full access"| bridged
   filter --> bridged["Merged into the tool namespace,<br/>inside the jail"]
@@ -238,6 +240,8 @@ flowchart TD
         caption: 'Which external tools a turn gets',
         code: `
 flowchart LR
+  g0{"MCP group"} -->|"phase default, or loaded earlier"| q0
+  g0 -->|"anything else"| off["Absent until load_mcp<br/>asks for it"]
   q0{"Chat kind"} -->|"deployments monitor"| ro["Every source, but only<br/>declared read-only tools"]
   q0 -->|"workflow or deployment"| q1{"Source"}
   q1 -->|"codebase-memory, Context7"| all["Every tool, in every phase"]
@@ -296,13 +300,31 @@ flowchart LR
       <li><strong>The gate is the phase, never the sandbox mode.</strong>
         <code>SANDBOX_MODE=none</code> is a development fallback; if it changed
         the tool set, what gets tested would not be what ships.</li>
+      <li><strong>Tools are loaded per group, not all at once.</strong> Every
+        MCP server is a group of its own, and several can share a set they
+        declare in the same config. A turn starts with the chat's defaults;
+        anything else the agent loads with <code>load_mcp</code> after finding
+        it with <code>query_mcps</code>, and the load lasts for the rest of the
+        chat. A group nobody asked for costs no prompt tokens and never starts
+        its server — which is the part hiding the tools alone would not
+        buy.</li>
+      <li><strong>Skills are selected before the prompt is written.</strong> A
+        small router model reads the skill and group indexes and names what
+        this request is likely to need; <code>query_skills</code> reaches the
+        rest. It deliberately has no fallback: if routing fails, the turn
+        fails, because the alternative — quietly listing every skill again —
+        is exactly the cost this removes and nothing would ever surface
+        it.</li>
     </ul>`,
     source: [
       'src/lib/agent/tools/registry.ts',
       'src/lib/agent/mcp/index.ts',
       'src/lib/agent/mcp/policy.ts',
+      'src/lib/agent/mcp/groups.ts',
       'src/lib/agent/mcp/custom.ts',
       'src/lib/agent/mcp/bridgeEntry.ts',
+      'src/lib/agent/skillRouter.ts',
+      'src/lib/agent/tools/capabilityTools.ts',
       'src/lib/agent/prompt.ts',
     ],
   },

@@ -48,6 +48,7 @@ import {
   toggleBrowserCompareOverlay,
   setBrowserCompareMode,
   setBrowserCompareBrowser,
+  restartPreviewServer,
 } from './actions';
 import {
   registerPreviewAgent,
@@ -464,6 +465,11 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-nav-reload"]', (_e, target) => {
     if (target.getAttribute('data-scope') === 'diff') reloadDiffPanes();
     else reloadPreviewFrame(store.state);
+  });
+  // Same two views, one level deeper: bounce the dev server, then reload.
+  delegateEvent(app, 'click', '[data-action="ws-nav-restart"]', (_e, target) => {
+    const diff = target.getAttribute('data-scope') === 'diff';
+    void restartPreviewServer(() => (diff ? reloadDiffPanes() : reloadPreviewFrame(store.state)));
   });
   delegateEvent(app, 'click', '[data-action="ws-tab-switch"]', (event, target) => {
     // The close × sits inside the tab button — let its own handler run alone

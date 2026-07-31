@@ -2122,7 +2122,8 @@ html.is-first-visit #app {
     max-width: 28rem;
   }
 
-  .ws-nav__reload {
+  .ws-nav__reload,
+  .ws-nav__restart {
     padding: 0.3rem 0.45rem;
     flex-shrink: 0;
   }
