@@ -119,6 +119,7 @@ export const connectEvents = (): Promise<void> => {
         // Workspace events (execution/publish lifecycle, chat meta)
         'state', 'ui_language', 'open_compare', 'execution_committed', 'execution_reverted', 'publish_log', 'publish_done',
         'chat_renamed', 'tabs_updated', 'automatism', 'automatism_state', 'chat_archived',
+        'compare_stale',
       ];
       for (const type of eventTypes) {
         es.addEventListener(type, (event) => {

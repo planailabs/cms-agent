@@ -113,6 +113,9 @@ locally booted production build (see `launcher.mjs`). Status legend:
 
 | Post-sync site check (backend error detection → automatism pause → agent fix → re-check on resume) + restart_preview | — | 🟡 unit-covered (test/site-health.test.ts drives a real HTTP dev-server stub, test/site-check-automatism.test.ts drives the flow against the DB); bench-driving it needs a sync that deliberately breaks the draft, which 06 does not do |
 
+| Compare shot staleness (generation bumped by the turn loop, in the cache key and the shot URL, `compare_stale` reload) | — | 🟡 unit-covered (test/compare-staleness.test.ts) |
+| Automatism repair turn (waits out a running turn, folds duplicate failures, reports when it cannot start, re-invokes abandoned repairs on boot) | 06 (real conflict → repair turn) | 🟡 partly: 06 drives the happy path; the busy/dedupe/give-up paths are unit-covered (test/automatism-repair-turn.test.ts) |
+
 ## Agent tool paths (implicit via e2e prompts)
 
 Every e2e agent turn sends `reasoning_effort` (OPENAI_REASONING_EFFORT,

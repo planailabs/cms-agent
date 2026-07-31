@@ -158,6 +158,22 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
     that is how a mid-run load reaches the model.
   * The group gate is not the phase gate: `mcp/policy.ts` still narrows a
     freshly loaded group to declared-read-only tools outside EXECUTE.
+- Compare shots are cached per (route, main sha, branch sha) AND a per-branch
+  generation (`lib/diff/screenshot.ts`): an EXECUTE turn writes for minutes
+  before it commits, so both shas stay put while the page changes. The turn
+  loop bumps the generation when it starts, whenever a tool records a write,
+  and when it ends; the number rides in the shot URL (`&v=`), which is what
+  defeats the browser's own 5-minute cache, and `compare_stale` tells an open
+  compare window to reload. A closed one is only marked — capturing shots
+  nobody asked for costs two browser renders per route.
+- A paused automatism is only useful if the repair turn actually starts
+  (`invokeAgent`): it waits up to 10 minutes for the chat's turn lock (the
+  agent that called resume_automatism is usually still finishing), folds a
+  second failure into the invocation already waiting rather than racing two
+  turns on one worktree, and — if it truly cannot start — posts the failure
+  into the chat and sets `lastError` so Retry is on screen. Boot recovery also
+  re-invokes paused flows whose failure notice is still the last message,
+  i.e. whose repair turn never happened.
 - Site health is a backend capability, not an Astro special case
   (`SiteBackend.detectSiteErrors`, `src/lib/site/health.ts`): "broken" means
   a 5xx from the dev server for Astro and nothing at all for a static site,

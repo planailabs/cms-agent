@@ -13,6 +13,7 @@ import { resolveChangedPages } from '@/lib/diff/routes';
 import { ensureInstance } from '@/lib/preview/manager';
 import { affectedGraphRoutes } from '@/lib/preview/routeGraph';
 import { activeBackend } from '@/lib/site';
+import { compareGeneration } from '@/lib/diff/screenshot';
 
 export const GET: APIRoute = async ({ params, locals }) => {
   const chat = await prisma.chat.findUnique({
@@ -47,6 +48,8 @@ export const GET: APIRoute = async ({ params, locals }) => {
       branch: chat.workBranch,
       targetBranch: chat.branch.name,
       changedFiles: files,
+      // Part of every shot URL the client builds — see diffViewer.shotUrl.
+      generation: compareGeneration(chat.workBranch),
       ...resolution,
     }),
     { headers: { 'Content-Type': 'application/json' } },

@@ -235,19 +235,78 @@ async function pauseOnFailure(
 }
 
 /**
+ * How long a failed step waits for the chat's turn lock before giving up.
+ *
+ * This is the auto-repair path, so giving up is expensive: the flow stays
+ * paused and the person who pressed Publish sees nothing happen. The wait has
+ * to outlast a real turn — an EXECUTE turn that installs dependencies and runs
+ * a build takes minutes, and the common case for a resumed step failing again
+ * is precisely that the agent that resumed it is still finishing its own turn.
+ */
+let invokeWaitMs = 10 * 60_000;
+
+/** Test hook: the real budget would make a lock-timeout case a 10-minute test. */
+export function setAgentInvokeWaitMs(ms: number): number {
+  const previous = invokeWaitMs;
+  invokeWaitMs = ms;
+  return previous;
+}
+
+/**
+ * Chats with an invocation waiting for the lock. A second failure in the same
+ * chat must not queue a second turn behind the first: the agent reads the
+ * whole transcript, so one turn handles every failure posted to it, and two
+ * would race for the same worktree.
+ */
+const pendingInvocations = new Set<string>();
+
+/**
  * Run an agent turn in a chat off the automatism messages already appended
  * (a 'continue' turn — nothing else is added to the transcript). Waits for
  * the chat's turn lock in case the agent is mid-turn.
  */
 async function invokeAgent(chatId: string, userId: string): Promise<void> {
+  if (pendingInvocations.has(chatId)) {
+    // The turn that is about to start reads the transcript this failure was
+    // just appended to, so it handles this one too.
+    console.log(`[automatism] chat=${chatId} agent invocation already pending — folding into it`);
+    return;
+  }
+  pendingInvocations.add(chatId);
+  try {
+    await invokeAgentLocked(chatId, userId);
+  } finally {
+    pendingInvocations.delete(chatId);
+  }
+}
+
+async function invokeAgentLocked(chatId: string, userId: string): Promise<void> {
   const start = Date.now();
   let lockId = acquireTurnLock(chatId);
-  while (!lockId && Date.now() - start < 120_000) {
+  let lastLog = start;
+  while (!lockId && Date.now() - start < invokeWaitMs) {
     await new Promise((r) => setTimeout(r, 2000));
+    if (Date.now() - lastLog > 60_000) {
+      lastLog = Date.now();
+      console.log(
+        `[automatism] chat=${chatId} still waiting for the turn lock (${Math.round((Date.now() - start) / 1000)}s)`,
+      );
+    }
     lockId = acquireTurnLock(chatId);
   }
   if (!lockId) {
+    // Silence here would strand the flow: paused, nobody working on it, and
+    // nothing on screen saying so. Say it in the chat and light up the error
+    // banner, whose Retry runs exactly the turn this could not start.
     console.error(`[automatism] chat=${chatId} agent turn lock timeout — not invoking`);
+    const message = tmsg('automatism.agentBusy');
+    await postAutomatismMessage(chatId, message).catch((err: unknown) =>
+      console.error('[automatism] could not post the busy notice:', err),
+    );
+    await prisma.chat
+      .updateMany({ where: { id: chatId }, data: { lastError: message.fallback } })
+      .catch(() => {});
+    broadcast(chatId, 'error', { type: 'error', message: message.fallback });
     return;
   }
   try {
@@ -298,6 +357,34 @@ export async function recoverAutomatisms(): Promise<void> {
       console.error('[automatism] recovery notice failed:', err);
     }
     void advance(row.id);
+  }
+  await reinvokeAbandonedRepairs();
+}
+
+/**
+ * Paused automatisms whose repair turn never happened.
+ *
+ * Pausing and invoking the agent are two steps, and a process that dies
+ * between them leaves the flow paused with its failure posted and nobody
+ * acting on it — indistinguishable, from the outside, from an agent that is
+ * thinking. The tell is the transcript: if the failure notice is still the
+ * last message in the chat, no turn ever ran on it.
+ */
+async function reinvokeAbandonedRepairs(): Promise<void> {
+  const paused = await prisma.automatism.findMany({ where: { status: 'paused' } });
+  for (const row of paused) {
+    const chatId = row.agentChatId ?? row.chatId;
+    if (hasActiveTurn(chatId)) continue;
+    const last = await prisma.message.findFirst({
+      where: { chatId },
+      orderBy: { ordinal: 'desc' },
+      select: { role: true },
+    });
+    if (last?.role !== 'automatism') continue;
+    const data = row.data as AutomatismData;
+    if (!data?.actorId) continue;
+    console.log(`[automatism] ${row.id} paused with no repair turn — invoking the agent`);
+    void invokeAgent(chatId, data.actorId);
   }
 }
 

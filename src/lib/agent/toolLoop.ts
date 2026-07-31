@@ -25,6 +25,7 @@ import { reasoningEffortParam, withEffortFallback } from './reasoningEffort';
 import { buildSystemPrompt, type PromptInput } from './prompt';
 import { tmsg } from '@/lib/i18n';
 import { createMcpBridge } from './mcp';
+import { markComparePreviewsOutdated } from '@/lib/diff/screenshot';
 import { routeCapabilities } from './skillRouter';
 import { skillsForChat } from './plugins';
 import { dirStatus } from '@/lib/git/engine';
@@ -150,6 +151,22 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
 
   const openai = new OpenAI({ baseURL: e.OPENAI_BASE_URL, apiKey: e.OPENAI_API_KEY });
   const bridge = await createMcpBridge(toolContext);
+
+  /**
+   * Compare shots are cached per (route, main sha, branch sha) — which goes
+   * stale the moment the agent touches the worktree, because an EXECUTE turn
+   * writes for minutes before it commits and both shas stay put. So the turn
+   * itself is the signal: the shots are declared outdated when it starts, as
+   * soon as a tool records a write, and when it ends. The client refetches on
+   * the broadcast; a compare view nobody has open costs nothing, because the
+   * recapture happens on the next request.
+   */
+  const invalidateCompare = (): void => {
+    if (toolContext.chatKind === 'deployments') return; // no worktree of its own
+    const generation = markComparePreviewsOutdated(toolContext.branchName);
+    broadcast(chatId, 'compare_stale', { type: 'compare_stale', generation });
+  };
+  invalidateCompare();
 
   // Preload image attachments so an image read_upload can be inlined as a
   // multimodal message (Chat Completions can't carry images in tool results;
@@ -346,6 +363,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     // instead of continuing to plan with EXECUTE tools — or worse, promising
     // an implementation it has no write tools to carry out.
     const runPhase = toolContext.workflowPhase;
+    let modifiedBefore = toolContext.modifiedPaths.size;
     let rounds = 0;
     while (rounds < MAX_TOOL_ROUNDS) {
       if (isTurnStopRequested(chatId)) return await endStopped();
@@ -547,6 +565,14 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         });
       }
       await appendMsg({ role: 'tool', results });
+      // A write mid-turn: whoever has the compare view open should see the
+      // page as it is now, not as it was when the turn started. (run_command
+      // and skill scripts write without recording a path — the turn's own
+      // end-of-run invalidation is what covers those.)
+      if (toolContext.modifiedPaths.size !== modifiedBefore) {
+        modifiedBefore = toolContext.modifiedPaths.size;
+        invalidateCompare();
+      }
       if (isTurnStopRequested(chatId)) return await endStopped();
       await setPhase('running');
     }
@@ -561,6 +587,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     await flushTokens();
     return { type: 'finished' };
   } finally {
+    // Whatever the turn did — committed, wrote, ran a command, gave up — the
+    // shots taken before it can no longer be trusted.
+    invalidateCompare();
     await flushTokens();
     await bridge.close();
   }

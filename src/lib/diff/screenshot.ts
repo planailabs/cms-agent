@@ -75,6 +75,38 @@ function cacheKey(...parts: string[]): string {
 }
 
 /**
+ * Compare shots are keyed by the two shas — which is enough right up until the
+ * agent starts working: an EXECUTE turn writes to the worktree for minutes
+ * before it commits anything, and every one of those writes changes what the
+ * preview serves while both shas stay exactly where they were. The compare
+ * view would keep answering from the cache and show the user a page that no
+ * longer exists.
+ *
+ * So the branch also carries a generation counter, bumped by whoever touched
+ * the site (see markComparePreviewsOutdated). It is in-memory on purpose: a
+ * restart loses the shots anyway (TMPDIR), and a bump that survived one would
+ * only ever cost a recapture.
+ */
+const g = globalThis as unknown as { __compareGeneration?: Map<string, number> };
+const generations = (): Map<string, number> => (g.__compareGeneration ??= new Map());
+
+export const compareGeneration = (branch: string): number => generations().get(branch) ?? 0;
+
+/**
+ * Declare a branch's compare shots outdated: the next request recaptures.
+ * The previous generation's files can never be served again, so they go now
+ * rather than sitting in TMPDIR until a restart.
+ */
+export function markComparePreviewsOutdated(branch: string): number {
+  const next = compareGeneration(branch) + 1;
+  generations().set(branch, next);
+  // Best-effort: a capture racing this bump writes under the NEW key, so the
+  // worst case here is an orphan file, never a stale answer.
+  fs.rmSync(cacheDir(branch), { recursive: true, force: true });
+  return next;
+}
+
+/**
  * The before/after/diff/meta paths for a cache key, prefixed with the app
  * commit: if a TMPDIR happens to survive a redeploy, a new build looks up
  * `<commit>-<key>-*` and misses the previous build's shots/markers (which may
@@ -474,7 +506,7 @@ export async function diffRoute(
     branchSha(main),
     branchSha(branch),
   ]);
-  const key = cacheKey(route, mainRef, branchRef);
+  const key = cacheKey(route, mainRef, branchRef, String(compareGeneration(branch)));
   const dir = cacheDir(branch);
   fs.mkdirSync(dir, { recursive: true });
 
@@ -532,7 +564,15 @@ export async function diffBrowsers(
   device?: PreviewDevice | null,
 ): Promise<DiffResult> {
   const ref = await branchSha(branch);
-  const key = cacheKey("browsers", route, ref, browserA, browserB, device?.key ?? "");
+  const key = cacheKey(
+    "browsers",
+    route,
+    ref,
+    browserA,
+    browserB,
+    device?.key ?? "",
+    String(compareGeneration(branch)),
+  );
   const dir = cacheDir(branch);
   fs.mkdirSync(dir, { recursive: true });
 

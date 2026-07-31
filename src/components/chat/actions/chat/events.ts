@@ -9,6 +9,7 @@ import { transition } from './stateMachine';
 import { publishCardReducer } from '../../../workspace/publishCard';
 import { applyTransientUiLanguage } from './transientLocale';
 import { applyOpenCompare } from './openCompare';
+import { applyCompareStale } from '../../../workspace/compareStale';
 
 /**
  * Handles workspace-level events (execution/publish lifecycle). These don't
@@ -41,6 +42,13 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
     case 'open_compare':
       // Same live-nudge contract as ui_language: no cache, no replay.
       applyOpenCompare(data.mode, data.userId, data.chatId);
+      return true;
+
+    case 'compare_stale':
+      // The agent touched the site, so the shots on screen are of a page that
+      // no longer exists. Refetch if someone is looking; otherwise mark it, so
+      // opening the compare window loads the new state instead of the cache.
+      applyCompareStale(data.generation);
       return true;
 
     case 'execution_committed': {

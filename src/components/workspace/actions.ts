@@ -250,6 +250,7 @@ export const loadDiffPages = async (): Promise<void> => {
     }
     cur.pages = (data.pages as DiffPage[]) ?? [];
     cur.unresolved = (data.unresolved as string[]) ?? [];
+    cur.generation = (data.generation as number) ?? cur.generation;
     cur.selectedRoute = cur.pages[0]?.route ?? null;
     cur.loading = false;
     cur.loaded = true;

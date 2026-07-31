@@ -12,6 +12,8 @@ export const automatismCatalogs: AreaCatalogs = {
       'Step "{step}" FAILED:\n{error}\n\nInvestigate and fix the cause, then call resume_automatism to re-run the failed step and continue. If a human decision is needed, explain what and why.',
     'automatism.takeover': 'Step "{step}" failed — the agent takes over in another chat.\n{error}',
     'automatism.recovered': 'Server restarted mid-flow — resuming automatically from step {step}.',
+    'automatism.agentBusy':
+      'The failed step needs the agent, but this chat has been busy with another turn for too long. Nothing was lost — press Retry, or send a message here, and the agent picks the failure up from the messages above.',
 
     // ── pull (Sync button) ──
     'pull.started': 'Sync started by {actor}: rebasing this draft onto the latest {target}.',
@@ -71,6 +73,8 @@ export const automatismCatalogs: AreaCatalogs = {
       'Schritt "{step}" fehlgeschlagen — der Agent übernimmt in einem anderen Chat.\n{error}',
     'automatism.recovered':
       'Der Server wurde mitten im Ablauf neu gestartet — es geht automatisch ab Schritt {step} weiter.',
+    'automatism.agentBusy':
+      'Der fehlgeschlagene Schritt braucht den Agenten, aber in diesem Chat läuft schon zu lange ein anderer Durchgang. Es ging nichts verloren — klicke auf Wiederholen oder schreibe hier eine Nachricht, dann übernimmt der Agent die Fehlermeldung von oben.',
 
     // ── pull (Sync-Button) ──
     'pull.started':

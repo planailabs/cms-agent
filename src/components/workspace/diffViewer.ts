@@ -97,8 +97,16 @@ export const MODE_ICONS: Record<DiffViewMode, string> = {
   onion: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.4" y="2" width="11.2" height="12" rx="1.6"/><path d="M8 4.6v6.8"/><path d="M6.4 8H4.6m1.2-1.2L4.6 8l1.2 1.2"/><path d="M9.6 8h1.8m-1.2-1.2L11.4 8l-1.2 1.2"/></svg>`,
 };
 
+/**
+ * Shots are served with a 5-minute max-age, so the URL has to change when the
+ * site does — otherwise the browser answers from its own cache and a reload
+ * shows the page as it was before the agent touched it. The generation counter
+ * (bumped server-side on every write, see lib/diff/screenshot.ts) is what
+ * makes each state its own URL.
+ */
 const shotUrl = (chatId: string, route: string, kind: 'before' | 'after' | 'diff' | 'before-aligned' | 'after-aligned'): string =>
-  `/api/diff/${encodeURIComponent(chatId)}/shot?route=${encodeURIComponent(route)}&kind=${kind}`;
+  `/api/diff/${encodeURIComponent(chatId)}/shot?route=${encodeURIComponent(route)}&kind=${kind}` +
+  `&v=${store.state.workspace.diff.generation}`;
 
 /** Screenshot <img> wrapped with a per-image loading spinner. */
 const renderShot = (src: string, alt: string, extraClass = '', extraStyle = '', attrs = ''): string =>

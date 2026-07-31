@@ -255,6 +255,9 @@ export interface DiffState {
   overlayVisible: boolean;
   /** Onion mode: slider position 0..100 (percentage of "after" shown). */
   onionPercent: number;
+  /** Server-side compare generation — part of every shot URL, so a change to
+   *  the site gives the shots new URLs instead of the browser's cached ones. */
+  generation: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -367,6 +370,7 @@ export const createInitialDiffState = (): DiffState => ({
   mode: 'side-by-side',
   overlayVisible: true,
   onionPercent: 50,
+  generation: 0,
 });
 
 export const createInitialWorkspaceState = (): WorkspaceState => ({
