@@ -384,9 +384,9 @@ sequenceDiagram
     id: 'deploy',
     title: 'Publish: the deploy automatism',
     intro: `Publishing is not a request that blocks — it is an automatism on its
-      own chat. The generic shape is merge, deploy, finalize. A flow that
-      declares its own phases gets one automatism step per phase, so each shows
-      up in the step bar and can pause and resume on its own.`,
+      own chat. The generic shape is validate, merge, deploy, finalize. A flow
+      that declares its own phases gets one automatism step per phase, so each
+      shows up in the step bar and can pause and resume on its own.`,
     diagrams: [
       {
         caption: 'Step chain',
@@ -394,14 +394,16 @@ sequenceDiagram
 stateDiagram-v2
   direction LR
 
-  [*] --> merge
+  [*] --> validate
 
+  state "validate — build the tree the merge would produce, run the dist validators" as validate
   state "merge — work branch into target, under the target lock" as merge
   state "flow steps — push, build, deploy, one automatism step each" as flowsteps
   state "verify — the flow confirms the deployment landed" as verify
   state "finalize — reset the work branch, archive both chats" as finalize
   state "deploy — single step for flows without phases, and merge-only targets" as generic
 
+  validate --> merge
   merge --> generic: flow declares no steps
   merge --> flowsteps: flow declares steps
   flowsteps --> flowsteps: next phase
@@ -438,6 +440,18 @@ sequenceDiagram
       },
     ],
     notes: `<ul>
+      <li><strong>Nothing moves until the site builds.</strong> The validate step
+        is the site type's own build — <code>astro build</code> for an Astro
+        repo, the checkout itself for a static one — followed by the dist
+        validators, and it runs for every flow, including the ones that only
+        push a branch and would otherwise never build at all. It builds the tree
+        the merge <em>would</em> produce, written to the object store as a
+        dangling commit: what ships is what was checked, and a failure leaves
+        both branches untouched, so the fix lands in the work branch and the
+        retry re-derives the tree instead of being stuck on a merge that was
+        recorded before the fix existed. When the two sides conflict there is no
+        merged tree yet, so the check defers to the merge step, which re-runs it
+        once the resolution is committed.</li>
       <li><strong>The approval is re-checked at merge time.</strong> The publish
         endpoint compares the reviewed sha against the branch head synchronously,
         but the merge runs later. If anything moved the branch in between — a

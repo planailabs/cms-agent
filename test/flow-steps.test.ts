@@ -30,7 +30,9 @@ describe('flow-defined deploy steps', () => {
       data: { chatId: chat.id, type: 'deploy:web-agency', data: { actorId: u.id } },
     });
     const state = await automatismStateFor(chat.id);
-    expect(state?.steps).toEqual(['merge', 'build', 'deploy', 'verify', 'finalize']);
+    // 'validate' is the publisher's own build gate, injected ahead of the
+    // flow's steps for every flow.
+    expect(state?.steps).toEqual(['validate', 'merge', 'build', 'deploy', 'verify', 'finalize']);
   });
 
   it('exposes flow tools only to deployment chats of that flow', () => {

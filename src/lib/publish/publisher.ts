@@ -1,6 +1,9 @@
 /**
  * Publish orchestration (plan §3 PUBLISH): SHA-bound approval → deployment
- * chat + 'deploy' automatism (merge → deploy → finalize). The automatism runs
+ * chat + 'deploy' automatism (validate → merge → deploy → finalize). The
+ * 'validate' step is the site-type build gate (`astro build` for Astro): it
+ * builds the tree the merge would produce, for every flow, before anything
+ * moves. The automatism runs
  * agent-less and posts its progress into the deployment chat; on a failed
  * step it pauses and invokes the agent with the failure context — merge
  * conflicts in the WORKFLOW chat (which owns the worktree and edit tools),
@@ -26,6 +29,7 @@ import {
   defaultBranch,
   ensureWorktree,
   mergeInto,
+  mergePreviewCommit,
   rebaseInProgress,
   rebaseOnto,
   resetBranchOnto,
@@ -41,6 +45,7 @@ import {
   type AutomatismStep,
 } from '@/lib/automatism';
 import { tmsg, type TranslatedMessage } from '@/lib/i18n';
+import { prevalidateBuild } from './artifact';
 import { registerBuiltinFlows } from './flows';
 import { getDeployFlow, listDeployFlows, type DeployFlow, type DeployFlowStep } from './types';
 
@@ -436,7 +441,7 @@ const deployLog = (data: DeployData) => (line: string) => {
   });
 };
 
-async function failDeploy(data: DeployData, err: unknown): Promise<never> {
+async function failDeploy(data: DeployData, err: unknown, sha?: string): Promise<never> {
   const message = err instanceof Error ? err.message : String(err);
   deployLog(data)(`FAILED: ${message}`);
   await prisma.publication.update({
@@ -446,7 +451,7 @@ async function failDeploy(data: DeployData, err: unknown): Promise<never> {
   emitChatState(data.workflowChatId);
   throw new AutomatismFailure(
     tmsg('deploy.failed', {
-      sha: (data.mergedSha ?? '').slice(0, 8),
+      sha: (sha ?? data.mergedSha ?? '').slice(0, 8),
       target: data.targetName,
       error: message,
       publicationId: data.publicationId,
@@ -496,10 +501,68 @@ async function recordDeploySuccess(
   emitChatState(data.workflowChatId);
 }
 
+/**
+ * Type-specific deploy pre-flight: build the tree the merge WOULD produce
+ * (`astro build` for an Astro site, the checkout itself for a static one) and
+ * run the dist validators over the result.
+ *
+ * Against the merged tree, because that is what gets deployed — the work
+ * branch alone can build fine and still break once the target's changes are
+ * in. Before the merge, because nothing may move until it passes: a failure
+ * leaves both branches untouched, so the fix lands in the work branch and the
+ * retry re-derives the merged tree and converges. Returns the validated
+ * commit, or null when the merge conflicts (nothing to build yet — the merge
+ * step materializes those conflicts for the agent).
+ */
+async function prevalidate(data: DeployData): Promise<string | null> {
+  const log = deployLog(data);
+  const identity = await chatGitIdentity(data.workflowChatId, data.actorId);
+  const preview = await mergePreviewCommit(data.workBranch, data.targetName, identity);
+  if (!preview) {
+    log(`${data.workBranch} conflicts with ${data.targetName} — validating after the conflict is resolved.`);
+    return null;
+  }
+  try {
+    await prevalidateBuild(preview, log);
+  } catch (err) {
+    if (err instanceof AutomatismFailure) throw err;
+    await failDeploy(data, err, preview);
+  }
+  return preview;
+}
+
+const prevalidateStep: AutomatismStep = {
+  name: 'validate',
+  async run(raw, post) {
+    const data = raw as DeployData;
+    await prisma.publication.update({
+      where: { id: data.publicationId },
+      data: { status: 'running' },
+    });
+    const preview = await prevalidate(data);
+    await post(
+      preview
+        ? tmsg('deploy.validated', {
+            workBranch: data.workBranch,
+            target: data.targetName,
+            sha: preview.slice(0, 8),
+          })
+        : tmsg('deploy.validateDeferred', {
+            workBranch: data.workBranch,
+            target: data.targetName,
+          }),
+    );
+  },
+};
+
 const mergeStep: AutomatismStep = {
   name: 'merge',
   async run(raw, post) {
     const data = raw as DeployData;
+    // A conflict round committed a reverse merge onto the work branch after
+    // the validate step ran (or made it skip) — that resolution is
+    // unvalidated code, and this retry is the last point before the merge.
+    if (data.conflictStarted) await prevalidate(data);
     const identity = await chatGitIdentity(data.workflowChatId, data.actorId);
     await prisma.publication.update({
       where: { id: data.publicationId },
@@ -703,12 +766,23 @@ const finalizeStep: AutomatismStep = {
   },
 };
 
-registerAutomatism({ type: 'deploy', steps: [mergeStep, genericDeployStep, finalizeStep] });
+// 'validate' is injected ahead of every flow's own steps — the build gate is
+// the publisher's, not a flow's, so a flow that only pushes still gets it.
+registerAutomatism({
+  type: 'deploy',
+  steps: [prevalidateStep, mergeStep, genericDeployStep, finalizeStep],
+});
 for (const flow of listDeployFlows()) {
   if (flow.steps?.length) {
     registerAutomatism({
       type: `deploy:${flow.id}`,
-      steps: [mergeStep, ...flow.steps.map((s) => flowStep(flow, s)), verifyStep(flow), finalizeStep],
+      steps: [
+        prevalidateStep,
+        mergeStep,
+        ...flow.steps.map((s) => flowStep(flow, s)),
+        verifyStep(flow),
+        finalizeStep,
+      ],
     });
   }
 }

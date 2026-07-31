@@ -9,6 +9,7 @@ import path from 'node:path';
 import { simpleGit } from 'simple-git';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { resetEnvCache } from '@/lib/env';
+import { resetActiveBackend } from '@/lib/site';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 let base: string;
@@ -104,4 +105,44 @@ describe('deploy flows', () => {
     await runFlowSteps(getDeployFlow('web-agency')!, { sha, repoPath: repo, log: (l) => log2.push(l) });
     expect(log2.join('\n')).toContain('Reusing sealed artifact');
   }, 300_000);
+
+  // The deploy build gate. git-push and github-ci never build otherwise, so
+  // without this a site that no longer compiles ships on a green push. Runs
+  // against its own dependency-free repo: the point is the jailed build
+  // command's exit code, not another npm install.
+  it('pre-validation fails when the site build command fails', async () => {
+    const plain = path.join(base, 'plain-site');
+    fs.mkdirSync(plain, { recursive: true });
+    fs.writeFileSync(path.join(plain, 'index.html'), '<html><body>hi</body></html>');
+    const pg = simpleGit(plain);
+    await pg.init(['--initial-branch=main'] as never);
+    await pg.addConfig('user.name', 'T');
+    await pg.addConfig('user.email', 't@t');
+    await pg.add(['-A']);
+    await pg.commit('init');
+    const plainSha = (await pg.revparse(['HEAD'])).trim();
+
+    process.env.REPO_PATH = plain;
+    process.env.SITE_BACKEND = 'static';
+    process.env.REPO_BUILD_COMMAND =
+      'echo "TypeError: Cannot read properties of undefined" >&2; exit 3';
+    resetEnvCache();
+    resetActiveBackend();
+    try {
+      const { prevalidateBuild } = await import('@/lib/publish/artifact');
+      const log: string[] = [];
+      await expect(prevalidateBuild(plainSha, (l) => log.push(l))).rejects.toThrow(
+        /exited with code 3/,
+      );
+      // The build's own output lands in the publish log — that is what the
+      // agent gets handed to fix.
+      expect(log.join('\n')).toContain('TypeError');
+    } finally {
+      process.env.REPO_PATH = repo;
+      delete process.env.SITE_BACKEND;
+      delete process.env.REPO_BUILD_COMMAND;
+      resetEnvCache();
+      resetActiveBackend();
+    }
+  }, 120_000);
 });

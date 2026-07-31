@@ -260,6 +260,47 @@ export async function revertCommit(branch: string, sha: string, author: GitIdent
 }
 
 /**
+ * The tree that merging `source` into `target` WOULD produce, materialized as
+ * a dangling commit so it can be checked out and built — without moving
+ * either branch or touching any checkout.
+ *
+ * Returns null when the merge would conflict: there is no merged tree to
+ * validate yet, and the real merge is what materializes those conflicts for
+ * the agent to resolve.
+ */
+export async function mergePreviewCommit(
+  source: string,
+  target: string,
+  author: GitIdentity,
+): Promise<string | null> {
+  const git = gitAs(path.resolve(env().REPO_PATH), author);
+  let out: string[];
+  try {
+    // --write-tree writes the merged tree into the object store, touching no
+    // index and no worktree.
+    out = (await git.raw(['merge-tree', '--write-tree', target, source]))
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+  } catch {
+    return null; // unrelated histories, missing ref, conflicts (exit 1)
+  }
+  // A clean merge prints the tree oid and nothing else; a conflicted one adds
+  // the conflicted-file block, which not every git version reports by exiting
+  // non-zero — so read the shape rather than trusting the exit code.
+  const tree = out[0];
+  if (out.length !== 1 || !/^[0-9a-f]{40}$/.test(tree)) return null;
+  const parents = [await branchSha(target), await branchSha(source)];
+  const commit = await git.raw([
+    'commit-tree', tree,
+    '-p', parents[0],
+    '-p', parents[1],
+    '-m', `Validation merge of ${source} into ${target}`,
+  ]);
+  return commit.trim();
+}
+
+/**
  * Merge `source` into `target` with a merge commit; returns the target's new
  * sha. The merge runs inside the checkout that owns `target` — the repo for
  * the default branch, its worktree otherwise (a branch can only be checked

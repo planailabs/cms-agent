@@ -62,22 +62,32 @@ function* walkFiles(dir: string, root: string): Generator<string> {
 
 export const distFilter = (src: string): boolean => !DIST_SKIP.has(path.basename(src));
 
-/** Build (or reuse) the sealed artifact for a sha. */
-export async function sealArtifact(sha: string, log: (l: string) => void): Promise<ArtifactInfo> {
+export interface BuiltCheckout {
+  /** Built output inside the temp worktree (backend.resolveDist). */
+  dist: string;
+  backendId: string;
+  /** null when the backend has no build step (the checkout IS the dist). */
+  buildCommand: string | null;
+}
+
+/**
+ * Clean checkout of `sha` → site-backend build → pre-publish dist validation,
+ * handed to `use`. The temp worktree lives only for that call.
+ *
+ * This is the whole type-specific build knowledge in one place: `astro build`
+ * for an Astro repo, nothing but the checkout for a static one. Both the
+ * sealed artifact and the deploy pre-validation step go through it, so a flow
+ * that never seals an artifact still gets the same build gate.
+ */
+export async function withBuiltCheckout<T>(
+  sha: string,
+  log: (l: string) => void,
+  use: (built: BuiltCheckout) => Promise<T> | T,
+): Promise<T> {
   const e = env();
   const dir = artifactsDir();
   fs.mkdirSync(dir, { recursive: true });
 
-  const tarballPath = path.join(dir, `${sha}.tar.gz`);
-  const metaPath = path.join(dir, `${sha}.json`);
-  const distDir = path.join(dir, `${sha}-dist`);
-
-  if (fs.existsSync(metaPath) && fs.existsSync(tarballPath) && fs.existsSync(distDir)) {
-    log(`Reusing sealed artifact for ${sha.slice(0, 8)}`);
-    return JSON.parse(fs.readFileSync(metaPath, 'utf8')) as ArtifactInfo;
-  }
-
-  // Clean checkout of the exact sha in a temp worktree
   const buildDir = path.join(dir, `${sha}-build`);
   const git = simpleGit(path.resolve(e.REPO_PATH));
   await git.raw(['worktree', 'prune']);
@@ -99,19 +109,52 @@ export async function sealArtifact(sha: string, log: (l: string) => void): Promi
       }
       await run(sb, buildCommand, buildDir, sha, log, 'production');
     } else {
-      log('No build step for this site backend — publishing the checkout as-is');
+      log('No build step for this site backend — using the checkout as-is');
     }
 
-    const builtDist = backend.resolveDist(buildDir);
+    const dist = backend.resolveDist(buildDir);
 
     // Pre-publish validation: no CMS/overlay code in production output,
     // local links resolve (medved §21.2)
-    const distIssues = validateDist(builtDist);
+    const distIssues = validateDist(dist);
     for (const issue of distIssues) log(`[validate:${issue.severity}] ${issue.message}`);
     if (hasErrors(distIssues)) {
       throw new Error('Pre-publish validation failed — see log for details');
     }
 
+    return await use({ dist, backendId: backend.id, buildCommand });
+  } finally {
+    await git.raw(['worktree', 'remove', '--force', buildDir]).catch(() => undefined);
+  }
+}
+
+/**
+ * Deploy pre-flight for ANY flow: prove the sha builds and its output passes
+ * the dist validators, without sealing anything. Flows that push instead of
+ * uploading (git-push, github-ci) never build otherwise, so this is the only
+ * thing standing between a broken `astro build` and the target branch.
+ */
+export async function prevalidateBuild(sha: string, log: (l: string) => void): Promise<void> {
+  await withBuiltCheckout(sha, log, ({ backendId, buildCommand }) => {
+    log(`Pre-validation passed for ${sha.slice(0, 8)} (${backendId}: ${buildCommand ?? 'no build step'}).`);
+  });
+}
+
+/** Build (or reuse) the sealed artifact for a sha. */
+export async function sealArtifact(sha: string, log: (l: string) => void): Promise<ArtifactInfo> {
+  const dir = artifactsDir();
+  fs.mkdirSync(dir, { recursive: true });
+
+  const tarballPath = path.join(dir, `${sha}.tar.gz`);
+  const metaPath = path.join(dir, `${sha}.json`);
+  const distDir = path.join(dir, `${sha}-dist`);
+
+  if (fs.existsSync(metaPath) && fs.existsSync(tarballPath) && fs.existsSync(distDir)) {
+    log(`Reusing sealed artifact for ${sha.slice(0, 8)}`);
+    return JSON.parse(fs.readFileSync(metaPath, 'utf8')) as ArtifactInfo;
+  }
+
+  return withBuiltCheckout(sha, log, async ({ dist: builtDist, backendId, buildCommand }) => {
     // Manifest with per-file hashes
     const manifest: ArtifactInfo['manifest'] = [];
     for (const rel of walkFiles(builtDist, builtDist)) {
@@ -139,7 +182,7 @@ export async function sealArtifact(sha: string, log: (l: string) => void): Promi
       buildMeta: {
         gitSha: sha,
         node: process.version,
-        backend: backend.id,
+        backend: backendId,
         buildCommand: buildCommand ?? '(none)',
         builtAt: new Date().toISOString(),
       },
@@ -147,7 +190,5 @@ export async function sealArtifact(sha: string, log: (l: string) => void): Promi
     fs.writeFileSync(metaPath, JSON.stringify(info, null, 2));
     log(`Artifact sealed: ${manifest.length} files, tarball ${path.basename(tarballPath)}`);
     return info;
-  } finally {
-    await git.raw(['worktree', 'remove', '--force', buildDir]).catch(() => undefined);
-  }
+  });
 }

@@ -16,6 +16,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `POST /api/chats/[id]/request-changes` | 03 (journey B) | ✅ |
 | `POST /api/chats/[id]/finalize` | 03 | ✅ |
 | `POST /api/chats/[id]/publish` (+repeat guard) | 03 | ✅ |
+| Deploy pre-validation (merged tree built with the site backend before anything moves) | 03 — the git-push publish runs `astro build` on the merged tree first | 🟡 the passing path only; rejection is unit-covered (test/deploy-prevalidation.test.ts) and the jailed build failure in test/integration/deploy-flows.test.ts, because bench-driving it needs the agent to commit a change that breaks the build |
 | `POST /api/chats/[id]/sync` (pull automatism) | 03 (journey B) | ✅ |
 | Automatisms refused while a turn is live (sync + publish → 409) | — | 🟡 unit-covered (test/automatism-turn-guard.test.ts); bench-driving needs a request timed against a running agent turn |
 | `POST /api/chats/[id]/resume-automatism` | 06 (pull-conflict + deploy-failure pauses; user-resume or self-resume + 404 guard) | ✅ |

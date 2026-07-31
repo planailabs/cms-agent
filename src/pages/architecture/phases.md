@@ -86,7 +86,11 @@ commit under the branch lock; the record is marked `revertedBySha`.
 
 **Publish** (`POST …/publish {sha}`) → refused if the chat's work branch moved
 since review (stale approval); otherwise: publish approval bound to the exact
-sha → the work branch merges into its TARGET branch under the target's lock →
+sha → **pre-validation**: the tree the merge would produce is written as a
+dangling commit and built with the site backend's own build (`astro build` for
+Astro, none for static) plus the dist validators — for every flow, before
+anything moves; a failure leaves both branches untouched → the work branch
+merges into its TARGET branch under the target's lock →
 the configured DeployFlow runs (only when the target is the default branch;
 other targets are pure merges) with live log streaming → `Publication` (+
 sealed `Artifact` where the flow builds).

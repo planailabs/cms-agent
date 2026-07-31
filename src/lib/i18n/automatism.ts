@@ -27,6 +27,10 @@ export const automatismCatalogs: AreaCatalogs = {
       'Deployment of "{title}" started by {actor}: merge {workBranch} ({sha}) into {target}, then deploy via "{flow}".',
     'deploy.startedMergeOnly':
       'Deployment of "{title}" started by {actor}: merge {workBranch} ({sha}) into {target}, no deploy (non-default target).',
+    'deploy.validated':
+      'Pre-validation passed: {workBranch} merged into {target} ({sha}) builds cleanly.',
+    'deploy.validateDeferred':
+      '{workBranch} conflicts with {target} — the build check runs once the conflict is resolved.',
     'deploy.merged': 'Merged {workBranch} into {target} → {sha}.',
     'deploy.mergeFailed': 'Merge into {target} failed: {error}',
     'deploy.mergeConflicts':
@@ -42,6 +46,7 @@ export const automatismCatalogs: AreaCatalogs = {
     'deploy.finished': 'Deployment finished — this chat and the source chat are archived.',
 
     // ── step-bar labels (fallback: raw registered step name) ──
+    'automatism.step.validate': 'Validate',
     'automatism.step.merge': 'Merge',
     'automatism.step.deploy': 'Deploy',
     'automatism.step.verify': 'Verify',
@@ -75,6 +80,10 @@ export const automatismCatalogs: AreaCatalogs = {
       'Deployment von "{title}" gestartet von {actor}: {workBranch} ({sha}) wird in {target} gemerged, danach Deploy über "{flow}".',
     'deploy.startedMergeOnly':
       'Deployment von "{title}" gestartet von {actor}: {workBranch} ({sha}) wird in {target} gemerged; kein Deploy (Ziel ist nicht der Standard-Branch).',
+    'deploy.validated':
+      'Vorabprüfung bestanden: {workBranch} in {target} gemerged ({sha}) baut fehlerfrei.',
+    'deploy.validateDeferred':
+      '{workBranch} steht im Konflikt mit {target} — die Build-Prüfung läuft, sobald der Konflikt gelöst ist.',
     'deploy.merged': '{workBranch} wurde in {target} gemerged → {sha}.',
     'deploy.mergeFailed': 'Merge in {target} fehlgeschlagen: {error}',
     'deploy.mergeConflicts':
@@ -90,6 +99,7 @@ export const automatismCatalogs: AreaCatalogs = {
     'deploy.finished': 'Deployment abgeschlossen — dieser Chat und der Quell-Chat wurden archiviert.',
 
     // ── Schrittleisten-Labels ──
+    'automatism.step.validate': 'Prüfung',
     'automatism.step.merge': 'Merge',
     'automatism.step.deploy': 'Deploy',
     'automatism.step.verify': 'Prüfen',

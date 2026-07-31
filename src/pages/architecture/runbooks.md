@@ -36,9 +36,11 @@ failed-retryable; the push itself is idempotent. Check the run URL from the
 publish log.
 
 ### Build permanently broken
-`sealArtifact` logs the full build output into the publish log. Reproduce
-with the site backend's build command (`buildCommand` in the artifact's
-build meta) in a clean checkout of the recorded sha.
+The `validate` step (and `sealArtifact`) log the full build output into the
+publish log. Reproduce with the site backend's build command
+(`REPO_BUILD_COMMAND`, or the backend default) in a clean checkout. A failure
+in `validate` means nothing merged: fix the site in the work branch and press
+Retry — the step re-derives the merged tree, so the fix is picked up.
 
 ### Restore a known-good version
 Branch history panel → pick the commit → **Restore** (new commit applying the

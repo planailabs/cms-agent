@@ -80,6 +80,10 @@ flowchart LR
         and invalidates every recorded sha at once. Sync therefore re-anchors
         the rows onto the rewritten commits (matched by subject, in rebase
         order) and records the new head if nothing else claims it.</li>
+      <li><strong>A publish builds a commit that is on no branch.</strong> The
+        deploy automatism's validate step writes the tree the merge would
+        produce into the object store as a dangling commit and builds that. The
+        branch graph stays exactly as it was until the build passes.</li>
       <li><strong>Branch names are DNS-safe by validation.</strong> They are
         hostnames, so the name check runs before anything is created; work
         branches use a generated hex suffix, which is also how branch listings
