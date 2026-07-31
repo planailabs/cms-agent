@@ -388,8 +388,13 @@ describe('preview + proxy', () => {
       ok('comment input exposes an icon submit button', (await submitComment?.locator('svg').isVisible()) === true);
       await submitComment?.click();
       await s.page.locator('#preview-toolbar-region [data-action="ws-edit-undo"]').waitFor({ state: 'visible' });
-      ok('undo appears after the first edit', (await s.page.getByRole('button', { name: 'Undo' }).count()) === 1);
-      ok('undo all stays hidden after one edit', (await s.page.getByRole('button', { name: 'Undo all' }).count()) === 0);
+      // By action, not by label: "Undo all" contains "Undo", so a role+name
+      // lookup counts both buttons and the two checks below stop meaning what
+      // they say.
+      const undoCount = await s.page.locator('#preview-toolbar-region [data-action="ws-edit-undo"]').count();
+      const undoAllCount = await s.page.locator('#preview-toolbar-region [data-action="ws-edit-clear"]').count();
+      ok('undo appears after the first edit', undoCount === 1, `${undoCount} undo buttons`);
+      ok('undo all stays hidden after one edit', undoAllCount === 0, `${undoAllCount} undo-all buttons`);
       await s.page.getByRole('button', { name: 'Undo' }).click();
       const redo = s.page.getByRole('button', { name: 'Redo' });
       await redo.waitFor({ state: 'visible' });
