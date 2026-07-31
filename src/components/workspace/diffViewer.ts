@@ -14,6 +14,7 @@ import { activeBranchName, previewBranchName } from './preview';
 import { store } from '../chat/app/store';
 import { loadDiffPages } from './actions';
 import { registerWindow } from './window';
+import { refetchShots, renderNavigation } from './navigation';
 
 /** Route-shaped pathname: leading '/', query/hash dropped. The trailing
  *  slash is PRESERVED — sites may require it (Astro trailingSlash). */
@@ -47,6 +48,26 @@ export const navigateDiffTo = (input: string): void => {
   if (!diff.loaded || (current !== null && routeKey(current) === routeKey(route))) return;
   diff.selectedRoute = route;
   store.notify();
+};
+
+/**
+ * Reload what the compare window shows, without re-rendering it: the live
+ * panes re-request their page from the branch previews, the screenshot modes
+ * re-fetch their shots. Both are rebuilt from the selected route, so a pane
+ * the user browsed away from comes back to the page the address bar names.
+ */
+export const reloadDiffPanes = (): void => {
+  const state = store.state;
+  const route = resolveDiffRoute(state.workspace.diff);
+  if (!route) return;
+  const pane = (id: string, url: string): void => {
+    const frame = document.getElementById(id) as HTMLIFrameElement | null;
+    if (frame) frame.src = url;
+  };
+  pane('ws-diff-before', branchPreviewUrl(activeBranchName(state), route));
+  pane('ws-diff-after', branchPreviewUrl(previewBranchName(state), route));
+  const body = document.querySelector('.ws-diff-body');
+  if (body) refetchShots(body);
 };
 
 /** cms:agent-ready from a diff pane → the user browsed inside it: sync the
@@ -263,11 +284,7 @@ export const renderDiffViewer = (state: AppState): string => {
   else if (diff.mode === 'highlight') body = renderHighlight(state, route);
   else body = renderOnion(state, route);
 
-  const address = `<form class="ws-address" data-action="ws-diff-address-form"
-      title="${escapeHtml(t(locale, 'workspace.preview.addressTitle'))}">
-      <input class="ws-address__input ws-mono" type="text" spellcheck="false"
-        autocomplete="off" value="${escapeHtml(route)}" aria-label="${escapeHtml(t(locale, 'workspace.preview.addressLabel'))}" />
-    </form>`;
+  const address = renderNavigation('diff', route);
 
   // Files without a page route: amber chip (count) toggling the banner
   const warnChip = diff.unresolved.length

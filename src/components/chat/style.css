@@ -2111,12 +2111,25 @@ html.is-first-visit #app {
     font-weight: 600;
   }
 
-  /* ── Address bar ── */
+  /* ── Navigation bar (reload + address; preview and compare) ── */
+
+  .ws-nav {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 8rem;
+    max-width: 28rem;
+  }
+
+  .ws-nav__reload {
+    padding: 0.3rem 0.45rem;
+    flex-shrink: 0;
+  }
 
   .ws-address {
     flex: 1;
-    min-width: 8rem;
-    max-width: 28rem;
+    min-width: 0;
     display: flex;
   }
 

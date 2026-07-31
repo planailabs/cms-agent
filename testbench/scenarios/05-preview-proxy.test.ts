@@ -177,12 +177,35 @@ describe('preview + proxy', () => {
       ok('browsed off-list route shows in the route chip', true);
 
       // Address input free-browses both panes back to a changed page
-      const addr = s.page.locator('[data-action="ws-diff-address-form"] .ws-address__input');
+      const addr = s.page.locator('[data-nav="diff"] .ws-address__input');
       await addr.fill('/');
       await addr.press('Enter');
       await expect.poll(() => pathnameOf('ws-diff-after'), { timeout: 60_000 }).toBe('/');
       await expect.poll(() => pathnameOf('ws-diff-before'), { timeout: 60_000 }).toBe('/');
       ok('diff address input navigates both panes', true);
+
+      // Reload button (shared navigation bar): the pane document is really
+      // re-requested — a mark set in the live document does not survive it.
+      await (await paneFrame('ws-diff-after'))!.evaluate(() => {
+        (window as unknown as Record<string, unknown>).__benchReloadMark = 1;
+      });
+      await s.page.locator('[data-nav="diff"] [data-action="ws-nav-reload"]').click();
+      await expect
+        .poll(
+          async () => {
+            const frame = await paneFrame('ws-diff-after');
+            if (!frame) return false;
+            return frame
+              .evaluate(
+                () =>
+                  (window as unknown as Record<string, unknown>).__benchReloadMark === undefined,
+              )
+              .catch(() => false);
+          },
+          { timeout: 60_000 },
+        )
+        .toBe(true);
+      ok('navigation reload re-requests the pane document', true);
 
       // Route-chip dropdown (redesign) lists the changed pages; picking one
       // navigates the panes and closes the dropdown.

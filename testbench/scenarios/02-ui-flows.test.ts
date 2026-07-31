@@ -301,6 +301,34 @@ describe('ui flows', () => {
     await expect.poll(frameScheme, { timeout: 30_000 }).toBe(await effective());
   });
 
+  it('the navigation reload button re-requests the preview page', async () => {
+    const frame = async () => {
+      const el = await s.page.$('#preview-frame-region iframe.is-active');
+      return (await el?.contentFrame()) ?? null;
+    };
+    // A mark in the live document is the only proof the frame really
+    // reloaded — same URL, so nothing observable changes otherwise.
+    await (await frame())!.evaluate(() => {
+      (window as unknown as Record<string, unknown>).__benchReloadMark = 1;
+    });
+    await s.page.locator('[data-nav="preview"] [data-action="ws-nav-reload"]').click();
+    await expect
+      .poll(
+        async () => {
+          const f = await frame();
+          if (!f) return false;
+          return f
+            .evaluate(
+              () => (window as unknown as Record<string, unknown>).__benchReloadMark === undefined,
+            )
+            .catch(() => false);
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(true);
+    ok('preview reload re-requests the page', true);
+  }, 120_000);
+
   it('element-picker hint banner is closeable and stays dismissed', async () => {
     // The picker banner only appears in the ACTIVE tab's iframe — hidden
     // tabs' frames also match a URL filter, so resolve via the DOM.

@@ -9,6 +9,7 @@ import { t, uiLocale } from '@/lib/i18n';
 import { annotationCount } from '@/injected/annotate';
 import type { AppState, ChatSummary } from '../chat/app/state';
 import { branchPreviewUrl } from './config';
+import { renderNavigation } from './navigation';
 import { previewDevices } from './devices';
 
 export const activeBranchName = (state: AppState): string =>
@@ -128,10 +129,7 @@ export const renderPreviewToolbar = (state: AppState): string => {
       <div class="ws-toolbar">
         <span class="ws-chrome-dots" aria-hidden="true"><i></i><i></i></span>
         <span class="ws-toolbar__branch" title="${escapeHtml(t(locale, 'workspace.preview.branchTitle'))}">${label}</span>
-        <form class="ws-address" data-action="ws-address-form" title="${escapeHtml(t(locale, 'workspace.preview.addressTitle'))}">
-          <input class="ws-address__input ws-mono" type="text" spellcheck="false"
-            autocomplete="off" value="${escapeHtml(ws.previewRoute)}" aria-label="${escapeHtml(t(locale, 'workspace.preview.addressLabel'))}" />
-        </form>
+        ${renderNavigation('preview', ws.previewRoute)}
         <span class="ws-toolbar__spacer"></span>
         ${
           ws.pickerActive

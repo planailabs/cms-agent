@@ -89,6 +89,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Code browser (tree, open file — judged) | 02 | ✅ |
 | Code browser image preview (svg renders inline, naturalWidth > 0) | 02 | ✅ |
 | Preview tabs new/switch/close | 02 | ✅ |
+| Shared navigation bar (route input + reload) in preview and compare | 02 (preview reload), 05 (compare address + reload) | ✅ |
 | Sidebar collapse/resize | 02 | 🟡 collapse only; drag-resize not simulated |
 | Plan/execution/publish cards | — | 🟡 exercised via API in 03; card DOM not driven (approve via endpoint, not button) |
 | Element-edit overlay (draw/move/comment in-iframe) | — | 🟡 handoff covered API-side in 03; in-iframe drawing not driven |

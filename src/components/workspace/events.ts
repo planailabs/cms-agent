@@ -10,10 +10,11 @@ import { delegateEvent } from '../chat/utils/dom';
 import { switchChat } from '../chat/actions/chat';
 import { continueChatSession } from '../chat/actions/chat/session';
 import { registerDiffScrollSync } from './diffScroll';
-import { navigateDiffTo } from './diffViewer';
+import { navigateDiffTo, reloadDiffPanes } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
 import { closeWindow, openWindow, toggleWindow } from './window';
 import { deviceByKey } from './devices';
+import { reloadPreviewFrame } from './previewFrames';
 import { registerLayer } from '../chat/app/layers';
 import {
   approvePlanAction,
@@ -451,11 +452,17 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     store.notify();
   });
 
-  // Preview tabs + address bar
-  delegateEvent(app, 'submit', '[data-action="ws-address-form"]', (event, target) => {
+  // Preview tabs + the shared navigation bar (preview and compare)
+  delegateEvent(app, 'submit', '[data-action="ws-nav-go"]', (event, target) => {
     event.preventDefault();
     const input = target.querySelector<HTMLInputElement>('.ws-address__input');
-    if (input?.value) navigatePreviewTo(input.value);
+    if (!input?.value) return;
+    if (target.getAttribute('data-scope') === 'diff') navigateDiffTo(input.value);
+    else navigatePreviewTo(input.value);
+  });
+  delegateEvent(app, 'click', '[data-action="ws-nav-reload"]', (_e, target) => {
+    if (target.getAttribute('data-scope') === 'diff') reloadDiffPanes();
+    else reloadPreviewFrame(store.state);
   });
   delegateEvent(app, 'click', '[data-action="ws-tab-switch"]', (event, target) => {
     // The close × sits inside the tab button — let its own handler run alone
@@ -534,11 +541,6 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     const diff = store.state.workspace.diff;
     diff.warnOpen = !diff.warnOpen;
     store.notify();
-  });
-  delegateEvent(app, 'submit', '[data-action="ws-diff-address-form"]', (event, target) => {
-    event.preventDefault();
-    const input = target.querySelector<HTMLInputElement>('.ws-address__input');
-    if (input?.value) navigateDiffTo(input.value);
   });
   delegateEvent(app, 'click', '[data-action="ws-diff-mode"]', (_e, target) => {
     const mode = target.getAttribute('data-mode') as DiffViewMode | null;

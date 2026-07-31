@@ -101,3 +101,19 @@ export const getPreviewIframes = (): HTMLIFrameElement[] => [
 /** The visible (active-tab) iframe — the target for commands and eval. */
 export const getPreviewIframe = (): HTMLIFrameElement | null =>
   document.querySelector<HTMLIFrameElement>('#preview-frame-region iframe.is-active');
+
+/**
+ * Reload the visible tab. The URL is rebuilt from the tab's route rather than
+ * reused from the node: the preview is another origin, so the frame's own
+ * location is unreadable, and after free browsing the stale `src` would send
+ * the user back to where the tab started instead of reloading what they see.
+ */
+export const reloadPreviewFrame = (state: AppState): void => {
+  const frame = getPreviewIframe();
+  if (!frame) return;
+  const ws = state.workspace;
+  frame.src = withUaParam(
+    branchPreviewUrl(previewBranchName(state), ws.previewTabs[ws.activeTabIndex] ?? '/'),
+    deviceByKey(ws.previewDevice),
+  );
+};
