@@ -109,6 +109,30 @@ describe('the site-check step', () => {
     expect(texts.some((t) => t.includes('resume_automatism'))).toBe(true);
   });
 
+  it('does not blame the site when the checker could not reach the preview', async () => {
+    // The checker's own transport failing says nothing about the page. Pausing
+    // the sync on it would hand the agent a repair job for a site that renders.
+    checkSiteHealth.mockResolvedValue([
+      {
+        validator: 'astro-dev',
+        severity: 'error',
+        failureClass: 'RETRYABLE_INFRA',
+        message: '/ could not be requested at http://127.0.0.1:4321/: fetch failed (ECONNREFUSED)',
+      },
+    ]);
+    const id = await startSiteCheck(chatId, 'sitecheck-user');
+
+    await waitFor(async () =>
+      (await prisma.automatism.findUniqueOrThrow({ where: { id } })).status === 'done',
+    );
+    const chat = await prisma.chat.findUniqueOrThrow({ where: { id: chatId } });
+    expect(chat.workflowPhase).toBe('plan'); // never forced into EXECUTE
+    const texts = (await prisma.message.findMany({ where: { chatId } })).map((m) => m.content);
+    // Said out loud, not swallowed: the check did not happen.
+    expect(texts.some((t) => t.includes('could not be checked'))).toBe(true);
+    expect(texts.some((t) => t.includes('ECONNREFUSED'))).toBe(true);
+  });
+
   it('re-checks on resume instead of taking the fix on trust', async () => {
     checkSiteHealth.mockResolvedValue([broken]);
     const id = await startSiteCheck(chatId, 'sitecheck-user');

@@ -117,6 +117,14 @@ function hostPort(host: string, port: number): string {
   return host.includes(':') ? `[${host}]:${port}` : `${host}:${port}`;
 }
 
+/**
+ * Where a preview actually listens. Dev servers bind HOST, which is ::1 in
+ * development and 127.0.0.1 in production — anything that assumes one of them
+ * works on one machine and is refused on the other, with undici reporting it
+ * as an opaque "fetch failed". Every caller uses this.
+ */
+export const previewOrigin = (port: number): string => `http://${hostPort(env().HOST, port)}`;
+
 function buildRoutes(): { cms: string; previews: Record<string, string> } {
   const e = env();
   const previews: Record<string, string> = {};

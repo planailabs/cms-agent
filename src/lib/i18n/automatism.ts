@@ -27,6 +27,8 @@ export const automatismCatalogs: AreaCatalogs = {
     // ── site health check (post-sync, and any other checkpoint) ──
     'site.checking': 'Checking the draft site for errors ({routes}).',
     'site.ok': 'The draft site renders without errors.',
+    'site.uncheckable':
+      'The draft could not be checked — the preview did not answer:\n{error}\nThis says nothing about the site itself, so the sync continues. Open the preview to see the page.',
     'site.broken':
       'The draft site is broken:\n{error}\n\nFix the cause in this worktree (the site must render again), commit it, then call resume_automatism to re-check. site_status returns the exact failures (and re-checks on request), preview_logs shows what the development server printed, and restart_preview bounces it when the server is stuck rather than the code.',
 
@@ -89,6 +91,8 @@ export const automatismCatalogs: AreaCatalogs = {
     // ── Site-Prüfung (nach dem Sync und an anderen Prüfpunkten) ──
     'site.checking': 'Der Entwurf wird auf Fehler geprüft ({routes}).',
     'site.ok': 'Der Entwurf wird ohne Fehler dargestellt.',
+    'site.uncheckable':
+      'Der Entwurf konnte nicht geprüft werden — die Vorschau hat nicht geantwortet:\n{error}\nDas sagt nichts über die Seite selbst aus, der Sync läuft weiter. Öffne die Vorschau, um die Seite zu sehen.',
     'site.broken':
       'Der Entwurf ist fehlerhaft:\n{error}\n\nBehebe die Ursache in diesem Worktree (die Seite muss wieder dargestellt werden), committe die Änderung und rufe dann resume_automatism auf, damit erneut geprüft wird. site_status liefert die genauen Fehler (und prüft auf Wunsch neu), preview_logs zeigt die Ausgabe des Entwicklungsservers, und restart_preview startet ihn neu, wenn nicht der Code, sondern der Server hängt.',
 

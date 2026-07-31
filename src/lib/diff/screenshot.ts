@@ -32,7 +32,7 @@ import {
   PROBE_SPACER_OWNERS,
 } from "@/lib/compare/inject";
 import { branchSha, defaultBranch } from "@/lib/git/engine";
-import { ensureInstance } from "@/lib/preview/manager";
+import { ensureInstance, previewOrigin } from "@/lib/preview/manager";
 import type { PreviewDevice } from "@/lib/preview/devices";
 
 // Content-aligned shots: the same page re-rendered with filler <div>s injected
@@ -160,11 +160,8 @@ async function openPage(
           })
         ).newPage()
       : await launched.newPage({ viewport });
-    // Connect on the host the dev server actually binds (HOST — ::1 in dev,
-    // 127.0.0.1 in prod); v6 needs brackets.
-    const host = env().HOST;
-    const h = host.includes(":") ? `[${host}]` : host;
-    const response = await page.goto(`http://${h}:${port}${route}`, {
+    // Connect on the host the dev server actually binds (previewOrigin).
+    const response = await page.goto(`${previewOrigin(port)}${route}`, {
       waitUntil: "networkidle",
       timeout: 30_000,
     });

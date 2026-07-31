@@ -407,8 +407,17 @@ const siteCheckStep: AutomatismStep = {
       await post(tmsg('site.ok'));
       return;
     }
+    // A check that could not reach the preview has found nothing about the
+    // site. Pausing the sync on it would hand the agent a repair job for a
+    // page that renders — say what happened and let the flow finish; the user
+    // is looking at the preview either way.
+    const real = issues.filter((i) => i.severity === 'error' && i.failureClass !== 'RETRYABLE_INFRA');
+    if (real.length === 0) {
+      await post(tmsg('site.uncheckable', { error: describeIssues(issues) }));
+      return;
+    }
     await forceExecutePhase(data);
-    throw new AutomatismFailure(tmsg('site.broken', { error: describeIssues(issues) }));
+    throw new AutomatismFailure(tmsg('site.broken', { error: describeIssues(real) }));
   },
 };
 

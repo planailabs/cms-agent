@@ -15,7 +15,14 @@ const { ensureInstance, getStartError, prismaMock } = vi.hoisted(() => ({
   prismaMock: { chatTabs: { findMany: vi.fn() } },
 }));
 
-vi.mock('@/lib/preview/manager', () => ({ ensureInstance, getStartError, stopInstance: vi.fn() }));
+vi.mock('@/lib/preview/manager', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/preview/manager')>(
+    '@/lib/preview/manager',
+  );
+  // previewOrigin stays real: where the checker looks for the dev server is
+  // the thing under test here, not a detail to stub away.
+  return { ...actual, ensureInstance, getStartError, stopInstance: vi.fn() };
+});
 vi.mock('@/lib/db', () => ({ prisma: prismaMock }));
 
 import { astroBackend, astroErrorText } from '@/lib/site/astro';
@@ -28,9 +35,15 @@ import {
   lastSiteHealth,
 } from '@/lib/site/health';
 import { resetActiveBackend } from '@/lib/site';
+import { env } from '@/lib/env';
 import { hasErrors } from '@/lib/validate';
 
-/** A dev server on a real port, answering whatever the case needs. */
+/**
+ * A dev server on a real port, answering whatever the case needs — bound to
+ * the SAME host a preview binds (env HOST), because addressing it is exactly
+ * what this used to get wrong: the checker probed 127.0.0.1 while the dev
+ * server listened on ::1, and every page came back as "fetch failed".
+ */
 const server = async (
   handler: (req: Request) => Response,
 ): Promise<{ port: number; close: () => Promise<void> }> => {
@@ -42,7 +55,7 @@ const server = async (
       res.end(body);
     });
   });
-  await new Promise<void>((resolve) => srv.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => srv.listen(0, env().HOST, resolve));
   const port = (srv.address() as { port: number }).port;
   return { port, close: () => new Promise<void>((r) => srv.close(() => r())) };
 };
@@ -102,15 +115,24 @@ describe('the Astro error detector', () => {
     }
   });
 
-  it('reports a route that never answers rather than passing it', async () => {
-    // Nothing listens on this port; the fetch fails outright.
+  it('names what actually failed when it cannot reach the server at all', async () => {
+    // A port that was real and is now closed — the shape of a dev server that
+    // died, and the case where "fetch failed" (undici's word for every
+    // transport problem) is exactly what a person debugging must not be
+    // handed. The address it tried is the other half of the answer.
+    const dead = await server(() => new Response('never', { status: 200 }));
+    await dead.close();
+
     const issues = await astroBackend.detectSiteErrors!({
-      baseUrl: 'http://127.0.0.1:1',
+      baseUrl: `http://127.0.0.1:${dead.port}`,
       routes: ['/'],
       worktree: '/tmp/nope',
     });
     expect(issues).toHaveLength(1);
-    expect(issues[0].message).toContain('could not be loaded');
+    expect(issues[0].message).toContain(`http://127.0.0.1:${dead.port}/`);
+    expect(issues[0].message).toMatch(/ECONNREFUSED/);
+    // Not the site's fault, and not the agent's job.
+    expect(issues[0].failureClass).toBe('RETRYABLE_INFRA');
   });
 
   it('keeps the words and drops the markup', () => {

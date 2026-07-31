@@ -13,7 +13,7 @@
  * pre-publish validators speak, so a caller can hand it to the agent unchanged.
  */
 import { prisma } from '@/lib/db';
-import { ensureInstance, getStartError } from '@/lib/preview/manager';
+import { ensureInstance, getStartError, previewOrigin } from '@/lib/preview/manager';
 import { activeBackend } from '@/lib/site';
 import { hasErrors, type ValidationIssue } from '@/lib/validate';
 
@@ -86,7 +86,7 @@ export async function checkSiteHealth(input: SiteHealthInput): Promise<Validatio
   let baseUrl: string;
   try {
     const instance = await ensureInstance(input.branch);
-    baseUrl = `http://127.0.0.1:${instance.port}`;
+    baseUrl = previewOrigin(instance.port);
   } catch (err) {
     const recorded = getStartError(input.branch);
     return record(input.branch, routes, [

@@ -18,6 +18,56 @@ import type { SiteBackend } from './backend';
 const PROBE_TIMEOUT_MS = 15_000;
 
 /**
+ * `fetch failed` is what undici says for every transport problem — refused,
+ * reset, DNS, TLS — and it is the one thing a person debugging this must not
+ * be told. The cause chain carries the syscall and the code; say those.
+ */
+export function transportReason(err: unknown): string {
+  const describe = (e: Error): string => {
+    const x = e as Error & { code?: string; syscall?: string; address?: string; port?: number };
+    const detail = [x.code, x.syscall, x.address ? `${x.address}${x.port ? `:${x.port}` : ''}` : null]
+      .filter(Boolean)
+      .join(' ');
+    return detail ? `${e.message} (${detail})` : e.message;
+  };
+
+  const parts: string[] = [];
+  let current: unknown = err;
+  for (let depth = 0; current instanceof Error && depth < 4; depth++) {
+    const e = current;
+    parts.push(describe(e));
+    // Node reports "connect failed" per address family in an AggregateError;
+    // the codes live on its members, and the codes are the whole point.
+    const nested = (e as unknown as { errors?: unknown }).errors;
+    if (Array.isArray(nested) && nested.length > 0) {
+      parts.push(nested.filter((n): n is Error => n instanceof Error).map(describe).join(', '));
+      break;
+    }
+    current = (e as { cause?: unknown }).cause;
+  }
+  return parts.filter(Boolean).join(' ← ') || String(err);
+}
+
+/**
+ * One retry on a transport error: a dev server that has just answered its
+ * first request can still drop the next connection while Vite finishes
+ * warming, and a checkpoint that pauses a sync over that would be a false
+ * alarm the user has to clear by hand.
+ */
+async function probe(url: string): Promise<Response> {
+  try {
+    return await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+  } catch (first) {
+    await new Promise((r) => setTimeout(r, 750));
+    try {
+      return await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+    } catch {
+      throw first; // the first failure is the one worth reporting
+    }
+  }
+}
+
+/**
  * The readable part of Astro's dev error page. It renders the error as HTML
  * (title, message, file, stack) — the agent needs the words, not the markup,
  * and the first lines carry the message and the file it happened in.
@@ -106,15 +156,19 @@ export const astroBackend: SiteBackend = {
       const url = `${baseUrl}${route.startsWith('/') ? route : `/${route}`}`;
       let res: Response;
       try {
-        res = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+        res = await probe(url);
       } catch (err) {
-        // The dev server is up (the caller checked) but this route hung or
-        // reset the connection — that is a broken page, not a missing server.
+        // Reaching here means the checker could not talk to the dev server at
+        // all. That is usually the CHECKER's problem — the wrong address, a
+        // connection dropped while the server was still coming up — and the
+        // agent is the wrong audience for it, so the class says infrastructure
+        // and the message carries what actually failed rather than undici's
+        // opaque "fetch failed".
         issues.push({
           validator: 'astro-dev',
           severity: 'error',
-          failureClass: 'AGENT_FIXABLE',
-          message: `${route} could not be loaded from the preview: ${err instanceof Error ? err.message : err}`,
+          failureClass: 'RETRYABLE_INFRA',
+          message: `${route} could not be requested at ${url}: ${transportReason(err)}`,
         });
         continue;
       }
