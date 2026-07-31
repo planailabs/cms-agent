@@ -169,6 +169,10 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
   conflict — chat forced to EXECUTE, error posted, agent invoked, and
   `resume_automatism` RE-RUNS the check rather than trusting the fix. Add new
   checkpoints by reusing that step, not by writing another detector.
+  Consequence to know: the check STARTS the branch's preview if it is cold, so
+  a sync now waits for that boot (visible in the step bar) and an install that
+  cannot complete surfaces as a paused sync rather than as a preview nobody
+  opened yet. Tests that drive the pull flow mock `@/lib/site/health`.
 
 ## Client state: streamed snapshots
 

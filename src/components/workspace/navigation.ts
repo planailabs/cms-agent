@@ -12,8 +12,13 @@ import { t, uiLocale } from '@/lib/i18n';
 export type NavScope = 'preview' | 'diff';
 
 const RELOAD_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 1 1-1.5-3.7"/><path d="M13.4 2.8v3.1h-3.1"/></svg>`;
-/** Power symbol — the server behind the page, not the page. */
-const RESTART_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.2v5"/><path d="M4.6 4.2a5.4 5.4 0 1 0 6.8 0"/></svg>`;
+/**
+ * Power-cycle over a server stack: the power ring says "the machine", its
+ * arrowhead says "again", and the two racked bars underneath say which machine
+ * — the box serving the page, not the page. The reload button next to it is a
+ * plain circular arrow, so the two never read as the same action.
+ */
+const RESTART_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.9v3.3"/><path d="M5.45 3.85a3.6 3.6 0 1 0 5.1 0"/><path d="M9.4 2.6 10.9 3.75 9.7 5.05"/><rect x="2.3" y="11.7" width="11.4" height="2.9" rx="0.9"/><path d="M4.5 13.15h.01M6.4 13.15h.01"/></svg>`;
 
 export const renderNavigation = (scope: NavScope, route: string): string => {
   const locale = uiLocale();

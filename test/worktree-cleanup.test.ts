@@ -23,6 +23,8 @@ vi.mock('@/lib/git/engine', () => ({
 vi.mock('@/lib/preview/manager', () => ({
   stopInstance: mocks.stopInstance,
   clearStartError: vi.fn(),
+  // Reclaiming a checkout drops the branch's dev-server log buffer with it.
+  clearPreviewLogs: vi.fn(),
   listInstances: () => mocks.instances,
 }));
 vi.mock('@/lib/preview/prewarm', () => ({ reservedBranches: () => mocks.reserved }));

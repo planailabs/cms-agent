@@ -11,6 +11,13 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { resetEnvCache } from '@/lib/env';
 
 vi.mock('@/lib/agent/handler', () => ({ handleChatMessage: vi.fn(async () => {}) }));
+// The sync flow ends on the site-health checkpoint, which wants a running dev
+// server for the branch. Rebasing is what this file is about — the checkpoint
+// has test/site-check-automatism.test.ts to itself.
+vi.mock('@/lib/site/health', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/site/health')>('@/lib/site/health');
+  return { ...actual, checkSiteHealth: vi.fn(async () => []), chatPreviewRoutes: vi.fn(async () => ['/']) };
+});
 
 import { prisma } from '@/lib/db';
 import { handleChatMessage } from '@/lib/agent/handler';
