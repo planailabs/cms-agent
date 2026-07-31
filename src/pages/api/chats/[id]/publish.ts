@@ -2,6 +2,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { WorkflowError } from '@/lib/agent/workflow';
+import { TurnInProgressError } from '@/lib/automatism';
 import { publish } from '@/lib/publish/publisher';
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -30,6 +31,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    // A turn that started between the guard and the spawn lands here.
+    if (err instanceof TurnInProgressError) {
+      return new Response(JSON.stringify({ error: err.message }), { status: err.status });
+    }
     if (err instanceof WorkflowError) {
       return new Response(JSON.stringify({ error: err.message }), { status: err.status });
     }

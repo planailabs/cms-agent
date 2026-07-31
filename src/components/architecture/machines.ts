@@ -292,12 +292,14 @@ stateDiagram-v2
       automatism type is an ordered list of named steps; the engine runs them
       server-side and posts each event into a chat as a message the agent can
       read. When a step fails the flow pauses instead of dying, and the agent is
-      invoked to fix the cause.`,
+      invoked to fix the cause. One never starts on top of a live turn: it
+      would rewrite the worktree that turn is editing.`,
     diagrams: [
       {
         caption: 'Automatism status',
         code: `
 stateDiagram-v2
+  [*] --> refused: a turn is live in an affected chat
   [*] --> running: startAutomatism
   running --> running: step done, advance
   running --> paused: step threw
@@ -346,6 +348,15 @@ sequenceDiagram
       },
     ],
     notes: `<ul>
+      <li><strong>Never on top of a live turn.</strong> Starting one is refused
+        while any affected chat has a turn in flight — its own, and the workflow
+        chat whose branch the steps touch, since a deploy lives on its own
+        deployment chat but merges someone else's work. A sync would rebase the
+        worktree the agent is editing and a publish would merge a tree it is
+        still writing to; the branch lock the steps take serializes git
+        commands, it cannot make a half-finished execution coherent. Resuming a
+        PAUSED one is deliberately exempt: that is the agent, mid-turn, saying
+        it has fixed the cause.</li>
       <li><strong>Failures can be routed.</strong> A step throws a failure that
         may name a different chat to handle it. A merge conflict during publish
         is raised in the deployment chat, which owns the worktree and the edit

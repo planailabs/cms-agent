@@ -14,7 +14,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { dbNull, prisma } from '@/lib/db';
 import { env } from '@/lib/env';
 import { canSeeOthersChats } from '@/lib/chatAccess';
-import { broadcast, withBranchLock } from '@/lib/agent/bus';
+import { broadcast, hasActiveTurn, withBranchLock } from '@/lib/agent/bus';
 import { emitChatState, emitChatStatesForBranch } from '@/lib/agent/chatState';
 import { WorkflowError } from '@/lib/agent/workflow';
 import {
@@ -105,6 +105,12 @@ export async function publish(
   await assertChatVisibleTo(req.actor, chat);
   if (chat.workflowPhase !== 'execute') {
     throw new WorkflowError(`Cannot publish from the ${chat.workflowPhase} phase.`);
+  }
+
+  // Publishing merges the work branch; a turn still writing to it would put
+  // uncommitted or half-finished work behind the reviewed sha.
+  if (hasActiveTurn(req.chatId)) {
+    throw new WorkflowError('The agent is working in this chat — publish when the turn finishes.', 409);
   }
 
   // The approval binds the chat's WORK branch head — the exact state reviewed
@@ -303,6 +309,13 @@ async function startPullInner(chatId: string, actor: { id: string; name: string;
   const activePub = await prisma.publication.findFirst({ where: { chatId, status: 'running' } });
   if (activePub) {
     throw new WorkflowError('A publication for this chat is in progress — sync after it finishes.', 409);
+  }
+  // A sync rebases the work branch: doing that while the agent is mid-turn
+  // rewrites the worktree it is editing, and its next write lands on commits
+  // that no longer exist. startAutomatism refuses this too; here it becomes a
+  // 409 the UI can show instead of a stack trace.
+  if (hasActiveTurn(chatId)) {
+    throw new WorkflowError('The agent is working in this chat — sync when the turn finishes.', 409);
   }
 
   await postAutomatismMessage(

@@ -11,7 +11,7 @@
  * re-runs and the flow continues — steps must therefore be retry-safe.
  */
 import { prisma } from '@/lib/db';
-import { acquireTurnLock, broadcast, releaseTurnLock } from '@/lib/agent/bus';
+import { acquireTurnLock, broadcast, hasActiveTurn, releaseTurnLock } from '@/lib/agent/bus';
 import { tmsg, type TranslatedMessage } from '@/lib/i18n';
 
 export type AutomatismData = Record<string, unknown> & { actorId: string };
@@ -122,12 +122,42 @@ export async function postAutomatismMessage(chatId: string, msg: AutomatismMessa
   broadcast(chatId, 'automatism', { type: 'automatism', content, tm });
 }
 
+/**
+ * Chats an automatism would run underneath: its own, plus the workflow chat
+ * whose worktree the steps actually touch (a deploy lives on its own
+ * deployment chat but merges the workflow chat's branch).
+ */
+const affectedChats = (chatId: string, data: AutomatismData): string[] => {
+  const workflowChatId = (data as { workflowChatId?: string }).workflowChatId;
+  return workflowChatId && workflowChatId !== chatId ? [chatId, workflowChatId] : [chatId];
+};
+
+/**
+ * Thrown when an automatism would start on top of a live turn. Endpoints turn
+ * it into a 409 — see WorkflowError in agent/workflow.ts.
+ */
+export class TurnInProgressError extends Error {
+  readonly status = 409;
+}
+
 export async function startAutomatism(
   type: string,
   chatId: string,
   data: AutomatismData,
 ): Promise<string> {
   if (!types.has(type)) throw new Error(`Unknown automatism type: ${type}`);
+  // An automatism rewrites the very worktree a running turn is editing — a
+  // sync rebases the branch under the agent's feet, a deploy merges a tree it
+  // is still writing to. The steps hold the branch lock for their git calls,
+  // but that only serializes commands; it cannot make a half-finished
+  // execution coherent. So the whole flow is refused while a turn is live.
+  for (const affected of affectedChats(chatId, data)) {
+    if (hasActiveTurn(affected)) {
+      throw new TurnInProgressError(
+        'The agent is working in this chat — wait for the turn to finish, then try again.',
+      );
+    }
+  }
   const row = await prisma.automatism.create({ data: { chatId, type, data: data as object } });
   void advance(row.id);
   return row.id;
