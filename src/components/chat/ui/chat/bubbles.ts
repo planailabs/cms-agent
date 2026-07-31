@@ -154,20 +154,16 @@ const renderMessage = (
     const attachmentsRow = chips
       ? `<div class="msg-attachments">${chips}</div>`
       : '';
-    // A message that carries a card was WRITTEN for the agent: the prose spells
-    // out upload ids and annotation JSON, which is exactly what the card
-    // replaces for a human. Keep it one fold away rather than in their face —
-    // it is still the record of what the agent was told.
-    const textRow = !msg.content
-      ? ''
-      : msg.blocks?.length
-        ? `<details class="msg-agent-text max-w-[85%]">
-                <summary>${escapeHtml(t(uiLocale(), 'chat.block.agentText'))}</summary>
-                <p>${escapeHtml(msg.content)}</p>
-              </details>`
-        : `<p class="max-w-[85%] rounded-2xl bg-(--surface-elevated) px-3.5 py-2 text-sm text-(--text-primary)">
+    // A message that carries blocks has a human-facing rendering already. Its
+    // `content` is the copy written for the AGENT — upload ids, annotation
+    // JSON, instructions about which tool to call — and showing that to the
+    // person as well is just the same message in a worse language.
+    const textRow =
+      msg.content && !msg.blocks?.length
+        ? `<p class="max-w-[85%] rounded-2xl bg-(--surface-elevated) px-3.5 py-2 text-sm text-(--text-primary)">
                 ${escapeHtml(msg.content)}
-              </p>`;
+              </p>`
+        : '';
     // The /command the message was sent with, beside it — so the transcript
     // still explains why the chat behaved differently from here on.
     const commandRow = msg.command ? `<div class="msg-command">${commandChipHtml(msg.command)}</div>` : '';

@@ -126,10 +126,12 @@ describe('the message the card belongs to', () => {
     expect(html).not.toContain('element-edit-home-before.png');
   });
 
-  it('keeps the agent-facing prose, folded away', () => {
+  it('does not show the agent-facing prose at all', () => {
+    // It is the same message written for the model — upload ids and JSON. The
+    // card is the version for the person; the transcript needs one of them.
     const html = render(message);
-    expect(html).toContain('msg-agent-text');
-    expect(html).toContain('Annotation metadata');
+    expect(html).not.toContain('Annotation metadata');
+    expect(html).not.toContain('Element-edit handoff from');
   });
 
   it('leaves an ordinary message alone', () => {
@@ -139,7 +141,6 @@ describe('the message the card belongs to', () => {
       attachments: [{ id: 'u-9', filename: 'notes.md', mime: 'text/markdown' }],
     });
     expect(html).toContain('notes.md');
-    expect(html).not.toContain('msg-agent-text');
     expect(html).toContain('plain question');
   });
 });
