@@ -140,6 +140,9 @@ model Chat {
   // Explicit plan mode (the /plan command): the agent proposes a plan and
   // waits for approval instead of recording it and carrying on.
   planMode        Boolean @default(false)
+  // MCP groups the agent loaded on top of the phase defaults (string array).
+  // Persisted so a multi-turn task does not re-load the same group every turn.
+  loadedMcpGroups Json?
   // Optimistic concurrency for phase transitions (no last-writer-wins)
   entityVersion   Int     @default(0)
   // Set when the chat is done (published / deployment finished): hidden from

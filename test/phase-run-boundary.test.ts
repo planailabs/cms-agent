@@ -38,7 +38,13 @@ vi.mock('@/lib/agent/mcp', () => ({
           type: 'function' as const,
           function: { name, description: '', parameters: { type: 'object' } },
         })),
-      promptHints: () => [],
+      control: {
+      index: () => [],
+      loaded: () => [],
+      load: async () => [],
+      unload: () => ({ dropped: [], refused: [] }),
+    },
+    promptHints: () => [],
       callTool: async (name: string) => {
         onToolCall(name, ctx);
         return JSON.stringify({ ok: true });
@@ -47,6 +53,13 @@ vi.mock('@/lib/agent/mcp', () => ({
     };
   }),
 }));
+
+// The loop routes its capabilities before it prompts; that decision is not
+// what these tests are about, and it must not consume a queued completion.
+vi.mock('@/lib/agent/skillRouter', () => ({
+  routeCapabilities: async () => ({ skills: [], groups: [], inputTokens: 0, outputTokens: 0 }),
+}));
+
 
 import { addConnection } from '@/lib/agent/bus';
 import { handleChatMessage } from '@/lib/agent/handler';

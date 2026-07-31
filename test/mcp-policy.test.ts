@@ -7,16 +7,20 @@
  * the read-only PLAN phase. The sandbox contains host damage; it does not
  * know what PLAN means.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetEnvCache } from '@/lib/env';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 
-const { attachCustomMcps, attachCodebaseMemory, attachContext7 } = vi.hoisted(() => ({
-  attachCustomMcps: vi.fn(),
+const { attachCustomMcpsLabeled, attachCodebaseMemory, attachContext7 } = vi.hoisted(() => ({
+  attachCustomMcpsLabeled: vi.fn(),
   attachCodebaseMemory: vi.fn(),
   attachContext7: vi.fn(),
 }));
 
-vi.mock('@/lib/agent/mcp/custom', () => ({ attachCustomMcps }));
+vi.mock('@/lib/agent/mcp/custom', () => ({ attachCustomMcpsLabeled }));
 vi.mock('@/lib/agent/mcp/codebaseMemory', () => ({ attachCodebaseMemory }));
 vi.mock('@/lib/agent/mcp/context7', () => ({ attachContext7 }));
 
@@ -27,15 +31,19 @@ import { registerTool, type ChatKind, type ToolContext } from '@/lib/agent/tools
 import type { WorkflowPhase } from '@/lib/agent/types';
 import { z } from 'zod';
 
-/** An MCP server exposing one declared-read-only tool and one undeclared. */
+/**
+ * An MCP server exposing one declared-read-only tool and one undeclared.
+ * Tool names carry the bridge's mcp_<server>_ prefix, because that prefix is
+ * what maps a tool back to its MCP group (mcp/groups.ts).
+ */
 const stubClient = () =>
   ({
     async listTools() {
       return {
         tools: [
-          { name: 'search', description: 'Search.', annotations: { readOnlyHint: true } },
-          { name: 'deploy', description: 'Deploy.', annotations: { readOnlyHint: false } },
-          { name: 'mystery', description: 'Undeclared.' },
+          { name: 'mcp_stub_search', description: 'Search.', annotations: { readOnlyHint: true } },
+          { name: 'mcp_stub_deploy', description: 'Deploy.', annotations: { readOnlyHint: false } },
+          { name: 'mcp_stub_mystery', description: 'Undeclared.' },
         ],
       };
     },
@@ -55,6 +63,9 @@ const ctx = (phase: WorkflowPhase, kind: ChatKind = 'workflow'): ToolContext => 
   worktreePath: '/tmp/does-not-matter',
   userContext: new Map(),
   modifiedPaths: new Set(),
+  // The policy is what is under test here, not the group gate — load the
+  // stub server's group so its tools reach the phase filter at all.
+  loadedMcpGroups: new Set(['stub']),
 });
 
 // One in-process tool so the MCP server advertises the tools capability.
@@ -76,13 +87,31 @@ const toolNames = async (c: ToolContext) => {
   }
 };
 
+// The group index is read from the admin config, so the stub server has to
+// exist there for 'stub' to be a loadable group.
+const prevVarDir = process.env.VAR_DIR;
+beforeAll(() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-mcp-policy-'));
+  fs.writeFileSync(
+    path.join(dir, 'mcp.json'),
+    JSON.stringify({ mcpServers: { stub: { command: 'true' } } }),
+  );
+  process.env.VAR_DIR = dir;
+  resetEnvCache();
+});
+afterAll(() => {
+  process.env.VAR_DIR = prevVarDir;
+  resetEnvCache();
+});
+
 beforeEach(() => {
   attachCodebaseMemory.mockResolvedValue(null);
   attachContext7.mockResolvedValue(null);
-  attachCustomMcps.mockReset();
-  attachCustomMcps.mockImplementation(async () => [
-    await externalMcp(stubClient(), (d) => d, 'custom hint'),
-  ]);
+  attachCustomMcpsLabeled.mockReset();
+  attachCustomMcpsLabeled.mockImplementation(async () => ({
+    global: await externalMcp(stubClient(), (d) => d, 'custom hint'),
+    worktree: null,
+  }));
 });
 
 describe('external MCP access policy', () => {
@@ -121,43 +150,44 @@ describe('external MCP access policy', () => {
 
   it('keeps a declared read-only tool and leaves an undeclared one out', async () => {
     const ext = await externalMcp(stubClient(), (d) => d, 'hint');
-    expect(ext.readOnlyToolNames).toEqual(new Set(['search']));
+    expect(ext.readOnlyToolNames).toEqual(new Set(['mcp_stub_search']));
 
     const restricted = readOnlyView(ext);
-    expect([...restricted.toolNames]).toEqual(['search']);
-    expect(restricted.openAiTools.map((t) => t.function.name)).toEqual(['search']);
+    expect([...restricted.toolNames]).toEqual(['mcp_stub_search']);
+    expect(restricted.openAiTools.map((t) => t.function.name)).toEqual(['mcp_stub_search']);
   });
 
   it('offers a custom server its read-only tools while planning, all of them in EXECUTE', async () => {
     // 'deploy' declares readOnlyHint: false, 'mystery' declares nothing —
     // neither may be reachable from a read-only phase.
-    expect(await toolNames(ctx('plan'))).toEqual(['probe_tool', 'search']);
+    expect(await toolNames(ctx('plan'))).toEqual(['probe_tool', 'mcp_stub_search']);
 
     expect(await toolNames(ctx('execute'))).toEqual([
       'probe_tool',
-      'search',
-      'deploy',
-      'mystery',
+      'mcp_stub_search',
+      'mcp_stub_deploy',
+      'mcp_stub_mystery',
     ]);
   });
 
   it('gives the deployment monitor only the tools that declare read-only', async () => {
-    expect(await toolNames(ctx('execute', 'deployments'))).toEqual(['probe_tool', 'search']);
+    expect(await toolNames(ctx('execute', 'deployments'))).toEqual(['probe_tool', 'mcp_stub_search']);
   });
 
   it('drops a source whose tools were all filtered away, hint included', async () => {
-    attachCustomMcps.mockImplementation(async () => [
-      await externalMcp(
+    attachCustomMcpsLabeled.mockImplementation(async () => ({
+      global: await externalMcp(
         {
           async listTools() {
-            return { tools: [{ name: 'mutate', description: 'Undeclared.' }] };
+            return { tools: [{ name: 'mcp_stub_mutate', description: 'Undeclared.' }] };
           },
           async close() {},
         } as unknown as Client,
         (d) => d,
         'custom hint',
       ),
-    ]);
+      worktree: null,
+    }));
     const bridge = await createMcpBridge(ctx('execute', 'deployments'));
     try {
       expect((await bridge.asOpenAiTools()).map((t) => t.function.name)).toEqual(['probe_tool']);

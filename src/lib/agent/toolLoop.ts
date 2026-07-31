@@ -25,6 +25,8 @@ import { reasoningEffortParam, withEffortFallback } from './reasoningEffort';
 import { buildSystemPrompt, type PromptInput } from './prompt';
 import { tmsg } from '@/lib/i18n';
 import { createMcpBridge } from './mcp';
+import { routeCapabilities } from './skillRouter';
+import { skillsForChat } from './plugins';
 import { dirStatus } from '@/lib/git/engine';
 import { isClientSideTool, type ToolContext } from './tools/registry';
 import type {
@@ -223,8 +225,28 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
   };
 
   try {
-    const tools = await bridge.asOpenAiTools();
-    const systemPrompt = buildSystemPrompt({ ...input.promptInput, mcpHints: bridge.promptHints() });
+    // What this turn is hinted with. The router decides; a failure here fails
+    // the turn, because the alternative is an unrouted prompt carrying every
+    // skill in the install — silently, forever (see skillRouter.ts).
+    const groupViews = bridge.control.index();
+    const routed = await routeCapabilities({
+      chatId,
+      messages,
+      skills: skillsForChat(toolContext.worktreePath),
+      groups: groupViews,
+      phase: toolContext.workflowPhase,
+      kind: toolContext.chatKind,
+    });
+    totalInputTokens += routed.inputTokens;
+    totalOutputTokens += routed.outputTokens;
+
+    const systemPrompt = buildSystemPrompt({
+      ...input.promptInput,
+      mcpHints: bridge.promptHints(),
+      mcpGroups: groupViews,
+      routedSkills: routed.skills,
+      routedGroups: routed.groups,
+    });
     const detectLoop = createLoopDetector();
     let compactedForRequest = false;
 
@@ -318,8 +340,8 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     }
 
     // ── Main loop ────────────────────────────────────────────────────────────
-    // The phase this run was built for: `tools` and `systemPrompt` above are
-    // snapshots of it. A tool that moves the workflow (start_execution,
+    // The phase this run was built for: `systemPrompt` above is a snapshot of
+    // it, and so is the tool set the registry hands out per round. A tool that moves the workflow (start_execution,
     // return_to_plan) invalidates both, so the run ends at the next loop head
     // instead of continuing to plan with EXECUTE tools — or worse, promising
     // an implementation it has no write tools to carry out.
@@ -334,6 +356,10 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         return { type: 'phase_changed', phase: toolContext.workflowPhase };
       }
       rounds++;
+
+      // Rebuilt every round: load_mcp adds an MCP group's tools mid-run, and
+      // this is where they enter the request (in-memory listing, no I/O).
+      const tools = await bridge.asOpenAiTools();
 
       const chatMessages = sanitizeMessages(
         toOpenAiMessages(messages.filter((m) => m.role !== 'cancel'), resolveImage, resolveFileImage),

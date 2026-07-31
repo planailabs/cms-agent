@@ -30,12 +30,11 @@ import {
   type SandboxState,
 } from '@/lib/sandbox';
 import { externalMcp, type ExternalMcp } from './external';
+import { WORKTREE_CONFIG, globalConfigPath, safeName, serverEntries } from './groups';
 
 const GLOBAL_SESSION_KEY = 'mcp-bridge';
 const BRIDGE_FILE = 'mcp-bridge.cjs';
 const BRIDGE_CONFIG = 'mcp-bridge.json';
-/** Repo-scoped config file name (the cross-tool `.mcp.json` convention). */
-export const WORKTREE_CONFIG = '.mcp.json';
 
 /** Chat context for the per-worktree bridge. */
 export interface CustomMcpContext {
@@ -52,8 +51,6 @@ interface BridgeState {
 // Survive Vite HMR module reloads in dev (same pattern as preview/manager)
 const g = globalThis as unknown as { __customMcp?: Map<string, BridgeState> };
 const bridges = (): Map<string, BridgeState> => (g.__customMcp ??= new Map());
-
-const globalConfigPath = () => path.join(path.resolve(env().VAR_DIR), 'mcp.json');
 
 let bridgeCache: string | null = null;
 /**
@@ -84,16 +81,8 @@ async function bridgeCode(): Promise<string> {
   return bridgeCache;
 }
 
-const serverNames = (configPath: string): string[] => {
-  try {
-    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
-      mcpServers?: Record<string, unknown>;
-    };
-    return Object.keys(raw.mcpServers ?? {});
-  } catch {
-    return [];
-  }
-};
+const serverNames = (configPath: string): string[] =>
+  serverEntries(configPath).map((e) => e.name);
 
 interface StartOpts {
   configHostPath: string;
@@ -194,10 +183,29 @@ export interface CustomMcpAttachments {
   worktree: ExternalMcp | null;
 }
 
+/**
+ * Server names each source is wanted for. A source whose servers are all in
+ * unloaded MCP groups is never started at all — a bridge is a jail process
+ * plus one connection per configured server, and nothing in the turn can
+ * reach its tools anyway (see mcp/groups.ts). Omitted: attach everything,
+ * which is what the capabilities view wants.
+ */
+export interface WantedServers {
+  config: Set<string>;
+  worktree: Set<string>;
+}
+
+/** Nothing wanted from this config — skip the spawn without touching the cache. */
+const skipSource = (configPath: string, wanted: Set<string> | undefined): boolean =>
+  wanted !== undefined && !serverNames(configPath).some((n) => wanted.has(n));
+
 export async function attachCustomMcpsLabeled(
   ctx?: CustomMcpContext,
+  wanted?: WantedServers,
 ): Promise<CustomMcpAttachments> {
-  const globalExt = await cachedAttach('global', globalConfigPath(), () =>
+  const globalExt = skipSource(globalConfigPath(), wanted?.config)
+    ? null
+    : await cachedAttach('global', globalConfigPath(), () =>
     startBridge({
       configHostPath: globalConfigPath(),
       stageConfig: true,
@@ -211,8 +219,9 @@ export async function attachCustomMcpsLabeled(
   );
 
   let wtExt: ExternalMcp | null = null;
-  if (ctx?.worktreePath) {
-    const cfg = path.join(ctx.worktreePath, WORKTREE_CONFIG);
+  const wtConfig = ctx?.worktreePath ? path.join(ctx.worktreePath, WORKTREE_CONFIG) : '';
+  if (ctx?.worktreePath && !skipSource(wtConfig, wanted?.worktree)) {
+    const cfg = wtConfig;
     wtExt = await cachedAttach(`wt:${ctx.worktreePath}`, cfg, () =>
       startBridge({
         configHostPath: cfg,
@@ -236,8 +245,11 @@ export async function attachCustomMcpsLabeled(
  * Order matters — global first; index.ts dedupes colliding tool names in
  * that order, so the global config wins.
  */
-export async function attachCustomMcps(ctx?: CustomMcpContext): Promise<ExternalMcp[]> {
-  const { global, worktree } = await attachCustomMcpsLabeled(ctx);
+export async function attachCustomMcps(
+  ctx?: CustomMcpContext,
+  wanted?: WantedServers,
+): Promise<ExternalMcp[]> {
+  const { global, worktree } = await attachCustomMcpsLabeled(ctx, wanted);
   return [global, worktree].filter((e): e is ExternalMcp => e !== null);
 }
 
@@ -256,9 +268,6 @@ async function closeState(state: BridgeState): Promise<void> {
     /* old bridge teardown must not affect the new one */
   }
 }
-
-/** Must match the bridge's tool-name prefixing (bridgeEntry.ts safe()). */
-const safeName = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 24);
 
 /**
  * Per-server attachment status for the capabilities modal: one row per

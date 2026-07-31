@@ -279,15 +279,24 @@ export function skillsForChat(worktreePath?: string): PluginSkill[] {
   ];
 }
 
-/** System-prompt section: always-on rules (plugins + VAR_DIR/rules) and the
- *  on-demand skill list. */
-export function pluginPromptSection(worktreePath?: string): string {
+/**
+ * System-prompt section: always-on rules (plugins + VAR_DIR/rules) and the
+ * on-demand skill list.
+ *
+ * The skill list is the router's selection (lib/agent/skillRouter), not the
+ * whole install — listing every skill in every prompt is what this costs
+ * tokens for. `routedSkills` undefined means no routing happened (a caller
+ * outside a turn, e.g. a test); then the full list is shown as before.
+ */
+export function pluginPromptSection(worktreePath?: string, routedSkills?: string[]): string {
   const rules = [
     ...loadPluginRegistry().rules,
     ...loadAdminRules(),
     ...loadAgentsRules(worktreePath),
   ];
-  const skills = skillsForChat(worktreePath);
+  const all = skillsForChat(worktreePath);
+  const routed = routedSkills && new Set(routedSkills.map((s) => s.toLowerCase()));
+  const skills = routed ? all.filter((s) => routed.has(s.name.toLowerCase())) : all;
   const parts: string[] = [];
   if (rules.length > 0) {
     parts.push(
@@ -295,7 +304,19 @@ export function pluginPromptSection(worktreePath?: string): string {
         rules.map((r) => `[${r.plugin}]\n${r.text}`).join('\n\n'),
     );
   }
-  if (skills.length > 0) {
+  // With routing on, the pointer must be there even when nothing was selected:
+  // an empty section would read as "this install has no skills".
+  const more =
+    routed && all.length > skills.length
+      ? `\nThe other ${all.length - skills.length} installed skill(s) are not listed here — ` +
+        'call query_skills with a keyword to search them.'
+      : '';
+  if (skills.length === 0 && routed && all.length > 0) {
+    parts.push(
+      `No skill was selected for this turn. ${all.length} are installed — call query_skills ` +
+        'with a keyword to search them, then use_skill to load one.',
+    );
+  } else if (skills.length > 0) {
     parts.push(
       'Available skills — call use_skill with a name to load its full instructions ' +
         'when the task (or the user) calls for it:\n' +
@@ -314,7 +335,8 @@ export function pluginPromptSection(worktreePath?: string): string {
               .join('');
             return `- ${s.name}${origin}: ${s.description.slice(0, 300)}${scripts}`;
           })
-          .join('\n'),
+          .join('\n') +
+        more,
     );
   }
   return parts.join('\n\n');

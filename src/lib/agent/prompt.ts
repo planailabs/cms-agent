@@ -8,6 +8,7 @@ import { languageName } from '@/lib/i18n';
 import { pluginPromptSection } from './plugins';
 import type { CommunicationMode } from '@/lib/communicationMode';
 import { activeBackend } from '@/lib/site';
+import type { McpGroupView } from './mcp/groups';
 
 export interface PromptInput {
   /** Non-workflow kinds get their own prompt, phase-independent. */
@@ -28,6 +29,12 @@ export interface PromptInput {
   worktreePath?: string;
   /** Guidance lines for external MCP tools that attached this turn. */
   mcpHints?: string[];
+  /** Every MCP group this chat can load, with its current state. */
+  mcpGroups?: McpGroupView[];
+  /** Skills the router selected for this turn (undefined: no routing ran). */
+  routedSkills?: string[];
+  /** MCP groups the router flagged as likely relevant — candidates, not loads. */
+  routedGroups?: string[];
   /** Rendered task list (taskTools.taskListForPrompt), when the chat has one. */
   taskList?: string | null;
   communicationMode?: CommunicationMode;
@@ -202,11 +209,39 @@ function languageDirective(locale: string): string {
   );
 }
 
+/**
+ * The MCP tool set is loaded per group, so the prompt has to say what is
+ * currently in the tool list, what else exists, and how to get it. Stated as a
+ * requirement, because a model that calls a tool it cannot see burns a round
+ * and gets an error back.
+ */
+function mcpGroupSection(input: PromptInput): string {
+  const groups = input.mcpGroups ?? [];
+  if (groups.length === 0) return '';
+  const line = (g: McpGroupView) =>
+    `- ${g.id}${g.loaded ? ' — LOADED' : ''}: ${g.description}` +
+    (g.servers.length > 1 ? ` (servers: ${g.servers.join(', ')})` : '');
+  const routed = (input.routedGroups ?? []).filter((id) => !groups.find((g) => g.id === id)?.loaded);
+  return (
+    `MCP tools are loaded per group, and only the LOADED groups' tools are in your tool list:\n` +
+    groups.map(line).join('\n') +
+    `\nCalling a tool from a group that is not loaded fails — load it first: load_mcp with the ` +
+    `group ids, then call its tools from the next round on. query_mcps searches these groups (and ` +
+    `finds any not listed here); unload_mcp drops the ones you are finished with. A group stays ` +
+    `loaded for the rest of this chat, so load it once and use it.` +
+    (routed.length > 0
+      ? `\nLikely relevant for this request, not loaded yet: ${routed.join(', ')}. Load them only if ` +
+        `you actually need their tools.`
+      : '')
+  );
+}
+
 export function buildSystemPrompt(input: PromptInput): string {
   const directive = languageDirective(input.locale);
   const backend = activeBackend();
-  const plugins = pluginPromptSection(input.worktreePath);
+  const plugins = pluginPromptSection(input.worktreePath, input.routedSkills);
   const hints = input.mcpHints?.length ? input.mcpHints.map((h) => `- ${h}`).join('\n') : '';
+  const groups = mcpGroupSection(input);
   if (input.kind === 'deployments' || input.kind === 'deployment') {
     const base = input.kind === 'deployment' ? DEPLOYMENT_PROMPT : DEPLOYMENTS_PROMPT;
     let p = base.replace('{site}', backend.promptLabel).replace('{language_directive}', directive);
@@ -214,6 +249,7 @@ export function buildSystemPrompt(input: PromptInput): string {
     if (input.extension) p += `\n\n${input.extension}`;
     if (plugins) p += `\n\n${plugins}`;
     if (hints) p += `\n\n${hints}`;
+    if (groups) p += `\n\n${groups}`;
     if (input.communicationMode !== 'technical') p += `\n\n${NON_TECHNICAL_DIRECTIVE}`;
     return p;
   }
@@ -258,6 +294,9 @@ with a concise 3–6 word title in the language of the user's latest message des
   }
   if (hints) {
     prompt += `\n\n${hints}`;
+  }
+  if (groups) {
+    prompt += `\n\n${groups}`;
   }
   if (input.communicationMode !== 'technical') {
     prompt += `\n\n${NON_TECHNICAL_DIRECTIVE}`;

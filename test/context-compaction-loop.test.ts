@@ -29,11 +29,24 @@ vi.mock('openai', () => ({
 vi.mock('@/lib/agent/mcp', () => ({
   createMcpBridge: vi.fn(async () => ({
     asOpenAiTools: async () => [],
+    control: {
+      index: () => [],
+      loaded: () => [],
+      load: async () => [],
+      unload: () => ({ dropped: [], refused: [] }),
+    },
     promptHints: () => [],
     callTool: vi.fn(),
     close: vi.fn(),
   })),
 }));
+
+// The loop routes its capabilities before it prompts; that decision is not
+// what these tests are about, and it must not consume a queued completion.
+vi.mock('@/lib/agent/skillRouter', () => ({
+  routeCapabilities: async () => ({ skills: [], groups: [], inputTokens: 0, outputTokens: 0 }),
+}));
+
 
 import { addConnection } from '@/lib/agent/bus';
 import { runToolLoop } from '@/lib/agent/toolLoop';

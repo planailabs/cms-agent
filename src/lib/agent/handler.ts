@@ -32,6 +32,7 @@ import { registerCommandTools } from './tools/commandTools';
 import { registerAutomatismTools } from './tools/automatismTools';
 import { registerConflictTools } from './tools/conflictTools';
 import { registerSkillTools } from './tools/skillTools';
+import { registerCapabilityTools } from './tools/capabilityTools';
 import { registerSkillScriptTools } from './tools/skillScriptTools';
 import { registerImageTools } from './tools/imageTools';
 import { registerFirecrawlTools } from './tools/firecrawlTools';
@@ -64,6 +65,7 @@ registerCommandTools();
 registerAutomatismTools();
 registerConflictTools();
 registerSkillTools();
+registerCapabilityTools();
 registerSkillScriptTools();
 registerImageTools();
 registerFirecrawlTools();
@@ -113,6 +115,7 @@ export async function handleChatMessage(
   let planMode = false;
   let planJson: unknown;
   let nextOrdinal = 0;
+  let loadedMcpGroups: string[] = [];
 
   if (opts.skipPersistence) {
     const rec = memoryRecords.get(chatId);
@@ -140,7 +143,14 @@ export async function handleChatMessage(
       prisma.branch.findUniqueOrThrow({ where: { id: record.branchId } }),
       prisma.chat.findUniqueOrThrow({
         where: { id: chatId },
-        select: { planJson: true, planMode: true, workBranch: true, kind: true, title: true },
+        select: {
+          planJson: true,
+          planMode: true,
+          workBranch: true,
+          kind: true,
+          title: true,
+          loadedMcpGroups: true,
+        },
       }),
     ]);
     targetBranchName = branch.name;
@@ -149,6 +159,11 @@ export async function handleChatMessage(
     planJson = chat.planJson ?? undefined;
     planMode = chat.planMode;
     needsTitle = chat.title === 'New chat';
+    // Groups the agent loaded in an earlier turn — the phase defaults are
+    // added by the bridge, so a config that dropped a group simply forgets it.
+    loadedMcpGroups = Array.isArray(chat.loadedMcpGroups)
+      ? (chat.loadedMcpGroups as unknown[]).filter((g): g is string => typeof g === 'string')
+      : [];
   }
 
   const ordinalRef = { value: nextOrdinal };
@@ -269,6 +284,7 @@ export async function handleChatMessage(
     worktreePath,
     userContext: getUserContextStore(chatId),
     modifiedPaths: new Set(),
+    loadedMcpGroups: new Set(loadedMcpGroups),
   };
 
   const [extension, approvedMemories, communicationMode, taskList] = opts.skipPersistence

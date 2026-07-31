@@ -13,23 +13,57 @@ import { z } from 'zod';
 import { executeTool, isClientSideTool, toolsForPhase, type ToolContext } from '../tools/registry';
 import { attachCodebaseMemory } from './codebaseMemory';
 import { attachContext7 } from './context7';
-import { attachCustomMcps } from './custom';
+import { attachCustomMcpsLabeled } from './custom';
 import { readOnlyView, type ExternalMcp } from './external';
 import { mcpAccess, type McpAccess } from './policy';
+import {
+  CODEBASE_MEMORY_GROUP,
+  CONTEXT7_GROUP,
+  defaultGroups,
+  groupIndex,
+  groupViews,
+  serversForGroups,
+  toolBelongsTo,
+  type McpGroupView,
+} from './groups';
 
 /** In-process tools include image generation, builds and deploys — the SDK's
  *  60s default request timeout (-32001) kills them mid-run. */
 const OWN_TOOL_TIMEOUT_MS = 600_000;
 
 export interface McpBridge {
-  /** OpenAI function-tool definitions for the current phase. */
+  /** OpenAI function-tool definitions for the current phase and loaded groups. */
   asOpenAiTools(): Promise<OpenAI.Chat.Completions.ChatCompletionTool[]>;
   /** System-prompt guidance lines for the external MCPs that actually attached. */
   promptHints(): string[];
   /** Dispatch a model tool call through MCP; returns the tool result string. */
   callTool(name: string, input: Record<string, unknown>): Promise<string>;
+  /** Load/unload MCP groups mid-turn (also published on the tool context). */
+  control: McpControl;
   close(): Promise<void>;
 }
+
+/** What one group's load attempt produced. */
+export interface McpLoadResult {
+  id: string;
+  tools: string[];
+  error?: string;
+}
+
+/**
+ * The agent's handle on its own tool set. `load` attaches what a group needs
+ * and returns the tools that just became callable — the next round's tool list
+ * carries them (toolLoop rebuilds it every round).
+ */
+export interface McpControl {
+  index(): McpGroupView[];
+  loaded(): string[];
+  load(ids: string[]): Promise<McpLoadResult[]>;
+  unload(ids: string[]): { dropped: string[]; refused: string[] };
+}
+
+/** Attached sources, keyed so a source is started at most once per turn. */
+type SourceKey = 'known:codebase-memory' | 'known:context7' | 'custom:config' | 'custom:worktree';
 
 /**
  * Apply an access decision to what a source actually attached: drop the
@@ -69,29 +103,144 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
 
   // External MCPs (sandboxed codebase graph, Context7 docs, custom servers
   // from the admin config + the branch's .mcp.json) — merged into the tool
-  // set, but under the same phase boundary the in-process registry enforces:
-  // policy.ts decides whether a source attaches at all and whether it is
-  // reduced to its declared read-only tools. Order matters: on tool-name
-  // collisions the earlier source wins (asOpenAiTools dedupes, callTool
-  // matches first).
+  // set, but under two gates. policy.ts decides whether a source attaches at
+  // all and whether it is reduced to its declared read-only tools; groups.ts
+  // decides whether the chat asked for it in the first place. A group nobody
+  // loaded is never attached, so its server is never even started.
+  // Order matters: on tool-name collisions the earlier source wins
+  // (asOpenAiTools dedupes, callTool matches first).
   const known = mcpAccess('known', { phase: ctx.workflowPhase, kind: ctx.chatKind });
   const custom = mcpAccess('custom', { phase: ctx.workflowPhase, kind: ctx.chatKind });
-  const [knownAttachments, customAttachments] = await Promise.all([
-    known.attach
-      ? Promise.all([attachCodebaseMemory(ctx), attachContext7()])
-      : Promise.resolve([]),
-    custom.attach
-      ? attachCustomMcps(
-          ctx.worktreePath ? { worktreePath: ctx.worktreePath, chatId: ctx.chatId } : undefined,
-        )
-      : Promise.resolve([]),
-  ]);
-  const externals = [
-    ...applyAccess(knownAttachments, known),
-    ...applyAccess(customAttachments, custom),
-  ];
+  const defaults = defaultGroups(ctx.chatKind, ctx.workflowPhase);
+  // Shared with the tool context: load_mcp mutates this set and the next
+  // round's tool list follows.
+  const loaded = (ctx.loadedMcpGroups ??= new Set(defaults));
+  for (const id of defaults) loaded.add(id);
+
+  const attached = new Map<SourceKey, ExternalMcp>();
+  const customCtx = ctx.worktreePath
+    ? { worktreePath: ctx.worktreePath, chatId: ctx.chatId }
+    : undefined;
+
+  /** Servers of the loaded groups, per config source. */
+  const wantedServers = () => ({
+    config: serversForGroups([...loaded], groupIndex(ctx.worktreePath), 'config'),
+    worktree: serversForGroups([...loaded], groupIndex(ctx.worktreePath), 'worktree'),
+  });
+
+  /** Attach whatever the currently loaded groups need and is not up yet. */
+  const attachLoaded = async (): Promise<void> => {
+    const jobs: Array<Promise<void>> = [];
+    const add = (key: SourceKey, get: () => Promise<ExternalMcp | null>, access: McpAccess) => {
+      if (attached.has(key) || !access.attach) return;
+      jobs.push(
+        get().then((ext) => {
+          const [ok] = applyAccess([ext], access);
+          if (ok) attached.set(key, ok);
+        }),
+      );
+    };
+    if (loaded.has(CODEBASE_MEMORY_GROUP)) {
+      add('known:codebase-memory', () => attachCodebaseMemory(ctx), known);
+    }
+    if (loaded.has(CONTEXT7_GROUP)) add('known:context7', () => attachContext7(), known);
+
+    const wanted = wantedServers();
+    const needConfig = wanted.config.size > 0 && !attached.has('custom:config');
+    const needWorktree = wanted.worktree.size > 0 && !attached.has('custom:worktree');
+    if (custom.attach && (needConfig || needWorktree)) {
+      jobs.push(
+        (async () => {
+          const { global, worktree } = await attachCustomMcpsLabeled(customCtx, wanted);
+          const [g] = applyAccess([global], custom);
+          if (g && needConfig) attached.set('custom:config', g);
+          const [w] = applyAccess([worktree], custom);
+          if (w && needWorktree) attached.set('custom:worktree', w);
+        })(),
+      );
+    }
+    await Promise.all(jobs);
+  };
+
+  /**
+   * Attached sources narrowed to what the loaded groups actually cover. A
+   * custom bridge serves every server of its config, so its tools are filtered
+   * by name prefix; a known source is all-or-nothing.
+   */
+  const visible = (): ExternalMcp[] => {
+    const wanted = wantedServers();
+    const out: ExternalMcp[] = [];
+    for (const [key, ext] of attached) {
+      if (key === 'known:codebase-memory') {
+        if (loaded.has(CODEBASE_MEMORY_GROUP)) out.push(ext);
+      } else if (key === 'known:context7') {
+        if (loaded.has(CONTEXT7_GROUP)) out.push(ext);
+      } else {
+        const servers = key === 'custom:config' ? wanted.config : wanted.worktree;
+        const names = new Set([...ext.toolNames].filter((n) => toolBelongsTo(n, servers)));
+        if (names.size === 0) continue;
+        out.push({
+          ...ext,
+          toolNames: names,
+          openAiTools: ext.openAiTools.filter((t) => names.has(t.function.name)),
+        });
+      }
+    }
+    return out;
+  };
+
+  await attachLoaded();
+
+  const control: McpControl = {
+    index: () => groupViews(groupIndex(ctx.worktreePath), loaded, defaults),
+    loaded: () => [...loaded],
+    async load(ids) {
+      const index = groupIndex(ctx.worktreePath);
+      const results: McpLoadResult[] = [];
+      const fresh = ids.filter((id) => {
+        if (!index.some((g) => g.id === id)) {
+          results.push({ id, tools: [], error: `Unknown MCP group "${id}" — call query_mcps.` });
+          return false;
+        }
+        return true;
+      });
+      const before = new Set(visible().flatMap((e) => [...e.toolNames]));
+      for (const id of fresh) loaded.add(id);
+      await attachLoaded();
+      const after = visible();
+      for (const id of fresh) {
+        const servers = new Set(index.find((g) => g.id === id)?.servers ?? []);
+        const tools = after
+          .flatMap((e) => [...e.toolNames])
+          .filter((n) => !before.has(n) && (servers.size === 0 || toolBelongsTo(n, servers)));
+        results.push(
+          tools.length > 0
+            ? { id, tools }
+            : {
+                id,
+                tools: [],
+                error:
+                  `Group "${id}" exposed no tools — its server is unavailable, or the ` +
+                  `${ctx.workflowPhase} phase allows only tools that declare themselves read-only.`,
+              },
+        );
+      }
+      return results;
+    },
+    unload(ids) {
+      const dropped: string[] = [];
+      const refused: string[] = [];
+      for (const id of ids) {
+        if (defaults.includes(id)) refused.push(id);
+        else if (loaded.delete(id)) dropped.push(id);
+      }
+      return { dropped, refused };
+    },
+  };
+  ctx.mcp = control;
 
   return {
+    control,
     async asOpenAiTools() {
       const { tools } = await client.listTools();
       const own = tools.map((t) => {
@@ -111,17 +260,25 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
       // Dedupe colliding tool names across externals (e.g. the same server
       // name in the admin config and a branch .mcp.json) — first wins.
       const seen = new Set(own.map((t) => t.function.name));
-      const extTools = externals
+      const extTools = visible()
         .flatMap((e) => e.openAiTools)
         .filter((t) => (seen.has(t.function.name) ? false : (seen.add(t.function.name), true)));
       return [...own, ...extTools];
     },
     promptHints() {
-      return externals.map((e) => e.promptHint);
+      return visible().map((e) => e.promptHint);
     },
     async callTool(name, input) {
-      const ext = externals.find((e) => e.toolNames.has(name));
+      const ext = visible().find((e) => e.toolNames.has(name));
       if (ext) return ext.callTool(name, input);
+      // Attached but not in a loaded group: the model is calling a tool it saw
+      // before an unload, or one it never had. Say so instead of failing blind.
+      const unloaded = [...attached.values()].find((e) => e.toolNames.has(name));
+      if (unloaded) {
+        return JSON.stringify({
+          error: `Tool "${name}" belongs to an MCP group that is not loaded — call load_mcp for it first (query_mcps finds the group).`,
+        });
+      }
       try {
         const result = await client.callTool({ name, arguments: input }, undefined, {
           timeout: OWN_TOOL_TIMEOUT_MS,
@@ -142,7 +299,11 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
       }
     },
     async close() {
-      await Promise.allSettled([client.close(), server.close(), ...externals.map((e) => e.close())]);
+      await Promise.allSettled([
+        client.close(),
+        server.close(),
+        ...[...attached.values()].map((e) => e.close()),
+      ]);
     },
   };
 }

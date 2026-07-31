@@ -40,6 +40,11 @@ const schema = z.object({
   // Smaller model the testbench judge grades results with; call sites fall
   // back to OPENAI_MODEL when unset.
   JUDGE_MODEL: z.string().min(1).optional(),
+  // Small model that picks the skills and MCP groups a turn is hinted with
+  // (lib/agent/skillRouter). Required: without routing every prompt would
+  // carry every skill again, which is the cost this exists to remove — a
+  // silent fallback would hide a broken router forever.
+  SKILL_ROUTER_MODEL: z.string().min(1),
   OPENAI_MAX_TOKENS: z.coerce.number().int().positive().default(4096),
   // Reasoning effort forwarded to chat completions (reasoning models).
   // 'none' omits the parameter for backends that reject it.

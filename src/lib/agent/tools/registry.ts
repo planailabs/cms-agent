@@ -5,6 +5,7 @@
  */
 import type { z } from 'zod';
 import type { WorkflowPhase } from '../types';
+import type { McpControl } from '../mcp';
 
 /** Chat kinds: workflow chats, per-publish deployment chats, and the shared
  *  deployments system chat. */
@@ -29,6 +30,11 @@ export interface ToolContext {
   planMode?: boolean;
   /** Live user context per connected editor (fed by the preview overlay). */
   userContext: Map<string, unknown>;
+  /** MCP groups whose tools this chat has loaded (phase defaults + load_mcp).
+   *  Seeded by the handler from the chat row, mutated by the bridge. */
+  loadedMcpGroups?: Set<string>;
+  /** Load/unload handle, published by createMcpBridge for the capability tools. */
+  mcp?: McpControl;
   /** Paths written by tools during this chat's EXECUTE phase. */
   modifiedPaths: Set<string>;
 }
