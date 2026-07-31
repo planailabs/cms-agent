@@ -76,6 +76,24 @@ path without `.git` (git would otherwise walk up into a parent repo).
 `git init`s it, installs its dependencies, and prints the `.env` values
 (default destination: `./local/dev-site`, gitignored).
 
+## Development database
+
+Bring your own PostgreSQL (a system service or a container), or let the repo
+run one. `scripts/local-postgres.mjs` keeps a cluster under `var/postgres`,
+initialised from `DATABASE_URL` and listening only on the loopback host and
+port that URL names:
+
+```bash
+nix develop --command pnpm run db:start    # init if absent, start, create the database
+nix develop --command pnpm run db:status
+nix develop --command pnpm run db:stop
+```
+
+`db:start` is idempotent and refuses to adopt a foreign server already on that
+port. The unix socket lives in the data directory, so tools that connect
+without a host (`psql`, `pnpm bench`) need the `PGHOST`/`PGPORT` that
+`db:start` prints. Apply migrations with `pnpm exec prisma migrate deploy`.
+
 ## Running in development
 
 Inside `nix develop`, `overmind start` runs the CMS dev server with its embedded

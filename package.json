@@ -21,6 +21,9 @@
     "bench:proxy": "node testbench/launcher.mjs --group proxy",
     "bench:recovery": "node testbench/launcher.mjs --group recovery",
     "bench:auth": "node testbench/launcher.mjs --group auth",
+    "db:start": "node scripts/local-postgres.mjs start",
+    "db:stop": "node scripts/local-postgres.mjs stop",
+    "db:status": "node scripts/local-postgres.mjs status",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },

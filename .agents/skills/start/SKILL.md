@@ -27,8 +27,22 @@ request always overrides the local file.
   and report the choice needed. Never provision one or use deployment Compose.
 - **System:** reuse PostgreSQL managed by the host system. Start only a
   documented service without enabling it; never install or configure PostgreSQL.
-- **Project:** use only a repository-declared database lifecycle. The current
-  Procfile has none, so report that this mode is not configured.
+- **Project:** use only the repository-declared lifecycle — a cluster the repo
+  owns under `var/postgres`, initialised from `DATABASE_URL` and reachable only
+  on the loopback host and port that URL names. Run it through the dev shell,
+  which provides `initdb`/`pg_ctl`/`psql`:
+
+  ```bash
+  nix develop --command pnpm run db:status   # running / stopped / no cluster
+  nix develop --command pnpm run db:start    # init if absent, start, create the database
+  nix develop --command pnpm run db:stop     # only a cluster this repo started
+  ```
+
+  `db:start` is idempotent and refuses to adopt a foreign server on that port;
+  if it reports one, stop and ask which mode to use. Never run `initdb`,
+  `pg_ctl`, or `createdb` by hand, and never delete `var/postgres` — it holds
+  the local data. Other tools reach the cluster over its socket with
+  `PGHOST`/`PGPORT`, which `db:start` prints.
 
 If `src/generated/prisma/client.ts` is absent, generate it once; otherwise skip:
 

@@ -46,6 +46,9 @@ the embedded proxy on port `8080`.
   tests run it on SQLite (`scripts/prepare-test-db.mjs`).
 - On NixOS the Prisma CLI needs engine env vars:
   `source scripts/prisma-env.sh` (or `nix develop`).
+- Need a local PostgreSQL? `pnpm run db:start|db:stop|db:status` runs a
+  repo-owned cluster in `var/postgres` from `DATABASE_URL`
+  (`scripts/local-postgres.mjs`) — it never touches a server it did not start.
 - Workflow-phase transitions are POST endpoints, never chat text; tool
   availability is enforced in `src/lib/agent/tools/registry.ts` — keep it
   that way when adding tools (zod schema + `phases` + registered in
