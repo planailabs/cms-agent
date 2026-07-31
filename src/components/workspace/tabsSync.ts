@@ -1,8 +1,8 @@
 /**
  * Preview-tabs persistence — per (chat, user), stored via /api/chat/tabs and
- * synced live to the user's other sessions through the chat SSE channel
- * (`tabs_updated`). Kept separate from actions.ts so chat actions can import
- * it without an import cycle.
+ * carried to the user's other sessions by the chat-state snapshot (the server
+ * sends no per-tab event; session.ts feeds the snapshot's tabs in here). Kept
+ * separate from actions.ts so chat actions can import it without a cycle.
  */
 
 import { store } from '../chat/app/store';
@@ -10,7 +10,7 @@ import { branchPreviewUrl } from './config';
 import { previewBranchName } from './preview';
 import { getPreviewIframe } from './previewAgent';
 
-/** Identifies this browser session so its own tabs_updated echo is ignored. */
+/** Identifies this browser session so its own echo is ignored. */
 export const TABS_CLIENT_ID = crypto.randomUUID();
 
 /** Points the preview iframe at a route (direct src set — the frame region's
@@ -80,7 +80,7 @@ export const loadChatTabs = async (chatId: string): Promise<void> => {
   }
 };
 
-/** tabs_updated SSE event — apply when it is this user's from another session. */
+/** Snapshot tabs — apply when they are this user's, from another session. */
 export const onRemoteTabsUpdated = (data: Record<string, unknown>): void => {
   if (data.clientId === TABS_CLIENT_ID) return;
   if (data.userId !== store.state.user?.id) return;

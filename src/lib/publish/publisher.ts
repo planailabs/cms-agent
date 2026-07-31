@@ -147,7 +147,11 @@ export async function publish(
     throw new WorkflowError(`Unknown deploy flow: ${e.DEPLOY_FLOW}`, 500);
   }
 
-  // Approval bound to the exact sha; unique idempotency key dedupes retries
+  // Approval bound to the exact sha. The unique idempotency key makes a
+  // retried request fail at the database instead of recording a second
+  // approval — it does NOT replay the first attempt's outcome: the caller sees
+  // an error, not the original publicationId, and nothing here reconstructs
+  // it. Retry-safety is the automatism's, per step.
   await prisma.approval.create({
     data: {
       chatId: chat.id,
@@ -298,7 +302,11 @@ export async function reanchorExecutions(
 
 /** In-flight startPull chatIds — the DB guard below is check-then-create,
  *  so a double-click could otherwise start two pulls. */
-const pullStarting = new Set<string>();
+// Survives a Vite module reload: a second copy of this module would bring a
+// second empty set, and the double click this guards against is exactly what
+// a dev-time reload makes easy (see lib/preview/manager for the same reason).
+const g = globalThis as unknown as { __pullStarting?: Set<string> };
+const pullStarting: Set<string> = (g.__pullStarting ??= new Set<string>());
 
 /** Start a target→work sync for a workflow chat. Throws on invalid state. */
 export async function startPull(

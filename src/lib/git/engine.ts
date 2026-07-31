@@ -136,6 +136,12 @@ export async function defaultBranch(): Promise<string> {
   return branches.current;
 }
 
+/** Does this ref exist in the repo right now? (Callers that must not create
+ *  one — warming, listings — ask this before ensureWorktree, which would.) */
+export async function branchExists(branch: string): Promise<boolean> {
+  return (await repoGit().branchLocal()).all.includes(branch);
+}
+
 /** Create the git branch (from `base`, default main) if missing. */
 export async function ensureBranch(branch: string, base?: string): Promise<void> {
   const git = repoGit();

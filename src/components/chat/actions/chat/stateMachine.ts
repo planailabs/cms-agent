@@ -90,8 +90,12 @@ export const transition = (
 
   // Delay tool → waiting so the spinner shows for at least 500ms
   if (mc.phase === 'tool' && phase === 'waiting') {
+    // Bound to the chat that scheduled it: half a second is plenty of time to
+    // open another chat, and this would otherwise flip THAT chat's phase.
+    const forChatId = store.state.activeChatId;
     toolTransitionTimer = setTimeout(() => {
       toolTransitionTimer = null;
+      if (store.state.activeChatId !== forChatId) return;
       const cur = store.state.chat?.aiChat;
       // Only transition if still in tool phase (another event may have moved us)
       if (cur?.phase === 'tool') {

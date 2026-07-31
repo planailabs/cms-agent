@@ -121,13 +121,22 @@ export async function catchUpWithTarget(branch: string, target: string): Promise
  */
 export async function warmPrimaryBranches(): Promise<void> {
   const { prisma } = await import('@/lib/db');
-  const { defaultBranch } = await import('@/lib/git/engine');
+  const { branchExists, defaultBranch } = await import('@/lib/git/engine');
   const { ensureInstance, isInstanceActive, pinBranch, pinnedBranches, unpinBranch } =
     await import('./manager');
 
+  const fallback = await defaultBranch();
   const rows = await prisma.branch.findMany({ select: { name: true } });
-  const primary = new Set(rows.map((r) => r.name));
-  primary.add(await defaultBranch()); // always startable, row or not
+  // A Branch row outlives the ref it names — someone deletes the branch in the
+  // repo, the row is reconciled later. Warming such a row would RECREATE the
+  // branch (ensureWorktree → ensureBranch), so the deletion silently undoes
+  // itself and the ghost gets a preview. Warm only what exists.
+  const primary = new Set<string>();
+  for (const row of rows) {
+    if (await branchExists(row.name)) primary.add(row.name);
+    else console.log(`[prewarm] skipping ${row.name}: the branch no longer exists in the repo`);
+  }
+  primary.add(fallback); // always startable, row or not
 
   for (const stale of pinnedBranches()) {
     if (!primary.has(stale)) unpinBranch(stale);

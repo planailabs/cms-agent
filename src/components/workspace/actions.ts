@@ -138,7 +138,7 @@ export const undoExecutionAction = async (sha: string): Promise<void> => {
     card.busy = false;
     store.notify();
   }
-  // Success: the execution_reverted SSE event updates the card.
+  // Success: the chat-state snapshot that follows updates the card.
 };
 
 /** Publish the reviewed sha (phase bar / diff viewer / retry). */
@@ -177,7 +177,7 @@ export const syncAction = async (): Promise<void> => {
   const chatId = store.state.activeChatId;
   if (!chatId) return;
   await postJson(`/api/chats/${encodeURIComponent(chatId)}/sync`, {});
-  // Progress arrives as automatism messages + automatism_state events.
+  // Progress arrives as automatism messages + chat-state snapshots.
 };
 
 /** Step-bar ▶ Resume — re-runs the paused automatism's failed step. */
@@ -187,7 +187,7 @@ export const resumeAutomatismAction = async (): Promise<void> => {
   const res = await postJson(`/api/chats/${encodeURIComponent(chatId)}/resume-automatism`, {});
   if (res.ok) {
     const a = store.state.workspace.automatism;
-    // Optimistic; the automatism_state SSE event confirms right after
+    // Optimistic; the chat-state snapshot confirms right after
     if (a && a.forChatId === chatId) a.status = 'running';
     store.notify();
   }
@@ -272,13 +272,16 @@ export const loadDiffPages = async (): Promise<void> => {
 const CONTEXT_BEACON_MIN_INTERVAL_MS = 1000;
 let lastBeaconAt = 0;
 let beaconTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingBeacon: { url: string; route: string } | null = null;
+/** The beacon belongs to the chat whose preview navigated, not to whichever
+ *  chat is open a second later — the throttle delay is long enough to switch. */
+let pendingBeacon: { url: string; route: string; chatId: string } | null = null;
 
 const flushBeacon = (): void => {
-  const chatId = store.state.activeChatId;
   const payload = pendingBeacon;
   pendingBeacon = null;
-  if (!chatId || !payload) return;
+  if (!payload) return;
+  const chatId = payload.chatId;
+  if (store.state.activeChatId !== chatId) return; // switched away — that page context is over
   lastBeaconAt = Date.now();
   void fetch('/api/chat/context', {
     method: 'POST',
@@ -304,7 +307,9 @@ export const onPreviewNavigation = (url: string, route: string): void => {
     scheduleTabsSave();
   }
 
-  pendingBeacon = { url, route };
+  const beaconChatId = store.state.activeChatId;
+  if (!beaconChatId) return;
+  pendingBeacon = { url, route, chatId: beaconChatId };
   const elapsed = Date.now() - lastBeaconAt;
   if (elapsed >= CONTEXT_BEACON_MIN_INTERVAL_MS) {
     flushBeacon();

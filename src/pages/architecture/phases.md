@@ -24,7 +24,8 @@ There is no approval card and no approve step: a plan is something the user
 reads while the work happens, not a form they sign before it can start. The
 call still writes the immutable `Approval` row (plan hash + base sha +
 idempotency key) with the requesting user as actor, so the audit trail is
-unchanged. Steering happens through the conversation instead:
+unchanged. That key is a uniqueness constraint, not a replay cache: a repeated
+request is rejected, never answered with the first attempt's result. Steering happens through the conversation instead:
 
 - **Request changes** (`POST /api/chats/:id/request-changes`) → feedback goes
   into the chat, the phase returns to PLAN, and the agent plans again.

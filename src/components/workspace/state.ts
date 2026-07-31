@@ -60,7 +60,7 @@ export interface ContextChip {
 export interface ExecutionCard {
   sha: string;
   summary: string;
-  /** Set once execution_reverted arrives for this sha. */
+  /** Set once the chat-state snapshot reports this sha reverted. */
   reverted?: { revertSha: string; by: string };
   /** Revert POST in flight. */
   busy?: boolean;
@@ -311,7 +311,7 @@ export interface WorkspaceState {
    *  offer pending). Not chat-scoped — survives switches. */
   windowPicker: Array<{ id: string; label: string; updatedAt: string }> | null;
 
-  /** Sha to publish — from phase_changed.executionSha / execution_committed. */
+  /** Sha to publish — from the chat-state snapshot / execution_committed. */
   executionSha: string | null;
   /** Committed-execution cards shown in the chat. */
   executions: ExecutionCard[];
@@ -346,7 +346,7 @@ export interface WorkspaceState {
   targetAhead: boolean;
 }
 
-/** Mirror of the server's AutomatismState (history + automatism_state SSE). */
+/** Mirror of the server's AutomatismState (history + chat-state snapshot). */
 export interface AutomatismProgress {
   forChatId: string;
   automatismType: string;

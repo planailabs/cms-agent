@@ -1,4 +1,5 @@
 import { delegateEvent } from '../utils/dom';
+import { store } from '../app/store';
 import {
   sendChatMessage,
   answerChatQuestion,
@@ -255,7 +256,12 @@ export const registerChatEvents = (app: HTMLElement) => {
         btn.disabled = true;
         btn.classList.add('is-disabled');
       });
+      // The 200ms is only there so the pressed state is visible; the answer
+      // still belongs to the chat that asked the question, not to whichever
+      // chat is open when the timer lands.
+      const askedIn = store.state.activeChatId;
       setTimeout(() => {
+        if (store.state.activeChatId !== askedIn) return;
         answerChatQuestion(choice);
       }, 200);
     },

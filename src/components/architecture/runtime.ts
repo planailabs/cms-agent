@@ -473,12 +473,15 @@ sequenceDiagram
         <code>text_done</code>, <code>tool_start</code>, <code>tool_end</code>,
         <code>question</code>, <code>compaction_start</code>,
         <code>compaction</code>, <code>automatism</code>,
-        <code>execution_committed</code>, <code>execution_reverted</code>,
-        <code>validation_result</code>, <code>publish_log</code>,
-        <code>publish_done</code>, <code>memory_proposed</code>,
-        <code>version_restored</code>,
+        <code>execution_committed</code>, <code>publish_log</code>,
+        <code>compare_stale</code>, <code>open_compare</code>,
+        <code>ui_language</code>, <code>stopped</code>,
         <code>done</code>, <code>error</code>. Everything that is not in the
-        append-only list above is derivable from the snapshot.</li>
+        append-only list above is derivable from the snapshot — and the list is
+        exactly what the client listens for. Events nobody emits used to sit in
+        both halves (a <code>version_restored</code> the browser never heard, a
+        <code>publish_done</code> nobody sent), which reads as a live path and
+        hides the fact that the snapshot is doing the work.</li>
       <li><strong>Sequence and epoch are a stale-drop guard, nothing more.</strong>
         The sequence is per chat and per process; the epoch is regenerated on
         restart so clients reset with it. History snapshots carry sequence zero
@@ -498,6 +501,68 @@ sequenceDiagram
         avoid that the same way.</li>
     </ul>`,
     source: ['src/lib/agent/chatState.ts', 'src/lib/agent/bus.ts', 'src/pages/api/chat/events.ts'],
+  },
+
+  {
+    id: 'compare-alignment',
+    title: 'Compare alignment',
+    intro: `The before/after views compare two renderings of a page whose
+      content moved. Aligning them is not an image problem — the same paragraph
+      simply sits at a different y once something above it grew — so the
+      comparison is anchored on CONTENT, and the shots are re-rendered with real
+      spacing rather than sliced on a canvas.`,
+    diagrams: [
+      {
+        caption: 'From two pages to two comparable shots',
+        code: `
+flowchart TD
+  cap["Screenshot each side<br/>(main instance, branch instance)"] --> mark["Collect content markers<br/>tag + text prefix + occurrence"]
+  mark --> lcs["Match the two marker lists<br/>LCS, order-preserving"]
+  lcs --> conf{"Confidence above the floor?"}
+  conf -->|"no"| plain["Plain shots — the panes still<br/>work, they just do not co-scroll"]
+  conf -->|"yes"| part["Partition both shots into rectangles<br/>by full-span gaps (guillotine cuts)"]
+  part --> shape{"Trees match by shape?"}
+  shape -->|"no"| leaf["Align that region as one 1-D leaf"]
+  shape -->|"yes"| plan["Per leaf: how much filler each side needs"]
+  leaf --> plan
+  plan --> inject["Re-render with spacer divs injected<br/>— a real reflow, not a canvas slice"]
+  inject --> conv{"Residual above the threshold?"}
+  conv -->|"yes, and improving"| plan
+  conv -->|"no, or it regressed"| out["before-aligned / after-aligned<br/>+ the marker docs beside them"]
+`,
+      },
+    ],
+    notes: `<ul>
+      <li><strong>Markers are computed, never stored in the page.</strong> One
+        collector expression runs in Playwright before a capture and in the
+        side-by-side iframes through the overlay's eval channel, so both paths
+        see the same identities. Build-time attributes would mean modifying
+        every managed site's build; injected DOM markers would mutate the page
+        under test.</li>
+      <li><strong>Identity is content, not position.</strong> Tag plus a
+        whitespace-normalized text prefix (the src for images), with an
+        occurrence counter for duplicates — stable exactly where the content is
+        unchanged, which is what an alignment needs.</li>
+      <li><strong>Alignment is 2-D.</strong> Horizontal bands cannot express a
+        row of cards where one grew; recursive rectangle partitioning splits
+        that row into columns first, so each card expands on its own side.</li>
+      <li><strong>Filler is real layout.</strong> The aligned pair is produced
+        by injecting spacer elements and re-rendering, so text reflows and
+        sticky elements behave — a canvas that slid pixels around would show a
+        page that could never exist.</li>
+      <li><strong>It converges or it stops.</strong> Correction repeats while
+        the residual keeps improving, and a round that makes it materially worse
+        ends the process on the previous result. Low structural confidence skips
+        alignment altogether rather than inventing a correspondence: the
+        unaligned panes are honest, a wrong alignment is not.</li>
+    </ul>`,
+    source: [
+      'src/lib/compare/markers.ts',
+      'src/lib/compare/layout.ts',
+      'src/lib/compare/converge.ts',
+      'src/lib/compare/inject.ts',
+      'src/lib/diff/screenshot.ts',
+    ],
   },
 
   {
@@ -583,7 +648,7 @@ flowchart TD
 
   subgraph durable["In the database"]
     ver["Chat.entityVersion<br/>conditional updates, 409 on a lost race"]
-    idem["Approval.idempotencyKey<br/>unique — retries cannot double-record"]
+    idem["Approval.idempotencyKey<br/>unique — a retry is rejected,<br/>not replayed"]
     autos["Automatism status and step<br/>resume is exact"]
   end
 
@@ -595,12 +660,12 @@ flowchart TD
     <table>
       <thead><tr><th>Guard</th><th>Scope</th><th>Blocks</th></tr></thead>
       <tbody>
-        <tr><td>Turn lock</td><td>One chat</td><td>A second turn in the same chat. Automatism agent invocations wait for it, up to two minutes, rather than skipping the fix.</td></tr>
+        <tr><td>Turn lock</td><td>One chat</td><td>A second turn in the same chat. An automatism's repair turn waits for it (up to ten minutes — the agent that resumed the step is usually still finishing), folds a second failure into the invocation already waiting, and says so in the chat if it cannot start at all.</td></tr>
         <tr><td>Branch mutation lock</td><td>One work branch</td><td>Concurrent commits, reverts and rebases on that worktree.</td></tr>
         <tr><td>Target branch lock</td><td>One target branch</td><td>Two publishes merging into the same branch. Held for the merge only, not for the deploy.</td></tr>
         <tr><td>Install queue</td><td>The whole process</td><td>Parallel dependency installs, which only starve each other into the timeout.</td></tr>
         <tr><td>Entity version</td><td>One chat row</td><td>Two editors deciding at once. The loser is told the chat moved.</td></tr>
-        <tr><td>Idempotency key</td><td>One approval</td><td>Duplicate audit rows from a retried request.</td></tr>
+        <tr><td>Idempotency key</td><td>One approval</td><td>Duplicate audit rows from a retried request. It rejects the duplicate; it does not replay the first result, so a retry that arrives after the original succeeded gets an error rather than the publication it asked about.</td></tr>
       </tbody>
     </table>
     <p>All of the in-process guards hang off the global object rather than

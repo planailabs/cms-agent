@@ -2,7 +2,7 @@
  * Publish Card Reducer — pure state logic for the publish progress card.
  *
  * The card is created when the user clicks Publish (start), receives
- * streamed `publish_log` lines, and is finalized by `publish_done`.
+ * streamed `publish_log` lines, and is finalized by the chat-state snapshot.
  * Kept free of store/DOM access so it is unit-testable.
  */
 

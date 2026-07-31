@@ -7,17 +7,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   ensureBranch: vi.fn(async (_branch: string, _base?: string) => {}),
+  branchExists: vi.fn(async (_branch: string) => true),
   ensureInstance: vi.fn(async (_branch: string) => ({})),
   pinBranch: vi.fn((_branch: string) => {}),
   unpinBranch: vi.fn((_branch: string) => {}),
   pinned: [] as string[],
   postMessage: vi.fn(),
 }));
-const { ensureBranch, ensureInstance, pinBranch, unpinBranch, postMessage } = mocks;
+const { branchExists, ensureBranch, ensureInstance, pinBranch, unpinBranch, postMessage } = mocks;
 
 vi.mock('@/lib/git/engine', () => ({
   defaultBranch: async () => 'main',
   ensureBranch: mocks.ensureBranch,
+  // The warmer asks before it warms: a Branch row whose ref is gone must not
+  // be recreated by warming it.
+  branchExists: mocks.branchExists,
 }));
 vi.mock('@/lib/preview/manager', () => ({
   ensureInstance: mocks.ensureInstance,
@@ -260,6 +264,30 @@ describe('primary branch warmer', () => {
     expect(started.some((b) => b.startsWith('c-'))).toBe(false);
 
     await prisma.branch.delete({ where: { name: 'warm-release' } });
+  });
+
+  it('never warms a Branch row whose git ref is gone — warming would recreate it', async () => {
+    await prisma.branch.upsert({ where: { name: 'main' }, update: {}, create: { name: 'main' } });
+    await prisma.branch.upsert({
+      where: { name: 'deleted-in-repo' },
+      update: {},
+      create: { name: 'deleted-in-repo' },
+    });
+    // The branch was deleted in the repo; the row has not been reconciled yet.
+    branchExists.mockImplementation(async (b: string) => b !== 'deleted-in-repo');
+    ensureInstance.mockClear();
+    pinBranch.mockClear();
+
+    await warmPrimaryBranches();
+
+    // ensureInstance → ensureWorktree → ensureBranch would resurrect the ref,
+    // and the ghost branch would then have a preview of its own.
+    expect(ensureInstance.mock.calls.map((c) => c[0])).not.toContain('deleted-in-repo');
+    expect(pinBranch.mock.calls.map((c) => c[0])).not.toContain('deleted-in-repo');
+    expect(ensureInstance.mock.calls.map((c) => c[0])).toContain('main');
+
+    branchExists.mockImplementation(async () => true);
+    await prisma.branch.delete({ where: { name: 'deleted-in-repo' } });
   });
 
   it('drops the pin when a branch goes away', async () => {

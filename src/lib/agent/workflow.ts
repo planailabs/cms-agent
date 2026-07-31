@@ -102,11 +102,6 @@ function resumeTurn(
   })();
 }
 
-/** Every transition funnels through here — the snapshot IS the phase event. */
-function emitPhase(chatId: string, _workflowPhase: WorkflowPhase, _extra: object = {}): void {
-  emitChatState(chatId);
-}
-
 // ─── Transitions ─────────────────────────────────────────────────────────────
 
 /**
@@ -150,7 +145,7 @@ export async function approvePlan(opts: TransitionOpts): Promise<void> {
     // Audit record only — failing to write it must not strand the transition.
     console.error('[workflow] approval record failed:', err);
   }
-  emitPhase(opts.chatId, 'execute');
+  emitChatState(opts.chatId);
 
   if (chat.turnPhase === 'waiting_for_answer') {
     resumeTurn(
@@ -201,7 +196,7 @@ export async function startExecution(opts: {
     // Audit record only — failing to write it must not strand the transition.
     console.error('[workflow] shadow-plan approval record failed:', err);
   }
-  emitPhase(opts.chatId, 'execute');
+  emitChatState(opts.chatId);
 }
 
 /** EXECUTE → PLAN without starting another turn or discarding worktree changes. */
@@ -211,7 +206,7 @@ export async function returnToPlan(chatId: string): Promise<void> {
     throw new WorkflowError(`Cannot return to planning from the ${chat.workflowPhase} phase.`);
   }
   await updatePhase(chatId, chat.entityVersion, { workflowPhase: 'plan' });
-  emitPhase(chatId, 'plan');
+  emitChatState(chatId);
 }
 
 /** PLAN/EXECUTE → PLAN with feedback (revision round on the same branch). */
@@ -223,7 +218,7 @@ export async function requestChanges(opts: TransitionOpts & { feedback: string }
   await updatePhase(opts.chatId, opts.expectedVersion ?? chat.entityVersion, {
     workflowPhase: 'plan',
   });
-  emitPhase(opts.chatId, 'plan');
+  emitChatState(opts.chatId);
 
   // Which tool to ask for depends on the chat's mode — in explicit plan mode
   // (the /plan command) start_execution is not even exposed.
@@ -262,7 +257,7 @@ export async function handoffToPlan(
     await updatePhase(opts.chatId, opts.expectedVersion ?? chat.entityVersion, {
       workflowPhase: 'plan',
     });
-    emitPhase(opts.chatId, 'plan');
+    emitChatState(opts.chatId);
   }
 
   if (chat.turnPhase === 'waiting_for_answer') {
@@ -324,10 +319,11 @@ export async function finalizeExecution(opts: TransitionOpts & { summary?: strin
   }
 
   // Validation of the memory-sync leftovers before their commit (medved §21).
+  // Errors below abort the transition with the list in the message; warnings
+  // are recorded in the log. (There used to be a 'validation_result' SSE event
+  // here that no client ever listened for.)
   const issues = await validateWorktree(worktree);
-  if (issues.length > 0) {
-    broadcast(opts.chatId, 'validation_result', { type: 'validation_result', issues });
-  }
+  if (issues.length > 0) console.warn(`[workflow] validation issues in ${worktree}:`, issues);
   if (hasErrors(issues)) {
     throw new WorkflowError(
       `Validation failed:\n${issues
@@ -363,7 +359,7 @@ export async function finalizeExecution(opts: TransitionOpts & { summary?: strin
 
   // The snapshot carries the refreshed executionSha; the transcript card was
   // already anchored by git_commit's event.
-  emitPhase(opts.chatId, 'execute', { executionSha: sha });
+  emitChatState(opts.chatId);
 
   if (chat.turnPhase === 'waiting_for_answer') {
     resumeTurn(

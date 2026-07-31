@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { env } from '@/lib/env';
+import { isTickerRunning, startTicker, stopTicker } from '@/lib/ticker';
 import { ensureWorktree } from '@/lib/git/engine';
 import {
   ensureSandbox,
@@ -32,7 +33,6 @@ export interface PreviewInstance {
 
 interface ManagerState {
   instances: Map<string, { info: PreviewInstance; child: ChildProcess }>;
-  sweeper: ReturnType<typeof setInterval> | null;
   starting: Map<string, Promise<PreviewInstance>>;
   /** Boot-page wait streams notified when preview availability changes. */
   routesListeners: Set<() => void>;
@@ -53,7 +53,6 @@ const state: ManagerState =
   g.__previewManager ??
   (g.__previewManager = {
     instances: new Map(),
-    sweeper: null,
     starting: new Map(),
     routesListeners: new Set(),
     startErrors: new Map(),
@@ -172,11 +171,15 @@ function freePort(): Promise<number> {
  * time, and parallel installs only starve each other — one of them ends up
  * killed on the 5-minute timeout.
  */
-let installQueue: Promise<unknown> = Promise.resolve();
+// On globalThis with the rest of the manager state: two copies of this module
+// mean two queues, and two parallel `npm install` runs in the same worktree
+// starve each other into the timeout — which is the whole point of a queue.
+const installState = ((globalThis as unknown as { __previewInstallQueue?: { p: Promise<unknown> } })
+  .__previewInstallQueue ??= { p: Promise.resolve() });
 
 export function queueInstall<T>(run: () => Promise<T>): Promise<T> {
-  const next = installQueue.catch(() => {}).then(run);
-  installQueue = next.catch(() => {}); // one failure must not break the queue
+  const next = installState.p.catch(() => {}).then(run);
+  installState.p = next.catch(() => {}); // one failure must not break the queue
   return next;
 }
 
@@ -188,10 +191,48 @@ function readDepsStamp(stampPath: string): string | null {
   }
 }
 
+/** Lockfile → the command that owns it. First match wins, npm last (its
+ *  lockfile is the one most likely to be present alongside another). */
+const PACKAGE_MANAGERS: Array<{ lockfile: string; install: string }> = [
+  { lockfile: 'pnpm-lock.yaml', install: 'pnpm install --prod=false' },
+  { lockfile: 'yarn.lock', install: 'yarn install --production=false' },
+  { lockfile: 'bun.lockb', install: 'bun install' },
+  // --include=dev: dev servers need devDependencies (astro usually lives there)
+  { lockfile: 'package-lock.json', install: 'npm install --no-audit --no-fund --include=dev' },
+];
+
 /**
- * Site deps: install when the checkout has none, when package.json changed
- * since the last install (the agent can edit site deps mid-chat), or when
- * `force` is set (boot-page retry = repair).
+ * Which installer this checkout expects, and the lockfile that decides it.
+ * Running `npm install` in a pnpm repo rewrites the tree its lockfile
+ * describes and can install versions the site was never tested with.
+ */
+export function packageManagerFor(worktree: string): { lockfile: string | null; install: string } {
+  for (const pm of PACKAGE_MANAGERS) {
+    if (fs.existsSync(path.join(worktree, pm.lockfile))) return pm;
+  }
+  return { lockfile: null, install: PACKAGE_MANAGERS[PACKAGE_MANAGERS.length - 1].install };
+}
+
+/** Fingerprint of what an install would produce: the manifest and the lockfile
+ *  that pins it. package.json alone misses `npm install` writing a new lock. */
+export function depsFingerprint(worktree: string, lockfile: string | null): string {
+  const hash = createHash('sha256');
+  hash.update(fs.readFileSync(path.join(worktree, 'package.json')));
+  if (lockfile) {
+    try {
+      hash.update(fs.readFileSync(path.join(worktree, lockfile)));
+    } catch {
+      // Deleted between the check and here — a missing lock is its own state.
+      hash.update('no-lockfile');
+    }
+  }
+  return hash.digest('hex');
+}
+
+/**
+ * Site deps: install when the checkout has none, when the manifest or the
+ * lockfile changed since the last install (the agent can edit site deps
+ * mid-chat), or when `force` is set (boot-page retry = repair).
  */
 async function ensureDeps(
   sb: SandboxState,
@@ -199,9 +240,9 @@ async function ensureDeps(
   branch: string,
   force = false,
 ): Promise<void> {
-  const pkgPath = path.join(worktree, 'package.json');
-  if (!fs.existsSync(pkgPath)) return;
-  const hash = createHash('sha256').update(fs.readFileSync(pkgPath)).digest('hex');
+  if (!fs.existsSync(path.join(worktree, 'package.json'))) return;
+  const { lockfile, install } = packageManagerFor(worktree);
+  const hash = depsFingerprint(worktree, lockfile);
   const stampPath = path.join(worktree, 'node_modules', '.cms-deps-hash');
   const stamp = readDepsStamp(stampPath); // null = never installed by us
   if (!force && stamp === hash) return;
@@ -209,17 +250,19 @@ async function ensureDeps(
     // The queue may have been long — another install for this worktree could
     // have finished it meanwhile.
     if (!force && readDepsStamp(stampPath) === hash) return;
-    console.log(`[preview] installing site dependencies in ${worktree}…`);
-    // --include=dev: dev servers need devDependencies (astro usually lives there)
-    const r = await runSandboxed(sb, 'npm install --no-audit --no-fund --include=dev', {
+    console.log(`[preview] installing site dependencies in ${worktree} (${install})…`);
+    const r = await runSandboxed(sb, install, {
       cwd: worktree,
       sessionKey: branch,
       timeoutMs: 5 * 60_000,
     });
     if (r.code !== 0) {
-      throw new Error(`npm install failed (${r.code}): ${(r.stderr || r.stdout).slice(-2000)}`);
+      throw new Error(`${install} failed (${r.code}): ${(r.stderr || r.stdout).slice(-2000)}`);
     }
-    fs.writeFileSync(stampPath, hash);
+    // Fingerprint the tree the installer LEFT: it may have written or updated
+    // the lockfile itself, and stamping the pre-install hash would make the
+    // next boot reinstall every time.
+    fs.writeFileSync(stampPath, depsFingerprint(worktree, lockfile));
   });
 }
 
@@ -237,11 +280,14 @@ async function waitForHttp(host: string, port: number, timeoutMs = 90_000): Prom
   throw new Error(`Preview development environment at ${url} did not come up within ${timeoutMs}ms`);
 }
 
+/** One named ticker for idle sweeping: it skips overlapping passes, survives
+ *  a dev reload by name instead of by module-level state, and is visible to
+ *  whoever asks which background loops are running (lib/ticker.ts). */
+const SWEEPER = 'preview-sweeper';
+
 function startSweeper(): void {
-  if (state.sweeper) return;
-  state.sweeper = setInterval(() => void sweepIdle(), 60_000);
-  // Don't keep the process alive just for the sweeper
-  if (typeof state.sweeper === 'object' && 'unref' in state.sweeper) state.sweeper.unref();
+  if (isTickerRunning(SWEEPER)) return;
+  startTicker(SWEEPER, 60_000, sweepIdle);
 }
 
 async function sweepIdle(): Promise<void> {
@@ -455,10 +501,7 @@ export function listInstances(): PreviewInstance[] {
 
 export async function shutdownAll(): Promise<void> {
   await Promise.all([...state.instances.keys()].map((b) => stopInstance(b)));
-  if (state.sweeper) {
-    clearInterval(state.sweeper);
-    state.sweeper = null;
-  }
+  stopTicker(SWEEPER);
 }
 
 /** Initialize the fallback routes file before the embedded proxy starts. */

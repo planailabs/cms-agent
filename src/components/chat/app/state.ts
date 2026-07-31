@@ -162,10 +162,10 @@ export interface AppState {
   activeChatKind: string;
   /** Title fallback for chats not in the sidebar list (archived chats). */
   activeChatTitle: string | null;
-  /** Active chat is archived (chat history / chat_archived SSE) — the
+  /** Active chat is archived (chat history / chat-state snapshot) — the
    *  composer is replaced by a note and the server rejects turns anyway. */
   activeChatArchived: boolean;
-  /** Workflow phase of the active chat (updated by phase_changed SSE event) */
+  /** Workflow phase of the active chat (updated by the chat-state snapshot) */
   workflowPhase: WorkflowPhase;
 
   // ─── Chat State ────────────────────────────────────────────────────────────

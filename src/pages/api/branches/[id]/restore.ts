@@ -7,7 +7,8 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
-import { broadcast, withBranchLock } from '@/lib/agent/bus';
+import { withBranchLock } from '@/lib/agent/bus';
+import { emitChatStatesForBranch } from '@/lib/agent/chatState';
 import { restoreVersion } from '@/lib/git/engine';
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -30,17 +31,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     restoreVersion(branch.name, body.sha!, body.paths, { name: user.name, email: user.email }),
   );
 
-  if (restoreSha) {
-    const chats = await prisma.chat.findMany({ where: { branchId: branch.id }, select: { id: true } });
-    for (const c of chats) {
-      broadcast(c.id, 'version_restored', {
-        type: 'version_restored',
-        sha: body.sha,
-        restoreSha,
-        by: user.name,
-      });
-    }
-  }
+  // The restore commit moves the branch head, so every chat on it is showing
+  // a stale sha. Push the authoritative snapshot rather than an event: the
+  // 'version_restored' event this used to send had no listener at all, so the
+  // workspace only caught up on the next reload.
+  if (restoreSha) emitChatStatesForBranch(branch.id);
 
   return new Response(JSON.stringify({ ok: true, restoreSha }), {
     headers: { 'Content-Type': 'application/json' },

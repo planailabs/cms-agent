@@ -25,12 +25,6 @@ const proposeMemoryTool: ToolDef = {
     const candidate = await prisma.memoryCandidate.create({
       data: { chatId: ctx.chatId, content: input.content, source: input.source, reason: input.reason },
     });
-    broadcast(ctx.chatId, 'memory_proposed', {
-      type: 'memory_proposed',
-      candidateId: candidate.id,
-      content: input.content,
-      reason: input.reason,
-    });
     return JSON.stringify({ success: true, candidateId: candidate.id, status: 'pending approval' });
   },
 };

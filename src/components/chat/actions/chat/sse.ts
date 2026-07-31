@@ -112,14 +112,17 @@ export const connectEvents = (): Promise<void> => {
 
       // Register event listeners BEFORE waiting for open — avoids missing
       // events that arrive between onopen and listener registration
+      // Exactly the events the server sends (see broadcast() call sites). A
+      // listener for an event nobody emits is not harmless: it reads as a live
+      // path, so the state it was supposed to update looks handled when the
+      // 'state' snapshot is in fact the only thing carrying it.
       const eventTypes = [
         'thinking', 'text_delta', 'text_done', 'tool_start', 'tool_end',
         'compaction_start', 'compaction',
-        'question', 'phase_changed', 'stopped', 'done', 'error',
+        'question', 'stopped', 'done', 'error',
         // Workspace events (execution/publish lifecycle, chat meta)
-        'state', 'ui_language', 'open_compare', 'execution_committed', 'execution_reverted', 'publish_log', 'publish_done',
-        'chat_renamed', 'tabs_updated', 'automatism', 'automatism_state', 'chat_archived',
-        'compare_stale',
+        'state', 'ui_language', 'open_compare', 'execution_committed', 'publish_log',
+        'automatism', 'compare_stale',
       ];
       for (const type of eventTypes) {
         es.addEventListener(type, (event) => {
