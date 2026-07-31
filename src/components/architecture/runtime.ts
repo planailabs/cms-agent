@@ -277,6 +277,19 @@ flowchart LR
       <li><strong>Deployment chats borrow the EXECUTE tool set.</strong> Their
         stored phase is <code>published</code>, but the context handed to the
         registry says execute, which is what lets them resolve conflicts.</li>
+      <li><strong>A paused automatism brings its own tools.</strong> The failed
+        step declares what its repair needs — conflict tools for a rebase, the
+        site diagnostics for a broken page, read-only publication state for a
+        deploy — and that set REPLACES the phase's for the repair turn. The
+        phase describes what the user's work is up to; a stopped step is a
+        different job. It also means the flow no longer moves the chat into
+        EXECUTE behind the user's back just to unlock writes, and no longer
+        owes it a restore afterwards.</li>
+      <li><strong>Starting or ending a repair ends the run.</strong> The tool
+        set and the prompt were built for that contract, so
+        <code>resume_automatism</code> ends the run exactly the way a
+        workflow-phase flip does and the handler starts a fresh one — the user
+        still sees a single turn.</li>
       <li><strong>External MCP servers are first-class but jailed.</strong>
         Servers defined in an admin-global config and in the branch's own repo
         config are bridged into the same tool namespace; the whole runtime for
@@ -328,6 +341,7 @@ flowchart LR
     </ul>`,
     source: [
       'src/lib/agent/tools/registry.ts',
+      'src/lib/automatism.ts',
       'src/lib/agent/mcp/index.ts',
       'src/lib/agent/mcp/policy.ts',
       'src/lib/agent/mcp/groups.ts',

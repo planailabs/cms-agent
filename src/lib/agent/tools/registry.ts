@@ -6,6 +6,7 @@
 import type { z } from 'zod';
 import type { WorkflowPhase } from '../types';
 import type { McpControl } from '../mcp';
+import type { RepairContext } from '../../automatism';
 
 /** Chat kinds: workflow chats, per-publish deployment chats, and the shared
  *  deployments system chat. */
@@ -33,6 +34,13 @@ export interface ToolContext {
   /** MCP groups whose tools this chat has loaded (phase defaults + load_mcp).
    *  Seeded by the handler from the chat row, mutated by the bridge. */
   loadedMcpGroups?: Set<string>;
+  /**
+   * Set while this turn is repairing a paused automatism: the failed step
+   * brings its own tools, and they REPLACE the phase's (see lib/automatism).
+   * Cleared by resume_automatism — leaving the repair is a contract change,
+   * so the run ends and a fresh one starts, exactly like a phase flip.
+   */
+  repair?: RepairContext;
   /** Load/unload handle, published by createMcpBridge for the capability tools. */
   mcp?: McpControl;
   /** Paths written by tools during this chat's EXECUTE phase. */
@@ -82,6 +90,29 @@ export function toolsForPhase(
   );
 }
 
+/**
+ * The tool set for one turn.
+ *
+ * A repair turn gets the failed step's own set instead of the chat's phase
+ * tools. The phase describes what the USER's work is up to; a paused step is
+ * a different job with different needs, and inheriting the phase meant either
+ * moving the chat into EXECUTE by force to unlock writes or leaving the agent
+ * without the tools it was invoked to use. Chat-kind scoping still applies —
+ * a repair cannot reach tools that chat kind never has.
+ */
+export function toolsForTurn(ctx: ToolContext): ToolDef[] {
+  if (!ctx.repair) {
+    return toolsForPhase(ctx.workflowPhase, ctx.chatKind, ctx.deployFlowId, ctx.planMode);
+  }
+  const wanted = ctx.repair.tools;
+  return [...registry.values()].filter(
+    (t) =>
+      wanted.has(t.name) &&
+      (t.kinds ?? ['workflow']).includes(ctx.chatKind) &&
+      (!t.flows || (ctx.deployFlowId != null && t.flows.includes(ctx.deployFlowId))),
+  );
+}
+
 const allowedInMode = (tool: ToolDef, planMode: boolean): boolean =>
   tool.planMode === 'only' ? planMode : tool.planMode === 'never' ? !planMode : true;
 
@@ -107,17 +138,30 @@ export async function executeTool(
   if (tool.flows && (!ctx.deployFlowId || !tool.flows.includes(ctx.deployFlowId))) {
     return JSON.stringify({ error: `Tool "${name}" belongs to another deploy flow.` });
   }
-  if (!allowedInMode(tool, ctx.planMode ?? false)) {
-    return JSON.stringify({
-      error: ctx.planMode
-        ? `Tool "${name}" is not available while this chat is in plan mode — propose_plan instead.`
-        : `Tool "${name}" needs the /plan command to be active in this chat.`,
-    });
-  }
-  if (!tool.phases.includes(ctx.workflowPhase)) {
-    return JSON.stringify({
-      error: `Tool "${name}" is not allowed in the ${ctx.workflowPhase} phase.`,
-    });
+  // A repair turn is authorized by its step, not by the phase: the same list
+  // that produced the tool set is re-checked here, so a hallucinated call to
+  // something the step did not ask for is refused like any other.
+  if (ctx.repair) {
+    if (!ctx.repair.tools.has(name)) {
+      return JSON.stringify({
+        error:
+          `Tool "${name}" is not part of repairing step "${ctx.repair.stepName}" of the ` +
+          `${ctx.repair.type} automatism. Fix that step, then call resume_automatism.`,
+      });
+    }
+  } else {
+    if (!allowedInMode(tool, ctx.planMode ?? false)) {
+      return JSON.stringify({
+        error: ctx.planMode
+          ? `Tool "${name}" is not available while this chat is in plan mode — propose_plan instead.`
+          : `Tool "${name}" needs the /plan command to be active in this chat.`,
+      });
+    }
+    if (!tool.phases.includes(ctx.workflowPhase)) {
+      return JSON.stringify({
+        error: `Tool "${name}" is not allowed in the ${ctx.workflowPhase} phase.`,
+      });
+    }
   }
   if (!tool.execute) {
     return JSON.stringify({ error: `Tool "${name}" is client-side and cannot be executed here.` });

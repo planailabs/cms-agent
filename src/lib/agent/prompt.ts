@@ -31,6 +31,8 @@ export interface PromptInput {
   mcpHints?: string[];
   /** Every MCP group this chat can load, with its current state. */
   mcpGroups?: McpGroupView[];
+  /** Set while the turn repairs a paused automatism step (lib/automatism). */
+  repair?: { type: string; stepName: string; tools: string[] };
   /** Skills the router selected for this turn (undefined: no routing ran). */
   routedSkills?: string[];
   /** MCP groups the router flagged as likely relevant — candidates, not loads. */
@@ -236,12 +238,35 @@ function mcpGroupSection(input: PromptInput): string {
   );
 }
 
+/**
+ * A repair turn is not the chat's ordinary work. The agent was invoked because
+ * a flow stopped, it holds only the tools that step asked for, and the way out
+ * is resume_automatism — so the prompt says that rather than leaving the model
+ * to infer it from a tool list that suddenly looks different.
+ */
+function repairSection(input: PromptInput): string {
+  if (!input.repair) return '';
+  return (
+    `A "${input.repair.type}" automatism is PAUSED at its "${input.repair.stepName}" step, and this ` +
+    `turn exists to unblock it.\n` +
+    `- Your tools for this turn are the ones that step needs, not this chat's usual set: ` +
+    `${input.repair.tools.join(', ')}.\n` +
+    `- Fix the cause of the failure described in the [Automatism] messages above, then call ` +
+    `resume_automatism — the failed step re-runs and the flow continues. Do not announce a fix ` +
+    `without making it; the step is re-run, not taken on trust.\n` +
+    `- If the fix needs a person (credentials, a decision, something outside this repository), ` +
+    `call needs_human_attention with exactly what is required.\n` +
+    `- The workflow phase of this chat is unchanged and is not what governs you here.`
+  );
+}
+
 export function buildSystemPrompt(input: PromptInput): string {
   const directive = languageDirective(input.locale);
   const backend = activeBackend();
   const plugins = pluginPromptSection(input.worktreePath, input.routedSkills);
   const hints = input.mcpHints?.length ? input.mcpHints.map((h) => `- ${h}`).join('\n') : '';
   const groups = mcpGroupSection(input);
+  const repair = repairSection(input);
   if (input.kind === 'deployments' || input.kind === 'deployment') {
     const base = input.kind === 'deployment' ? DEPLOYMENT_PROMPT : DEPLOYMENTS_PROMPT;
     let p = base.replace('{site}', backend.promptLabel).replace('{language_directive}', directive);
@@ -250,6 +275,7 @@ export function buildSystemPrompt(input: PromptInput): string {
     if (plugins) p += `\n\n${plugins}`;
     if (hints) p += `\n\n${hints}`;
     if (groups) p += `\n\n${groups}`;
+    if (repair) p += `\n\n${repair}`;
     if (input.communicationMode !== 'technical') p += `\n\n${NON_TECHNICAL_DIRECTIVE}`;
     return p;
   }
@@ -297,6 +323,9 @@ with a concise 3–6 word title in the language of the user's latest message des
   }
   if (groups) {
     prompt += `\n\n${groups}`;
+  }
+  if (repair) {
+    prompt += `\n\n${repair}`;
   }
   if (input.communicationMode !== 'technical') {
     prompt += `\n\n${NON_TECHNICAL_DIRECTIVE}`;

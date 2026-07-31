@@ -38,6 +38,7 @@ import { registerSkillScriptTools } from './tools/skillScriptTools';
 import { registerImageTools } from './tools/imageTools';
 import { registerFirecrawlTools } from './tools/firecrawlTools';
 import { getApprovedMemories } from '@/lib/memory';
+import { activeRepair } from '@/lib/automatism';
 import { getUserContextStore } from './userContext';
 import { ensureWorktree } from '@/lib/git/engine';
 import { communicationModeForUser } from '@/lib/communicationMode';
@@ -287,6 +288,10 @@ export async function handleChatMessage(
     userContext: getUserContextStore(chatId),
     modifiedPaths: new Set(),
     loadedMcpGroups: new Set(loadedMcpGroups),
+    // A paused automatism hands this turn the failed step's tools instead of
+    // the phase's (lib/automatism). Resolved per run below, because resuming
+    // ends the repair mid-turn.
+    repair: opts.skipPersistence ? undefined : ((await activeRepair(chatId)) ?? undefined),
   };
 
   const [extension, approvedMemories, communicationMode, taskList] = opts.skipPersistence
@@ -307,6 +312,12 @@ export async function handleChatMessage(
   // because nothing here broadcasts 'done' between runs.
   let taskListForRun = taskList;
   for (let run = 1; ; run++) {
+    // Re-resolved each run: the previous one may have resumed the automatism
+    // (repair over — back to the phase tools) or a step may have failed while
+    // it worked (repair on).
+    if (!opts.skipPersistence && run > 1) {
+      toolContext.repair = (await activeRepair(chatId)) ?? undefined;
+    }
     const outcome = await runToolLoop({
       chatId,
       userId,

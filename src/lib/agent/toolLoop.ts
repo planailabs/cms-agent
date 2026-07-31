@@ -143,6 +143,9 @@ export type ToolLoopOutcome =
   | { type: 'finished' }
   /** The user pressed stop — like 'finished' for the handler: no new run. */
   | { type: 'stopped' }
+  /** The contract this run was built for changed: the workflow phase moved,
+   *  or the turn entered or left an automatism repair (which brings its own
+   *  tools). Either way the handler starts a fresh run. */
   | { type: 'phase_changed'; phase: WorkflowPhase };
 
 export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome> {
@@ -270,6 +273,15 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       mcpGroups: groupViews,
       routedSkills: routed.skills,
       routedGroups: routed.groups,
+      ...(toolContext.repair
+        ? {
+            repair: {
+              type: toolContext.repair.type,
+              stepName: toolContext.repair.stepName,
+              tools: [...toolContext.repair.tools].sort(),
+            },
+          }
+        : {}),
     });
     const detectLoop = createLoopDetector();
     let compactedForRequest = false;
@@ -370,6 +382,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     // instead of continuing to plan with EXECUTE tools — or worse, promising
     // an implementation it has no write tools to carry out.
     const runPhase = toolContext.workflowPhase;
+    // A repair's tool set and prompt are as much this run's contract as the
+    // phase is; starting or ending one invalidates the snapshot the same way.
+    const runRepair = toolContext.repair?.automatismId ?? null;
     let modifiedBefore = toolContext.modifiedPaths.size;
     let rounds = 0;
     while (rounds < MAX_TOOL_ROUNDS) {
@@ -377,6 +392,12 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       if (toolContext.workflowPhase !== runPhase) {
         console.log(
           `[agent] chat=${chatId} phase ${runPhase} → ${toolContext.workflowPhase}, restarting the run`,
+        );
+        return { type: 'phase_changed', phase: toolContext.workflowPhase };
+      }
+      if ((toolContext.repair?.automatismId ?? null) !== runRepair) {
+        console.log(
+          `[agent] chat=${chatId} repair ${runRepair ?? '-'} → ${toolContext.repair?.automatismId ?? '-'}, restarting the run`,
         );
         return { type: 'phase_changed', phase: toolContext.workflowPhase };
       }

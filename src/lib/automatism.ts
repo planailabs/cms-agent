@@ -22,12 +22,68 @@ export type AutomatismMessage = string | TranslatedMessage;
 
 export interface AutomatismStep {
   name: string;
+  /**
+   * Tools the repair turn for THIS step gets, beyond the common core below.
+   *
+   * A paused step is a specific job — resolve these conflicts, fix this
+   * build, get this page rendering again — and the tools it needs follow from
+   * the job, not from whatever workflow phase the chat happens to sit in.
+   * Inheriting the phase meant either handing a planning chat write tools by
+   * force (the flow used to move the chat into EXECUTE for the duration) or
+   * leaving the agent unable to do the very thing it was invoked for.
+   *
+   * Unset: the step declares no repair of its own and falls back to the
+   * chat's phase tools, which is the old behaviour for flows that want it.
+   */
+  repairTools?: string[];
   run(data: AutomatismData, post: (msg: AutomatismMessage) => Promise<void>): Promise<void>;
 }
 
 export interface AutomatismDef {
   type: string;
   steps: AutomatismStep[];
+}
+
+/**
+ * Always in a repair turn: how to look around, how to ask, and the two ways
+ * out — resume when it is fixed, hand it to a human when it is not. Listing
+ * these per step would be noise that hides the tools that actually differ.
+ */
+export const REPAIR_CORE_TOOLS = [
+  'read_file',
+  'list_dir',
+  'grep',
+  'git_log',
+  'git_status',
+  'git_diff',
+  'ask_question',
+  'use_skill',
+  'query_skills',
+  'query_mcps',
+  'load_mcp',
+  'unload_mcp',
+  'resume_automatism',
+  'needs_human_attention',
+  'set_chat_title',
+  'user_ui_change_language',
+] as const;
+
+/** What a paused automatism grants the chat repairing it. */
+export interface RepairContext {
+  automatismId: string;
+  type: string;
+  /** Index and name of the failed step. */
+  step: number;
+  stepName: string;
+  /** Exactly the tools this repair turn may see and call. */
+  tools: Set<string>;
+}
+
+/** The tools a step's repair turn gets, or null when it declares none. */
+export function repairToolsFor(type: string, step: number): Set<string> | null {
+  const declared = types.get(type)?.steps[step]?.repairTools;
+  if (!declared) return null;
+  return new Set([...REPAIR_CORE_TOOLS, ...declared]);
 }
 
 /** Thrown by steps to direct the failure handling (agent chat, message). */
@@ -386,6 +442,26 @@ async function reinvokeAbandonedRepairs(): Promise<void> {
     console.log(`[automatism] ${row.id} paused with no repair turn — invoking the agent`);
     void invokeAgent(chatId, data.actorId);
   }
+}
+
+/**
+ * The repair a chat is currently on the hook for: the newest paused
+ * automatism actionable from it, resolved to the failed step's tool set.
+ * Null when nothing is paused, or when that step declares no tools of its own
+ * (then the chat's phase decides, as before).
+ */
+export async function activeRepair(chatId: string): Promise<RepairContext | null> {
+  const row = await findPausedAutomatism(chatId);
+  if (!row) return null;
+  const tools = repairToolsFor(row.type, row.step);
+  if (!tools) return null;
+  return {
+    automatismId: row.id,
+    type: row.type,
+    step: row.step,
+    stepName: types.get(row.type)?.steps[row.step]?.name ?? String(row.step),
+    tools,
+  };
 }
 
 /** Newest paused automatism actionable from `chatId` (home or agent chat). */

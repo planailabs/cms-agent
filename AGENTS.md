@@ -174,6 +174,18 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
   into the chat and sets `lastError` so Retry is on screen. Boot recovery also
   re-invokes paused flows whose failure notice is still the last message,
   i.e. whose repair turn never happened.
+- A paused automatism brings its OWN tools (`AutomatismStep.repairTools` +
+  `REPAIR_CORE_TOOLS`, resolved by `activeRepair` and applied in
+  `toolsForTurn`/`executeTool`). The failed step knows what its repair needs;
+  the chat's workflow phase does not, and inheriting it meant the flow shoved
+  the chat into EXECUTE to unlock writes and owed it a restore. Automatisms no
+  longer touch `workflowPhase` at all. Two consequences to keep true when
+  adding a step: declare `repairTools` or the step falls back to phase tools,
+  and `assertWritable` treats a repair that asked for write_file/edit_file as
+  authorized (that is what replaced the phase forcing).
+- Entering or leaving a repair is a CONTRACT change, like a workflow-phase
+  flip: the run's prompt and tool set were built for it, so `resume_automatism`
+  clears `ctx.repair` and the loop restarts the run (`phase_changed`).
 - Site health is a backend capability, not an Astro special case
   (`SiteBackend.detectSiteErrors`, `src/lib/site/health.ts`): "broken" means
   a 5xx from the dev server for Astro and nothing at all for a static site,

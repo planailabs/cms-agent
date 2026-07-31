@@ -27,7 +27,7 @@ vi.mock('@/lib/git/engine', async () => {
 });
 
 import { prisma } from '@/lib/db';
-import { findPausedAutomatism, resumeAutomatism } from '@/lib/automatism';
+import { activeRepair, findPausedAutomatism, resumeAutomatism } from '@/lib/automatism';
 import { startSiteCheck } from '@/lib/publish/publisher';
 
 const broken: ValidationIssue = {
@@ -91,7 +91,7 @@ describe('the site-check step', () => {
     expect(texts.some((t) => t.includes('without errors'))).toBe(true);
   });
 
-  it('pauses on a broken draft, hands the agent the error, and gives it EXECUTE', async () => {
+  it('pauses on a broken draft and hands the agent the error, without touching the phase', async () => {
     checkSiteHealth.mockResolvedValue([broken]);
     await startSiteCheck(chatId, 'sitecheck-user');
 
@@ -99,9 +99,15 @@ describe('the site-check step', () => {
     const paused = await findPausedAutomatism(chatId);
     expect(paused?.lastError).toContain('Hero.astro');
 
-    // Read-only PLAN would leave the agent unable to fix what it was asked to.
+    // The repair turn's tools come from the step (repairTools), so the chat
+    // stays exactly where the user left it — this flow used to shove it into
+    // EXECUTE just to unlock the file tools, and owed it a restore afterwards.
     const chat = await prisma.chat.findUniqueOrThrow({ where: { id: chatId } });
-    expect(chat.workflowPhase).toBe('execute');
+    expect(chat.workflowPhase).toBe('plan');
+    const repair = await activeRepair(chatId);
+    expect(repair?.stepName).toBe('check');
+    expect(repair?.tools.has('write_file')).toBe(true);
+    expect(repair?.tools.has('site_status')).toBe(true);
 
     const texts = (await prisma.message.findMany({ where: { chatId } })).map((m) => m.content);
     expect(texts.some((t) => t.includes('Hero.astro'))).toBe(true);

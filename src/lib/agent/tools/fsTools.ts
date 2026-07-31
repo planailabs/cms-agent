@@ -63,6 +63,12 @@ export async function assertWritable(ctx: ToolContext, ...paths: string[]): Prom
   }
   if (ctx.workflowPhase === 'execute') return;
   if (scratchOnly) return;
+  // A repair turn is authorized by the paused step, not by the phase: the step
+  // asked for this write tool by name (lib/automatism repairTools), which is
+  // exactly the permission the phase would otherwise have granted. Without
+  // this, resolving a conflict in a chat that happens to be planning would
+  // need the flow to move that chat into EXECUTE behind the user's back.
+  if (ctx.repair?.tools.has('write_file') || ctx.repair?.tools.has('edit_file')) return;
   throw new Error('Only .scratch/ is writable outside the execute phase');
 }
 

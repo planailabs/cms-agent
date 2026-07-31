@@ -366,25 +366,6 @@ async function startPullInner(
 }
 
 /**
- * An agent asked to repair something needs its write tools, whatever phase the
- * chat was in when the flow started. The previous phase is remembered in the
- * automatism payload; the finalize step puts it back.
- */
-async function forceExecutePhase(data: PullData): Promise<void> {
-  const chat = await prisma.chat.findUnique({
-    where: { id: data.workflowChatId },
-    select: { workflowPhase: true },
-  });
-  if (!chat || chat.workflowPhase === 'execute') return;
-  data.restorePhase ??= chat.workflowPhase;
-  await prisma.chat.updateMany({
-    where: { id: data.workflowChatId },
-    data: { workflowPhase: 'execute', entityVersion: { increment: 1 } },
-  });
-  emitChatState(data.workflowChatId);
-}
-
-/**
  * Checkpoint step: is the site still renderable after what just landed?
  *
  * A rebase onto the target can break the draft in ways git reports nothing
@@ -396,6 +377,22 @@ async function forceExecutePhase(data: PullData): Promise<void> {
  */
 const siteCheckStep: AutomatismStep = {
   name: 'check',
+  // Getting a page rendering again: the site's own diagnostics, the file
+  // tools to fix what they point at, and a commit to seal it.
+  repairTools: [
+    'site_status',
+    'preview_logs',
+    'restart_preview',
+    'read_file',
+    'write_file',
+    'edit_file',
+    'remove_file',
+    'move_file',
+    'run_command',
+    'lint',
+    'git_commit',
+    'git_show',
+  ],
   async run(raw, post) {
     const data = raw as PullData;
     const worktree = await ensureWorktree(data.workBranch);
@@ -416,7 +413,6 @@ const siteCheckStep: AutomatismStep = {
       await post(tmsg('site.uncheckable', { error: describeIssues(issues) }));
       return;
     }
-    await forceExecutePhase(data);
     throw new AutomatismFailure(tmsg('site.broken', { error: describeIssues(real) }));
   },
 };
@@ -426,14 +422,31 @@ registerAutomatism({
   steps: [
     {
       name: 'pull',
+      // Resolving a rebase conflict: the conflict tools, the files, and the
+      // git commands that finish a rebase. Not the phase's tool set — this
+      // chat may be mid-PLAN, and the repair still needs to write.
+      repairTools: [
+        'list_conflicts',
+        'show_conflict',
+        'resolve_conflict_take',
+        'target_file',
+        'read_file',
+        'write_file',
+        'edit_file',
+        'git_rebase_continue',
+        'git_rebase_abort',
+        'git_commit',
+        'git_show',
+        'run_command',
+      ],
       async run(raw, post) {
         const data = raw as PullData;
         const identity = await chatGitIdentity(data.workflowChatId, data.actorId);
 
-        // Force the chat into EXECUTE while conflicts need resolving; the
-        // finalize step restores the previous phase.
+        // The repair turn's tools come from this step's `repairTools`, so the
+        // chat's own phase is left exactly where the user had it — a sync is
+        // not a reason to move somebody's chat into EXECUTE.
         const pauseWithConflicts = async (files: string[]): Promise<never> => {
-          await forceExecutePhase(data);
           throw new AutomatismFailure(
             tmsg('pull.conflicts', {
               target: data.targetName,
@@ -478,9 +491,9 @@ registerAutomatism({
       async run(raw, post) {
         const data = raw as PullData;
         if (data.restorePhase) {
-          // An automatism that started before preview was merged into execute
-          // still carries the old name in its payload; the migration only
-          // touched rows at rest.
+          // Payload from before repair tools existed: that flow moved the chat
+          // into EXECUTE and owed it a restore. Honour the debt, then stop
+          // carrying it — nothing writes this field any more.
           const phase = data.restorePhase === 'preview' ? 'execute' : data.restorePhase;
           await prisma.chat.updateMany({
             where: { id: data.workflowChatId },
@@ -628,8 +641,27 @@ async function prevalidate(data: DeployData): Promise<string | null> {
   return preview;
 }
 
+/** Deploy-side repairs read state and re-run; they never edit the site. */
+const DEPLOY_REPAIR_TOOLS = [
+  'list_publications',
+  'get_publication',
+  'check_deployment_status',
+  'target_file',
+];
+
 const prevalidateStep: AutomatismStep = {
   name: 'validate',
+  // A failed pre-validation is a broken build of the MERGED tree: the agent
+  // reads the log and fixes the source on the work branch.
+  repairTools: [
+    ...DEPLOY_REPAIR_TOOLS,
+    'read_file',
+    'write_file',
+    'edit_file',
+    'run_command',
+    'lint',
+    'git_commit',
+  ],
   async run(raw, post) {
     const data = raw as DeployData;
     await prisma.publication.update({
@@ -654,6 +686,19 @@ const prevalidateStep: AutomatismStep = {
 
 const mergeStep: AutomatismStep = {
   name: 'merge',
+  // Merge conflicts are handed to the workflow chat, which owns the worktree.
+  repairTools: [
+    ...DEPLOY_REPAIR_TOOLS,
+    'list_conflicts',
+    'show_conflict',
+    'resolve_conflict_take',
+    'read_file',
+    'write_file',
+    'edit_file',
+    'git_commit',
+    'git_show',
+    'run_command',
+  ],
   async run(raw, post) {
     const data = raw as DeployData;
     // A conflict round committed a reverse merge onto the work branch after
@@ -736,6 +781,9 @@ const mergeStep: AutomatismStep = {
 
 /** Generic one-step deploy: flows without custom steps, and merge-only. */
 const genericDeployStep: AutomatismStep = {
+  // Deploying is the flow's job; a failure here is read, understood, and
+  // either re-run or escalated — the site is not edited from the deploy chat.
+  repairTools: DEPLOY_REPAIR_TOOLS,
   name: 'deploy',
   async run(raw, post) {
     const data = raw as DeployData;
@@ -780,6 +828,9 @@ const genericDeployStep: AutomatismStep = {
 function flowStep(flow: DeployFlow, step: DeployFlowStep): AutomatismStep {
   return {
     name: step.name,
+    // Every flow phase repairs the same way: read the publication state, fix
+    // the outside world (or escalate), re-run the step.
+    repairTools: DEPLOY_REPAIR_TOOLS,
     async run(raw, post) {
       const data = raw as DeployData;
       await prisma.publication.update({
@@ -807,6 +858,7 @@ function flowStep(flow: DeployFlow, step: DeployFlowStep): AutomatismStep {
 function verifyStep(flow: DeployFlow): AutomatismStep {
   return {
     name: 'verify',
+    repairTools: DEPLOY_REPAIR_TOOLS,
     async run(raw, post) {
       const data = raw as DeployData;
       try {
@@ -835,6 +887,7 @@ function verifyStep(flow: DeployFlow): AutomatismStep {
 }
 
 const finalizeStep: AutomatismStep = {
+  repairTools: DEPLOY_REPAIR_TOOLS,
   name: 'finalize',
   async run(raw, post) {
     const data = raw as DeployData;

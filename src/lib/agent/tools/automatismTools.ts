@@ -27,6 +27,11 @@ export function registerAutomatismTools(): void {
       }
       const ok = await resumeAutomatism(paused.id);
       if (!ok) return JSON.stringify({ error: 'The automatism is no longer paused.' });
+      // Leaving the repair is a contract change: the step's tools were this
+      // run's tool set, and they are not the chat's to keep. Clearing it here
+      // is what the tool loop notices at the next round head, the same way it
+      // notices a workflow-phase flip — the run ends and a fresh one starts.
+      ctx.repair = undefined;
       return JSON.stringify({
         ok: true,
         resumed: paused.type,

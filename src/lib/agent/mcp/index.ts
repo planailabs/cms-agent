@@ -10,7 +10,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type OpenAI from 'openai';
 import { z } from 'zod';
-import { executeTool, isClientSideTool, toolsForPhase, type ToolContext } from '../tools/registry';
+import { executeTool, isClientSideTool, toolsForTurn, type ToolContext } from '../tools/registry';
 import { attachCodebaseMemory } from './codebaseMemory';
 import { attachContext7 } from './context7';
 import { attachCustomMcpsLabeled } from './custom';
@@ -80,7 +80,7 @@ function applyAccess(attachments: Array<ExternalMcp | null>, access: McpAccess):
 export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   const server = new McpServer({ name: 'cms-agent', version: '1.0.0' });
 
-  for (const tool of toolsForPhase(ctx.workflowPhase, ctx.chatKind, ctx.deployFlowId, ctx.planMode)) {
+  for (const tool of toolsForTurn(ctx)) {
     const shape =
       tool.schema instanceof z.ZodObject ? (tool.schema as z.AnyZodObject).shape : undefined;
     server.registerTool(

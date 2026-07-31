@@ -1,7 +1,7 @@
 /**
  * 'pull' automatism (Sync) — rebases the work branch onto the target: clean
- * case completes and posts events; conflict case pauses, forces EXECUTE,
- * and resumes to completion with the phase restored.
+ * case completes and posts events; conflict case pauses with the repair's own
+ * tools (the chat's phase is left alone) and resumes to completion.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -21,7 +21,7 @@ vi.mock('@/lib/site/health', async () => {
 
 import { prisma } from '@/lib/db';
 import { handleChatMessage } from '@/lib/agent/handler';
-import { resumeAutomatism } from '@/lib/automatism';
+import { activeRepair, resumeAutomatism } from '@/lib/automatism';
 
 let repo: string;
 let engine: typeof import('@/lib/git/engine');
@@ -95,7 +95,7 @@ describe('pull automatism (Sync)', () => {
     expect(msgs.some((m) => m.role === 'automatism' && /Rebased the draft/.test(m.content))).toBe(true);
   });
 
-  it('pauses on conflicts in EXECUTE and resumes to done with phase restored', async () => {
+  it('pauses on conflicts with a repair tool set, leaving the phase alone', async () => {
     const branch = await prisma.branch.findUniqueOrThrow({ where: { name: 'main' } });
     // A pending finish-execution card is the realistic sync-after-execution
     // state — the failure invocation must answer it, not refuse the turn.
@@ -120,9 +120,15 @@ describe('pull automatism (Sync)', () => {
 
     const id = await publisher.startPull(chat.id, ACTOR);
     await waitStatus(id, 'paused');
+    // The chat keeps the phase the user left it in; the conflict tools come
+    // from the paused step instead (lib/automatism repairTools).
     expect(
       (await prisma.chat.findUniqueOrThrow({ where: { id: chat.id } })).workflowPhase,
-    ).toBe('execute');
+    ).toBe('plan');
+    const repair = await activeRepair(chat.id);
+    expect(repair?.stepName).toBe('pull');
+    expect(repair?.tools.has('list_conflicts')).toBe(true);
+    expect(repair?.tools.has('git_rebase_continue')).toBe(true);
     expect(await engine.rebaseInProgress(wt)).toBe(true);
     expect(handleChatMessage).toHaveBeenCalledWith(
       ACTOR.id,
@@ -141,6 +147,8 @@ describe('pull automatism (Sync)', () => {
     await waitStatus(id, 'done');
     expect(
       (await prisma.chat.findUniqueOrThrow({ where: { id: chat.id } })).workflowPhase,
-    ).toBe('plan'); // restored
+    ).toBe('plan');
+    // Nothing to repair any more — the next turn is back on the phase tools.
+    expect(await activeRepair(chat.id)).toBeNull();
   });
 });
