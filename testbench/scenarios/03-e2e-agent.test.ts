@@ -1,8 +1,12 @@
 /**
- * Real-model end-to-end scenarios: one full plan → approve → execute →
- * preview → publish journey (judged at every checkpoint), a request-changes
- * loop, the ask_question flow with a turn-lock probe, and the element-edit
- * handoff. All later scenarios reuse this journey's data (journey.json).
+ * Real-model end-to-end scenarios, one per way out of PLAN.
+ *
+ * Journey A asks to approve first (`/plan`): propose → approve → execute →
+ * finalize → publish, judged at every checkpoint. Journey B takes the default
+ * path, where the agent records its plan and implements it in the same turn,
+ * and then exercises request-changes and the element-edit handoff on top of
+ * it. Also here: ask_question with a turn-lock probe. All later scenarios
+ * reuse this journey's data (journey.json).
  */
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
@@ -12,6 +16,7 @@ import { judgeStep, recordAssert } from '../lib/judge';
 import { loadJourney, saveJourney } from '../lib/journey';
 import {
   chatState as flowChatState,
+  driveToExecution,
   driveToPlan as flowDriveToPlan,
   noError,
 } from '../lib/agentFlow';
@@ -39,7 +44,7 @@ const driveToPlan = (chatId: string, firstPrompt: string) =>
   flowDriveToPlan(client, SCENARIO, chatId, firstPrompt);
 
 describe('e2e agent journey', () => {
-  it('agent proposes a plan for the About headline change', async () => {
+  it('the /plan command makes the agent propose instead of implementing', async () => {
     const branches = (await client.get('/api/branches')).json as {
       branches: { id: string; name: string }[];
     };
@@ -50,10 +55,30 @@ describe('e2e agent journey', () => {
     J.chatId = created.chat.id;
     J.workBranch = created.chat.workBranch;
 
+    // driveToPlan prefixes /plan — without it the agent has no propose_plan
+    // tool and would implement straight away (journey B covers that path).
     const plan = await driveToPlan(
       J.chatId,
       'Change the main headline on the About page to exactly "Hello Bench". ' +
         'This is a simple content change — propose your plan right away without asking questions.',
+    );
+
+    const st = await chatState(J.chatId);
+    ok('the command switched the chat into plan mode', st.planMode === true);
+    ok('the turn stopped on the proposal', st.pendingQuestion?.toolName === 'propose_plan');
+    // The command is stored on the message the user sent — that is what the
+    // transcript renders as a chip beside it.
+    const history = (await client.get(`/api/chat/history?chatId=${J.chatId}`)).json as {
+      messages?: { role: string; command?: string }[];
+    };
+    ok(
+      'the message kept its command for the transcript chip',
+      (history.messages ?? []).some((m) => m.role === 'user' && m.command === 'plan'),
+    );
+    // The stripped text is what the agent works from — no stray "/plan".
+    ok(
+      'the command prefix is stripped from the message text',
+      !(history.messages ?? []).some((m) => m.role === 'user' && String((m as { content?: string }).content ?? '').startsWith('/plan')),
     );
     const verdict = await judgeStep({
       scenario: SCENARIO,
@@ -166,7 +191,7 @@ describe('e2e agent journey', () => {
     });
   }, 700_000);
 
-  it('request-changes produces a revised plan (journey B)', async () => {
+  it('journey B: the default path implements without an approval step', async () => {
     const created = (await client.req('POST', '/api/chats', { branchId: J.branchId })).json as {
       chat: { id: string };
     };
@@ -177,9 +202,22 @@ describe('e2e agent journey', () => {
     ok('sync automatism accepted', sync.status === 202);
     await new Promise((r) => setTimeout(r, 4000));
 
-    await driveToPlan(
+    // No /plan here: the agent records its plan and carries it out in one
+    // turn. This is the default every chat gets.
+    const afterFirst = await driveToExecution(
+      client,
+      SCENARIO,
       J.chatB,
-      'Add a short tagline under the main headline on the home page saying "Fast sites". Propose a plan.',
+      'Add a short tagline under the main headline on the home page saying "Fast sites".',
+    );
+    ok('chat B reached execute without an approval', afterFirst.workflowPhase === 'execute');
+    ok('chat B is not in plan mode', afterFirst.planMode !== true);
+    // It may rest on finish_execution or a question — but never on a plan
+    // waiting to be approved, which is the whole point of the default path.
+    ok(
+      'no plan was submitted for approval',
+      afterFirst.pendingQuestion?.toolName !== 'propose_plan',
+      String(afterFirst.pendingQuestion?.toolName),
     );
     const events = await client.collectEvents(
       J.chatB,
@@ -194,23 +232,25 @@ describe('e2e agent journey', () => {
       420_000,
     );
     ok('revision turn streams without error', noError(events));
+    // request-changes returns the chat to PLAN; the agent re-plans and, with
+    // no approval in the way, implements the revision in the same turn.
     const st = await chatState(J.chatB);
-    ok('agent proposes a revised plan', st.pendingQuestion?.toolName === 'propose_plan');
+    ok('the revision lands back in execute', st.workflowPhase === 'execute', st.workflowPhase);
     const verdict = await judgeStep({
       scenario: SCENARIO,
-      step: 'The user rejected the first plan asking for the tagline "Blazing fast sites"; the agent revised the plan.',
-      criteria: 'The revised plan uses the wording "Blazing fast sites" and names the placement.',
+      step: 'The user asked for the tagline "Blazing fast sites" instead; the agent revised its plan and carried it out.',
+      criteria:
+        'The reply shows the revision was made with the wording "Blazing fast sites" and says where it was placed.',
       artifacts: [
+        { kind: 'text', label: 'revision turn', content: turnText(events) || '(no text)' },
         {
           kind: 'json',
-          label: 'revised plan',
+          label: 'recorded plan',
           content: JSON.stringify(st.pendingQuestion?.input ?? {}, null, 2),
         },
       ],
     });
     expect(verdict.pass, verdict.reasoning).toBe(true);
-    // Chat B keeps its pending plan — the element-edit handoff test below
-    // answers it (and re-plans); approval happens after that.
   }, 900_000);
 
   it('ask_question pauses the turn; concurrent message hits the turn lock', async () => {
@@ -254,8 +294,9 @@ describe('e2e agent journey', () => {
   }, 900_000);
 
   it('element-edit handoff captures a screenshot and re-plans', async () => {
-    // Journey B sits on a pending propose_plan — the handoff answers it with
-    // the annotated screenshot (same path the UI takes).
+    // Journey B has no pending question, so the handoff arrives as a normal
+    // message with the annotated screenshot attached (the same path the UI
+    // takes; a paused turn would instead be answered with it).
     const annotations = {
       url: `http://main.localhost:${benchRun().proxyPort}/`,
       route: '/',
@@ -309,24 +350,19 @@ describe('e2e agent journey', () => {
     expect(verdict.pass, verdict.reasoning).toBe(true);
   }, 900_000);
 
-  it('journey B: approve after handoff → executes and rests in preview (for 05)', async () => {
-    let st = await chatState(J.chatB!);
-    if (st.pendingQuestion?.toolName !== 'propose_plan') {
-      // The handoff turn answered without re-proposing — ask for the plan.
-      await driveToPlan(J.chatB!, 'Please propose the updated plan now.');
-      st = await chatState(J.chatB!);
+  it('journey B: the handoff work lands and the chat rests in review (for 05)', async () => {
+    const st = await chatState(J.chatB!);
+    // The handoff turn may have left the chat back in PLAN (the handoff
+    // returns it there) — drive it forward so 05 finds committed work.
+    if (st.workflowPhase !== 'execute') {
+      await driveToExecution(
+        client,
+        SCENARIO,
+        J.chatB!,
+        'Go ahead and implement the change from the annotated screenshot now.',
+      );
     }
-    ok('a plan is pending after the handoff', st.pendingQuestion?.toolName === 'propose_plan');
-    const exec = await client.collectEvents(
-      J.chatB!,
-      async () => {
-        const res = await client.req('POST', `/api/chats/${J.chatB}/approve-plan`, {});
-        if (res.status !== 200) throw new Error(`approve-plan B: ${res.status} ${res.text}`);
-      },
-      ['question', 'done', 'error'],
-      600_000,
-    );
-    ok('journey B execution streams without error', noError(exec));
+    ok('journey B is in execute with the work done', (await chatState(J.chatB!)).workflowPhase === 'execute');
     const prev = await client.req('POST', `/api/chats/${J.chatB}/finalize`, {
       summary: 'Bench journey B: annotated tagline change',
     });

@@ -1,7 +1,12 @@
 /**
- * Shared agent-driving helpers for real-model scenarios (03-e2e, 06-recovery):
- * drive a chat to a proposed plan, run an approved execution, and poll the
- * automatism / publication state the server exposes.
+ * Shared agent-driving helpers for real-model scenarios (03-e2e, 06-recovery).
+ *
+ * Two ways out of PLAN, and both are driven here. By default the agent records
+ * its plan with start_execution and implements it in the same turn, so a
+ * journey needs no approval step at all. Sending the first message with the
+ * /plan command switches the chat into explicit plan mode, where propose_plan
+ * replaces start_execution and the turn stops for a human — that is the only
+ * path that reaches approve-plan.
  */
 import { expect } from 'vitest';
 import { BenchClient, type SseEvent } from './client';
@@ -10,6 +15,8 @@ import { recordAssert } from './judge';
 export interface ChatState {
   workflowPhase: string;
   turnPhase: string;
+  /** Explicit plan mode — set by the /plan command. */
+  planMode?: boolean;
   pendingQuestion: { toolName: string; input: Record<string, unknown> } | null;
   automatism: {
     status: string;
@@ -25,15 +32,20 @@ export const chatState = async (client: BenchClient, chatId: string): Promise<Ch
 
 export const noError = (events: SseEvent[]): boolean => !events.some((e) => e.event === 'error');
 
-/** Drive a chat until the agent pauses on propose_plan (answering any
- *  ask_question rounds along the way). Returns the plan input. */
+/**
+ * Drive a chat until the agent pauses on propose_plan, answering any
+ * ask_question rounds along the way. Returns the plan input.
+ *
+ * The first message carries the /plan command: without it the agent has no
+ * propose_plan tool at all — it would record a plan and start implementing.
+ */
 export async function driveToPlan(
   client: BenchClient,
   scenario: string,
   chatId: string,
   firstPrompt: string,
 ): Promise<Record<string, unknown>> {
-  let text = firstPrompt;
+  let text = `/plan ${firstPrompt}`;
   let type: 'message' | 'answer' = 'message';
   for (let round = 0; round < 4; round++) {
     const events = await client.sendMessageAndCollect(chatId, text, { type, timeoutMs: 420_000 });
@@ -47,15 +59,48 @@ export async function driveToPlan(
       text = 'No preferences — please proceed and propose the plan now.';
       type = 'answer';
     } else {
-      text = 'Please propose the plan now using your propose_plan tool.';
+      text = '/plan Please propose the plan now using your propose_plan tool.';
       type = 'message';
     }
   }
   throw new Error('agent never proposed a plan');
 }
 
-/** Full plan→approve→execute on a fresh chat; returns its ids once the
- *  execution turn has finished (finish card pending or idle). */
+/**
+ * Drive a chat the default way: one message, and the agent plans and
+ * implements without stopping. Answers ask_question rounds and returns once
+ * the chat has reached EXECUTE (or gives up after a few rounds).
+ */
+export async function driveToExecution(
+  client: BenchClient,
+  scenario: string,
+  chatId: string,
+  firstPrompt: string,
+): Promise<ChatState> {
+  let text = firstPrompt;
+  let type: 'message' | 'answer' = 'message';
+  for (let round = 0; round < 4; round++) {
+    const events = await client.sendMessageAndCollect(chatId, text, { type, timeoutMs: 600_000 });
+    recordAssert(scenario, `turn ${round + 1} streams without error`, noError(events));
+    expect(noError(events), `turn ${round + 1} errored`).toBe(true);
+    const st = await chatState(client, chatId);
+    // EXECUTE is the goal, whatever the turn ended on. A turn that reached it
+    // usually ends PAUSED — on finish_execution ("ready for review"), or on a
+    // question asked while implementing — and neither is a failure to get
+    // there; the caller decides what to do with a pending card.
+    if (st.workflowPhase === 'execute') return st;
+    if (st.turnPhase === 'waiting_for_answer') {
+      text = 'No preferences — go ahead and implement it.';
+      type = 'answer';
+    } else {
+      text = 'Please go ahead and implement it now.';
+      type = 'message';
+    }
+  }
+  throw new Error('agent never reached the execute phase');
+}
+
+/** A fresh chat driven to committed work, the default (no-approval) way. */
 export async function runToExecution(
   client: BenchClient,
   scenario: string,
@@ -65,20 +110,8 @@ export async function runToExecution(
   const created = (await client.req('POST', '/api/chats', { branchId })).json as {
     chat: { id: string; workBranch: string };
   };
-  const chatId = created.chat.id;
-  await driveToPlan(client, scenario, chatId, prompt);
-  const events = await client.collectEvents(
-    chatId,
-    async () => {
-      const res = await client.req('POST', `/api/chats/${chatId}/approve-plan`, {});
-      if (res.status !== 200) throw new Error(`approve-plan: ${res.status} ${res.text}`);
-    },
-    ['question', 'done', 'error'],
-    600_000,
-  );
-  recordAssert(scenario, 'execution turn streams without error', noError(events));
-  expect(noError(events), 'execution errored').toBe(true);
-  return { chatId, workBranch: created.chat.workBranch };
+  await driveToExecution(client, scenario, created.chat.id, prompt);
+  return { chatId: created.chat.id, workBranch: created.chat.workBranch };
 }
 
 /** Poll the chat's automatism state until it hits a terminal/paused status.

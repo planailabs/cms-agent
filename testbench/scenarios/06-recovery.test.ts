@@ -60,7 +60,7 @@ describe('recovery paths', () => {
       SCENARIO,
       bid,
       'Change the main headline on the About page to exactly "Revert Bench". ' +
-        'Simple content change — propose your plan right away without asking questions.',
+        'Simple content change — go ahead and make it without asking questions.',
     );
     const execSha = await headSha(workBranch);
 
@@ -107,7 +107,7 @@ describe('recovery paths', () => {
         SCENARIO,
         bid,
         'Change the main headline on the About page to exactly "Setup Bench". ' +
-          'Simple content change — propose your plan right away without asking questions.',
+          'Simple content change — go ahead and make it without asking questions.',
       );
       const preview = (await client.req('POST', `/api/chats/${setup.chatId}/finalize`, {
         summary: 'Recovery setup: About headline',
@@ -125,7 +125,7 @@ describe('recovery paths', () => {
       SCENARIO,
       bid,
       'Change the main headline on the About page to exactly "Conflict Bench". ' +
-        'Simple content change — propose your plan right away without asking questions.',
+        'Simple content change — go ahead and make it without asking questions.',
     );
 
     // …then main moves underneath it: restore the OLDEST version of exactly
@@ -225,7 +225,7 @@ describe('recovery paths', () => {
       SCENARIO,
       bid,
       'Add the line "Deploy Bench was here." to the end of the main content on the home page. ' +
-        'Simple content change — propose your plan right away without asking questions.',
+        'Simple content change — go ahead and make it without asking questions.',
     );
     const preview = (await client.req('POST', `/api/chats/${chatId}/finalize`, {
       summary: 'Recovery: deploy pause/resume',
