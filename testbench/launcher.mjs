@@ -89,8 +89,29 @@ const dotenv = {
 if (!dotenv.OPENAI_API_KEY || dotenv.OPENAI_API_KEY === 'sk-test' || !dotenv.OPENAI_MODEL) {
   fail('.env must provide a real OPENAI_API_KEY and OPENAI_MODEL — the bench runs real agent turns');
 }
-if (spawnSync('psql', ['-c', 'select 1'], { stdio: 'ignore' }).status !== 0) {
-  fail('psql cannot connect (peer auth) — a local Postgres is required for the throwaway bench DB');
+// createdb/dropdb take no connection string, so give libpq the same server
+// DATABASE_URL names rather than the ambient peer-auth defaults — a repo-owned
+// cluster (`pnpm run db:start`) listens on its own socket and port, and the
+// bench's throwaway database has to be created on the server the app will use.
+const pgEnv = (() => {
+  const url = new URL(dotenv.DATABASE_URL);
+  const socketDir = url.searchParams.get('host');
+  return {
+    PGHOST: socketDir ? path.resolve(ROOT, socketDir) : url.hostname || '127.0.0.1',
+    PGPORT: url.port || '5432',
+    PGDATABASE: 'postgres', // maintenance connection: the bench DB does not exist yet
+    ...(url.username ? { PGUSER: decodeURIComponent(url.username) } : {}),
+    ...(url.password ? { PGPASSWORD: decodeURIComponent(url.password) } : {}),
+  };
+})();
+const pgSpawn = (cmd, cmdArgs, opts = {}) =>
+  spawnSync(cmd, cmdArgs, { cwd: ROOT, env: { ...process.env, ...pgEnv }, ...opts });
+
+if (pgSpawn('psql', ['-c', 'select 1'], { stdio: 'ignore' }).status !== 0) {
+  fail(
+    `psql cannot reach ${pgEnv.PGHOST}:${pgEnv.PGPORT} as ${pgEnv.PGUSER ?? '(default user)'} — ` +
+      'the bench needs the PostgreSQL from DATABASE_URL running (`pnpm run db:start` starts a local one)',
+  );
 }
 
 // ── build if stale ───────────────────────────────────────────────────────
@@ -127,7 +148,7 @@ fs.mkdirSync(varDir, { recursive: true });
 fs.mkdirSync(resultsDir, { recursive: true });
 
 console.log(`bench: db=${dbName} work=${work}`);
-run('createdb', [dbName]);
+if (pgSpawn('createdb', [dbName], { stdio: 'inherit' }).status !== 0) fail(`createdb ${dbName} failed`);
 
 const dbUrl = new URL(dotenv.DATABASE_URL);
 dbUrl.pathname = `/${dbName}`;
@@ -281,7 +302,7 @@ const teardown = () => {
     spawnSync('sleep', ['2']);
     server = null;
   }
-  spawnSync('dropdb', ['--if-exists', dbName], { stdio: 'inherit' });
+  pgSpawn('dropdb', ['--if-exists', dbName], { stdio: 'inherit' });
   // The server leaves the sandbox squashfuse mounted under VAR_DIR — rm
   // would otherwise walk into (and fail on) the mount.
   const mntDir = path.join(varDir, 'sandbox', 'mnt');

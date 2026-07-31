@@ -90,9 +90,10 @@ nix develop --command pnpm run db:stop
 ```
 
 `db:start` is idempotent and refuses to adopt a foreign server already on that
-port. The unix socket lives in the data directory, so tools that connect
-without a host (`psql`, `pnpm bench`) need the `PGHOST`/`PGPORT` that
-`db:start` prints. Apply migrations with `pnpm exec prisma migrate deploy`.
+port. Apply migrations with `pnpm exec prisma migrate deploy`; `pnpm bench`
+finds the cluster by itself (it derives libpq settings from `DATABASE_URL`).
+The unix socket lives in the data directory, so a bare `psql` needs the
+`PGHOST`/`PGPORT` that `db:start` prints.
 
 ## Running in development
 
