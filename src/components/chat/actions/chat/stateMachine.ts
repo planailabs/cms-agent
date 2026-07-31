@@ -79,6 +79,9 @@ export const transition = (
 ) => {
   if (!mc) return;
 
+  // A turn that reached a resting phase can no longer be stopping.
+  if (phase === 'idle' || phase === 'error' || phase === 'question') mc.stopping = false;
+
   // Always cancel a pending tool→waiting transition
   if (toolTransitionTimer) {
     clearTimeout(toolTransitionTimer);
@@ -193,6 +196,33 @@ export const answerChatQuestion = async (text: string, attachments?: AttachmentD
     pageContext,
     attachmentIds: attachments?.map((a) => a.id).filter((id): id is string => !!id),
   });
+};
+
+/**
+ * Stop the running turn. The server ends it at the next boundary (between
+ * streamed chunks, between tool calls), so the button reports "Stopping…"
+ * until the turn's own 'stopped'/'done' events arrive rather than pretending
+ * the agent halted the instant it was clicked.
+ */
+export const stopChatTurn = async () => {
+  const mc = store.state.chat?.aiChat;
+  const chatId = store.state.activeChatId;
+  if (!mc || !chatId || mc.stopping) return;
+  mc.stopping = true;
+  store.notify();
+
+  const res = await fetch('/api/chat/stop', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chatId }),
+  }).catch(() => null);
+
+  // 409 = the turn ended on its own between render and click; the events that
+  // ended it also clear the flag. Anything else: give the button back.
+  if (!res?.ok) {
+    mc.stopping = false;
+    store.notify();
+  }
 };
 
 export const cancelChatQuestion = async () => {

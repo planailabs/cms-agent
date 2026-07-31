@@ -5,6 +5,7 @@
  * OpenAI-compatible shape: assistant messages carry optional tool_calls, tool
  * results are stored as one batch message per round.
  */
+import type { TranslatedMessage } from '@/lib/i18n';
 import type OpenAI from 'openai';
 
 /** Turn phase persisted on Chat.turnPhase (same machine as chat/). */
@@ -70,7 +71,9 @@ export type StoredMessage =
     }
   | { id?: string; role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { id?: string; role: 'tool'; results: ToolResult[] }
-  | { id?: string; role: 'cancel'; content: string }
+  // `tm` localizes server-written notes per viewer (content is the English
+  // fallback); rows the browser writes leave it unset.
+  | { id?: string; role: 'cancel'; content: string; tm?: TranslatedMessage }
   // Durable boundary for model context. Older rows stay in the DB, but future
   // loads begin at this summary instead of replaying the entire transcript.
   | { id?: string; role: 'compaction'; content: string }

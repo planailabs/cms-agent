@@ -9,7 +9,7 @@ import path from 'node:path';
 import OpenAI from 'openai';
 import { env } from '@/lib/env';
 import { prisma } from '@/lib/db';
-import { broadcast } from './bus';
+import { broadcast, isTurnStopRequested } from './bus';
 import {
   compactionTranscript,
   getLastToolCalls,
@@ -23,6 +23,7 @@ import type { PersistenceAdapter } from './persistence';
 import { recordTokenUsage } from './tokenBudget';
 import { reasoningEffortParam, withEffortFallback } from './reasoningEffort';
 import { buildSystemPrompt, type PromptInput } from './prompt';
+import { tmsg } from '@/lib/i18n';
 import { createMcpBridge } from './mcp';
 import { dirStatus } from '@/lib/git/engine';
 import { isClientSideTool, type ToolContext } from './tools/registry';
@@ -36,6 +37,11 @@ import type {
 } from './types';
 
 const MAX_TOOL_ROUNDS = 250;
+/** Result for calls the stop cut short — the model reads it if the user
+ *  continues the chat afterwards. */
+const STOPPED_TOOL_RESULT = JSON.stringify({
+  error: 'Not executed: the user stopped the turn. Ask what they want to do before retrying.',
+});
 const LOOP_WINDOW = 5;
 const LOOP_THRESHOLD = 3;
 
@@ -132,6 +138,8 @@ export interface ToolLoopInput {
  */
 export type ToolLoopOutcome =
   | { type: 'finished' }
+  /** The user pressed stop — like 'finished' for the handler: no new run. */
+  | { type: 'stopped' }
   | { type: 'phase_changed'; phase: WorkflowPhase };
 
 export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome> {
@@ -261,6 +269,27 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       broadcast(chatId, 'compaction', { type: 'compaction', content: summary });
     };
 
+    /**
+     * End the turn where the user asked it to. Whatever the model already said
+     * is kept — it is what happened — and the transcript gets a note of its
+     * own, carried as a TranslatedMessage so every viewer reads it in their
+     * language. The 'stopped' event is what tells the browser its Stop landed;
+     * 'done' then closes the turn exactly like any other ending.
+     */
+    const endStopped = async (partialText = ''): Promise<ToolLoopOutcome> => {
+      console.log(`[agent] chat=${chatId} stopped by the user`);
+      if (partialText) {
+        await appendMsg({ role: 'assistant', content: partialText });
+        broadcast(chatId, 'text_done', { type: 'text_done', content: partialText });
+      }
+      await appendMsg({ role: 'cancel', content: tmsg('chat.stopped').fallback, tm: tmsg('chat.stopped') });
+      await setPhase('idle');
+      broadcast(chatId, 'stopped', { type: 'stopped' });
+      broadcast(chatId, 'done', { type: 'done' });
+      await flushTokens();
+      return { type: 'stopped' };
+    };
+
     // ── Pre-step: resume from tool_pending (crash/restart recovery) ─────────
     if (input.phase === 'tool_pending') {
       broadcast(chatId, 'thinking', { type: 'thinking' });
@@ -297,6 +326,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     const runPhase = toolContext.workflowPhase;
     let rounds = 0;
     while (rounds < MAX_TOOL_ROUNDS) {
+      if (isTurnStopRequested(chatId)) return await endStopped();
       if (toolContext.workflowPhase !== runPhase) {
         console.log(
           `[agent] chat=${chatId} phase ${runPhase} → ${toolContext.workflowPhase}, restarting the run`,
@@ -339,6 +369,11 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         }));
 
         for await (const chunk of stream) {
+          if (isTurnStopRequested(chatId)) {
+            // Close the HTTP stream too — nobody is going to read the rest.
+            stream.controller.abort();
+            break;
+          }
           if (chunk.usage) {
             const promptTokens = chunk.usage.prompt_tokens ?? 0;
             totalInputTokens += promptTokens;
@@ -373,6 +408,8 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
           }
         }
       } catch (error) {
+        // Our own abort surfaces here — the stop is handled right below.
+        if (isTurnStopRequested(chatId)) return await endStopped(text);
         if (
           !isContextLengthError(error) ||
           compactedForRequest ||
@@ -391,6 +428,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         continue;
       }
 
+      if (isTurnStopRequested(chatId)) return await endStopped(text);
       compactedForRequest = false;
 
       const toolCalls = accumulated.filter(Boolean);
@@ -464,6 +502,12 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       await setPhase('tool_pending');
       const results: ToolResult[] = [];
       for (const call of toolCalls) {
+        // Every call still needs a result row — an assistant tool_call without
+        // one is a malformed conversation the next turn would send to the model.
+        if (isTurnStopRequested(chatId)) {
+          results.push({ toolCallId: call.id, content: STOPPED_TOOL_RESULT });
+          continue;
+        }
         const args = safeParseArgs(call.function.arguments);
         broadcast(chatId, 'tool_start', { type: 'tool_start', name: call.function.name, input: args });
         const loopWarning = detectLoop(call.function.name, args);
@@ -477,6 +521,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         });
       }
       await appendMsg({ role: 'tool', results });
+      if (isTurnStopRequested(chatId)) return await endStopped();
       await setPhase('running');
     }
 

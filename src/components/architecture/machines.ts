@@ -142,7 +142,10 @@ stateDiagram-v2
         caption: 'One round of the loop',
         code: `
 flowchart TD
-  start(["Round begins"]) --> stream["Stream a completion"]
+  start(["Round begins"]) --> stopq{"Stop requested?"}
+  stopq -->|"yes"| stopped["Keep what was said, note the stop<br/>phase to idle, emit stopped + done"]
+  stopq -->|"no"| stream["Stream a completion"]
+  stream -.->|"stop mid-stream: abort and keep the partial"| stopped
   stream --> err{"Context length error?"}
   err -->|"yes, first time this round"| compact["Summarize into a compaction checkpoint<br/>and retry the same round"]
   compact --> stream
@@ -163,6 +166,7 @@ flowchart TD
   loopdet -->|"no"| run["Execute through the MCP bridge"]
   warn --> append
   run --> append["Append results, phase back to running"]
+  exec -.->|"stop between calls: the rest get a not-executed result"| stopped
   append --> moved{"Workflow phase moved?"}
   moved -->|"no"| start
   moved -->|"yes"| boundary["End the run — the handler starts<br/>a new one in the new phase"]
@@ -219,13 +223,27 @@ sequenceDiagram
         broadcast in between, so a single turn is what the user sees. Four
         flips in one turn is treated as a plan/execute ping-pong and ends the
         turn with a question instead of a fifth run.</li>
+      <li><strong>Stop is asked for, never inflicted.</strong> The Stop button
+        raises a per-chat flag; the loop reads it between streamed chunks and
+        between tool calls, then ends the turn itself — partial answer kept, a
+        result row for every tool call it had already made (an assistant
+        <code>tool_call</code> without one is a conversation the next turn
+        could not send at all), and a stopped note in the transcript. A tool
+        already executing finishes first, so nothing is left half-written in
+        the worktree, and the flag is dropped with the turn lock so it cannot
+        leak into the next turn.</li>
       <li><strong>Streaming is accumulated by hand.</strong> Some
         OpenAI-compatible backends resend the full tool-argument JSON on every
         fragment instead of streaming deltas; concatenating those would corrupt
         every call. The accumulator detects a complete-JSON buffer followed by a
         new object and replaces rather than appends.</li>
     </ul>`,
-    source: ['src/lib/agent/toolLoop.ts', 'src/lib/agent/handler.ts', 'src/lib/agent/chatState.ts'],
+    source: [
+      'src/lib/agent/toolLoop.ts',
+      'src/lib/agent/handler.ts',
+      'src/lib/agent/chatState.ts',
+      'src/pages/api/chat/stop.ts',
+    ],
   },
 
   {

@@ -119,10 +119,13 @@ const renderMessage = (
           `;
   }
   if (msg.role === 'cancel') {
+    // Server-written notes (a stopped turn) travel as a TranslatedMessage;
+    // rows the browser wrote are already in the viewer's language.
+    const text = msg.tm ? resolveTranslated(uiLocale(), msg.tm) : msg.content;
     return `
             <div class="flex justify-end">
               <p class="max-w-[85%] rounded-2xl px-3.5 py-2 text-xs italic text-(--text-muted)">
-                ${escapeHtml(msg.content)}
+                ${escapeHtml(text)}
               </p>
             </div>
           `;

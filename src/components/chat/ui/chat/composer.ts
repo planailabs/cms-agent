@@ -37,6 +37,22 @@ export const renderChatComposer = (
         </div>`;
   }
 
+  // While the loop runs there is nothing to type into — the composer is
+  // replaced by the way out of it.
+  if (mc.phase === 'waiting' || mc.phase === 'streaming' || mc.phase === 'tool' || mc.phase === 'compacting') {
+    const label = t(uiLocale(), mc.stopping ? 'chat.stop.stopping' : 'chat.stop.button');
+    return `<div class="composer-card composer-card--resume" data-form="machine-config-composer">
+          <div class="composer-resume-copy">
+            ${escapeHtml(t(uiLocale(), 'chat.stop.running'))}
+          </div>
+          <button type="button" class="composer-resume-button" data-action="chat-stop"
+            ${mc.stopping ? 'aria-disabled="true" disabled' : ''}>
+            <span aria-hidden="true">■</span>
+            ${escapeHtml(label)}
+          </button>
+        </div>`;
+  }
+
   const prompt = mc.phase === 'question' ? mc.clientPrompt : undefined;
   const skipLabel = escapeHtml(modeLocale.cancelLabel);
 

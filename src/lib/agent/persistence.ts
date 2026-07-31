@@ -3,6 +3,7 @@
  * for skipPersistence test mode. Ported from chat/'s persistence.ts.
  */
 import { dbNull, prisma } from '@/lib/db';
+import type { TranslatedMessage } from '@/lib/i18n';
 import type {
   AttachmentMeta,
   ClientToolPrompt,
@@ -72,7 +73,14 @@ export async function loadChatRecord(chatId: string): Promise<{
   });
 
   const messages: StoredMessage[] = rows.map((row) => {
-    if (row.role === 'cancel') return { id: row.id, role: 'cancel', content: row.content };
+    if (row.role === 'cancel') {
+      return {
+        id: row.id,
+        role: 'cancel',
+        content: row.content,
+        tm: (row.contentBlocks as TranslatedMessage | null) ?? undefined,
+      };
+    }
     if (row.role === 'assistant') {
       return {
         id: row.id,
@@ -161,6 +169,7 @@ export function createDbAdapter(
       const contentBlocks =
         msg.role === 'assistant' ? (msg.toolCalls as object[] | undefined) ?? null
         : msg.role === 'tool' ? (msg.results as object[])
+        : msg.role === 'cancel' ? (msg.tm as object | undefined) ?? null
         : null;
       // Ordinals come from an in-memory counter; an automatism message can
       // land mid-turn and take the next ordinal — on collision resync the

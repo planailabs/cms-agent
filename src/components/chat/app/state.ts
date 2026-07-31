@@ -116,6 +116,8 @@ export interface ChatState {
     };
     /** Name of currently executing tool (set during 'tool' phase) */
     toolName?: string;
+    /** A stop was sent and the turn has not ended yet (button reads "Stopping…") */
+    stopping?: boolean;
   };
 }
 

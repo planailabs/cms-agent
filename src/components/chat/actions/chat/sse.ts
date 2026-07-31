@@ -115,7 +115,7 @@ export const connectEvents = (): Promise<void> => {
       const eventTypes = [
         'thinking', 'text_delta', 'text_done', 'tool_start', 'tool_end',
         'compaction_start', 'compaction',
-        'question', 'phase_changed', 'done', 'error',
+        'question', 'phase_changed', 'stopped', 'done', 'error',
         // Workspace events (execution/publish lifecycle, chat meta)
         'state', 'ui_language', 'open_compare', 'execution_committed', 'execution_reverted', 'publish_log', 'publish_done',
         'chat_renamed', 'tabs_updated', 'automatism', 'automatism_state', 'chat_archived',

@@ -18,6 +18,7 @@ interface BusState {
   connections: Map<string, Set<SSEWriter>>; // chatId -> connections
   activeTurns: Map<string, string>; // chatId -> lockId
   branchLocks: Map<string, string>; // branchId -> lockId
+  stopRequests: Set<string>; // chatIds whose turn the user stopped
   lockCounter: number;
 }
 const g = globalThis as unknown as { __cmsBus?: BusState };
@@ -25,11 +26,13 @@ const bus: BusState = (g.__cmsBus ??= {
   connections: new Map(),
   activeTurns: new Map(),
   branchLocks: new Map(),
+  stopRequests: new Set(),
   lockCounter: 0,
 });
 const connections = bus.connections;
 const activeTurns = bus.activeTurns;
 const branchLocks = bus.branchLocks;
+const stopRequests = (bus.stopRequests ??= new Set());
 
 export function addConnection(chatId: string, writer: SSEWriter): () => void {
   let set = connections.get(chatId);
@@ -69,8 +72,27 @@ function release(map: Map<string, string>, key: string, lockId: string): void {
 
 /** One in-flight turn per chat. */
 export const acquireTurnLock = (chatId: string) => acquire(activeTurns, chatId);
-export const releaseTurnLock = (chatId: string, id: string) => release(activeTurns, chatId, id);
+export const releaseTurnLock = (chatId: string, id: string): void => {
+  release(activeTurns, chatId, id);
+  // The next turn starts fresh, whether this one stopped, finished or threw.
+  if (!activeTurns.has(chatId)) stopRequests.delete(chatId);
+};
 export const hasActiveTurn = (chatId: string): boolean => activeTurns.has(chatId);
+
+/**
+ * Ask the running turn to stop. The loop checks between streamed chunks and
+ * between tool calls, so a stop lands at the next boundary — a tool already
+ * executing (a build, an install) still runs to completion. Returns false when
+ * there is no turn to stop.
+ */
+export function requestTurnStop(chatId: string): boolean {
+  if (!activeTurns.has(chatId)) return false;
+  stopRequests.add(chatId);
+  return true;
+}
+
+/** True while the user's stop for this chat's turn is still pending. */
+export const isTurnStopRequested = (chatId: string): boolean => stopRequests.has(chatId);
 
 /**
  * Wait for a chat's turn to finish, up to `timeoutMs`. Returns whether it is

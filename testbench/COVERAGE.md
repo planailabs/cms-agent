@@ -26,6 +26,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `GET /api/chat/history` | 01, 03 (state polling) | ✅ |
 | `POST /api/chat/message` (202, turn-lock 409, answer routing) | 03 | ✅ |
 | `POST /api/chat/context` | 01 | ✅ |
+| `POST /api/chat/stop` (interrupt a running turn; 409 with none running) | 03 | ✅ |
 | `GET/PUT /api/chat/tabs` | 01 (API), 02 (UI) | ✅ |
 | `POST /api/chat/element-handoff` | 03 | ✅ |
 | `GET/POST /api/branches` (+name validation) | 01 | ✅ |
@@ -72,6 +73,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Icon rail (stage tools + registered windows + settings) + compact header (branch pill, version chip, avatar icon) | 02 | ✅ |
 | Composer element-picker button (arms/disarms) | 02 | ✅ |
 | Publish / request-changes action row under the composer (preview phase) | 05 | ✅ |
+| Stop button while the agent works (composer card → turn ends, transcript note) | — | 🟡 the endpoint and loop behaviour are covered in 03 + test/turn-stop.test.ts; the button itself is not clicked in a browser |
 | Chat transcript scroll preserved across rerenders (tool-use jump fix) | 05 | ✅ |
 | Element picker from the icon rail in the compare window (arm → live preview on diff route → cancel returns to compare) | 05 | ✅ |
 | Edit mode from the icon rail; toolbar offers swap tool; exit returns to diff viewer | 05 | ✅ |

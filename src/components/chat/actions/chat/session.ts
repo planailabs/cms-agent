@@ -360,7 +360,9 @@ const applyHistoryResult = (
     if (serverWins) mc.streamingText = undefined; // deltas in the gap are lost
     const cancelLabel = locales[store.state.localeKey].chatMode.cancelLabel;
       mc.messages = result.messages.map((m) =>
-        m.role === 'cancel' ? { ...m, content: m.content || cancelLabel } : m,
+        // Rows with a `tm` localize themselves at render time; only the
+        // question-cancel rows (persisted empty) need the generic label.
+        m.role === 'cancel' && !m.tm ? { ...m, content: m.content || cancelLabel } : m,
       );
       // Interleave committed-execution cards at their chronological place
       for (const e of result.state?.executions ?? []) {

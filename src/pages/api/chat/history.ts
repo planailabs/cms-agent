@@ -99,9 +99,12 @@ export const GET: APIRoute = async ({ url, locals }) => {
       authorId: m.authorId,
       pageContext: m.pageContext,
       createdAt: m.createdAt,
-      // Automatism rows carry their TranslatedMessage container (i18n key +
-      // params + English fallback) for per-viewer localization
-      ...(m.role === 'automatism' && m.contentBlocks ? { tm: m.contentBlocks } : {}),
+      // Automatism rows — and server-written cancel notes — carry their
+      // TranslatedMessage container (i18n key + params + English fallback)
+      // for per-viewer localization
+      ...((m.role === 'automatism' || m.role === 'cancel') && m.contentBlocks
+        ? { tm: m.contentBlocks }
+        : {}),
       ...(m.role === 'user' && attachmentsByMsg.has(m.id)
         ? { attachments: attachmentsByMsg.get(m.id) }
         : {}),

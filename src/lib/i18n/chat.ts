@@ -56,6 +56,10 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.error.network': 'Network error — could not continue the session.',
     'chat.error.continueFailed': 'Continue failed ({status})',
     'chat.error.retry': 'Retry',
+    'chat.stopped': 'Stopped.',
+    'chat.stop.running': 'The agent is working…',
+    'chat.stop.button': 'Stop',
+    'chat.stop.stopping': 'Stopping…',
     'chat.continue.interrupted': 'This session was interrupted before the last turn finished.',
     'chat.continue.button': 'Continue',
     // needs_human_attention prompt
@@ -135,6 +139,10 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.error.network': 'Netzwerkfehler — die Session konnte nicht fortgesetzt werden.',
     'chat.error.continueFailed': 'Fortsetzen fehlgeschlagen ({status})',
     'chat.error.retry': 'Erneut versuchen',
+    'chat.stopped': 'Gestoppt.',
+    'chat.stop.running': 'Der Agent arbeitet…',
+    'chat.stop.button': 'Stopp',
+    'chat.stop.stopping': 'Wird gestoppt…',
     'chat.continue.interrupted': 'Diese Session wurde unterbrochen, bevor der letzte Schritt abgeschlossen war.',
     'chat.continue.button': 'Fortsetzen',
     // needs_human_attention prompt

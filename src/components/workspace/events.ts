@@ -9,6 +9,7 @@ import { t, uiLocale } from '@/lib/i18n';
 import { delegateEvent } from '../chat/utils/dom';
 import { switchChat } from '../chat/actions/chat';
 import { continueChatSession } from '../chat/actions/chat/session';
+import { stopChatTurn } from '../chat/actions/chat/stateMachine';
 import { registerDiffScrollSync } from './diffScroll';
 import { navigateDiffTo, reloadDiffPanes } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
@@ -517,6 +518,7 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
 
   // Retry a failed turn / continue an interrupted session
   delegateEvent(app, 'click', '[data-action="chat-continue"]', () => void continueChatSession());
+  delegateEvent(app, 'click', '[data-action="chat-stop"]', () => void stopChatTurn());
 
   // Context chip
   delegateEvent(app, 'click', '[data-action="ws-chip-remove"]', () => removeContextChip());

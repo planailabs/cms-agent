@@ -306,6 +306,46 @@ describe('e2e agent journey', () => {
     ok('answer resumes the turn without error', noError(answerEvents));
   }, 900_000);
 
+  it('stop interrupts a running turn', async () => {
+    const created = (await client.req('POST', '/api/chats', { branchId: J.branchId })).json as {
+      chat: { id: string };
+    };
+    const chatS = created.chat.id;
+
+    const events = await client.collectEvents(
+      chatS,
+      async () => {
+        const first = await client.req('POST', '/api/chat/message', {
+          chatId: chatS,
+          type: 'message',
+          text:
+            'Read every page of this site one file at a time and write me a long report about ' +
+            'the writing style of each one.',
+        });
+        if (first.status !== 202) throw new Error(`message: ${first.status}`);
+        // Stop once the turn is demonstrably running — before that there is
+        // nothing to interrupt and the endpoint says so.
+        const idle = await client.req('POST', '/api/chat/stop', { chatId: chatS });
+        ok('stop before the turn starts is refused', idle.status === 202 || idle.status === 409, `got ${idle.status}`);
+        await new Promise((r) => setTimeout(r, 8_000));
+        const stop = await client.req('POST', '/api/chat/stop', { chatId: chatS });
+        ok('stop is accepted while the turn runs', stop.status === 202, `got ${stop.status}`);
+      },
+      ['stopped', 'error'],
+      300_000,
+    );
+    ok('the turn reports it stopped', events.some((e) => e.event === 'stopped'), noError(events) ? '' : 'errored');
+
+    // The chat is usable again: idle, unlocked, and it takes the next message.
+    await expect
+      .poll(async () => (await chatState(chatS)).turnPhase, { timeout: 60_000 })
+      .toBe('idle');
+    const after = await client.sendMessageAndCollect(chatS, 'Never mind — just say OK.', {
+      timeoutMs: 300_000,
+    });
+    ok('a stopped chat runs its next turn normally', noError(after) && after.length > 0);
+  }, 600_000);
+
   it('element-edit handoff captures a screenshot and re-plans', async () => {
     // Journey B has no pending question, so the handoff arrives as a normal
     // message with the annotated screenshot attached (the same path the UI

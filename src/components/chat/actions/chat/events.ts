@@ -219,6 +219,24 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
       break;
     }
 
+    case 'stopped': {
+      // The turn ended because the user asked it to: mirror the note the
+      // server persisted, so the transcript reads the same before and after a
+      // reload. 'done' follows and settles the phase.
+      const mc2 = store.state.chat?.aiChat;
+      if (mc2) {
+        mc2.stopping = false;
+        if (mc2.streamingText?.full) {
+          mc2.messages.push({ role: 'assistant', content: mc2.streamingText.full });
+          mc2.streamingText = undefined;
+        }
+        mc2.messages.push({ role: 'cancel', content: t(uiLocale(), 'chat.stopped') });
+        cacheAIChatMessages(mc2.messages);
+        store.notify();
+      }
+      break;
+    }
+
     case 'done': {
       const mc2 = store.state.chat?.aiChat;
       if (mc2) {
