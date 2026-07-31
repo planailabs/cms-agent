@@ -356,7 +356,9 @@ describe('preview + proxy', () => {
       await editBtn.click();
       const editMenu = s.page.locator('.ws-edit-menu');
       ok('edit tools stay hidden until the edit icon is hovered', !(await editMenu.isVisible()));
-      await s.page.locator('.ws-rail [data-action="ws-edit-exit"]').hover();
+      // The rail BUTTON opens the flyout; the flyout carries an exit item of
+      // its own (see rail.ts), so an unscoped .ws-rail lookup matches both.
+      await s.page.locator('.ws-rail__btn[data-action="ws-edit-exit"]').hover();
       await editMenu.waitFor({ state: 'visible', timeout: 10_000 });
       const tools = await editMenu.locator('[data-action="ws-edit-tool"]').count();
       ok('edit icon flyout lists all five tools', tools === 5, `${tools} tools`);
@@ -411,7 +413,7 @@ describe('preview + proxy', () => {
         'comment edit saves the new text',
         (await frame?.locator('.cms-ov-bubble').filter({ hasText: 'Updated bench comment' }).count()) === 1,
       );
-      await s.page.locator('.ws-rail [data-action="ws-edit-exit"]').hover();
+      await s.page.locator('.ws-rail__btn[data-action="ws-edit-exit"]').hover();
       await editMenu.locator('[data-action="ws-edit-exit"]').click();
       await s.page.locator('.ws-diff').first().waitFor({ timeout: 30_000 });
       ok('exiting edit mode returns to the diff viewer', true);
