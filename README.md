@@ -20,18 +20,15 @@ diffs, and pluggable deployment flows.
 ## Quick start (development)
 
 ```bash
-nix develop               # dev shell: node, pnpm, cargo, postgres, overmind,
-                          # Prisma engines + Playwright browsers wired up
-pnpm install
 cp .env.example .env             # fill in DATABASE_URL, OPENAI_*, …
 scripts/setup-dev-site.sh        # real git-inited site copy at ./local/dev-site
-npx prisma migrate deploy        # against your postgres
-overmind start                   # Procfile: CMS (SKIP_AUTH dev mode) + proxy
+nix develop --command overmind s # after starting the PostgreSQL in DATABASE_URL
 ```
 
-Without Nix you need Node 22, pnpm 11, and a Rust toolchain, then run the two
-Procfile processes yourself (`pnpm dev` and
-`cargo run --manifest-path proxy/Cargo.toml`).
+The start command reconciles dependencies and the generated Prisma client only
+when their inputs changed, applies pending committed migrations, then starts
+the CMS and embedded proxy. `./scripts/update-local.sh` is an optional prewarm
+after a pull; starting remains sufficient on its own.
 
 ## Documentation
 

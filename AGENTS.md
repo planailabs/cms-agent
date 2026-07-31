@@ -21,15 +21,16 @@ files normally before editing.
 
 ## First-time local setup
 
-Before the first start, create `.env` and fill in its required values. Without
-it the dev server starts but every request fails with an environment-validation
-error.
+Before the first start, create `.env` and fill in its required values. A missing
+or invalid file stops the start during preflight.
 
 ```bash
 cp .env.example .env
-nix develop --command pnpm prisma:generate
 nix develop --command overmind s
 ```
+
+Have the PostgreSQL named by `DATABASE_URL` running first. Agents should invoke
+`$start`, which resolves the local database mode before using the same command.
 
 Use `http://localhost:8080` once Astro reports that it is ready. Port `4321`
 is only Astro's internal upstream; developers should access the app through
@@ -44,11 +45,18 @@ the embedded proxy on port `8080`.
 - DB changes ONLY via Prisma migrations (`npx prisma migrate dev`); the
   schema must stay provider-portable (no enums, no pg-native types) because
   tests run it on SQLite (`scripts/prepare-test-db.mjs`).
-- On NixOS the Prisma CLI needs engine env vars:
-  `source scripts/prisma-env.sh` (or `nix develop`).
+- Run Prisma through the default Nix shell, which supplies the pinned engine;
+  `scripts/prepare-test-db.mjs` fails closed when it is absent rather than
+  downloading from Prisma, and the shell disables Prisma's checkpoint network
+  request. On NixOS, `source scripts/prisma-env.sh` remains an explicit
+  alternative.
 - Need a local PostgreSQL? `pnpm run db:start|db:stop|db:status` runs a
   repo-owned cluster in `var/postgres` from `DATABASE_URL`
   (`scripts/local-postgres.mjs`) — it never touches a server it did not start.
+- `$update` (or `./scripts/update-local.sh`) is an optional prewarm after a
+  pull, merge, rebase, or branch switch. It reconciles only stale local
+  prerequisites and never runs tests, accesses the database, or starts
+  services. The normal Overmind start always runs the same cached preflight.
 - Workflow-phase transitions are POST endpoints, never chat text; tool
   availability is enforced in `src/lib/agent/tools/registry.ts` — keep it
   that way when adding tools (zod schema + `phases` + registered in

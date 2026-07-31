@@ -395,6 +395,7 @@
             git
             postgresql
             overmind
+            lsof
             skopeo # for docker-push.sh (copy the image to the registry)
             squashfsTools
           ]) ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux (with pkgs; [
@@ -403,11 +404,19 @@
           ]);
 
           shellHook = ''
+            # Lets the local preflight reuse this shell only while it matches
+            # the current project inputs. An unrelated/stale Nix shell re-enters.
+            unset CMS_AGENT_DEV_SHELL_FINGERPRINT
+            if [ -x ./scripts/update-local.sh ]; then
+              export CMS_AGENT_DEV_SHELL_FINGERPRINT="$(./scripts/update-local.sh --print-nix-fingerprint 2>/dev/null || true)"
+            fi
+
             # Prisma on NixOS: use nixpkgs engines, never download binaries.
             # Prisma 7 is engine-less at query time; prisma-engines_7 only
             # ships schema-engine (no query-engine/libquery_engine/prisma-fmt).
             export PRISMA_SCHEMA_ENGINE_BINARY=${pkgs.prisma-engines_7}/bin/schema-engine
             export PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
+            export CHECKPOINT_DISABLE=1
 
             export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
             export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true

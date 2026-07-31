@@ -91,25 +91,36 @@ nix develop --command pnpm run db:stop
 ```
 
 `db:start` is idempotent and refuses to adopt a foreign server already on that
-port. Apply migrations with `pnpm exec prisma migrate deploy`; `pnpm bench`
-finds the cluster by itself (it derives libpq settings from `DATABASE_URL`).
-The unix socket lives in the data directory, so a bare `psql` needs the
-`PGHOST`/`PGPORT` that `db:start` prints.
+port. The normal development start applies pending committed migrations;
+`pnpm bench` finds the cluster by itself (it derives libpq settings from
+`DATABASE_URL`). The unix socket lives in the data directory, so a bare `psql`
+needs the `PGHOST`/`PGPORT` that `db:start` prints.
 
 ## Running in development
 
-Inside `nix develop`, `overmind start` runs the CMS dev server with its embedded
-proxy at `127.0.0.1:8080`. overmind sources `.env` into the process.
+With the PostgreSQL from `DATABASE_URL` running, use the same command on macOS
+and NixOS:
+
+```bash
+nix develop --command overmind s
+```
+
+The Procfile reconciles changed dependencies, environment contracts, Nix
+inputs, and the generated Prisma client; applies pending committed migrations;
+then runs the CMS dev server with its embedded proxy at `127.0.0.1:8080`.
+Overmind sources `.env` into the process. Running
+`./scripts/update-local.sh` after a pull is only an optional prewarm.
 
 The Procfile enables **SKIP_AUTH** (development only): no sign-in, every
 request runs as `admin@localhost`, and `user@localhost` / `user2@localhost`
 are seeded so you can test multi-user behavior — switch identity with
 `POST /api/dev/impersonate {"email":"user@localhost"}` (GET lists them).
-astro dev binds `::1` — the Procfile sets `HOST=::1` and
-`CMS_UPSTREAM=[::1]:4321` so the routes file and the proxy dial the same
-IPv6 address.
+Astro dev binds `::1` — the launcher sets `HOST=::1`, so the generated routes
+file and the proxy dial the same IPv6 address.
 
 ## NixOS note (development)
 
 Prisma CLI needs the nixpkgs engines: `source scripts/prisma-env.sh` (the
-flake dev shell does this automatically).
+flake dev shell does this automatically). Test database preparation refuses to
+run without that pinned engine rather than downloading a vendor binary; both
+paths also disable Prisma's checkpoint request.
