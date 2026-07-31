@@ -44,6 +44,39 @@ export async function chatPreviewRoutes(chatId: string): Promise<string[]> {
   return [...new Set([HOME, ...routes])].slice(0, MAX_ROUTES);
 }
 
+/**
+ * The last verdict per branch, backend-agnostic: whoever checked (the sync
+ * checkpoint, the agent's own tool) leaves the result here in one vocabulary,
+ * so the agent can ask what is broken without re-running a check — and
+ * without parsing it back out of the chat transcript, which is prose.
+ *
+ * In memory with the preview logs it explains: both describe a dev server
+ * this process is running, and both are worthless after a restart.
+ */
+const g = globalThis as unknown as { __siteHealth?: Map<string, SiteHealthReport> };
+const reports = (): Map<string, SiteHealthReport> => (g.__siteHealth ??= new Map());
+
+export interface SiteHealthReport {
+  branch: string;
+  /** Epoch ms of the check. */
+  at: number;
+  issues: ValidationIssue[];
+  /** Routes the check actually probed. */
+  routes: string[];
+}
+
+export const lastSiteHealth = (branch: string): SiteHealthReport | null =>
+  reports().get(branch) ?? null;
+
+export const clearSiteHealth = (branch: string): void => {
+  reports().delete(branch);
+};
+
+function record(branch: string, routes: string[], issues: ValidationIssue[]): ValidationIssue[] {
+  reports().set(branch, { branch, at: Date.now(), issues, routes });
+  return issues;
+}
+
 export async function checkSiteHealth(input: SiteHealthInput): Promise<ValidationIssue[]> {
   const routes = [...new Set([HOME, ...(input.routes ?? [])])].slice(0, MAX_ROUTES);
 
@@ -56,7 +89,7 @@ export async function checkSiteHealth(input: SiteHealthInput): Promise<Validatio
     baseUrl = `http://127.0.0.1:${instance.port}`;
   } catch (err) {
     const recorded = getStartError(input.branch);
-    return [
+    return record(input.branch, routes, [
       {
         validator: 'preview-start',
         severity: 'error',
@@ -65,24 +98,28 @@ export async function checkSiteHealth(input: SiteHealthInput): Promise<Validatio
           `The preview development server for ${input.branch} does not start: ` +
           (recorded?.message ?? (err instanceof Error ? err.message : String(err))),
       },
-    ];
+    ]);
   }
 
   const backend = activeBackend();
-  if (!backend.detectSiteErrors) return [];
+  if (!backend.detectSiteErrors) return record(input.branch, routes, []);
   try {
-    return await backend.detectSiteErrors({ baseUrl, routes, worktree: input.worktree });
+    return record(
+      input.branch,
+      routes,
+      await backend.detectSiteErrors({ baseUrl, routes, worktree: input.worktree }),
+    );
   } catch (err) {
     // The detector itself failing is an infrastructure problem, not a site
     // one — report it rather than passing the site as healthy.
-    return [
+    return record(input.branch, routes, [
       {
         validator: `${backend.id}-detect`,
         severity: 'error',
         failureClass: 'RETRYABLE_INFRA',
         message: `Checking the site for errors failed: ${err instanceof Error ? err.message : err}`,
       },
-    ];
+    ]);
   }
 }
 

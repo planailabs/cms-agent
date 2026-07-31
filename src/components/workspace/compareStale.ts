@@ -11,7 +11,6 @@
  * route, per turn.
  */
 import { store } from '../chat/app/store';
-import { loadDiffPages } from './actions';
 
 export const applyCompareStale = (generation?: unknown): void => {
   const ws = store.state.workspace;
@@ -26,5 +25,10 @@ export const applyCompareStale = (generation?: unknown): void => {
   }
   // Open: the page list may have changed too, and loadDiffPages refreshes the
   // generation, which is what gives every shot a new URL.
-  void loadDiffPages();
+  //
+  // Imported lazily on purpose. This module is reached from the chat's SSE
+  // dispatcher, and workspace/actions imports the chat actions back: a static
+  // edge here closes that cycle, and the client dies at boot on the first
+  // binding the cycle evaluates out of order (see test/client-boot.test.ts).
+  void import('./actions').then(({ loadDiffPages }) => loadDiffPages());
 };

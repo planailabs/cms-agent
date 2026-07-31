@@ -10,7 +10,13 @@
  */
 import { z } from 'zod';
 import { previewLogs, stopInstance } from '@/lib/preview/manager';
-import { chatPreviewRoutes, checkSiteHealth, describeIssues, hasErrors } from '@/lib/site/health';
+import {
+  chatPreviewRoutes,
+  checkSiteHealth,
+  describeIssues,
+  hasErrors,
+  lastSiteHealth,
+} from '@/lib/site/health';
 import { registerTool, type ToolDef } from './registry';
 import { ALL_PHASES } from '../types';
 
@@ -91,7 +97,61 @@ const previewLogsTool: ToolDef = {
   },
 };
 
+/**
+ * The failure record the checkpoints write (lib/site/health), in the same
+ * shape whatever the site backend is. The agent is invoked on a paused sync
+ * with the errors quoted in a chat message; this is the structured form of
+ * that — which validator, which failure class, which routes were probed —
+ * without re-reading prose, and it is how the agent confirms a fix rather
+ * than announcing one.
+ */
+const siteStatusTool: ToolDef = {
+  name: 'site_status',
+  description:
+    "Report whether this chat's draft site renders: the last recorded check " +
+    '(what failed, which routes were probed, when), or a fresh one with ' +
+    'recheck=true. Use it to confirm a fix before resuming a paused sync.',
+  schema: z.object({
+    recheck: z
+      .boolean()
+      .optional()
+      .describe('Run the check again now instead of reporting the last result (default false)'),
+  }),
+  phases: ALL_PHASES,
+  kinds: ['workflow', 'deployment'],
+  async execute(input, ctx) {
+    if (input.recheck) {
+      const issues = await checkSiteHealth({
+        branch: ctx.branchName,
+        worktree: ctx.worktreePath,
+        routes: await chatPreviewRoutes(ctx.chatId),
+      });
+      return JSON.stringify({
+        checked: 'just now',
+        healthy: !hasErrors(issues),
+        issues,
+        ...(hasErrors(issues) ? { summary: describeIssues(issues) } : {}),
+      });
+    }
+    const report = lastSiteHealth(ctx.branchName);
+    if (!report) {
+      return JSON.stringify({
+        checked: null,
+        note: 'The site has not been checked in this server process — call again with recheck=true.',
+      });
+    }
+    return JSON.stringify({
+      checkedSecondsAgo: Math.round((Date.now() - report.at) / 1000),
+      routes: report.routes,
+      healthy: !hasErrors(report.issues),
+      issues: report.issues,
+      ...(hasErrors(report.issues) ? { summary: describeIssues(report.issues) } : {}),
+    });
+  },
+};
+
 export function registerPreviewTools(): void {
   registerTool(restartPreviewTool);
   registerTool(previewLogsTool);
+  registerTool(siteStatusTool);
 }

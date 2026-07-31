@@ -20,7 +20,13 @@ vi.mock('@/lib/db', () => ({ prisma: prismaMock }));
 
 import { astroBackend, astroErrorText } from '@/lib/site/astro';
 import { staticBackend } from '@/lib/site/static';
-import { chatPreviewRoutes, checkSiteHealth, describeIssues } from '@/lib/site/health';
+import {
+  chatPreviewRoutes,
+  checkSiteHealth,
+  clearSiteHealth,
+  describeIssues,
+  lastSiteHealth,
+} from '@/lib/site/health';
 import { resetActiveBackend } from '@/lib/site';
 import { hasErrors } from '@/lib/validate';
 
@@ -150,6 +156,35 @@ describe('checkSiteHealth', () => {
       expect(describeIssues(issues)).toContain('Oops');
     } finally {
       await s.close();
+    }
+  });
+
+  it('records every verdict, so the agent can read it back without re-checking', async () => {
+    // The checkpoint runs server-side and the agent arrives afterwards; the
+    // record is what site_status reports (and what a fix is measured against).
+    clearSiteHealth('c-record');
+    const s = await server(() => new Response('<h1>Oops</h1>', { status: 500 }));
+    ensureInstance.mockResolvedValue({ port: s.port });
+    try {
+      await checkSiteHealth({ branch: 'c-record', worktree: '/tmp/wt', routes: ['/blog/'] });
+      const report = lastSiteHealth('c-record');
+      // Both probed routes answered 500 — the record keeps every failure, not
+      // just the first, because the agent has to fix all of them.
+      expect(report?.issues).toHaveLength(2);
+      expect(report?.routes).toEqual(['/', '/blog/']);
+      expect(report?.at).toBeGreaterThan(0);
+
+      // A later healthy check replaces it — a stale failure would have the
+      // agent fixing something that is no longer broken.
+      await s.close();
+      const healthy = await server(() => new Response('<html>ok</html>', { status: 200 }));
+      ensureInstance.mockResolvedValue({ port: healthy.port });
+      await checkSiteHealth({ branch: 'c-record', worktree: '/tmp/wt' });
+      expect(lastSiteHealth('c-record')?.issues).toEqual([]);
+      await healthy.close();
+    } catch (err) {
+      await s.close().catch(() => {});
+      throw err;
     }
   });
 

@@ -23,6 +23,8 @@ import {
   clearPreviewLogs,
   previewLogs,
 } from '@/lib/preview/manager';
+import { clearSiteHealth } from '@/lib/site/health';
+import { toolsForPhase } from '@/lib/agent/tools/registry';
 import { registerPreviewTools } from '@/lib/agent/tools/previewTools';
 import { executeTool, type ToolContext } from '@/lib/agent/tools/registry';
 
@@ -98,6 +100,53 @@ describe('preview_logs', () => {
     const result = await run('preview_logs');
     expect(result.lines).toEqual([]);
     expect(result.note).toContain('restart_preview');
+  });
+});
+
+describe('site_status', () => {
+  it('says so when nothing has been checked yet, instead of implying health', async () => {
+    clearSiteHealth(BRANCH);
+    const result = await run('site_status');
+    expect(result.checked).toBeNull();
+    expect(result.note).toContain('recheck=true');
+  });
+
+  it('re-checks on request and reports the failures in one vocabulary', async () => {
+    checkSiteHealth.mockResolvedValue([
+      {
+        validator: 'astro-dev',
+        severity: 'error',
+        failureClass: 'AGENT_FIXABLE',
+        message: '/blog/ fails to render (HTTP 500): Hero.astro',
+      },
+    ]);
+    const result = await run('site_status', { recheck: true });
+    expect(result.healthy).toBe(false);
+    expect(result.issues[0].failureClass).toBe('AGENT_FIXABLE');
+    expect(result.summary).toContain('Hero.astro');
+  });
+});
+
+/**
+ * The site-check step pauses the sync and hands the failure to an agent turn
+ * in the workflow chat. That turn is useless without the tools the brief tells
+ * it to use, so the registry has to expose them in the phase the repair runs
+ * in — EXECUTE, which the step forces precisely so the agent can act.
+ */
+describe('what the repair turn can reach', () => {
+  it('offers the site tools in every phase of a workflow chat', () => {
+    for (const phase of ['plan', 'execute', 'published'] as const) {
+      const names = toolsForPhase(phase, 'workflow').map((t) => t.name);
+      expect(names).toContain('restart_preview');
+      expect(names).toContain('preview_logs');
+      expect(names).toContain('site_status');
+    }
+  });
+
+  it('keeps them out of the deployments monitor, which owns no worktree', () => {
+    const names = toolsForPhase('published', 'deployments').map((t) => t.name);
+    expect(names).not.toContain('restart_preview');
+    expect(names).not.toContain('site_status');
   });
 });
 
