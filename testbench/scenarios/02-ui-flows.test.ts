@@ -387,6 +387,9 @@ describe('ui flows', () => {
 
     await openRail('ws-caps-open');
     ok('capabilities window opens', true);
+    // The window renders its shell first and fills the rows from the
+    // capabilities fetch — reading straight away sees an empty list.
+    await s.page.locator('.ws-caps__row .ws-git__message').first().waitFor({ timeout: 15_000 });
     const skillTitles = await s.page.locator('.ws-caps__row .ws-git__message').allTextContents();
     ok(
       'Ponytail plugin origin sits beside the skill title',

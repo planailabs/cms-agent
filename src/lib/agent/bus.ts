@@ -72,6 +72,23 @@ export const acquireTurnLock = (chatId: string) => acquire(activeTurns, chatId);
 export const releaseTurnLock = (chatId: string, id: string) => release(activeTurns, chatId, id);
 export const hasActiveTurn = (chatId: string): boolean => activeTurns.has(chatId);
 
+/**
+ * Wait for a chat's turn to finish, up to `timeoutMs`. Returns whether it is
+ * idle now.
+ *
+ * For human-facing actions that refuse to run on top of a turn: finalize
+ * resumes the paused agent to close its finish_execution card, so the Publish
+ * button a second later is racing a turn that is about to end on its own.
+ * Waiting it out beats making the human click twice.
+ */
+export async function awaitTurnIdle(chatId: string, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (hasActiveTurn(chatId) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return !hasActiveTurn(chatId);
+}
+
 /** One mutating chat per branch worktree (EXECUTE turns, commits, reverts). */
 export const acquireBranchLock = (branchId: string) => acquire(branchLocks, branchId);
 export const releaseBranchLock = (branchId: string, id: string) => release(branchLocks, branchId, id);

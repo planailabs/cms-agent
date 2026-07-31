@@ -155,11 +155,24 @@ describe('e2e agent journey', () => {
     J.previewSha = previewJson.sha;
     ok('chat stays in execute for review', (await chatState(J.chatId!)).workflowPhase === 'execute');
 
+    // finalize resumes the paused agent to close its finish_execution card.
+    // A human reviews the preview before pressing Publish; a test that posts
+    // immediately would be racing that wrap-up turn.
+    const idleBy = Date.now() + 120_000;
+    while (Date.now() < idleBy && (await chatState(J.chatId!)).turnPhase !== 'idle') {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    ok('the wrap-up turn finished before publish', (await chatState(J.chatId!)).turnPhase === 'idle');
+
     const publish = await client.req('POST', `/api/chats/${J.chatId}/publish`, {
       sha: J.previewSha,
     });
     const pubJson = publish.json as { publicationId?: string; deployChatId?: string };
-    ok('publish accepted (202)', publish.status === 202 && !!pubJson.publicationId);
+    ok(
+      'publish accepted (202)',
+      publish.status === 202 && !!pubJson.publicationId,
+      `got ${publish.status}: ${publish.text.slice(0, 200)}`,
+    );
     J.publicationId = pubJson.publicationId;
     J.deployChatId = pubJson.deployChatId;
 

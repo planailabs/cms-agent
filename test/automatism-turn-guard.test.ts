@@ -81,10 +81,29 @@ describe('automatisms and a live turn', () => {
 
   it('answers the sync endpoint with a 409, not a crash', async () => {
     hold(chatId);
-    const err = await startPull(chatId, ACTOR).catch((e: unknown) => e);
+    const err = await startPull(chatId, ACTOR, 50).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(WorkflowError);
     expect((err as WorkflowError).status).toBe(409);
     expect((err as WorkflowError).message).toMatch(/agent is working/i);
+  });
+
+  // finalize resumes the paused agent to close its finish_execution card, so
+  // the Publish that follows a second later races a turn that is already
+  // ending. Refusing it made the whole finalize → publish sequence fail.
+  it('waits for a turn that is about to end instead of refusing', async () => {
+    hold(chatId);
+    setTimeout(() => {
+      const [id, lockId] = locks.pop()!;
+      releaseTurnLock(id, lockId);
+    }, 300);
+    const err = await publish({
+      chatId,
+      sha: 'a'.repeat(40),
+      actor: { ...ACTOR, role: 'admin' },
+    }).catch((e: unknown) => e);
+    // It got past the turn guard — whatever stops it later (here: the test
+    // env has no git repo behind REPO_PATH) is not "the agent is working".
+    expect(String((err as Error).message)).not.toMatch(/agent is working/i);
   });
 
   it('refuses a publish for the same reason', async () => {
@@ -93,6 +112,7 @@ describe('automatisms and a live turn', () => {
       chatId,
       sha: 'a'.repeat(40),
       actor: { ...ACTOR, role: 'admin' },
+      settleMs: 50,
     }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(WorkflowError);
     expect((err as WorkflowError).status).toBe(409);

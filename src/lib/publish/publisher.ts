@@ -17,7 +17,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { dbNull, prisma } from '@/lib/db';
 import { env } from '@/lib/env';
 import { canSeeOthersChats } from '@/lib/chatAccess';
-import { broadcast, hasActiveTurn, withBranchLock } from '@/lib/agent/bus';
+import { awaitTurnIdle, broadcast, hasActiveTurn, withBranchLock } from '@/lib/agent/bus';
 import { emitChatState, emitChatStatesForBranch } from '@/lib/agent/chatState';
 import { WorkflowError } from '@/lib/agent/workflow';
 import {
@@ -51,6 +51,13 @@ import { getDeployFlow, listDeployFlows, type DeployFlow, type DeployFlowStep } 
 
 registerBuiltinFlows();
 
+/**
+ * How long publish/sync let a running turn finish before refusing it. Long
+ * enough for the wrap-up turn finalize resumes, short enough that a chat the
+ * agent is really working in answers rather than hangs.
+ */
+const TURN_SETTLE_MS = 20_000;
+
 /** Restricted visibility: a foreign chat is indistinguishable from absent. */
 async function assertChatVisibleTo(
   viewer: { id: string; role?: string },
@@ -72,6 +79,8 @@ export interface PublishRequest {
   actor: { id: string; name: string; email: string; role?: string };
   expectedVersion?: number;
   idempotencyKey?: string;
+  /** How long to let a running turn finish first (tests shorten it). */
+  settleMs?: number;
 }
 
 /** Payload of the 'deploy' automatism (persisted in Automatism.data). */
@@ -113,7 +122,10 @@ export async function publish(
   }
 
   // Publishing merges the work branch; a turn still writing to it would put
-  // uncommitted or half-finished work behind the reviewed sha.
+  // uncommitted or half-finished work behind the reviewed sha. The usual
+  // "turn" here is the wrap-up finalize just resumed, seconds from ending —
+  // wait for it before refusing, or Publish fails for pressing it too soon.
+  await awaitTurnIdle(req.chatId, req.settleMs ?? TURN_SETTLE_MS);
   if (hasActiveTurn(req.chatId)) {
     throw new WorkflowError('The agent is working in this chat — publish when the turn finishes.', 409);
   }
@@ -288,17 +300,25 @@ export async function reanchorExecutions(
 const pullStarting = new Set<string>();
 
 /** Start a target→work sync for a workflow chat. Throws on invalid state. */
-export async function startPull(chatId: string, actor: { id: string; name: string; role?: string }): Promise<string> {
+export async function startPull(
+  chatId: string,
+  actor: { id: string; name: string; role?: string },
+  settleMs = TURN_SETTLE_MS,
+): Promise<string> {
   if (pullStarting.has(chatId)) throw new WorkflowError('A sync is already starting.', 409);
   pullStarting.add(chatId);
   try {
-    return await startPullInner(chatId, actor);
+    return await startPullInner(chatId, actor, settleMs);
   } finally {
     pullStarting.delete(chatId);
   }
 }
 
-async function startPullInner(chatId: string, actor: { id: string; name: string; role?: string }): Promise<string> {
+async function startPullInner(
+  chatId: string,
+  actor: { id: string; name: string; role?: string },
+  settleMs: number,
+): Promise<string> {
   const chat = await prisma.chat.findUnique({ where: { id: chatId }, include: { branch: true } });
   if (!chat) throw new WorkflowError('Chat not found', 404);
   await assertChatVisibleTo(actor, chat);
@@ -319,6 +339,7 @@ async function startPullInner(chatId: string, actor: { id: string; name: string;
   // rewrites the worktree it is editing, and its next write lands on commits
   // that no longer exist. startAutomatism refuses this too; here it becomes a
   // 409 the UI can show instead of a stack trace.
+  await awaitTurnIdle(chatId, settleMs);
   if (hasActiveTurn(chatId)) {
     throw new WorkflowError('The agent is working in this chat — sync when the turn finishes.', 409);
   }
