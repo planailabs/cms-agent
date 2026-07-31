@@ -12,7 +12,7 @@ import type { DiffPage, DiffState, DiffViewMode } from './state';
 import { branchPreviewUrl } from './config';
 import { activeBranchName, previewBranchName } from './preview';
 import { store } from '../chat/app/store';
-import { loadDiffPages } from './actions';
+import { loadDiffPages, recordVisit } from './actions';
 import { registerWindow } from './window';
 import { refetchShots, renderNavigation } from './navigation';
 
@@ -46,6 +46,7 @@ export const navigateDiffTo = (input: string): void => {
   const route = canonicalDiffRoute(diff.pages, input);
   const current = resolveDiffRoute(diff);
   if (!diff.loaded || (current !== null && routeKey(current) === routeKey(route))) return;
+  recordVisit('diff', route);
   diff.selectedRoute = route;
   store.notify();
 };
@@ -292,7 +293,8 @@ export const renderDiffViewer = (state: AppState): string => {
   else if (diff.mode === 'highlight') body = renderHighlight(state, route);
   else body = renderOnion(state, route);
 
-  const address = renderNavigation('diff', route);
+  const nav = state.workspace.navHistory;
+  const address = renderNavigation('diff', route, nav.diff, nav.navOpen === 'diff');
 
   // Files without a page route: amber chip (count) toggling the banner
   const warnChip = diff.unresolved.length

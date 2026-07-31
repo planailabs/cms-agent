@@ -7,9 +7,9 @@
  */
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
+import { canGoBack, canGoForward, createNavHistory, type NavHistory, type NavScope } from './navHistory';
 
-/** Which window the bar drives — decides where submit and reload go. */
-export type NavScope = 'preview' | 'diff';
+export type { NavScope } from './navHistory';
 
 const RELOAD_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 1 1-1.5-3.7"/><path d="M13.4 2.8v3.1h-3.1"/></svg>`;
 /**
@@ -20,11 +20,58 @@ const RELOAD_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none"
  */
 const RESTART_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.9v3.3"/><path d="M5.45 3.85a3.6 3.6 0 1 0 5.1 0"/><path d="M9.4 2.6 10.9 3.75 9.7 5.05"/><rect x="2.3" y="11.7" width="11.4" height="2.9" rx="0.9"/><path d="M4.5 13.15h.01M6.4 13.15h.01"/></svg>`;
 
-export const renderNavigation = (scope: NavScope, route: string): string => {
+const BACK_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2 5.2 8l4.8 4.8"/></svg>`;
+const FORWARD_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.2 10.8 8 6 12.8"/></svg>`;
+/** A clock face: the list is "where this window has been", not a menu. */
+const HISTORY_ICON = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.7"/><path d="M8 4.6V8l2.4 1.6"/></svg>`;
+
+/**
+ * The history list, newest first. It is rendered from the same stack Back and
+ * Forward walk, so what the user sees and what those buttons do cannot drift;
+ * the entry they are on is marked rather than hidden.
+ */
+const renderHistoryList = (scope: NavScope, history: NavHistory): string => {
+  if (history.entries.length === 0) return '';
+  const rows = history.entries
+    .map((entry, i) => ({ entry, i }))
+    .reverse()
+    .map(
+      ({ entry, i }) =>
+        `<button type="button" class="ws-nav__history-item${i === history.index ? ' is-current' : ''}"
+          data-action="ws-nav-history-jump" data-scope="${scope}" data-index="${i}">
+          <span class="ws-mono">${escapeHtml(entry)}</span>
+        </button>`,
+    )
+    .join('');
+  return `<div class="ws-nav__history" data-nav-history="${scope}">${rows}</div>`;
+};
+
+export const renderNavigation = (
+  scope: NavScope,
+  route: string,
+  history: NavHistory = createNavHistory(),
+  historyOpen = false,
+): string => {
   const locale = uiLocale();
   const reload = escapeHtml(t(locale, 'workspace.preview.reload'));
   const restart = escapeHtml(t(locale, 'workspace.preview.restart'));
+  const back = escapeHtml(t(locale, 'workspace.preview.back'));
+  const forward = escapeHtml(t(locale, 'workspace.preview.forward'));
+  const historyLabel = escapeHtml(t(locale, 'workspace.preview.history'));
+  // Disabled rather than hidden: the buttons keep their place in the row, so
+  // the address bar does not shift as the history grows.
+  const off = (on: boolean) => (on ? '' : ' disabled aria-disabled="true"');
   return `<div class="ws-nav" data-nav="${scope}">
+      <button type="button" class="ws-mini-button ws-nav__back" data-action="ws-nav-back"
+        data-scope="${scope}" title="${back}" aria-label="${back}"${off(canGoBack(history))}>${BACK_ICON}</button>
+      <button type="button" class="ws-mini-button ws-nav__forward" data-action="ws-nav-forward"
+        data-scope="${scope}" title="${forward}" aria-label="${forward}"${off(canGoForward(history))}>${FORWARD_ICON}</button>
+      <div class="ws-nav__history-wrap">
+        <button type="button" class="ws-mini-button ws-nav__history-toggle${historyOpen ? ' is-active' : ''}"
+          data-action="ws-nav-history" data-scope="${scope}" title="${historyLabel}"
+          aria-label="${historyLabel}" aria-expanded="${historyOpen ? 'true' : 'false'}"${off(history.entries.length > 0)}>${HISTORY_ICON}</button>
+        ${historyOpen ? renderHistoryList(scope, history) : ''}
+      </div>
       <button type="button" class="ws-mini-button ws-nav__reload" data-action="ws-nav-reload"
         data-scope="${scope}" title="${reload}" aria-label="${reload}">${RELOAD_ICON}</button>
       <button type="button" class="ws-mini-button ws-nav__restart" data-action="ws-nav-restart"

@@ -119,7 +119,7 @@ export const renderPreviewToolbar = (state: AppState): string => {
       <div class="ws-toolbar">
         <span class="ws-chrome-dots" aria-hidden="true"><i></i><i></i></span>
         <span class="ws-toolbar__branch" title="${escapeHtml(t(locale, 'workspace.preview.branchTitle'))}">${label}</span>
-        ${renderNavigation('preview', ws.previewRoute)}
+        ${renderNavigation('preview', ws.previewRoute, ws.navHistory.preview, ws.navHistory.navOpen === 'preview')}
         <span class="ws-toolbar__spacer"></span>
         ${
           ws.pickerActive

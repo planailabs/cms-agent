@@ -27,6 +27,7 @@ import {
   type WindowKind,
 } from './state';
 import { closeWindow, openWindow } from './window';
+import { jumpTo, pushEntry, step, type NavScope } from './navHistory';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -301,6 +302,9 @@ export const onPreviewNavigation = (url: string, route: string): void => {
     ws.elementEdit = createInitialElementEditState();
   }
   if (ws.previewRoute !== route) {
+    // Free browsing inside the iframe is navigation too — the back button
+    // would be useless if it only knew about the address bar.
+    recordVisit('preview', route);
     ws.previewRoute = route;
     ws.previewTabs[ws.activeTabIndex] = route;
     store.notify();
@@ -344,6 +348,7 @@ export const navigatePreviewTo = (raw: string): void => {
   stopEditMode();
   const ws = store.state.workspace;
   const route = normalizeRoute(raw);
+  recordVisit('preview', route);
   ws.previewRoute = route;
   ws.previewTabs[ws.activeTabIndex] = route;
   store.notify();
@@ -533,4 +538,65 @@ export const restartPreviewServer = async (reload: () => void): Promise<void> =>
   if (!chatId) return;
   const res = await postJson('/api/preview/restart', { chatId });
   if (res.ok) reload();
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Navigation history (back / forward / the list)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Add a route to a scope's history. Called from wherever a route is decided,
+ *  never from the back/forward walk itself — that would erase the future. */
+export const recordVisit = (scope: NavScope, route: string): void => {
+  const nav = store.state.workspace.navHistory;
+  nav[scope] = pushEntry(nav[scope], route);
+};
+
+/** Put the window on `route` without touching its history. */
+const applyHistoryRoute = (scope: NavScope, route: string): void => {
+  const ws = store.state.workspace;
+  if (scope === 'preview') {
+    stopEditMode();
+    ws.previewRoute = route;
+    ws.previewTabs[ws.activeTabIndex] = route;
+    store.notify();
+    loadPreviewRoute(route);
+    scheduleTabsSave();
+    return;
+  }
+  ws.diff.selectedRoute = route;
+  store.notify();
+};
+
+export const navHistoryStep = (scope: NavScope, delta: -1 | 1): void => {
+  const nav = store.state.workspace.navHistory;
+  const { history, route } = step(nav[scope], delta);
+  if (!route) return;
+  nav[scope] = history;
+  nav.navOpen = null;
+  applyHistoryRoute(scope, route);
+};
+
+export const navHistoryJump = (scope: NavScope, index: number): void => {
+  const nav = store.state.workspace.navHistory;
+  const { history, route } = jumpTo(nav[scope], index);
+  nav.navOpen = null;
+  if (!route) {
+    store.notify();
+    return;
+  }
+  nav[scope] = history;
+  applyHistoryRoute(scope, route);
+};
+
+export const toggleNavHistory = (scope: NavScope): void => {
+  const nav = store.state.workspace.navHistory;
+  nav.navOpen = nav.navOpen === scope ? null : scope;
+  store.notify();
+};
+
+export const closeNavHistory = (): void => {
+  const nav = store.state.workspace.navHistory;
+  if (!nav.navOpen) return;
+  nav.navOpen = null;
+  store.notify();
 };

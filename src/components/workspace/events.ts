@@ -16,6 +16,7 @@ import { openInputModal, closeInputModal, submitInputModal } from './modal';
 import { closeWindow, openWindow, toggleWindow } from './window';
 import { deviceByKey } from './devices';
 import { reloadPreviewFrame } from './previewFrames';
+import type { NavScope } from './navHistory';
 import { registerLayer } from '../chat/app/layers';
 import {
   approvePlanAction,
@@ -49,6 +50,10 @@ import {
   setBrowserCompareMode,
   setBrowserCompareBrowser,
   restartPreviewServer,
+  navHistoryStep,
+  navHistoryJump,
+  toggleNavHistory,
+  closeNavHistory,
 } from './actions';
 import {
   registerPreviewAgent,
@@ -270,6 +275,13 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     outsideSelector: '[data-menu="diff-routes"]',
   });
   registerLayer({
+    id: 'ws-nav-history',
+    priority: 90,
+    isOpen: (s) => s.workspace.navHistory.navOpen !== null,
+    close: closeNavHistory,
+    outsideSelector: '.ws-nav__history-wrap',
+  });
+  registerLayer({
     id: 'ws-compare-menu',
     priority: 90,
     isOpen: (s) => s.workspace.diff.menuOpen,
@@ -466,6 +478,21 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     if (target.getAttribute('data-scope') === 'diff') reloadDiffPanes();
     else reloadPreviewFrame(store.state);
   });
+  const navScope = (target: HTMLElement): NavScope =>
+    target.getAttribute('data-scope') === 'diff' ? 'diff' : 'preview';
+  delegateEvent(app, 'click', '[data-action="ws-nav-back"]', (_e, target) =>
+    navHistoryStep(navScope(target), -1),
+  );
+  delegateEvent(app, 'click', '[data-action="ws-nav-forward"]', (_e, target) =>
+    navHistoryStep(navScope(target), 1),
+  );
+  delegateEvent(app, 'click', '[data-action="ws-nav-history"]', (_e, target) =>
+    toggleNavHistory(navScope(target)),
+  );
+  delegateEvent(app, 'click', '[data-action="ws-nav-history-jump"]', (_e, target) =>
+    navHistoryJump(navScope(target), Number(target.getAttribute('data-index'))),
+  );
+
   // Same two views, one level deeper: bounce the dev server, then reload.
   delegateEvent(app, 'click', '[data-action="ws-nav-restart"]', (_e, target) => {
     const diff = target.getAttribute('data-scope') === 'diff';

@@ -8,6 +8,7 @@
 
 import type { EditAnnotations, EditTool } from '@/injected/annotate';
 import type { PublishCardState } from './publishCard';
+import { createNavHistory, type NavHistory, type NavScope } from './navHistory';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Page context (mirror of src/lib/agent/types.ts PageContext — client copy)
@@ -117,6 +118,14 @@ export interface GitCommitRow {
   date: string;
   /** Already on the target branch — rendered greyed out. */
   onTarget: boolean;
+}
+
+/** Route history per browsing window, plus which history dropdown is open. */
+export interface NavHistoryState {
+  preview: NavHistory;
+  diff: NavHistory;
+  /** Scope whose history list is open, or null. */
+  navOpen: NavScope | null;
 }
 
 /** Commits window: commit list per branch + per-commit diff. */
@@ -323,6 +332,8 @@ export interface WorkspaceState {
 
   /** Diff viewer state (PREVIEW phase main area). */
   diff: DiffState;
+  /** Back/forward history of the preview and compare windows. */
+  navHistory: NavHistoryState;
 
   /** Cross-browser comparison overlay (toggled from the preview toolbar). */
   browserCompare: BrowserCompareState;
@@ -398,6 +409,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   publish: null,
   contextChip: null,
   diff: createInitialDiffState(),
+  navHistory: { preview: createNavHistory(), diff: createNavHistory(), navOpen: null },
   browserCompare: createInitialBrowserCompareState(),
   archive: { loading: false, error: null, chats: [], busyId: null },
   git: createInitialGitModalState(),
