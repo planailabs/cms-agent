@@ -45,6 +45,7 @@ import {
   type AutomatismStep,
 } from '@/lib/automatism';
 import { tmsg, type TranslatedMessage } from '@/lib/i18n';
+import { chatPreviewRoutes, checkSiteHealth, describeIssues, hasErrors } from '@/lib/site/health';
 import { prevalidateBuild } from './artifact';
 import { registerBuiltinFlows } from './flows';
 import { getDeployFlow, listDeployFlows, type DeployFlow, type DeployFlowStep } from './types';
@@ -356,6 +357,53 @@ async function startPullInner(
   } satisfies PullData);
 }
 
+/**
+ * An agent asked to repair something needs its write tools, whatever phase the
+ * chat was in when the flow started. The previous phase is remembered in the
+ * automatism payload; the finalize step puts it back.
+ */
+async function forceExecutePhase(data: PullData): Promise<void> {
+  const chat = await prisma.chat.findUnique({
+    where: { id: data.workflowChatId },
+    select: { workflowPhase: true },
+  });
+  if (!chat || chat.workflowPhase === 'execute') return;
+  data.restorePhase ??= chat.workflowPhase;
+  await prisma.chat.updateMany({
+    where: { id: data.workflowChatId },
+    data: { workflowPhase: 'execute', entityVersion: { increment: 1 } },
+  });
+  emitChatState(data.workflowChatId);
+}
+
+/**
+ * Checkpoint step: is the site still renderable after what just landed?
+ *
+ * A rebase onto the target can break the draft in ways git reports nothing
+ * about — a component the incoming commits renamed, a config both sides
+ * touched — and the person who hits Sync usually looks away afterwards. So
+ * the flow looks for them, and a broken site pauses it exactly like a merge
+ * conflict does: the agent is invoked with the error, fixes it, and
+ * resume_automatism re-runs this check.
+ */
+const siteCheckStep: AutomatismStep = {
+  name: 'check',
+  async run(raw, post) {
+    const data = raw as PullData;
+    const worktree = await ensureWorktree(data.workBranch);
+    const routes = await chatPreviewRoutes(data.workflowChatId);
+    await post(tmsg('site.checking', { routes: routes.join(', ') }));
+
+    const issues = await checkSiteHealth({ branch: data.workBranch, worktree, routes });
+    if (!hasErrors(issues)) {
+      await post(tmsg('site.ok'));
+      return;
+    }
+    await forceExecutePhase(data);
+    throw new AutomatismFailure(tmsg('site.broken', { error: describeIssues(issues) }));
+  },
+};
+
 registerAutomatism({
   type: 'pull',
   steps: [
@@ -368,18 +416,7 @@ registerAutomatism({
         // Force the chat into EXECUTE while conflicts need resolving; the
         // finalize step restores the previous phase.
         const pauseWithConflicts = async (files: string[]): Promise<never> => {
-          const chat = await prisma.chat.findUnique({
-            where: { id: data.workflowChatId },
-            select: { workflowPhase: true },
-          });
-          if (chat && chat.workflowPhase !== 'execute') {
-            data.restorePhase ??= chat.workflowPhase;
-            await prisma.chat.updateMany({
-              where: { id: data.workflowChatId },
-              data: { workflowPhase: 'execute', entityVersion: { increment: 1 } },
-            });
-            emitChatState(data.workflowChatId);
-          }
+          await forceExecutePhase(data);
           throw new AutomatismFailure(
             tmsg('pull.conflicts', {
               target: data.targetName,
@@ -418,6 +455,7 @@ registerAutomatism({
         }
       },
     },
+    siteCheckStep,
     {
       name: 'finalize',
       async run(raw, post) {
@@ -439,6 +477,27 @@ registerAutomatism({
     },
   ],
 });
+
+// The same checkpoint on its own, for callers that want it at another point
+// (see startSiteCheck) — one step, same pause-and-fix behaviour.
+registerAutomatism({ type: 'site-check', steps: [siteCheckStep] });
+
+/**
+ * Run the site health checkpoint against a chat's draft. Resolves with the
+ * automatism id; a broken site pauses it and puts the agent on the repair.
+ */
+export async function startSiteCheck(chatId: string, actorId: string): Promise<string> {
+  const chat = await prisma.chat.findUniqueOrThrow({
+    where: { id: chatId },
+    include: { branch: true },
+  });
+  return startAutomatism('site-check', chatId, {
+    actorId,
+    workflowChatId: chatId,
+    workBranch: chat.workBranch,
+    targetName: chat.branch.name,
+  } satisfies PullData);
+}
 
 // ─── The 'deploy' automatism ─────────────────────────────────────────────────
 // Registered once generically ('deploy': merge → deploy → finalize) and once

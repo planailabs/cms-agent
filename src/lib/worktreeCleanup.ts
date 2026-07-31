@@ -70,9 +70,10 @@ const WORK_BRANCH_RE = /^c-[0-9a-f]{6,}$/;
  */
 export async function discardBranchData(branch: string): Promise<void> {
   const { deleteBranch, removeWorktree } = await import('@/lib/git/engine');
-  const { clearStartError, stopInstance } = await import('@/lib/preview/manager');
+  const { clearPreviewLogs, clearStartError, stopInstance } = await import('@/lib/preview/manager');
   await stopInstance(branch);
   clearStartError(branch);
+  clearPreviewLogs(branch);
   await removeWorktree(branch);
   if (WORK_BRANCH_RE.test(branch)) await deleteBranch(branch);
   removeSandboxHome(branch);

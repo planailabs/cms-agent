@@ -22,6 +22,12 @@ export const automatismCatalogs: AreaCatalogs = {
     'pull.rebaseFailed': 'Rebasing onto {target} failed: {error}',
     'pull.done': 'Sync done — the draft is up to date with {target}.',
 
+    // ── site health check (post-sync, and any other checkpoint) ──
+    'site.checking': 'Checking the draft site for errors ({routes}).',
+    'site.ok': 'The draft site renders without errors.',
+    'site.broken':
+      'The draft site is broken:\n{error}\n\nFix the cause in this worktree (the site must render again), commit it, then call resume_automatism to re-check. preview_logs shows what the development server itself reported; if the server is stuck rather than the code, restart_preview restarts it.',
+
     // ── deploy ──
     'deploy.startedFlow':
       'Deployment of "{title}" started by {actor}: merge {workBranch} ({sha}) into {target}, then deploy via "{flow}".',
@@ -52,6 +58,7 @@ export const automatismCatalogs: AreaCatalogs = {
     'automatism.step.verify': 'Verify',
     'automatism.step.finalize': 'Finalize',
     'automatism.step.pull': 'Pull',
+    'automatism.step.check': 'Site check',
     'automatism.step.push': 'Push',
     'automatism.step.build': 'Build',
     'automatism.step.artifact_info': 'Artifact info',
@@ -74,6 +81,12 @@ export const automatismCatalogs: AreaCatalogs = {
       'Der Entwurf wurde auf den neuesten Stand von {target} rebased → {sha}. Hinweis: Die Entwurfs-Historie wurde neu geschrieben — prüfe die Vorschau erneut, bevor du veröffentlichst.',
     'pull.rebaseFailed': 'Rebase auf {target} fehlgeschlagen: {error}',
     'pull.done': 'Sync abgeschlossen — der Entwurf ist auf dem Stand von {target}.',
+
+    // ── Site-Prüfung (nach dem Sync und an anderen Prüfpunkten) ──
+    'site.checking': 'Der Entwurf wird auf Fehler geprüft ({routes}).',
+    'site.ok': 'Der Entwurf wird ohne Fehler dargestellt.',
+    'site.broken':
+      'Der Entwurf ist fehlerhaft:\n{error}\n\nBehebe die Ursache in diesem Worktree (die Seite muss wieder dargestellt werden), committe die Änderung und rufe dann resume_automatism auf, damit erneut geprüft wird. preview_logs zeigt, was der Entwicklungsserver selbst gemeldet hat; wenn nicht der Code, sondern der Server hängt, startet restart_preview ihn neu.',
 
     // ── deploy ──
     'deploy.startedFlow':
@@ -105,6 +118,7 @@ export const automatismCatalogs: AreaCatalogs = {
     'automatism.step.verify': 'Prüfen',
     'automatism.step.finalize': 'Abschluss',
     'automatism.step.pull': 'Pull',
+    'automatism.step.check': 'Site-Prüfung',
     'automatism.step.push': 'Push',
     'automatism.step.build': 'Build',
     'automatism.step.artifact_info': 'Artefakt-Info',

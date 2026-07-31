@@ -92,11 +92,21 @@ flowchart LR
         reclaim a checkout it cannot account for, but it only ever deletes the
         git ref of generated work branches — a branch someone pushed minutes ago
         has regenerable working files and irreplaceable commits.</li>
+      <li><strong>A clean sync can still break the site.</strong> Git reports
+        success for a rebase that renamed a component out from under a page, and
+        nobody looks at the preview right after pressing Sync. So the flow looks:
+        a check step asks the site backend whether the draft still renders (an
+        Astro dev server answers a compile error with a 500; a static site has no
+        such answer, so it is not asked) and a broken draft pauses the flow like
+        a merge conflict does — the chat is forced into EXECUTE, the error is
+        posted as the agent's brief, and resuming re-runs the check instead of
+        trusting the fix.</li>
     </ul>`,
     source: [
       'src/lib/git/engine.ts',
       'src/lib/git/identity.ts',
       'src/lib/branchSync.ts',
+      'src/lib/site/health.ts',
       'src/lib/agent/tools/commitTools.ts',
       'src/lib/publish/publisher.ts',
     ],

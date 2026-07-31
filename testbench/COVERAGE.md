@@ -111,6 +111,8 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Capability router (SKILL_ROUTER_MODEL picks the skills/MCP groups the prompt carries; a failure fails the turn, never falls back to the full list) | — | 🟡 unit-covered (test/skill-router.test.ts, test/capability-tools.test.ts); every bench turn exercises it implicitly — a broken router fails 01/03 outright, which is the intended visibility |
 | Lazy MCP loading (defaults only at turn start; load_mcp/unload_mcp per group; an unloaded group's server never starts; phase policy still narrows a freshly loaded group) | — | 🟡 unit-covered (test/mcp-lazy-load.test.ts, test/mcp-groups.test.ts); bench-driving needs a configured custom MCP server in the bench environment, same blocker as the phase gate above |
 
+| Post-sync site check (backend error detection → automatism pause → agent fix → re-check on resume) + restart_preview | — | 🟡 unit-covered (test/site-health.test.ts drives a real HTTP dev-server stub, test/site-check-automatism.test.ts drives the flow against the DB); bench-driving it needs a sync that deliberately breaks the draft, which 06 does not do |
+
 ## Agent tool paths (implicit via e2e prompts)
 
 Every e2e agent turn sends `reasoning_effort` (OPENAI_REASONING_EFFORT,

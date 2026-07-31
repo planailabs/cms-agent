@@ -43,6 +43,8 @@ interface ManagerState {
   /** Branches kept running regardless of idleness (the branches chats fork
    *  from — a cold one would make every new chat wait). */
   pinned: Set<string>;
+  /** Rolling dev-server output per branch (see appendLog). */
+  logs: Map<string, string[]>;
 }
 
 // Survive Vite HMR module reloads in dev
@@ -57,11 +59,40 @@ const state: ManagerState =
     startErrors: new Map(),
     startPhases: new Map(),
     pinned: new Set(),
+    logs: new Map(),
   });
 state.pinned ??= new Set();
+state.logs ??= new Map();
 state.startErrors ??= new Map();
 state.startPhases ??= new Map();
 state.routesListeners ??= new Set();
+
+/**
+ * Dev-server output is kept in memory per branch, and outlives the process
+ * that wrote it: the interesting lines are usually the last ones before a
+ * crash, and a stopped instance is exactly when someone goes looking. Bounded
+ * per branch, dropped when the branch's worktree is cleaned up.
+ */
+const MAX_LOG_LINES = 400;
+
+export function appendPreviewLog(branch: string, chunk: string): void {
+  const lines = state.logs.get(branch) ?? [];
+  for (const line of chunk.split('\n')) {
+    const trimmed = line.replace(/\s+$/, '');
+    if (trimmed) lines.push(trimmed);
+  }
+  state.logs.set(branch, lines.slice(-MAX_LOG_LINES));
+}
+
+/** Tail of a branch's dev-server output, oldest first ([] when none). */
+export function previewLogs(branch: string, lines = 100): string[] {
+  const all = state.logs.get(branch) ?? [];
+  return all.slice(-Math.max(1, lines));
+}
+
+export function clearPreviewLogs(branch: string): void {
+  state.logs.delete(branch);
+}
 
 export function getStartError(branch: string): { message: string; at: number } | null {
   return state.startErrors.get(branch) ?? null;
@@ -317,6 +348,7 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
       host: e.HOST,
       allowedHost: `${branch}.${e.BASE_DOMAIN}`,
     });
+    appendPreviewLog(branch, `── starting: ${argv.join(' ')} ──`);
     const child = spawnSandboxed(sb, argv, { cwd: worktree, sessionKey: branch, extraEnv });
 
     const info: PreviewInstance = {
@@ -337,13 +369,16 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     };
     child.stdout?.on('data', (d: Buffer) => {
       appendTail(d);
+      appendPreviewLog(branch, d.toString());
       console.log(`[preview:${branch}] ${d.toString().trimEnd()}`);
     });
     child.stderr?.on('data', (d: Buffer) => {
       appendTail(d);
+      appendPreviewLog(branch, d.toString());
       console.error(`[preview:${branch}] ${d.toString().trimEnd()}`);
     });
     child.on('exit', (code) => {
+      appendPreviewLog(branch, `── development server exited (${code}) ──`);
       console.log(`[preview:${branch}] exited (${code})`);
       const cur = state.instances.get(branch);
       if (cur?.child === child) {

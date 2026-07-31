@@ -158,6 +158,17 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
     that is how a mid-run load reaches the model.
   * The group gate is not the phase gate: `mcp/policy.ts` still narrows a
     freshly loaded group to declared-read-only tools outside EXECUTE.
+- Site health is a backend capability, not an Astro special case
+  (`SiteBackend.detectSiteErrors`, `src/lib/site/health.ts`): "broken" means
+  a 5xx from the dev server for Astro and nothing at all for a static site,
+  so the adapter answers it. `checkSiteHealth` adds the half no backend can
+  see — a dev server that never starts — and returns `ValidationIssue[]`,
+  the same vocabulary the pre-commit/pre-publish validators use.
+  The `check` step (`publisher.ts`) runs it after a sync and standalone via
+  `startSiteCheck`; a broken site pauses the automatism exactly like a merge
+  conflict — chat forced to EXECUTE, error posted, agent invoked, and
+  `resume_automatism` RE-RUNS the check rather than trusting the fix. Add new
+  checkpoints by reusing that step, not by writing another detector.
 
 ## Client state: streamed snapshots
 

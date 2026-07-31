@@ -4,6 +4,7 @@
  * prompt framing). Registry mirrors src/lib/content/adapter.ts.
  */
 import type { PreviewRouteGraph } from '@/lib/preview/routeGraph';
+import type { ValidationIssue } from '@/lib/validate';
 
 export interface DevCommand {
   /** Full argv (incl. port/host flags) for spawnSandboxed. */
@@ -40,6 +41,22 @@ export interface SiteBackend {
   isSiteContent(file: string): boolean;
   /** Optional preview dependency-graph capability (visual diff precision). */
   routeGraph?: { read(worktree: string): PreviewRouteGraph | null };
+  /**
+   * Ask the running preview whether the site is currently broken.
+   *
+   * Backend-specific because "broken" is: Astro answers a compile error with
+   * a 500 and its own error page, a plain static server answers 404s and
+   * nothing else. Called at checkpoints where a change landed that nobody
+   * looked at yet (after a sync, before a publish) — see lib/site/health.ts.
+   * Omitted: the backend has no runtime errors of its own to report.
+   */
+  detectSiteErrors?(opts: {
+    /** Origin of the running preview, e.g. http://127.0.0.1:41234 (no proxy). */
+    baseUrl: string;
+    /** Routes to probe; the caller decides how many are worth the time. */
+    routes: string[];
+    worktree: string;
+  }): Promise<ValidationIssue[]>;
   /** Repo-local git excludes beyond the common set. */
   extraExcludes: string[];
 }
