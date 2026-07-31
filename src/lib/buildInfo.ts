@@ -11,7 +11,7 @@
  * authed GET /api/version. The client reads it back via getAppBuild()
  * (src/components/chat/constants.ts), never from the bundle.
  */
-export const APP_VERSION = 'v0.1.6';
+export const APP_VERSION = 'v0.1.7';
 
 /** Short git commit embedded at build time (empty when unknown). */
 export const GIT_COMMIT = import.meta.env.PUBLIC_GIT_COMMIT ?? '';

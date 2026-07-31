@@ -23,8 +23,7 @@ PUBLISH_COMMAND=./scripts/demo-publish.sh   # e.g. `cp "$TARBALL_PATH" /tmp/publ
 ```
 
 ```bash
-nix develop
-overmind start    # Procfile: CMS on :4321 + proxy entrypoint on :8080
+nix develop --command overmind s # CMS on :4321 + proxy entrypoint on :8080
 ```
 
 Open `http://cms.localtest.me:8080`, sign in via your OIDC provider.
