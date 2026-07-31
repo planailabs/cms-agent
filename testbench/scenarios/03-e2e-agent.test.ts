@@ -312,6 +312,11 @@ describe('e2e agent journey', () => {
     };
     const chatS = created.chat.id;
 
+    // With no turn running there is nothing to interrupt, and the endpoint
+    // says so rather than arming a stop for the next one.
+    const idle = await client.req('POST', '/api/chat/stop', { chatId: chatS });
+    ok('stop with no turn running is refused', idle.status === 409, `got ${idle.status}`);
+
     const events = await client.collectEvents(
       chatS,
       async () => {
@@ -323,11 +328,9 @@ describe('e2e agent journey', () => {
             'the writing style of each one.',
         });
         if (first.status !== 202) throw new Error(`message: ${first.status}`);
-        // Stop once the turn is demonstrably running — before that there is
-        // nothing to interrupt and the endpoint says so.
-        const idle = await client.req('POST', '/api/chat/stop', { chatId: chatS });
-        ok('stop before the turn starts is refused', idle.status === 202 || idle.status === 409, `got ${idle.status}`);
-        await new Promise((r) => setTimeout(r, 8_000));
+        // The turn lock is taken before that 202 comes back, so the turn is
+        // already running — no sleep to guess at, and no window where a fast
+        // model has finished before the stop is sent.
         const stop = await client.req('POST', '/api/chat/stop', { chatId: chatS });
         ok('stop is accepted while the turn runs', stop.status === 202, `got ${stop.status}`);
       },

@@ -61,7 +61,12 @@ describe('ui flows', () => {
       s.page.url(),
     );
     ok('draft edit tool is enabled', await dataAction(s.page, 'ws-edit-mode').isEnabled());
-    ok('draft element picker is enabled', await dataAction(s.page, 'ws-element-pick').isEnabled());
+    // The composer carries a second picker button, so scope to the rail one —
+    // it is the one whose enabled state follows the branch rather than the chat.
+    ok(
+      'draft element picker is enabled',
+      await s.page.locator('.ws-rail [data-action="ws-element-pick"]').isEnabled(),
+    );
     // Collapse the panel again — expanded it overlays the header dropdowns.
     await dataAction(s.page, 'ws-branch-list-toggle').first().click();
     await s.page.waitForTimeout(300);
