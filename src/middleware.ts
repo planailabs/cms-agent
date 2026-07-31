@@ -16,23 +16,28 @@ import { isFromProxy, proxyRequiredResponse } from '@/lib/proxyGuard';
 import { env } from '@/lib/env';
 
 // Publish the routing table, start the embedded proxy, and recover automatisms
-// orphaned by the previous process, once per server boot
-// (skipped when the module is loaded outside a configured runtime, e.g.
-// during astro build).
-if (process.env.VAR_DIR) {
+// orphaned by the previous process, once per server boot.
+//
+// Gated on a server actually booting, not merely on a configured environment:
+// `astro build` evaluates this module to prerender pages, and dotenv (via
+// lib/env) fills VAR_DIR in from .env there too — so this block would run
+// inside the build, where the preview warmer has no sandbox to start previews
+// in and logged its failure on every build. server.mjs publishes the proxy
+// marker before it imports the SSR entry, and `astro dev` is the other real
+// runtime; nothing else here is a server.
+const proxyStartedByServer = Boolean(
+  (globalThis as typeof globalThis & { __nativeProxy?: { started?: boolean } }).__nativeProxy
+    ?.started,
+);
+const isServerBoot = proxyStartedByServer || (import.meta.env.DEV && !process.env.VITEST);
+if (process.env.VAR_DIR && isServerBoot) {
   initRoutesFile();
   // Legacy scratchpad storage (pre-.scratch/-in-worktree) — drop it once.
   fs.rmSync(path.join(path.resolve(process.env.VAR_DIR), 'scratch'), {
     recursive: true,
     force: true,
   });
-  const proxyStartedByServer = Boolean(
-    (globalThis as typeof globalThis & { __nativeProxy?: { started?: boolean } }).__nativeProxy
-      ?.started,
-  );
-  if (proxyStartedByServer || (import.meta.env.DEV && !process.env.VITEST)) {
-    startEmbeddedProxy(currentRoutesJson());
-  }
+  startEmbeddedProxy(currentRoutesJson());
   void import('@/lib/automatism')
     .then(({ recoverAutomatisms }) => recoverAutomatisms())
     .catch((err) => console.error('[automatism] boot recovery failed:', err));
