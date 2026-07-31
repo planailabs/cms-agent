@@ -132,7 +132,17 @@ const renderMessage = (
           `;
   }
   if (msg.role === 'user') {
+    // Uploads the blocks already display: showing them again as chips says the
+    // same thing a second time (the handoff card IS its three screenshots).
+    const shown = new Set(
+      (msg.blocks ?? []).flatMap((b) =>
+        b.kind === 'handoff' ? b.shots.map((s) => s.uploadId)
+        : b.kind === 'images' ? b.items.map((i) => i.uploadId)
+        : [],
+      ),
+    );
     const chips = (msg.attachments ?? [])
+      .filter((a) => !a.id || !shown.has(a.id))
       .map((a) => {
         const thumb =
           a.url && a.mime.startsWith('image/')
@@ -144,11 +154,20 @@ const renderMessage = (
     const attachmentsRow = chips
       ? `<div class="msg-attachments">${chips}</div>`
       : '';
-    const textRow = msg.content
-      ? `<p class="max-w-[85%] rounded-2xl bg-(--surface-elevated) px-3.5 py-2 text-sm text-(--text-primary)">
+    // A message that carries a card was WRITTEN for the agent: the prose spells
+    // out upload ids and annotation JSON, which is exactly what the card
+    // replaces for a human. Keep it one fold away rather than in their face —
+    // it is still the record of what the agent was told.
+    const textRow = !msg.content
+      ? ''
+      : msg.blocks?.length
+        ? `<details class="msg-agent-text max-w-[85%]">
+                <summary>${escapeHtml(t(uiLocale(), 'chat.block.agentText'))}</summary>
+                <p>${escapeHtml(msg.content)}</p>
+              </details>`
+        : `<p class="max-w-[85%] rounded-2xl bg-(--surface-elevated) px-3.5 py-2 text-sm text-(--text-primary)">
                 ${escapeHtml(msg.content)}
-              </p>`
-      : '';
+              </p>`;
     // The /command the message was sent with, beside it — so the transcript
     // still explains why the chat behaved differently from here on.
     const commandRow = msg.command ? `<div class="msg-command">${commandChipHtml(msg.command)}</div>` : '';

@@ -14,6 +14,7 @@ import {
   type DisplayBlock,
 } from '@/lib/messageBlocks';
 import { renderMessageBlocks } from '@/components/chat/ui/chat/blocks';
+import { renderMessageBubbles } from '@/components/chat/ui/chat/bubbles';
 
 const handoff: DisplayBlock = {
   kind: 'handoff',
@@ -96,5 +97,49 @@ describe('rendering', () => {
     expect(html).toContain('c-abc');
     expect(html).toContain('id=u-1');
     expect(uploadUrl('u-1')).toBe('/api/uploads?id=u-1&mode=raw');
+  });
+});
+
+/**
+ * One handoff is ONE message: the card, the attachment chips and the prose
+ * were three rows saying the same thing, and the prose is agent-facing (upload
+ * ids, annotation JSON) — the card is what replaces it for a human.
+ */
+describe('the message the card belongs to', () => {
+  const message = {
+    role: 'user' as const,
+    content: 'Element-edit handoff from Dev Admin on /. Annotation metadata (JSON): {"route":"/"}',
+    blocks: [handoff],
+    attachments: [
+      { id: 'u-before', filename: 'element-edit-home-before.png', mime: 'image/png' },
+      { id: 'u-edited', filename: 'element-edit-home-edited.png', mime: 'image/png' },
+      { id: 'u-annotated', filename: 'element-edit-home-annotated.png', mime: 'image/png' },
+    ],
+  };
+
+  const render = (msg: unknown): string =>
+    renderMessageBubbles({ phase: 'idle', messages: [msg] } as never);
+
+  it('does not repeat the shots as attachment chips', () => {
+    const html = render(message);
+    expect(html).toContain('msg-card--handoff');
+    expect(html).not.toContain('element-edit-home-before.png');
+  });
+
+  it('keeps the agent-facing prose, folded away', () => {
+    const html = render(message);
+    expect(html).toContain('msg-agent-text');
+    expect(html).toContain('Annotation metadata');
+  });
+
+  it('leaves an ordinary message alone', () => {
+    const html = render({
+      role: 'user' as const,
+      content: 'plain question',
+      attachments: [{ id: 'u-9', filename: 'notes.md', mime: 'text/markdown' }],
+    });
+    expect(html).toContain('notes.md');
+    expect(html).not.toContain('msg-agent-text');
+    expect(html).toContain('plain question');
   });
 });

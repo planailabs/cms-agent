@@ -2133,6 +2133,23 @@ html.is-first-visit #app {
   }
 
   /* ── Message display blocks (lib/messageBlocks) ─────────────────────── */
+  .msg-agent-text > summary {
+    cursor: pointer;
+    font-size: 0.72rem;
+    color: var(--text-muted, rgba(255, 255, 255, 0.6));
+    text-align: right;
+  }
+
+  .msg-agent-text > p {
+    margin-top: 0.3rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.75rem;
+    background: var(--surface-elevated, rgba(255, 255, 255, 0.04));
+    font-size: 0.75rem;
+    color: var(--text-muted, rgba(255, 255, 255, 0.7));
+    white-space: pre-wrap;
+  }
+
   .msg-blocks {
     display: flex;
     flex-direction: column;
