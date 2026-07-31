@@ -45,7 +45,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `/api/admin/*` (all routes, editor 403) | 01 (403), 04 (admin) | ✅ |
 | `/api/admin/grants` | 04 (asserts it 404s) | ⛔ removed with autonomy grants |
 | `GET /dashboard` (admin gate) | 04 | ✅ |
-| `/injected-cms-agent.js`, `/injected-agent-module.js`, `/injected-annotate.js` | 01 | ✅ |
+| `/injected-cms-agent.js`, `/injected-agent-module.js`, `/injected-annotate.js` | 01 | ✅ — also the regression guard for the proxy front door vs. prerendering: these three are prerendered, so a guard that does not step aside at build time ships its own 403 note as the bundle, and only a probe against a real production build sees it |
 | `/__preview/boot/<branch>` (CMS-host redirect) | 05 | ✅ |
 | `/__preview/wait/<branch>` (SSE) | 05 | ✅ |
 | `<branch>.BASE_DOMAIN` proxy routing + injection | 05 | ✅ |

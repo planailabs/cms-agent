@@ -225,7 +225,6 @@ describe('api probes', () => {
       '/api/admin/users',
       '/api/admin/settings',
       '/api/admin/usage',
-      '/api/admin/grants',
     ];
     for (const route of routes) {
       const res = await asUser.get(route);

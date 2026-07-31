@@ -165,7 +165,11 @@ sequenceDiagram
         overlay, so what it serves is a half-working workspace whose failures
         read as application bugs. The two implementations are pinned to one
         token by a shared test vector — they ship in the same image, and a
-        mismatch would refuse every request.</li>
+        mismatch would refuse every request. The one exception is the build
+        itself: prerendered routes run their middleware at build time, where no
+        proxy exists, and are served as static files that never reach the
+        middleware again — so the guard steps aside for them, or its own
+        response ends up baked into the shipped bundles.</li>
       <li><strong>The boot page is authenticated.</strong> Both it and its SSE
         wait stream require a session — an anonymous visitor is redirected to
         sign-in, and the stream answers 401.</li>

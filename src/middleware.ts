@@ -69,6 +69,13 @@ const SELF_AUTHENTICATING_PATHS = [
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname, search } = new URL(context.request.url);
 
+  // Prerendered routes run at BUILD time, where there is no proxy and no real
+  // request — and are served as static files at runtime, which never reach
+  // this middleware at all. Without this the guard's own response is baked
+  // into the build output: the injected-agent bundles shipped as an 84-byte
+  // "visit the proxy" note, and the overlay was dead on every preview.
+  if (context.isPrerendered) return next();
+
   // Front door first: everything below assumes the proxy already routed,
   // authorized the preview host and rewrote the path. A request that reached
   // this port directly gets the public address instead of a page.
