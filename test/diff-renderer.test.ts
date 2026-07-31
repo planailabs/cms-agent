@@ -118,7 +118,9 @@ describe('diff compare renderers', () => {
 
     const html = renderDiffViewer(state);
     expect(html).toContain('data-boxhl');
-    expect(html).toContain('data-before="/api/diff/chat-1/shot?route=%2F&amp;kind=before"');
-    expect(html).toContain('data-after="/api/diff/chat-1/shot?route=%2F&amp;kind=after"');
+    // The generation is part of the URL so a site change gives the shots new
+    // URLs — the browser caches them for five minutes (see compareStale.ts).
+    expect(html).toContain('data-before="/api/diff/chat-1/shot?route=%2F&amp;kind=before&amp;v=0"');
+    expect(html).toContain('data-after="/api/diff/chat-1/shot?route=%2F&amp;kind=after&amp;v=0"');
   });
 });

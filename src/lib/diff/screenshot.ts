@@ -205,11 +205,22 @@ export async function captureRoute(
  * same code the live edit mode uses), and screenshot the annotated page.
  * The annotation viewport is matched so document coordinates line up.
  */
+export interface HandoffShots {
+  /** The page as it is now, before anything was drawn on it. */
+  before: Buffer;
+  /** Moves and swaps carried out, nothing drawn — what the edit asks for.
+   *  Absent when the annotation set changes no layout (drawings/comments only). */
+  edited: Buffer | null;
+  /** The same page with the user's marks on it: ghosts, arrows, pins. */
+  annotated: Buffer;
+  status: number | null;
+}
+
 export async function captureAnnotatedRoute(
   branch: string,
   route: string,
   annotations: import("@/injected/annotate").EditAnnotations,
-): Promise<{ buffer: Buffer; status: number | null }> {
+): Promise<HandoffShots> {
   const { ANNOTATE_GLOBAL, annotateRuntimeSource } = await import("@/lib/injected/bundle");
   const source = await annotateRuntimeSource();
   const viewport = {
@@ -224,14 +235,30 @@ export async function captureAnnotatedRoute(
     viewport,
   );
   try {
-    if (status !== null && status < 400) {
-      await page.addScriptTag({ content: source });
-      await page.evaluate(
-        `${ANNOTATE_GLOBAL}.apply(${JSON.stringify(annotations)})`,
-      );
+    // Three shots off ONE page load: the same layout, the same fonts, the same
+    // lazy images. Reloading between them would let the page differ for
+    // reasons that have nothing to do with the edit, which is exactly the
+    // comparison the agent is being asked to make.
+    const shot = () => page.screenshot({ fullPage: true });
+    const before = await shot();
+    if (status === null || status >= 400) {
+      return { before, edited: null, annotated: before, status };
     }
-    const buffer = await page.screenshot({ fullPage: true });
-    return { buffer, status };
+    await page.addScriptTag({ content: source });
+
+    const payload = JSON.stringify(annotations);
+    const changesLayout =
+      annotations.moves.length > 0 || (annotations.swaps?.length ?? 0) > 0;
+    let edited: Buffer | null = null;
+    if (changesLayout) {
+      await page.evaluate(`${ANNOTATE_GLOBAL}.applyLayout(${payload})`);
+      edited = await shot();
+    }
+    // apply() clears the layout-only pass first, so the marked-up shot is not
+    // a double application of the same moves.
+    await page.evaluate(`${ANNOTATE_GLOBAL}.apply(${payload})`);
+    const annotated = await shot();
+    return { before, edited, annotated, status };
   } finally {
     await launched.close();
   }

@@ -14,6 +14,7 @@ import OpenAI from 'openai';
 import { env } from '@/lib/env';
 import type { PluginSkill } from './plugins';
 import type { McpGroupView } from './mcp/groups';
+import { bestMatches } from './capabilityIndex';
 import type { ChatKind } from './tools/registry';
 import type { StoredMessage, WorkflowPhase } from './types';
 
@@ -33,14 +34,18 @@ export interface RouterVerdict {
   outputTokens: number;
 }
 
-const SYSTEM = `You route an editorial CMS agent's capabilities. Given the user's recent messages and two indexes — available SKILLS and loadable MCP GROUPS — name the ones that turn is likely to need.
+const SYSTEM = `You route an editorial CMS agent's capabilities. Given the user's recent messages and two indexes — available SKILLS and loadable MCP GROUPS — name everything that turn could plausibly need.
 
 Rules:
 - Answer with JSON only: {"skills":["name",…],"groups":["id",…]}. No prose, no code fence.
 - Use names exactly as listed. Never invent one.
-- Pick generously where a skill plainly governs the work (a skill about deploys for a deploy request), and leave the list empty when nothing fits. An unnecessary pick costs context; a missing one costs the agent a search.
-- MCP groups are NOT loaded by your answer — you are only naming candidates the agent may load.`;
+- Be generous. Include anything that MIGHT apply, not only what certainly does: a skill costs one line in the prompt when it turns out to be irrelevant, but a skill you leave out is one the agent never learns exists. When you hesitate over an entry, include it.
+- Think past the literal request to the work it implies — editing a page usually also means checking how it looks, publishing usually also means deploying — and include the skills and groups for those steps too.
+- Naming an MCP group does NOT load it: you are listing candidates the agent may load if it needs them, so the cost of naming one is a line of text.
+- Only leave a list empty when the index genuinely has nothing related.`;
 
+/** Keyword matches added on top of the model's picks, per index. */
+const KEYWORD_TOPUP = 3;
 const MAX_MESSAGE_CHARS = 1500;
 const RECENT_USER_MESSAGES = 3;
 
@@ -142,9 +147,28 @@ export async function routeCapabilities(input: RouterInput): Promise<RouterVerdi
     );
   }
 
+  // The model's picks, plus what plain keyword overlap says is relevant. The
+  // union is the optimistic half: a small model that overlooks the skill whose
+  // name is in the user's own sentence should not be the reason the agent
+  // never sees it. Duplicates collapse; misses cost nothing but a line.
+  const text = recentUserText(input.messages);
+  const skills = new Set(pick(parsed.skills, new Set(input.skills.map((s) => s.name))));
+  for (const s of bestMatches(text, input.skills, (x) => ({ title: x.name, body: x.description }), KEYWORD_TOPUP)) {
+    skills.add(s.name);
+  }
+  const groups = new Set(pick(parsed.groups, new Set(input.groups.map((g) => g.id))));
+  for (const g of bestMatches(
+    text,
+    input.groups,
+    (x) => ({ title: `${x.id} ${x.servers.join(' ')}`, body: x.description }),
+    KEYWORD_TOPUP,
+  )) {
+    groups.add(g.id);
+  }
+
   const verdict: RouterVerdict = {
-    skills: pick(parsed.skills, new Set(input.skills.map((s) => s.name))),
-    groups: pick(parsed.groups, new Set(input.groups.map((g) => g.id))),
+    skills: [...skills],
+    groups: [...groups],
     inputTokens,
     outputTokens,
   };

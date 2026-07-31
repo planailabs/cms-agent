@@ -168,6 +168,13 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
   };
   invalidateCompare();
 
+  /** Ends the turn for the client: the shots are stale before 'done', because
+   *  'done' is the event everything else treats as the end of the turn. */
+  const finishTurn = (): void => {
+    invalidateCompare();
+    broadcast(chatId, 'done', { type: 'done' });
+  };
+
   // Preload image attachments so an image read_upload can be inlined as a
   // multimodal message (Chat Completions can't carry images in tool results;
   // see toOpenAiMessages). Bytes are read lazily, only for images the agent
@@ -324,7 +331,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       await appendMsg({ role: 'cancel', content: tmsg('chat.stopped').fallback, tm: tmsg('chat.stopped') });
       await setPhase('idle');
       broadcast(chatId, 'stopped', { type: 'stopped' });
-      broadcast(chatId, 'done', { type: 'done' });
+      finishTurn();
       await flushTokens();
       return { type: 'stopped' };
     };
@@ -486,7 +493,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       if (toolCalls.length === 0) {
         if (text) await appendMsg({ role: 'assistant', content: text });
         await setPhase('idle');
-        broadcast(chatId, 'done', { type: 'done' });
+        finishTurn();
         await flushTokens();
         return { type: 'finished' };
       }
@@ -583,13 +590,10 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     await appendMsg({ role: 'assistant', content: msg });
     await setPhase('idle');
     broadcast(chatId, 'text_done', { type: 'text_done', content: msg });
-    broadcast(chatId, 'done', { type: 'done' });
+    finishTurn();
     await flushTokens();
     return { type: 'finished' };
   } finally {
-    // Whatever the turn did — committed, wrote, ran a command, gave up — the
-    // shots taken before it can no longer be trusted.
-    invalidateCompare();
     await flushTokens();
     await bridge.close();
   }

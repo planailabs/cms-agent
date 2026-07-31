@@ -8,3 +8,7 @@ import { applyAnnotations, type EditAnnotations } from './annotate';
 
 export const apply = (annotations: EditAnnotations): void =>
   applyAnnotations(document, annotations);
+
+/** The same edits with nothing drawn on top — the "after" shot of the trio. */
+export const applyLayout = (annotations: EditAnnotations): void =>
+  applyAnnotations(document, annotations, { layoutOnly: true });

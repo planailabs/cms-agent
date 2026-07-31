@@ -96,19 +96,39 @@ export const annotationSummaryForAgent = (a: EditAnnotations): Record<string, un
 });
 
 /** The user message that starts the agent's planning turn. */
+/** Upload ids of the shots the handoff attaches, in the order they are read. */
+export interface HandoffUploads {
+  /** The page before the user drew on it. */
+  before: string;
+  /** Moves and swaps carried out with nothing drawn — omitted when the
+   *  annotation set changes no layout. */
+  edited?: string;
+  /** The same page with the marks on it. */
+  annotated: string;
+}
+
 export const handoffMessageText = (opts: {
   actorName: string;
   note: string;
   annotations: EditAnnotations;
-  uploadId: string;
+  uploads: HandoffUploads;
 }): string => {
   const summary = JSON.stringify(annotationSummaryForAgent(opts.annotations));
+  // Three shots of one page load, so the only differences between them are the
+  // user's: what it looks like now, what they are asking for, and what they
+  // drew to ask for it. The middle one is what makes a move or a swap legible
+  // — an arrow over a page is an intention, a moved element is a result.
+  const shots =
+    `\n- upload ${opts.uploads.before}: the page BEFORE, exactly as it renders today.` +
+    (opts.uploads.edited
+      ? `\n- upload ${opts.uploads.edited}: the page with the requested moves/swaps CARRIED OUT and nothing drawn on it — this is the layout to implement.`
+      : '') +
+    `\n- upload ${opts.uploads.annotated}: the same page WITH the user's marks: numbered pins = comments, red strokes = drawings, a dashed outline with an arrow = an element moved from its ghost (old position) to its new position, a teal double-headed arrow = two elements to swap with each other.`;
   return (
     `Element-edit handoff from ${opts.actorName} on ${opts.annotations.route}.` +
     (opts.note ? `\nNote: ${opts.note}` : '') +
     `\nThe user annotated the live preview in element-edit mode. Annotation metadata (JSON):\n${summary}` +
-    `\nAn annotated screenshot of the page is attached as upload ${opts.uploadId} — call read_upload with that id to view it: ` +
-    `numbered pins = comments, red strokes = drawings, a dashed outline with an arrow = an element moved from its ghost (old position) to its new position, a teal double-headed arrow = two elements to swap with each other.` +
-    `\nAnalyze the screenshot together with the metadata and call start_execution with a plan that implements the intended changes.`
+    `\nScreenshots are attached — call read_upload on EACH id to view them:${shots}` +
+    `\nCompare them with the metadata and call start_execution with a plan that implements the intended changes.`
   );
 };

@@ -2,10 +2,12 @@
  * POST /api/chat/element-handoff — element-edit mode handoff.
  * Body: { chatId, note?, annotations } (annotations = EditAnnotations).
  *
- * Renders the annotated screenshot server-side (captureAnnotatedRoute replays
- * the annotation set on the branch preview), stores it as a chat-scoped
- * upload, throws the chat into the PLAN phase and starts the agent turn with
- * the screenshot + metadata message. 202; output arrives via SSE.
+ * Renders THREE screenshots server-side off one page load (captureAnnotatedRoute
+ * replays the annotation set on the branch preview): the page as it is, the
+ * page with the requested moves/swaps carried out and nothing drawn on it, and
+ * the page with the user's marks. Each is stored as a chat-scoped upload; the
+ * chat goes into the PLAN phase and the agent turn starts with the metadata
+ * message pointing at all three. 202; output arrives via SSE.
  */
 export const prerender = false;
 
@@ -65,30 +67,39 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   try {
-    const { buffer, status } = await captureAnnotatedRoute(
-      chat.workBranch,
-      annotations.route,
-      annotations,
-    );
-    if (status !== null && status >= 400) {
-      return json({ error: `The preview returned HTTP ${status} for ${annotations.route}.` }, 422);
+    const shots = await captureAnnotatedRoute(chat.workBranch, annotations.route, annotations);
+    if (shots.status !== null && shots.status >= 400) {
+      return json(
+        { error: `The preview returned HTTP ${shots.status} for ${annotations.route}.` },
+        422,
+      );
     }
 
     const slug =
       annotations.route.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'home';
-    const filename = `element-edit-${slug}.png`;
-    const stored = storeUpload(filename, 'image/png', Buffer.from(buffer), ATTACHMENT_KINDS);
-    const upload = await prisma.upload.create({
-      data: {
-        userId: user.id,
-        chatId: chat.id,
-        filename,
-        storedPath: stored.storedPath,
-        mime: stored.mime,
-        size: stored.size,
-        sha256: stored.sha256,
-      },
-    });
+    const store = async (kind: 'before' | 'edited' | 'annotated', buffer: Buffer) => {
+      const filename = `element-edit-${slug}-${kind}.png`;
+      const stored = storeUpload(filename, 'image/png', Buffer.from(buffer), ATTACHMENT_KINDS);
+      const upload = await prisma.upload.create({
+        data: {
+          userId: user.id,
+          chatId: chat.id,
+          filename,
+          storedPath: stored.storedPath,
+          mime: stored.mime,
+          size: stored.size,
+          sha256: stored.sha256,
+        },
+      });
+      return upload.id;
+    };
+
+    // Order matters: the agent reads them in the order the message lists them,
+    // and the story is before → requested → marked up.
+    const before = await store('before', shots.before);
+    const edited = shots.edited ? await store('edited', shots.edited) : undefined;
+    const annotated = await store('annotated', shots.annotated);
+    const uploads = { before, edited, annotated };
 
     await handoffToPlan({
       chatId: chat.id,
@@ -102,9 +113,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
         actorName: user.name ?? 'the user',
         note,
         annotations,
-        uploadId: upload.id,
+        uploads,
       }),
-      attachmentIds: [upload.id],
+      attachmentIds: [before, ...(edited ? [edited] : []), annotated],
     });
   } catch (err) {
     if (err instanceof WorkflowError) return json({ error: err.message }, err.status);

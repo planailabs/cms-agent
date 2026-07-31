@@ -367,7 +367,22 @@ const drawArrow = (
  * element (when the selector still resolves — a miss keeps the ghost, which
  * still communicates the intent).
  */
-export const applyMove = (doc: Document, move: ElementMove): void => {
+export const applyMove = (doc: Document, move: ElementMove, decorate = true): void => {
+  if (!decorate) {
+    // The "after" shot shows the layout the edit asks for, not the editing
+    // marks that describe it — the marked-up version is a separate shot.
+    let target: Element | null = null;
+    try {
+      target = doc.querySelector(move.selector);
+    } catch {
+      return; // invalid selector — nothing to move, and no ghost to draw
+    }
+    if (target instanceof HTMLElement) {
+      target.style.translate = `${move.dx}px ${move.dy}px`;
+      target.setAttribute(MOVED_ATTR, ''); // so clearAnnotations undoes it
+    }
+    return;
+  }
   const ghost = annotationNode(doc, 'div');
   ghost.style.cssText =
     `position:absolute;left:${move.rect.x}px;top:${move.rect.y}px;` +
@@ -395,7 +410,7 @@ export const applyMove = (doc: Document, move: ElementMove): void => {
  * both selectors resolve) + teal outlines. Selector misses still get the
  * canvas double-arrow from applyAnnotations, which carries the intent.
  */
-export const applySwap = (doc: Document, swap: ElementSwap): void => {
+export const applySwap = (doc: Document, swap: ElementSwap, decorate = true): void => {
   const els = [swap.a, swap.b].map((end) => {
     try {
       return doc.querySelector(end.selector);
@@ -410,11 +425,13 @@ export const applySwap = (doc: Document, swap: ElementSwap): void => {
     ea.style.translate = `${cx(swap.b.rect) - cx(swap.a.rect)}px ${cy(swap.b.rect) - cy(swap.a.rect)}px`;
     eb.style.translate = `${cx(swap.a.rect) - cx(swap.b.rect)}px ${cy(swap.a.rect) - cy(swap.b.rect)}px`;
     for (const el of [ea, eb]) {
-      el.style.outline = `2px dashed ${SWAP_ACCENT}`;
-      el.style.outlineOffset = '-1px';
+      if (decorate) {
+        el.style.outline = `2px dashed ${SWAP_ACCENT}`;
+        el.style.outlineOffset = '-1px';
+      }
       el.setAttribute(MOVED_ATTR, '');
     }
-  } else {
+  } else if (decorate) {
     for (const end of [swap.a, swap.b]) {
       const ghost = annotationNode(doc, 'div');
       ghost.style.cssText =
@@ -441,10 +458,23 @@ export const renderPin = (doc: Document, comment: EditComment): void => {
 
 /** Full render: clear, then moves/swaps (ghost+translate), strokes+arrows,
  *  pins. */
-export const applyAnnotations = (doc: Document, a: EditAnnotations): void => {
+/**
+ * Replay an annotation set onto a document.
+ *
+ * `layoutOnly` renders just the structural intent — moves and swaps, no
+ * ghosts, outlines, arrows or pins. That is the middle of the three shots the
+ * agent receives on a handoff: what the page would look like if the edit were
+ * carried out, with nothing drawn on top of it to argue about.
+ */
+export const applyAnnotations = (
+  doc: Document,
+  a: EditAnnotations,
+  { layoutOnly = false }: { layoutOnly?: boolean } = {},
+): void => {
   clearAnnotations(doc);
-  for (const move of a.moves) applyMove(doc, move);
-  for (const swap of a.swaps ?? []) applySwap(doc, swap);
+  for (const move of a.moves) applyMove(doc, move, !layoutOnly);
+  for (const swap of a.swaps ?? []) applySwap(doc, swap, !layoutOnly);
+  if (layoutOnly) return;
   const canvas = ensureOverlayCanvas(doc);
   const ctx = canvas.getContext('2d');
   if (ctx) {

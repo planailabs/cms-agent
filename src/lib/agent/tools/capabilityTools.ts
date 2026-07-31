@@ -10,32 +10,11 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { skillsForChat } from '../plugins';
+import { score } from '../capabilityIndex';
 import { ALL_PHASES } from '../types';
 import { registerTool, type ToolContext, type ToolDef } from './registry';
 
 const KINDS = ['workflow', 'deployment', 'deployments'] as const;
-
-/** Words of a haystack, lowercased; punctuation is a separator. */
-const words = (s: string): string[] => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-
-/**
- * Overlap score of a query against a document. Deliberately dumb: an index of
- * a few dozen short descriptions does not need embeddings, and a keyword hit
- * is what the model is actually reaching for. A term hit in the title counts
- * double — "the skill called deploy" beats "a skill that mentions deploy".
- */
-function score(query: string, title: string, body: string): number {
-  const terms = [...new Set(words(query))];
-  if (terms.length === 0) return 0;
-  const titleWords = new Set(words(title));
-  const bodyText = ` ${body.toLowerCase()} `;
-  let hits = 0;
-  for (const term of terms) {
-    if (titleWords.has(term)) hits += 2;
-    else if (bodyText.includes(term)) hits += 1;
-  }
-  return hits;
-}
 
 const querySkillsTool: ToolDef = {
   name: 'query_skills',

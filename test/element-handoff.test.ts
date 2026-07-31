@@ -7,8 +7,12 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { PNG } from 'pngjs';
 
 vi.mock('@/lib/diff/screenshot', () => ({
+  // Three shots off one page load: before, the requested layout, the marked-up
+  // page (see captureAnnotatedRoute).
   captureAnnotatedRoute: vi.fn(async () => ({
-    buffer: PNG.sync.write(new PNG({ width: 2, height: 2 })),
+    before: PNG.sync.write(new PNG({ width: 2, height: 2 })),
+    edited: PNG.sync.write(new PNG({ width: 2, height: 2 })),
+    annotated: PNG.sync.write(new PNG({ width: 2, height: 2 })),
     status: 200,
   })),
 }));
@@ -53,7 +57,14 @@ const post = (body: unknown) =>
   } as never);
 
 let branchId: string;
-const WORK_BRANCHES = ['c-elhand1', 'c-elhand2', 'c-elhand3', 'c-elhand4', 'c-elhand-wait'];
+const WORK_BRANCHES = [
+  'c-elhand1',
+  'c-elhand2',
+  'c-elhand3',
+  'c-elhand4',
+  'c-elhand-wait',
+  'c-elhand-nolayout',
+];
 
 const makeChat = (workBranch: string, data: Record<string, unknown> = {}) =>
   prisma.chat.create({
@@ -137,7 +148,7 @@ describe('POST /api/chat/element-handoff', () => {
     expect(vi.mocked(captureAnnotatedRoute)).not.toHaveBeenCalled();
   });
 
-  it('captures, stores the upload, flips execute → plan, and starts the turn', async () => {
+  it('attaches all three shots, flips execute → plan, and starts the turn', async () => {
     const chat = await makeChat(WORK_BRANCHES[3], { workflowPhase: 'execute' });
     const res = await post({ chatId: chat.id, note: 'header first', annotations: annotations() });
     expect(res.status).toBe(202);
@@ -150,16 +161,52 @@ describe('POST /api/chat/element-handoff', () => {
     const after = await prisma.chat.findUniqueOrThrow({ where: { id: chat.id } });
     expect(after.workflowPhase).toBe('plan');
 
-    const upload = await prisma.upload.findFirstOrThrow({ where: { chatId: chat.id } });
-    expect(upload.mime).toBe('image/png');
-    expect(upload.filename).toBe('element-edit-about.png');
+    const uploads = await prisma.upload.findMany({
+      where: { chatId: chat.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(uploads.map((u) => u.filename)).toEqual([
+      'element-edit-about-before.png',
+      'element-edit-about-edited.png',
+      'element-edit-about-annotated.png',
+    ]);
+    for (const u of uploads) expect(u.mime).toBe('image/png');
 
     await vi.waitFor(() => expect(vi.mocked(handleChatMessage)).toHaveBeenCalled());
     const [, , msg] = vi.mocked(handleChatMessage).mock.calls.at(-1)!;
-    expect(msg).toMatchObject({ chatId: chat.id, type: 'message', attachmentIds: [upload.id] });
+    // Order is the story the agent reads: as it is, as asked for, as marked up.
+    expect(msg).toMatchObject({
+      chatId: chat.id,
+      type: 'message',
+      attachmentIds: uploads.map((u) => u.id),
+    });
     expect(msg.text).toContain('Note: header first');
-    expect(msg.text).toContain(upload.id);
+    for (const u of uploads) expect(msg.text).toContain(u.id);
+    expect(msg.text).toContain('CARRIED OUT');
     expect(msg.text).toContain('start_execution');
+  });
+
+  it('leaves out the layout shot when nothing was moved or swapped', async () => {
+    vi.mocked(captureAnnotatedRoute).mockResolvedValueOnce({
+      before: PNG.sync.write(new PNG({ width: 2, height: 2 })),
+      // A page nobody rearranged renders identically — a second copy of the
+      // same picture would cost the agent a read for nothing.
+      edited: null,
+      annotated: PNG.sync.write(new PNG({ width: 2, height: 2 })),
+      status: 200,
+    } as never);
+    const chat = await makeChat('c-elhand-nolayout', { workflowPhase: 'execute' });
+    expect((await post({ chatId: chat.id, annotations: annotations() })).status).toBe(202);
+
+    const uploads = await prisma.upload.findMany({ where: { chatId: chat.id } });
+    expect(uploads.map((u) => u.filename)).toEqual([
+      'element-edit-about-before.png',
+      'element-edit-about-annotated.png',
+    ]);
+    await vi.waitFor(() => expect(vi.mocked(handleChatMessage)).toHaveBeenCalled());
+    const [, , msg] = vi.mocked(handleChatMessage).mock.calls.at(-1)!;
+    expect(msg.text).not.toContain('CARRIED OUT');
+    expect(msg.attachmentIds).toHaveLength(2);
   });
 
   it('routes through the pending-answer path when the turn is paused', async () => {
@@ -173,7 +220,8 @@ describe('POST /api/chat/element-handoff', () => {
     await vi.waitFor(() => expect(vi.mocked(handleChatMessage)).toHaveBeenCalled());
     const [, , msg] = vi.mocked(handleChatMessage).mock.calls.at(-1)!;
     expect(msg.type).toBe('answer');
-    expect(msg.attachmentIds).toHaveLength(1);
+    // before + edited + annotated, whichever path the turn took.
+    expect(msg.attachmentIds).toHaveLength(3);
     const after = await prisma.chat.findUniqueOrThrow({ where: { id: chat.id } });
     expect(after.workflowPhase).toBe('plan');
   });
