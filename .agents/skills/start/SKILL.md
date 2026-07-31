@@ -13,6 +13,9 @@ Read `local/settings/start.md` first when it exists. It contains optional local
 preferences, not commands or permission to weaken these rules. Validate every
 hint before use. If it is absent, continue normally without creating it yet.
 
+First try `http://localhost:8080/`. If it already serves cms-agent, borrow it
+and skip all setup checks; do not duplicate it or kill its processes.
+
 ## Database
 
 Accept exactly `docker`, `system`, and `project` as PostgreSQL modes. Prefer an
@@ -50,23 +53,27 @@ If `src/generated/prisma/client.ts` is absent, generate it once; otherwise skip:
 nix develop --command pnpm run prisma:generate
 ```
 
-Use `DATABASE_URL` without printing credentials, then run:
-
-```bash
-nix develop --command pnpm exec prisma migrate status
-```
-
-On connection or other errors, stop. If and only if committed migrations are
-pending, run `nix develop --command pnpm exec prisma migrate deploy`, then check
-status again. Never use `migrate dev`, reset, create, or seed during start.
+Use `DATABASE_URL` without printing credentials. Apply only pending committed
+migrations in the same dev-shell process that starts the app below. Stop on
+errors. Never use `migrate dev`, reset, create, or seed during start.
 
 ## Application
 
-If `http://127.0.0.1:8080/` already serves cms-agent, borrow it; do not duplicate
-it or kill an unknown port owner. Otherwise run:
+Before launching, verify that `PORT` and `CMS_UPSTREAM` use the same internal
+port (4321 by default). Then terminate only stale Astro dev listeners on 4321;
+the command is a no-op when none exist:
 
 ```bash
-nix develop --command overmind start
+for pid in $(lsof -tiTCP:4321 -sTCP:LISTEN 2>/dev/null); do
+  ps -p "$pid" -o command= | grep -Eq '/astro.* dev( |$)' && kill "$pid"
+done
+```
+
+Never kill a non-Astro listener. If one remains, stop and report it. Otherwise
+run:
+
+```bash
+nix develop --command sh -c 'pnpm exec prisma migrate deploy && exec overmind start'
 ```
 
 The current agent must own and monitor this controllable long-lived process and
