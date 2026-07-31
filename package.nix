@@ -137,21 +137,21 @@ stdenv.mkDerivation (finalAttrs: {
     # silently skips failed optional-dep downloads and `astro build` later
     # dies with "Cannot find module '../lightningcss.<platform>.node'".
     # Fail early with an actionable message instead (see pnpmDeps above).
-    node -e "require(require('path').resolve(process.argv[1]))" node_modules/.pnpm/lightningcss@*/node_modules/lightningcss || {
+    ${lib.getExe nodejs_26} -e "require(require('path').resolve(process.argv[1]))" node_modules/.pnpm/lightningcss@*/node_modules/lightningcss || {
       echo "ERROR: lightningcss native addon missing from node_modules." >&2
       echo "The pnpmDeps store is likely incomplete: set pnpmDeps.hash = \"\" in package.nix and rebuild to re-fetch." >&2
       exit 1
     }
 
     # Generate src/generated/prisma (gitignored; imported by src/lib/db.ts).
-    pnpm exec prisma generate --config prisma.config.ts
+    ${lib.getExe pnpm} exec prisma generate --config prisma.config.ts
 
     # Generate prisma/test-client (gitignored; src/lib/db.ts imports it with a
     # literal path, so rollup must be able to resolve it during `astro build`).
     # Offline-safe: sqlite db push via PRISMA_SCHEMA_ENGINE_BINARY + generate.
-    node scripts/prepare-test-db.mjs
+    ${lib.getExe nodejs_26} scripts/prepare-test-db.mjs
 
-    pnpm build
+    ${lib.getExe pnpm} build
 
     runHook postBuild
   '';

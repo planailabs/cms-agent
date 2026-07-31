@@ -5,11 +5,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1785367243,
-        "narHash": "sha256-VBstle00IMJsr3KQo1D/eRkspZcjkYAzdtuSVGG1ej4=",
+        "lastModified": 1785455523,
+        "narHash": "sha256-7SNqhQb+mYFmjHiyYat0CoSUxmg0Hy6NEzwEspE3XK4=",
         "owner": "DeusData",
         "repo": "codebase-memory-mcp",
-        "rev": "f0c65fb2a997364336844998e0d226b8fbb03987",
+        "rev": "65796ec779c5046c5c5360ef395a96d38c9a1083",
         "type": "github"
       },
       "original": {
