@@ -354,13 +354,16 @@ describe('preview + proxy', () => {
       const editBtn = s.page.locator('.ws-rail [data-action="ws-edit-mode"]:not([disabled])');
       await editBtn.waitFor({ timeout: 60_000 });
       await editBtn.click();
-      await s.page.locator('[data-action="ws-edit-tool"][data-tool="swap"]').waitFor({ timeout: 30_000 });
-      const tools = await s.page.locator('[data-action="ws-edit-tool"]').count();
-      ok('edit toolbar lists all five tools', tools === 5, `${tools} tools`);
+      const editMenu = s.page.locator('.ws-edit-menu');
+      ok('edit tools stay hidden until the edit icon is hovered', !(await editMenu.isVisible()));
+      await s.page.locator('.ws-rail [data-action="ws-edit-exit"]').hover();
+      await editMenu.waitFor({ state: 'visible', timeout: 10_000 });
+      const tools = await editMenu.locator('[data-action="ws-edit-tool"]').count();
+      ok('edit icon flyout lists all five tools', tools === 5, `${tools} tools`);
       const handoffSecondary = await s.page
         .locator('.ws-mini-button--handoff[data-action="ws-edit-handoff"]')
         .count();
-      ok('handoff button carries the secondary accent style', handoffSecondary === 1);
+      ok('handoff stays visible in the toolbar', handoffSecondary === 1);
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="comment"]').click();
       const preview = await s.page.locator('#preview-frame-region iframe').first().elementHandle();
       const frame = await preview?.contentFrame();
@@ -375,7 +378,9 @@ describe('preview + proxy', () => {
       await target?.click();
       const commentInput = frame?.locator('.cms-ov-edit-input input');
       await commentInput?.fill('Bench comment');
-      await commentInput?.press('Enter');
+      const submitComment = frame?.getByRole('button', { name: 'Submit' });
+      ok('comment input exposes an icon submit button', (await submitComment?.locator('svg').isVisible()) === true);
+      await submitComment?.click();
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="cursor"]').click();
       const editComment = frame?.getByRole('button', { name: 'Edit comment' });
       ok('comments expose a pencil edit button', (await editComment?.isVisible()) === true);
@@ -387,8 +392,8 @@ describe('preview + proxy', () => {
         'comment edit saves the new text',
         (await frame?.locator('.cms-ov-bubble').filter({ hasText: 'Updated bench comment' }).count()) === 1,
       );
-      // Two exit buttons exist in edit mode (rail + edit toolbar)
-      await s.page.locator('[data-action="ws-edit-exit"]').first().click();
+      await s.page.locator('.ws-rail [data-action="ws-edit-exit"]').hover();
+      await editMenu.locator('[data-action="ws-edit-exit"]').click();
       await s.page.locator('.ws-diff').first().waitFor({ timeout: 30_000 });
       ok('exiting edit mode returns to the diff viewer', true);
     } finally {

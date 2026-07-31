@@ -72,29 +72,18 @@ export const canEnterEditMode = (state: AppState): boolean => {
   return !!chat && (chat.kind ?? 'workflow') === 'workflow' && state.workflowPhase !== 'published';
 };
 
-/** Toolbar while edit mode is active: tools, undo/clear, handoff, exit. */
+/** Toolbar while edit mode is active: the handoff stays persistently visible. */
 const renderEditToolbar = (state: AppState): string => {
   const locale = uiLocale();
   const ee = state.workspace.elementEdit;
-  const tools = (['cursor', 'move', 'swap', 'draw', 'comment'] as const)
-    .map(
-      (tool) => `<button type="button" class="ws-mini-button ${ee.tool === tool ? 'is-active' : ''}"
-        data-action="ws-edit-tool" data-tool="${tool}">${escapeHtml(t(locale, `workspace.preview.tool.${tool}`))}</button>`,
-    )
-    .join('');
   const canHandoff = !!ee.annotations && annotationCount(ee.annotations) > 0 && !ee.busy;
   return `<div class="ws-toolbar">
       <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.preview.editMode'))}</span>
       <span class="ws-toolbar__spacer"></span>
-      ${tools}
-      <button type="button" class="ws-mini-button" data-action="ws-edit-undo">${escapeHtml(t(locale, 'workspace.preview.editUndo'))}</button>
-      <button type="button" class="ws-mini-button" data-action="ws-edit-clear">${escapeHtml(t(locale, 'workspace.preview.editClear'))}</button>
       <button type="button" class="ws-mini-button ws-mini-button--handoff" data-action="ws-edit-handoff"
         title="${escapeHtml(t(locale, 'workspace.preview.handoffTitle'))}" ${canHandoff ? '' : 'disabled aria-disabled="true"'}>
         ${escapeHtml(t(locale, 'workspace.preview.handoff'))}${ee.busy ? '…' : ''}
       </button>
-      <button type="button" class="ws-mini-button" data-action="ws-edit-exit"
-        title="${escapeHtml(t(locale, 'workspace.preview.exitEdit'))}" aria-label="${escapeHtml(t(locale, 'workspace.preview.exitEdit'))}">✕</button>
     </div>`;
 };
 

@@ -52,7 +52,9 @@ describe('element edit', () => {
 
       await page.locator('#target').click();
       await page.locator('.cms-ov-edit-input input').fill('First comment');
-      await page.locator('.cms-ov-edit-input input').press('Enter');
+      const submit = page.getByRole('button', { name: 'Submit' });
+      await expect.poll(() => submit.locator('svg').isVisible()).toBe(true);
+      await submit.click();
       await page.evaluate(() => {
         const handlers = (window as unknown as { editTest: Record<string, (data: Record<string, unknown>) => void> })
           .editTest;

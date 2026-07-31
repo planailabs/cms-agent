@@ -90,6 +90,21 @@ describe('draft chat', () => {
     }
   });
 
+  it('moves edit controls into the active rail button flyout', () => {
+    startDraftChat('b1');
+    store.state.workspace.elementEdit.active = true;
+    store.state.workspace.elementEdit.tool = 'swap';
+
+    const rail = renderRail(store.state);
+    expect(rail).toContain('ws-edit-menu');
+    expect(rail).toContain('ws-edit-menu__item is-active');
+    for (const action of ['ws-edit-tool', 'ws-edit-undo', 'ws-edit-clear', 'ws-edit-exit']) {
+      expect(rail).toContain(`data-action="${action}"`);
+    }
+
+    store.state.workspace.elementEdit.active = false;
+  });
+
   it('creates the chat on the first message, then sends it', async () => {
     startDraftChat('b1');
     const fetchMock = vi.fn(async () =>

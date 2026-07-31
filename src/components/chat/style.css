@@ -1847,7 +1847,8 @@ html.is-first-visit #app {
     opacity: 0;
   }
 
-  .ws-compare-menu {
+  .ws-compare-menu,
+  .ws-edit-menu {
     position: absolute;
     left: calc(100% + 8px);
     top: -4px;
@@ -1875,13 +1876,19 @@ html.is-first-visit #app {
   }
 
   @media (any-hover: hover) and (pointer: fine) {
-    .ws-rail__item:hover .ws-compare-menu {
+    .ws-rail__item:hover :is(.ws-compare-menu, .ws-edit-menu) {
       visibility: visible;
       opacity: 1;
     }
   }
 
-  .ws-compare-menu__head {
+  .ws-rail__item:focus-within :is(.ws-compare-menu, .ws-edit-menu) {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .ws-compare-menu__head,
+  .ws-edit-menu__head {
     padding: 4px 8px 6px;
     font-size: 0.68rem;
     text-transform: uppercase;
@@ -1889,7 +1896,8 @@ html.is-first-visit #app {
     color: var(--text-muted);
   }
 
-  .ws-compare-menu__item {
+  .ws-compare-menu__item,
+  .ws-edit-menu__item {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1903,12 +1911,14 @@ html.is-first-visit #app {
     cursor: pointer;
   }
 
-  .ws-compare-menu__item:hover {
+  .ws-compare-menu__item:hover,
+  .ws-edit-menu__item:hover {
     background: var(--surface-hover);
     color: var(--text-primary);
   }
 
-  .ws-compare-menu__item.is-active {
+  .ws-compare-menu__item.is-active,
+  .ws-edit-menu__item.is-active {
     background: color-mix(in lab, var(--accent) 14%, transparent);
     color: var(--accent);
   }

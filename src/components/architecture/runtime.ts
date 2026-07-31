@@ -546,15 +546,21 @@ sequenceDiagram
         Drawing or commenting on an element produces an annotated screenshot
         uploaded as an attachment and posted as a message that moves the chat back
         to planning — legal from every pre-publish phase.</li>
-      <li><strong>Edit mode is the same bundle.</strong> The injected module also
-        carries the inline edit toolbar and the hint banner, so the preview stays
-        a single script rather than a set of variants.</li>
+      <li><strong>Edit mode is the same bundle.</strong> The injected module carries
+        the editing behavior and hint banner; workspace tools live in the edit
+        rail flyout while the handoff action stays visible above the preview.</li>
       <li><strong>The compare view uses the same live frames.</strong> Before and
         after are two preview iframes with synchronized scrolling, plus a
         screenshot overlay with changed regions highlighted and an onion slider —
         screenshots are only for the highlight layer, not for the content.</li>
     </ul>`,
-    source: ['src/injected/protocol.ts', 'src/injected/module', 'src/lib/handoff/elementEdit.ts'],
+    source: [
+      'src/components/workspace/preview.ts',
+      'src/components/workspace/rail.ts',
+      'src/injected/protocol.ts',
+      'src/injected/module',
+      'src/lib/handoff/elementEdit.ts',
+    ],
   },
 
   {

@@ -39,9 +39,14 @@ const STYLE =
   '.cms-ov-edit-input{position:absolute;z-index:2147483646;padding:6px;border-radius:8px;' +
   'border:1px solid #e5484d;background:#1e1e1e;box-shadow:0 4px 14px rgba(0,0,0,.35)}' +
   '.cms-ov-edit-input.cms-ov-light{background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.18)}' +
+  '.cms-ov-edit-input{display:flex;align-items:center;gap:6px}' +
   '.cms-ov-edit-input input{width:220px;border:0;outline:0;background:transparent;' +
   'color:#eee;font:13px/1.4 system-ui,sans-serif}' +
   '.cms-ov-edit-input.cms-ov-light input{color:#222}' +
+  '.cms-ov-icon-btn{display:inline-grid;place-items:center;width:28px;height:28px;padding:0;border:0;' +
+  'border-radius:6px;background:#7852ee;color:#fff;cursor:pointer}' +
+  '.cms-ov-icon-btn:hover{background:#6842de}.cms-ov-icon-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}' +
+  '.cms-ov-icon-btn svg{width:16px;height:16px}' +
   '.cms-ov-bubble{position:absolute;z-index:2147483646;max-width:280px;padding:6px 10px;' +
   'border-radius:8px;background:#1e1e1e;color:#eee;font:12px/1.5 system-ui,sans-serif;' +
   'box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;white-space:pre-wrap}' +

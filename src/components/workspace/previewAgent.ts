@@ -140,6 +140,7 @@ const pushConfig = (): void => {
       pickInstruction: t(locale, 'workspace.injected.pickInstruction'),
       editInstruction: t(locale, 'workspace.injected.editInstruction'),
       commentPlaceholder: t(locale, 'workspace.injected.commentPlaceholder'),
+      submitComment: t(locale, 'workspace.injected.submitComment'),
       editComment: t(locale, 'workspace.injected.editComment'),
     },
   };

@@ -165,6 +165,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.injected.editInstruction':
       'Drag elements, draw, or click to comment. Esc discards your annotations and exits.',
     'workspace.injected.commentPlaceholder': 'Comment…',
+    'workspace.injected.submitComment': 'Submit',
     'workspace.injected.editComment': 'Edit comment',
 
     'workspace.archive.viewTitle': 'Open this chat read-only',
@@ -395,6 +396,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.injected.editInstruction':
       'Ziehe Elemente, zeichne oder klicke für einen Kommentar. Esc verwirft die Annotationen und beendet.',
     'workspace.injected.commentPlaceholder': 'Kommentar…',
+    'workspace.injected.submitComment': 'Absenden',
     'workspace.injected.editComment': 'Kommentar bearbeiten',
 
     'workspace.archive.viewTitle': 'Diesen Chat schreibgeschützt öffnen',

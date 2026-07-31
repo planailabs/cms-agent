@@ -18,6 +18,8 @@ const ICONS = {
   settings: `<svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="2.3"/><circle cx="8" cy="8" r="5.8"/><path d="M8 2.2v1.5M8 12.3v1.5M2.2 8h1.5M12.3 8h1.5"/></svg>`,
 };
 
+const EDIT_TOOLS = ['cursor', 'move', 'swap', 'draw', 'comment'] as const;
+
 const railButton = (
   action: string,
   icon: string,
@@ -27,6 +29,23 @@ const railButton = (
     class="ws-rail__btn tooltip tooltip--right ${opts.active ? 'is-active' : ''}"
     data-action="${action}" data-tooltip="${escapeHtml(tooltip)}"
     aria-label="${escapeHtml(tooltip)}" ${opts.disabled ? 'disabled aria-disabled="true"' : ''}>${icon}</button>`;
+
+const renderEditMenu = (state: AppState): string => {
+  const locale = uiLocale();
+  const items = EDIT_TOOLS.map(
+    (tool) => `<button type="button" class="ws-edit-menu__item ${state.workspace.elementEdit.tool === tool ? 'is-active' : ''}"
+      role="menuitem" data-action="ws-edit-tool" data-tool="${tool}">
+      ${escapeHtml(t(locale, `workspace.preview.tool.${tool}`))}
+    </button>`,
+  ).join('');
+  return `<div class="ws-edit-menu" role="menu">
+      <div class="ws-edit-menu__head">${escapeHtml(t(locale, 'workspace.preview.editMode'))}</div>
+      ${items}
+      <button type="button" class="ws-edit-menu__item" role="menuitem" data-action="ws-edit-undo">${escapeHtml(t(locale, 'workspace.preview.editUndo'))}</button>
+      <button type="button" class="ws-edit-menu__item" role="menuitem" data-action="ws-edit-clear">${escapeHtml(t(locale, 'workspace.preview.editClear'))}</button>
+      <button type="button" class="ws-edit-menu__item" role="menuitem" data-action="ws-edit-exit">${escapeHtml(t(locale, 'workspace.preview.exitEdit'))}</button>
+    </div>`;
+};
 
 export const renderRail = (state: AppState): string => {
   const locale = uiLocale();
@@ -47,13 +66,15 @@ export const renderRail = (state: AppState): string => {
     })
     .join('');
 
-  return `
-    ${railButton(
+  const editButton = railButton(
       editing ? 'ws-edit-exit' : 'ws-edit-mode',
       ICONS.edit,
       t(locale, editing ? 'workspace.preview.exitEdit' : 'workspace.preview.editModeTitle'),
       { active: editing, disabled: !editable && !editing },
-    )}
+    );
+
+  return `
+    ${editing ? `<span class="ws-rail__item">${editButton}${renderEditMenu(state)}</span>` : editButton}
     ${railButton('ws-element-pick', ICONS.pick, t(locale, 'workspace.preview.pickTitle'), {
       active: ws.pickerActive,
       disabled: editing || !state.activeBranchId,

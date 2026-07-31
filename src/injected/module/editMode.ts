@@ -395,6 +395,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     target: Element | null;
     box: HTMLDivElement;
     input: HTMLInputElement;
+    submit: HTMLButtonElement;
     index?: number;
   }
   let pending: PendingComment | null = null;
@@ -437,6 +438,13 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     input.maxLength = 2000;
     input.value = index === undefined ? '' : ann.comments[index]?.text ?? '';
     box.appendChild(input);
+    const submit = chromeNode('button', 'cms-ov-icon-btn');
+    submit.type = 'button';
+    submit.title = cfg.labels.submitComment;
+    submit.setAttribute('aria-label', cfg.labels.submitComment);
+    submit.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4Z"/></svg>';
+    submit.addEventListener('click', commitPendingComment);
+    box.appendChild(submit);
     box.style.left = `${Math.max(4, x)}px`;
     box.style.top = `${Math.max(4, y + 8)}px`;
 
@@ -450,7 +458,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     box.addEventListener('click', (ev) => ev.stopPropagation());
 
     document.body.appendChild(box);
-    pending = { x, y, target, box, input, index };
+    pending = { x, y, target, box, input, submit, index };
     input.focus();
   };
 
@@ -513,6 +521,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     if (pending) {
       pending.box.classList.toggle('cms-ov-light', cfg.theme === 'light');
       pending.input.placeholder = cfg.labels.commentPlaceholder;
+      pending.submit.title = cfg.labels.submitComment;
+      pending.submit.setAttribute('aria-label', cfg.labels.submitComment);
     }
     if (active && tool === 'cursor') showAllChrome();
   });
