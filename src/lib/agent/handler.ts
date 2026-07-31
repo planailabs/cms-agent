@@ -14,6 +14,8 @@ import {
 } from './persistence';
 import { checkTokenBudget } from './tokenBudget';
 import { buildQuestionToolResults, runToolLoop } from './toolLoop';
+import { phaseFlipNotice } from './turnNotices';
+import { isDefaultChatTitle } from '@/lib/chatTitle';
 import { isClientSideTool, type ChatKind, type ToolContext } from './tools/registry';
 import { registerClientTools } from './tools/clientTools';
 import { registerFsTools } from './tools/fsTools';
@@ -161,7 +163,7 @@ export async function handleChatMessage(
     chatKind = chat.kind as ChatKind;
     planJson = chat.planJson ?? undefined;
     planMode = chat.planMode;
-    needsTitle = chat.title === 'New chat';
+    needsTitle = isDefaultChatTitle(chat.title);
     // Groups the agent loaded in an earlier turn — the phase defaults are
     // added by the bridge, so a config that dropped a group simply forgets it.
     loadedMcpGroups = Array.isArray(chat.loadedMcpGroups)
@@ -352,12 +354,11 @@ export async function handleChatMessage(
     if (run >= MAX_PHASE_RUNS) {
       // Guard against a plan↔execute ping-pong: end the turn instead of
       // handing out another run.
-      const msg =
-        'I kept switching between planning and implementing without settling. ' +
-        'Could you tell me which part to do first?';
-      await appendMsg({ role: 'assistant', content: msg });
+      const notice = phaseFlipNotice(run, outcome.phase);
+      const msg = notice.content;
+      await appendMsg({ role: 'assistant', content: msg, blocks: notice.blocks });
       await setPhase('idle');
-      broadcast(chatId, 'text_done', { type: 'text_done', content: msg });
+      broadcast(chatId, 'text_done', { type: 'text_done', content: msg, blocks: notice.blocks });
       broadcast(chatId, 'done', { type: 'done' });
       return;
     }

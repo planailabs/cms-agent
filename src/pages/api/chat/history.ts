@@ -64,7 +64,10 @@ export const GET: APIRoute = async ({ url, locals }) => {
 
   for (const m of rows) {
     if (m.role === 'assistant') {
-      const calls = (m.contentBlocks as ToolCallBlock[] | null) ?? [];
+      // The column holds EITHER the row's tool calls (an array) or display
+      // blocks (an envelope) — a guard-rail ending has no tool calls.
+      const calls = Array.isArray(m.contentBlocks) ? (m.contentBlocks as unknown as ToolCallBlock[]) : [];
+      const blocks = Array.isArray(m.contentBlocks) ? [] : normalizeBlocks(m.contentBlocks);
       openCalls = new Map(
         calls.map((c) => {
           let input: unknown = {};
@@ -76,8 +79,13 @@ export const GET: APIRoute = async ({ url, locals }) => {
           return [c.id, { name: c.function.name, input }];
         }),
       );
-      if (m.content) {
-        messages.push({ role: 'assistant', content: m.content, createdAt: m.createdAt });
+      if (m.content || blocks.length > 0) {
+        messages.push({
+          role: 'assistant',
+          content: m.content,
+          ...(blocks.length > 0 ? { blocks } : {}),
+          createdAt: m.createdAt,
+        });
       }
       continue;
     }

@@ -9,6 +9,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
 import { claimWorkBranch } from '@/lib/preview/prewarm';
+import { defaultChatTitle } from '@/lib/chatTitle';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -32,7 +33,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
       // The chat's own work branch: worktree + preview subdomain, merged
       // into the target branch on publish. DNS-safe label.
       workBranch: await claimWorkBranch(branch.name),
-      title: body.title?.trim() || 'New chat',
+      // In the creator's language: the title is STORED, so an English
+      // placeholder is the one bit of chrome the language switch cannot fix.
+      title: body.title?.trim() || defaultChatTitle(user.language ?? 'en'),
       createdById: user.id,
     },
   });

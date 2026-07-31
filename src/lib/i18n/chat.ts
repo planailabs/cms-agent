@@ -7,6 +7,8 @@ import type { AreaCatalogs } from './types';
 export const chatCatalogs: AreaCatalogs = {
   en: {
     'chat.automatismHead': 'Automatism',
+    // Placeholder title until the agent names the chat (lib/chatTitle)
+    'chat.defaultTitle': 'New chat',
     'chat.attach.add': 'Attach a file',
     'chat.color.pick': 'Pick a color',
     'chat.color.confirm': 'Use this color',
@@ -64,6 +66,27 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.block.count.swaps': 'swapped',
     'chat.block.count.strokes': 'drawings',
     'chat.block.count.comments': 'comments',
+    // Notice cards: a turn that ended against a guard rail. The numbers are
+    // the point — "too many steps" alone tells nobody what to change.
+    'chat.notice.roundsTitle': 'The agent ran out of steps',
+    'chat.notice.roundsBody':
+      'It worked through {rounds} rounds of tool calls without arriving at an answer, so this turn was ended. Everything it changed along the way is still there — nothing was rolled back.',
+    'chat.notice.pingpongTitle': 'The agent kept switching between planning and building',
+    'chat.notice.pingpongBody':
+      'It moved between the plan and the implementation {runs} times inside one turn without settling on either, so this turn was ended.',
+    'chat.notice.fact.rounds': 'Rounds',
+    'chat.notice.fact.calls': 'Tool calls',
+    'chat.notice.fact.busiest': 'Used most',
+    'chat.notice.fact.blocked': 'Repeats blocked',
+    'chat.notice.fact.switches': 'Phase switches',
+    'chat.notice.fact.phase': 'Ended in',
+    'chat.notice.fact.files': 'Files changed',
+    'chat.notice.hint.narrow': 'Ask for one part of the job at a time — a smaller request finishes well inside the limit.',
+    'chat.notice.hint.continue': 'Or send “continue” and it picks up where it stopped.',
+    'chat.notice.hint.pickOne': 'Tell it which part to do first, or approve the plan before asking for changes.',
+    'chat.notice.phase.plan': 'planning',
+    'chat.notice.phase.execute': 'building',
+    'chat.notice.phase.published': 'published',
     'chat.stop.running': 'The agent is working…',
     'chat.stop.button': 'Stop',
     'chat.stop.stopping': 'Stopping…',
@@ -97,6 +120,7 @@ export const chatCatalogs: AreaCatalogs = {
   },
   de: {
     'chat.automatismHead': 'Automatismus',
+    'chat.defaultTitle': 'Neuer Chat',
     'chat.attach.add': 'Datei anhängen',
     'chat.color.pick': 'Farbe wählen',
     'chat.color.confirm': 'Farbe übernehmen',
@@ -154,6 +178,26 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.block.count.swaps': 'getauscht',
     'chat.block.count.strokes': 'Zeichnungen',
     'chat.block.count.comments': 'Kommentare',
+    // Hinweiskarten: ein Zug, der an einer Schutzgrenze endete.
+    'chat.notice.roundsTitle': 'Dem Agenten sind die Schritte ausgegangen',
+    'chat.notice.roundsBody':
+      'Er hat {rounds} Runden mit Werkzeugaufrufen gearbeitet, ohne zu einer Antwort zu kommen — deshalb wurde dieser Zug beendet. Alles, was er unterwegs geändert hat, ist erhalten geblieben.',
+    'chat.notice.pingpongTitle': 'Der Agent wechselte ständig zwischen Planen und Umsetzen',
+    'chat.notice.pingpongBody':
+      'Er ist in einem einzigen Zug {runs}-mal zwischen Plan und Umsetzung gewechselt, ohne sich festzulegen — deshalb wurde dieser Zug beendet.',
+    'chat.notice.fact.rounds': 'Runden',
+    'chat.notice.fact.calls': 'Werkzeugaufrufe',
+    'chat.notice.fact.busiest': 'Am häufigsten',
+    'chat.notice.fact.blocked': 'Wiederholungen blockiert',
+    'chat.notice.fact.switches': 'Phasenwechsel',
+    'chat.notice.fact.phase': 'Beendet in',
+    'chat.notice.fact.files': 'Geänderte Dateien',
+    'chat.notice.hint.narrow': 'Bitten Sie jeweils um einen Teil der Aufgabe — eine kleinere Anfrage bleibt deutlich unter der Grenze.',
+    'chat.notice.hint.continue': 'Oder schicken Sie „weiter“ — dann macht er dort weiter, wo er aufgehört hat.',
+    'chat.notice.hint.pickOne': 'Sagen Sie ihm, welcher Teil zuerst drankommt, oder bestätigen Sie den Plan, bevor Sie Änderungen verlangen.',
+    'chat.notice.phase.plan': 'Planung',
+    'chat.notice.phase.execute': 'Umsetzung',
+    'chat.notice.phase.published': 'veröffentlicht',
     'chat.stop.running': 'Der Agent arbeitet…',
     'chat.stop.button': 'Stopp',
     'chat.stop.stopping': 'Wird gestoppt…',

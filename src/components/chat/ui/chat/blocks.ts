@@ -8,7 +8,7 @@
  */
 import { escapeHtml } from '../../utils/html';
 import { resolveTranslated, t, uiLocale } from '@/lib/i18n';
-import { uploadUrl, type BlockImage, type DisplayBlock } from '@/lib/messageBlocks';
+import { uploadUrl, type BlockImage, type DisplayBlock, type NoticeFact } from '@/lib/messageBlocks';
 
 /** One clickable shot. The full-size view is opened by the click handler in
  *  events/chatEvents (data-action="msg-shot"). */
@@ -22,6 +22,16 @@ const shot = (image: BlockImage): string => {
         alt="${escapeHtml(image.alt ?? image.label ?? '')}" loading="lazy" />
       ${label ? `<span class="msg-shot__label">${label}</span>` : ''}
     </button>`;
+};
+
+const noticeFacts = (rows: NoticeFact[]): string => {
+  const locale = uiLocale();
+  return factRows(
+    rows.map((r) => ({
+      label: resolveTranslated(locale, r.label),
+      value: typeof r.value === 'string' ? r.value : resolveTranslated(locale, r.value),
+    })),
+  );
 };
 
 const factRows = (rows: Array<{ label: string; value: string }>): string =>
@@ -53,6 +63,22 @@ const renderBlock = (block: DisplayBlock): string => {
       return `<div class="msg-block__facts">${factRows(block.rows)}</div>`;
     case 'images':
       return `<div class="msg-shots">${block.items.map(shot).join('')}</div>`;
+    case 'notice': {
+      // Reads top-down: what stopped → why → the numbers → what to do.
+      const facts = block.facts?.length ? noticeFacts(block.facts) : '';
+      const hints = (block.hints ?? [])
+        .map((h) => `<li>${escapeHtml(resolveTranslated(locale, h))}</li>`)
+        .join('');
+      return `<div class="msg-card msg-card--notice msg-card--${escapeHtml(block.tone)}">
+          <div class="msg-card__head">
+            <span class="msg-card__icon" aria-hidden="true">${block.tone === 'error' ? '✕' : '⏱'}</span>
+            <span class="msg-card__title">${escapeHtml(resolveTranslated(locale, block.title))}</span>
+          </div>
+          <p class="msg-card__note">${escapeHtml(resolveTranslated(locale, block.body))}</p>
+          ${facts ? `<div class="msg-block__facts">${facts}</div>` : ''}
+          ${hints ? `<ul class="msg-card__hints">${hints}</ul>` : ''}
+        </div>`;
+    }
     case 'handoff': {
       const summary = countSummary(block.counts);
       return `<div class="msg-card msg-card--handoff">

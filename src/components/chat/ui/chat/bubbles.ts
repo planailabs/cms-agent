@@ -179,6 +179,11 @@ const renderMessage = (
             </div>
           `;
   }
+  // Same rule as the user branch: when the message carries a card, the card IS
+  // the message. The prose beside it is what the MODEL reads on the next turn.
+  if (msg.blocks?.length) {
+    return `<div class="flex justify-start">${renderMessageBlocks(msg.blocks)}</div>`;
+  }
   return `
           <div class="flex justify-start">
             <div class="chat-markdown max-w-full text-sm leading-relaxed text-(--text-primary)">

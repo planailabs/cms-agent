@@ -27,6 +27,7 @@ import { tmsg } from '@/lib/i18n';
 import { createMcpBridge } from './mcp';
 import { markComparePreviewsOutdated } from '@/lib/diff/screenshot';
 import { routeCapabilities } from './skillRouter';
+import { roundLimitNotice } from './turnNotices';
 import { skillsForChat } from './plugins';
 import { dirStatus } from '@/lib/git/engine';
 import { isClientSideTool, type ToolContext } from './tools/registry';
@@ -387,6 +388,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     const runRepair = toolContext.repair?.automatismId ?? null;
     let modifiedBefore = toolContext.modifiedPaths.size;
     let rounds = 0;
+    // Counters for the round-limit notice: when the turn ends against the
+    // limit, these are the only explanation of where the rounds went.
+    const stats = { toolCalls: 0, byTool: new Map<string, number>(), blockedRepeats: 0 };
     while (rounds < MAX_TOOL_ROUNDS) {
       if (isTurnStopRequested(chatId)) return await endStopped();
       if (toolContext.workflowPhase !== runPhase) {
@@ -582,8 +586,13 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         }
         const args = safeParseArgs(call.function.arguments);
         broadcast(chatId, 'tool_start', { type: 'tool_start', name: call.function.name, input: args });
+        stats.toolCalls++;
+        stats.byTool.set(call.function.name, (stats.byTool.get(call.function.name) ?? 0) + 1);
         const loopWarning = detectLoop(call.function.name, args);
-        if (loopWarning) console.warn(`[agent] chat=${chatId} loop detected on ${call.function.name}`);
+        if (loopWarning) {
+          stats.blockedRepeats++;
+          console.warn(`[agent] chat=${chatId} loop detected on ${call.function.name}`);
+        }
         const content = loopWarning ?? (await bridge.callTool(call.function.name, args));
         results.push({ toolCallId: call.id, content });
         broadcast(chatId, 'tool_end', {
@@ -606,11 +615,23 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     }
 
     // ── Max rounds reached ─────────────────────────────────────────────────
-    const msg =
-      "I've been working on your request but it required too many steps. Could you try a more specific request?";
-    await appendMsg({ role: 'assistant', content: msg });
+    // Not "something went wrong": a limit was reached, and the card says which
+    // one, how the rounds were spent, and what to do next (turnNotices).
+    const notice = roundLimitNotice({
+      rounds,
+      toolCalls: stats.toolCalls,
+      byTool: stats.byTool,
+      blockedRepeats: stats.blockedRepeats,
+      filesChanged: toolContext.modifiedPaths.size,
+    });
+    const msg = notice.content;
+    console.warn(
+      `[agent] chat=${chatId} round limit: ${rounds} rounds, ${stats.toolCalls} calls, ` +
+        `${stats.blockedRepeats} repeats blocked`,
+    );
+    await appendMsg({ role: 'assistant', content: msg, blocks: notice.blocks });
     await setPhase('idle');
-    broadcast(chatId, 'text_done', { type: 'text_done', content: msg });
+    broadcast(chatId, 'text_done', { type: 'text_done', content: msg, blocks: notice.blocks });
     finishTurn();
     await flushTokens();
     return { type: 'finished' };

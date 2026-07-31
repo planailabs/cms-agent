@@ -395,8 +395,11 @@ describe('preview + proxy', () => {
       const undoAllCount = await s.page.locator('#preview-toolbar-region [data-action="ws-edit-clear"]').count();
       ok('undo appears after the first edit', undoCount === 1, `${undoCount} undo buttons`);
       ok('undo all stays hidden after one edit', undoAllCount === 0, `${undoAllCount} undo-all buttons`);
-      await s.page.getByRole('button', { name: 'Undo' }).click();
-      const redo = s.page.getByRole('button', { name: 'Redo' });
+      // Same reason as the counts above: the transcript's execution cards carry
+      // their own "Undo", so every one of these controls is addressed by the
+      // action it fires, inside the toolbar it belongs to.
+      await s.page.locator('#preview-toolbar-region [data-action="ws-edit-undo"]').click();
+      const redo = s.page.locator('#preview-toolbar-region [data-action="ws-edit-redo"]');
       await redo.waitFor({ state: 'visible' });
       ok('redo with a forward-history icon appears after undo', (await redo.locator('svg').isVisible()) === true);
       await redo.click();
@@ -407,7 +410,7 @@ describe('preview + proxy', () => {
       ok('comment edit pre-fills the old text', (await commentInput?.inputValue()) === 'Bench comment');
       await commentInput?.fill('Updated bench comment');
       await commentInput?.press('Enter');
-      const undoAll = s.page.getByRole('button', { name: 'Undo all' });
+      const undoAll = s.page.locator('#preview-toolbar-region [data-action="ws-edit-clear"]');
       await undoAll.waitFor({ state: 'visible' });
       ok('undo all appears after the second edit with its reset-history icon', (await undoAll.locator('svg').isVisible()) === true);
       await undoAll.click();

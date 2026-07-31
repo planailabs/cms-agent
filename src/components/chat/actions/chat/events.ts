@@ -10,6 +10,7 @@ import { publishCardReducer } from '../../../workspace/publishCard';
 import { applyTransientUiLanguage } from './transientLocale';
 import { applyOpenCompare } from './openCompare';
 import { applyCompareStale } from '../../../workspace/compareStale';
+import { normalizeBlocks } from '@/lib/messageBlocks';
 
 /**
  * Handles workspace-level events (execution/publish lifecycle). These don't
@@ -156,9 +157,12 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
 
     case 'text_done': {
       const content: string = data.content as string;
+      // A turn that ended against a guard rail sends its card with the text
+      // (lib/agent/turnNotices) — without this the card only appears on reload.
+      const blocks = normalizeBlocks(data.blocks ? { v: 1, blocks: data.blocks } : null);
       const mc2 = store.state.chat?.aiChat;
       if (mc2) {
-        mc2.messages.push({ role: 'assistant', content });
+        mc2.messages.push({ role: 'assistant', content, ...(blocks.length ? { blocks } : {}) });
         mc2.streamingText = undefined;
         cacheAIChatMessages(mc2.messages);
         store.notify();

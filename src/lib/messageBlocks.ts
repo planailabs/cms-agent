@@ -21,6 +21,13 @@ export interface BlockImage {
   alt?: string;
 }
 
+/** One labelled number in a notice card ("Tool rounds · 250"). The value is a
+ *  TranslatedMessage when it is a word rather than a number. */
+export interface NoticeFact {
+  label: TranslatedMessage;
+  value: string | TranslatedMessage;
+}
+
 export type DisplayBlock =
   /** A localized server-written note (the existing TranslatedMessage). */
   | { kind: 'tm'; message: TranslatedMessage }
@@ -34,6 +41,21 @@ export type DisplayBlock =
    * An element-edit handoff: what the user drew, on which page, with the
    * before / requested / annotated shots that were sent to the agent.
    */
+  /**
+   * A turn that ended against a guard rail (round limit, plan↔execute
+   * ping-pong). The agent's own "something went wrong" sentence says nothing
+   * a person can act on; this says WHAT stopped, with the numbers behind it
+   * and what to do next.
+   */
+  | {
+      kind: 'notice';
+      tone: 'limit' | 'error';
+      title: TranslatedMessage;
+      body: TranslatedMessage;
+      facts?: NoticeFact[];
+      /** One actionable line each — what the person can do about it. */
+      hints?: TranslatedMessage[];
+    }
   | {
       kind: 'handoff';
       route: string;
@@ -51,7 +73,7 @@ export interface BlockEnvelope {
 
 export const blockEnvelope = (blocks: DisplayBlock[]): BlockEnvelope => ({ v: 1, blocks });
 
-const KNOWN_KINDS = new Set(['tm', 'note', 'facts', 'images', 'handoff']);
+const KNOWN_KINDS = new Set(['tm', 'note', 'facts', 'images', 'handoff', 'notice']);
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);

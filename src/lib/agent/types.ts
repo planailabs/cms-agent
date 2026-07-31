@@ -73,7 +73,9 @@ export type StoredMessage =
        *  `content`; blocks are for the person looking at the transcript. */
       blocks?: DisplayBlock[];
     }
-  | { id?: string; role: 'assistant'; content: string; toolCalls?: ToolCall[] }
+  // `blocks` and `toolCalls` are mutually exclusive in practice — they share
+  // one column, and only the guard-rail endings (turnNotices) carry blocks.
+  | { id?: string; role: 'assistant'; content: string; toolCalls?: ToolCall[]; blocks?: DisplayBlock[] }
   | { id?: string; role: 'tool'; results: ToolResult[] }
   // `tm` localizes server-written notes per viewer (content is the English
   // fallback); rows the browser writes leave it unset.

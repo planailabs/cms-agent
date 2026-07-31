@@ -45,6 +45,21 @@ describe('i18n core', () => {
     expect(resolveTranslated('de', msg)).toContain('Schritt "merge" FEHLGESCHLAGEN');
   });
 
+  it('gives a new chat its placeholder title in the creator\u2019s language', async () => {
+    // The title is STORED, so it is the one piece of chrome the language
+    // switch cannot reach afterwards \u2014 an English "New chat" in a German
+    // sidebar is what the bench judge kept flagging.
+    const { defaultChatTitle, isDefaultChatTitle } = await import('@/lib/chatTitle');
+    expect(defaultChatTitle('de')).toBe('Neuer Chat');
+    expect(defaultChatTitle('en')).toBe('New chat');
+    // "Has the agent named this chat yet?" must still be true for every
+    // placeholder ever written, including the pre-i18n English rows.
+    expect(isDefaultChatTitle('Neuer Chat')).toBe(true);
+    expect(isDefaultChatTitle('New chat')).toBe(true);
+    expect(isDefaultChatTitle('Summer landing page')).toBe(false);
+    expect(isDefaultChatTitle(null)).toBe(false);
+  });
+
   it('names languages for the system prompt', () => {
     expect(languageName('de')).toBe('German (Deutsch)');
     expect(languageName('en')).toBe('English');

@@ -168,7 +168,9 @@ export function createDbAdapter(
     async appendMsg(msg) {
       messages.push(msg);
       const contentBlocks =
-        msg.role === 'assistant' ? (msg.toolCalls as object[] | undefined) ?? null
+        msg.role === 'assistant' ?
+          (msg.toolCalls as object[] | undefined) ??
+          (msg.blocks?.length ? (blockEnvelope(msg.blocks) as unknown as object) : null)
         : msg.role === 'tool' ? (msg.results as object[])
         : msg.role === 'cancel' ? (msg.tm as object | undefined) ?? null
         // Display blocks travel in the same column, wrapped in a versioned
