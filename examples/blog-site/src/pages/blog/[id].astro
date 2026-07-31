@@ -1,5 +1,6 @@
 ---
 import { getCollection, render } from 'astro:content';
+import BlogLayout from '../../layouts/BlogLayout.astro';
 
 export async function getStaticPaths() {
   const posts = await getCollection('blog');
@@ -10,17 +11,48 @@ const { post } = Astro.props;
 const { Content } = await render(post);
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>{post.data.title} — Acme Blog</title>
-  </head>
-  <body>
-    <header>
+<BlogLayout title={`${post.data.title} — ExampleBlog`} description={post.data.description}>
+  <article>
+    <a class="back-link" href="/">← All notes</a>
+    <header class="article-header">
+      <time datetime={post.data.date.toISOString()}>
+        {post.data.date.toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })}
+      </time>
       <h1>{post.data.title}</h1>
-      <p><time>{post.data.date.toISOString().slice(0, 10)}</time></p>
+      <p class="description">{post.data.description}</p>
+      <ul class="tags" aria-label="Tags">
+        {post.data.tags.map((tag) => <li>{tag}</li>)}
+      </ul>
+      <img class="article-image" src={post.data.image.src} alt={post.data.image.alt} />
     </header>
-    <main><Content /></main>
-    <footer><a href="/">← All posts</a></footer>
-  </body>
-</html>
+    <div class="prose"><Content /></div>
+  </article>
+</BlogLayout>
+
+<style>
+  article { max-width: 44rem; margin: 0 auto; padding-top: 3rem; }
+  .back-link { color: #63716d; font-family: Arial, sans-serif; font-size: 0.82rem; text-decoration: none; }
+  .back-link:hover, .back-link:focus-visible { color: #d8663b; text-decoration: underline; }
+  .article-header { padding: 3rem 0; border-bottom: 1px solid #d9ddd4; }
+  time { color: #d8663b; font-family: Arial, sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+  h1 { margin: 1rem 0 0; font-size: clamp(2.75rem, 7vw, 5rem); font-weight: 400; letter-spacing: -0.065em; line-height: 0.96; }
+  .description { margin: 1.5rem 0 0; color: #50605c; font-size: 1.2rem; line-height: 1.55; }
+  .tags { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1.5rem 0 0; padding: 0; list-style: none; }
+  .tags li { padding: 0.3rem 0.65rem; border-radius: 999px; background: #e7ede7; color: #3e514d; font-family: Arial, sans-serif; font-size: 0.75rem; }
+  .article-image { display: block; width: 100%; height: auto; margin-top: 2.5rem; border-radius: 0.35rem; }
+  .prose { padding-top: 2.5rem; color: #33433f; font-size: 1.12rem; line-height: 1.75; }
+  .prose :global(p) { margin: 0 0 1.5rem; }
+  .prose :global(h2), .prose :global(h3) { margin: 2.5rem 0 0.8rem; color: #1d2b2a; font-weight: 400; letter-spacing: -0.035em; line-height: 1.15; }
+  .prose :global(h2) { font-size: 2rem; }
+  .prose :global(h3) { font-size: 1.5rem; }
+  .prose :global(a) { color: #b84f2b; text-underline-offset: 0.15em; }
+  .prose :global(blockquote) { margin: 2rem 0; padding-left: 1.25rem; border-left: 3px solid #d8663b; color: #50605c; }
+  .prose :global(img) { display: block; width: 100%; height: auto; margin: 2.25rem 0; border-radius: 0.5rem; }
+  .prose :global(:not(pre) > code) { padding: 0.1em 0.3em; border-radius: 0.2rem; background: #e7ede7; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.85em; }
+  .prose :global(pre) { overflow-x: auto; margin: 2rem 0; padding: 1.25rem; border-radius: 0.4rem; font-size: 0.9em; line-height: 1.6; }
+  @media (max-width: 560px) { article { padding-top: 2rem; } .article-header { padding: 2.5rem 0; } }
+</style>

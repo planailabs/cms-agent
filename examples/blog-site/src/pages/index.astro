@@ -1,27 +1,78 @@
 ---
 import { getCollection } from 'astro:content';
+import BlogLayout from '../layouts/BlogLayout.astro';
+
 const posts = (await getCollection('blog')).sort(
   (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
 );
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Acme Blog</title>
-  </head>
-  <body>
-    <header><h1>Acme Blog</h1></header>
-    <main>
-      <ul>
-        {posts.map((post) => (
-          <li>
-            <a href={`/blog/${post.id}/`}>{post.data.title}</a>
-            <small> — {post.data.date.toISOString().slice(0, 10)}</small>
-            <p>{post.data.description}</p>
-          </li>
-        ))}
-      </ul>
-    </main>
-  </body>
-</html>
+<BlogLayout title="ExampleBlog" description="Notes, ideas, and updates from ExampleBlog.">
+  <section class="intro" aria-labelledby="page-title">
+    <div class="intro-copy">
+      <p class="eyebrow">The ExampleBlog journal</p>
+      <h1 id="page-title">Ideas worth reading.</h1>
+      <p class="lede">A small collection of notes on building with more clarity, care, and momentum.</p>
+    </div>
+    <img class="intro-image" src="/images/polar-bear.png" alt="A polar bear walking across a snowy Arctic landscape beneath a pale blue sky." />
+  </section>
+
+  <section aria-labelledby="posts-title">
+    <div class="section-heading">
+      <h2 id="posts-title">Latest notes</h2>
+      <span>{posts.length} posts</span>
+    </div>
+    <ul class="post-list">
+      {posts.map((post) => (
+        <li>
+          <a class="post-card" href={`/blog/${post.id}/`}>
+            <img class="post-card-image" src={post.data.image.src} alt={post.data.image.alt} />
+            <div class="post-card-copy">
+              <time datetime={post.data.date.toISOString()}>
+                {post.data.date.toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </time>
+              <h3>{post.data.title}</h3>
+              <p>{post.data.description}</p>
+            </div>
+            <span class="arrow" aria-hidden="true">↗</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+</BlogLayout>
+
+<style>
+  .intro { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(15rem, 0.9fr); align-items: end; gap: 3rem; padding: 5.5rem 0 4.5rem; }
+  .intro-copy { max-width: 43rem; }
+  .intro-image { width: 100%; border-radius: 0.35rem; aspect-ratio: 3 / 2; object-fit: cover; }
+  .eyebrow, time, .section-heading {
+    color: #63716d;
+    font-family: Arial, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .eyebrow { margin: 0 0 1rem; color: #d8663b; }
+  h1 { margin: 0; font-size: clamp(2.75rem, 7vw, 5.5rem); font-weight: 400; letter-spacing: -0.065em; line-height: 0.94; }
+  .lede { max-width: 34rem; margin: 1.75rem 0 0; color: #50605c; font-size: 1.2rem; line-height: 1.55; }
+  .section-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem; }
+  h2 { margin: 0; color: #1d2b2a; font-size: 1.1rem; font-weight: 400; letter-spacing: -0.02em; text-transform: none; }
+  .post-list { display: grid; gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
+  .post-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; padding: 1.75rem; border: 1px solid #d9ddd4; border-radius: 0.35rem; background: #fbfaf6; text-decoration: none; transition: background 160ms ease, border-color 160ms ease, transform 160ms ease; }
+  .post-card-image { width: 10rem; aspect-ratio: 3 / 2; flex: 0 0 auto; border-radius: 0.25rem; object-fit: cover; }
+  .post-card-copy { flex: 1; }
+  .post-card:hover, .post-card:focus-visible { border-color: #9ba9a2; background: #fff; transform: translateY(-2px); }
+  .post-card:focus-visible { outline: 3px solid #d8663b; outline-offset: 3px; }
+  time { display: block; margin-bottom: 0.65rem; }
+  h3 { margin: 0; font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 400; letter-spacing: -0.04em; line-height: 1.1; }
+  .post-card p { max-width: 38rem; margin: 0.7rem 0 0; color: #50605c; line-height: 1.5; }
+  .arrow { color: #d8663b; font-family: Arial, sans-serif; font-size: 1.4rem; transition: transform 160ms ease; }
+  .post-card:hover .arrow, .post-card:focus-visible .arrow { transform: translate(2px, -2px); }
+  @media (max-width: 560px) { .intro { grid-template-columns: 1fr; gap: 2rem; padding: 4rem 0 3.25rem; } .post-card { gap: 1rem; padding: 1.35rem; } .post-card-image { width: 6rem; } }
+</style>

@@ -1,0 +1,96 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description ?? 'Notes, ideas, and updates from ExampleBlog.'} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="ExampleBlog home">
+          <span class="brand-mark" aria-hidden="true">✦</span>
+          <span>ExampleBlog</span>
+        </a>
+        <span class="site-label">Field notes</span>
+      </header>
+      <main><slot /></main>
+      <footer class="site-footer">Thoughtful work, in progress.</footer>
+    </div>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    color: #1d2b2a;
+    background: #f7f5ef;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-synthesis: none;
+  }
+
+  * { box-sizing: border-box; }
+
+  body { margin: 0; min-width: 320px; }
+
+  a { color: inherit; }
+
+  .page-shell {
+    width: min(100% - 2.5rem, 68rem);
+    margin: 0 auto;
+    padding: 1.75rem 0 3rem;
+  }
+
+  .site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid #d9ddd4;
+    font-family: Arial, sans-serif;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #1d2b2a;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    text-decoration: none;
+  }
+
+  .brand-mark { color: #d8663b; font-size: 1.2rem; }
+
+  .site-label {
+    color: #63716d;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .site-footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #d9ddd4;
+    color: #63716d;
+    font-family: Arial, sans-serif;
+    font-size: 0.8rem;
+  }
+
+  @media (max-width: 560px) {
+    .page-shell { width: min(100% - 2rem, 68rem); padding-top: 1.25rem; }
+    .site-header { padding-bottom: 1.5rem; }
+  }
+</style>
