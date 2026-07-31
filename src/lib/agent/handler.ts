@@ -32,6 +32,7 @@ import { registerCommandTools } from './tools/commandTools';
 import { registerAutomatismTools } from './tools/automatismTools';
 import { registerConflictTools } from './tools/conflictTools';
 import { registerSkillTools } from './tools/skillTools';
+import { registerSkillScriptTools } from './tools/skillScriptTools';
 import { registerImageTools } from './tools/imageTools';
 import { registerFirecrawlTools } from './tools/firecrawlTools';
 import { getApprovedMemories } from '@/lib/memory';
@@ -63,6 +64,7 @@ registerCommandTools();
 registerAutomatismTools();
 registerConflictTools();
 registerSkillTools();
+registerSkillScriptTools();
 registerImageTools();
 registerFirecrawlTools();
 

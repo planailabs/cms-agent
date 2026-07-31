@@ -128,6 +128,19 @@ inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
   the definition loader filtered to `source.kind === 'local'` (mcporter
   otherwise layers in servers imported from `~/.claude.json` etc.).
 
+- Skill scripts (`src/lib/agent/skillScripts.ts`, tool in
+  `tools/skillScriptTools.ts`) run in the same jail with LESS than
+  run_command: the skill's dir read-only at `/skill`, argv (never a shell),
+  a read-only `/work` and no network unless the skill's frontmatter declared
+  `flags: [write, network]`. The model names a DECLARED script — never a
+  path. Scripts only mentioned in a skill's prose are derived and can never
+  carry a flag; `${VAR_DIR}/skill-scripts.json` (admin-global, keyed
+  `plugin/skill`) is the only way a vendored skill gains one.
+- SKILL.md frontmatter is real YAML (`yaml`), with a lenient line-based
+  fallback for third-party skills whose headers are not valid YAML (an
+  unquoted `description:` containing a colon is common). Structured values
+  like `scripts:` are NOT recovered by the fallback.
+
 ## Client state: streamed snapshots
 
 Workflow/side state (phase, branch, plan, executions, publish card,

@@ -331,9 +331,10 @@ flowchart TB
   subgraph jailbox["bwrap jail — empty root, deny by default"]
     direction LR
     store["/nix/store<br/>bound OVER the app's"]
-    work["/work"]
+    work["/work<br/>read-only for a script without write"]
     home["/home/sandbox"]
-    etc["minimal /etc — DNS"]
+    skill["/skill — read-only<br/>only when a skill script runs"]
+    etc["minimal /etc — DNS<br/>absent when the run has no network"]
     tmp["tmpfs, proc, dev"]
   end
 
@@ -354,6 +355,15 @@ flowchart TB
       },
     ],
     notes: `<ul>
+      <li><strong>A skill's scripts run here too, with less.</strong> A skill
+        may ship scripts; the model names a declared one and the registry
+        supplies the path, so nothing it says selects a file. The skill's own
+        directory is mounted read-only at <code>/skill</code>, arguments go as
+        argv rather than through a shell, and the defaults are narrower than
+        <code>run_command</code>: a read-only <code>/work</code> and no network
+        unless the skill declared otherwise. A script only mentioned in a
+        skill's prose is runnable but can never carry those declarations — the
+        same rule the MCP policy applies to undeclared tools.</li>
       <li><strong>"Read-only" tools are not exempt.</strong> Linters, formatters
         and framework checks execute the repository's own config files as code.
         Running one on the host with the inherited environment would be remote
@@ -374,7 +384,13 @@ flowchart TB
         self-contained store inside the squashfs, deduplicated at build time;
         only the selected major is materialized at runtime.</li>
     </ul>`,
-    source: ['src/lib/sandbox/index.ts', 'src/lib/agent/mcp/bridgeEntry.ts', 'deploy/seccomp'],
+    source: [
+      'src/lib/sandbox/index.ts',
+      'src/lib/agent/mcp/bridgeEntry.ts',
+      'src/lib/agent/skillScripts.ts',
+      'src/lib/agent/tools/skillScriptTools.ts',
+      'deploy/seccomp',
+    ],
   },
 
   {

@@ -55,13 +55,31 @@ beforeAll(() => {
 afterEach(() => resetPluginCache());
 
 describe('agent plugins', () => {
-  it('parses frontmatter with plain and folded values', () => {
+  it('parses frontmatter as real YAML, structures and all', () => {
     const { attrs, body } = parseFrontmatter(
-      '---\nname: x\ndescription: >\n  line one\n  line two\n---\n\nBody here.\n',
+      '---\nname: x\ndescription: >\n  line one\n  line two\nscripts:\n' +
+        '  - id: check\n    run: node scripts/check.mjs\n    description: Check things\n' +
+        '    flags: [write]\n---\n\nBody here.\n',
     );
     expect(attrs.name).toBe('x');
-    expect(attrs.description).toBe('line one line two');
+    // A folded scalar keeps its trailing newline — consumers trim.
+    expect(String(attrs.description).trim()).toBe('line one line two');
+    // The reason for a real parser: nested lists of objects survive.
+    expect(attrs.scripts).toEqual([
+      { id: 'check', run: 'node scripts/check.mjs', description: 'Check things', flags: ['write'] },
+    ]);
     expect(body).toBe('Body here.');
+  });
+
+  it('falls back to a line-based read when the header is not valid YAML', () => {
+    // Vendored skills really ship these; losing the metadata would cost the
+    // model the only thing it picks a skill by.
+    const { attrs, body } = parseFrontmatter(
+      '---\nname: cbm\ndescription: Use it. Triggers on: explore, trace\n---\n\nStill here.\n',
+    );
+    expect(attrs.name).toBe('cbm');
+    expect(attrs.description).toBe('Use it. Triggers on: explore, trace');
+    expect(body).toBe('Still here.');
   });
 
   it('loads skills and rules from the marketplace, skipping non-local and escaping entries', () => {

@@ -13,13 +13,19 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import { env } from '@/lib/env';
+import { resolveSkillScripts, type SkillScript } from './skillScripts';
 
 export interface PluginSkill {
   plugin: string;
   name: string;
   description: string;
   body: string;
+  /** Directory holding SKILL.md — bound read-only when a script of it runs. */
+  dir: string;
+  /** Runnable scripts (declared, derived from the body, or admin overlay). */
+  scripts: SkillScript[];
 }
 
 export interface PluginRule {
@@ -35,20 +41,30 @@ export interface PluginRegistry {
 
 const pluginsRoot = (): string => process.env.CMS_PLUGINS_ROOT || process.cwd();
 
-// ── Frontmatter (minimal: plain values + folded '>' blocks, the two forms
-// SKILL.md files use in the wild — not worth a YAML dependency) ─────────────
+// ── Frontmatter ─────────────────────────────────────────────────────────────
 
-export function parseFrontmatter(md: string): { attrs: Record<string, string>; body: string } {
-  const attrs: Record<string, string> = {};
-  if (!md.startsWith('---\n')) return { attrs, body: md };
-  const end = md.indexOf('\n---', 4);
-  if (end < 0) return { attrs, body: md };
-  const lines = md.slice(4, end).split('\n');
+/** String frontmatter value, or '' for anything that is not one. */
+const str = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+/**
+ * Last resort for frontmatter strict YAML rejects: read `key: value` lines
+ * and folded blocks, taking the rest of the line verbatim.
+ *
+ * Real skills in the wild write `description: Use this. Triggers on: foo` —
+ * an unquoted scalar with a colon in it, which is not YAML at all. Their
+ * authors never ran a parser over it, and a skill losing its description
+ * (the only thing the model picks it by) is a worse outcome than accepting
+ * a line-oriented reading. Structured values are NOT recovered here: a skill
+ * that declares `scripts:` has to be valid YAML.
+ */
+function looseFrontmatter(header: string): Record<string, unknown> {
+  const attrs: Record<string, unknown> = {};
+  const lines = header.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const m = /^([\w-]+):\s*(.*)$/.exec(lines[i]);
     if (!m) continue;
     let value = m[2].trim();
-    if (value === '>' || value === '>-' || value === '|' || value === '|-') {
+    if (['>', '>-', '|', '|-'].includes(value)) {
       const block: string[] = [];
       while (i + 1 < lines.length && (/^\s+\S/.test(lines[i + 1]) || lines[i + 1] === '')) {
         block.push(lines[++i].trim());
@@ -57,7 +73,42 @@ export function parseFrontmatter(md: string): { attrs: Record<string, string>; b
     }
     attrs[m[1]] = value.replace(/^["']|["']$/g, '');
   }
-  return { attrs, body: md.slice(end + 4).replace(/^-*\n?/, '').trim() };
+  return attrs;
+}
+
+/** Files already reported as non-YAML — the registry reloads every turn. */
+const looseReported = new Set<string>();
+
+/**
+ * YAML frontmatter of a SKILL.md. Real YAML, because skills declare
+ * structured values (a `scripts:` list of objects) that no hand-rolled
+ * key:value reader can carry — with a lenient fallback, because a vendored
+ * skill's header is not ours to fix.
+ */
+export function parseFrontmatter(
+  md: string,
+  source = '(inline)',
+): { attrs: Record<string, unknown>; body: string } {
+  if (!md.startsWith('---\n')) return { attrs: {}, body: md };
+  const end = md.indexOf('\n---', 4);
+  if (end < 0) return { attrs: {}, body: md };
+  const header = md.slice(4, end);
+  const body = md.slice(end + 4).replace(/^-*\n?/, '').trim();
+  try {
+    const parsed: unknown = parseYaml(header);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return { attrs: parsed as Record<string, unknown>, body };
+    }
+    return { attrs: {}, body };
+  } catch (err) {
+    if (!looseReported.has(source)) {
+      looseReported.add(source);
+      console.warn(
+        `[plugins] ${source}: frontmatter is not valid YAML (${(err as Error).message.split('\n')[0]}) — read leniently; \`scripts:\` needs valid YAML`,
+      );
+    }
+    return { attrs: looseFrontmatter(header), body };
+  }
 }
 
 // ── Loading ──────────────────────────────────────────────────────────────
@@ -77,12 +128,16 @@ const skillsFromDir = (plugin: string, skillsDir: string): PluginSkill[] => {
     if (!entry.isDirectory()) continue;
     const file = path.join(skillsDir, entry.name, 'SKILL.md');
     if (!fs.existsSync(file)) continue;
-    const { attrs, body } = parseFrontmatter(fs.readFileSync(file, 'utf8'));
+    const { attrs, body } = parseFrontmatter(fs.readFileSync(file, 'utf8'), file);
+    const dir = path.join(skillsDir, entry.name);
+    const name = str(attrs.name) || entry.name;
     skills.push({
       plugin,
-      name: attrs.name || entry.name,
-      description: attrs.description ?? '',
+      name,
+      description: str(attrs.description),
       body,
+      dir,
+      scripts: resolveSkillScripts({ plugin, name, dir, body, declared: attrs.scripts }),
     });
   }
   return skills;
@@ -252,7 +307,12 @@ export function pluginPromptSection(worktreePath?: string): string {
                 : s.plugin === 'admin'
                   ? ' (admin-provided)'
                   : '';
-            return `- ${s.name}${origin}: ${s.description.slice(0, 300)}`;
+            // Scripts are listed with the skill so run_skill_script has
+            // something to name; what they expect is in the skill body.
+            const scripts = s.scripts
+              .map((sc) => `\n    · script "${sc.id}": ${sc.description}`)
+              .join('');
+            return `- ${s.name}${origin}: ${s.description.slice(0, 300)}${scripts}`;
           })
           .join('\n'),
     );

@@ -39,7 +39,8 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `GET /api/files/[chatId]` (dir/file/jail) | 01 | 🟡 mode=download/raw not probed |
 | `POST/GET /api/uploads` (+400, CSRF pass behind TLS termination via forwarded headers) | 01 | ✅ |
 | `GET/PUT/DELETE /api/window-sessions[/id]` (+ownership) | 01 (API), 02 (restore UX) | ✅ |
-| `GET /api/agent/capabilities` | 01 | ✅ |
+| `GET /api/agent/capabilities` (incl. per-skill scripts + origin) | 01 | ✅ |
+| Skill scripts (declared/derived/overlay resolution, jail limits) | — | 🟡 unit-covered (test/skill-scripts.test.ts) + real-jail limits in test/integration/skill-scripts.test.ts; bench-driving needs a bench-installed skill that ships one |
 | `GET/POST /api/memory` | 01 | 🟡 approve/reject of a real candidate needs the agent to propose one |
 | `GET /api/publications` (list + detail) | 01, 03 | ✅ |
 | `/api/admin/*` (all routes, editor 403) | 01 (403), 04 (admin) | ✅ |

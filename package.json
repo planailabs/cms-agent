@@ -46,6 +46,7 @@
     "simple-git": "^3.27.0",
     "tailwindcss": "^4.1.17",
     "tar": "^7.4.3",
+    "yaml": "^2.9.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

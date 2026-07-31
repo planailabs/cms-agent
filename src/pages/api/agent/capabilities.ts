@@ -15,6 +15,7 @@ import {
   loadAdminSkills,
   loadBranchSkills,
   loadPluginRegistry,
+  type PluginSkill,
 } from '@/lib/agent/plugins';
 import { attachCodebaseMemory } from '@/lib/agent/mcp/codebaseMemory';
 import { attachContext7 } from '@/lib/agent/mcp/context7';
@@ -53,6 +54,15 @@ const cbmIndexStatus = async (ext: ExternalMcp): Promise<string | undefined> => 
   return ext.callTool('index_status', { project });
 };
 
+/** Script rows for the capabilities modal: what it is, and where it came from. */
+const scriptRows = (skill: PluginSkill) =>
+  skill.scripts.map((s) => ({
+    id: s.id,
+    description: s.description,
+    origin: s.origin,
+    flags: Object.keys(s.flags).filter((f) => s.flags[f as keyof typeof s.flags]),
+  }));
+
 export const GET: APIRoute = async ({ url, locals }) => {
   const chatId = url.searchParams.get('chat') ?? '';
   const chat = await prisma.chat.findUnique({ where: { id: chatId }, include: { branch: true } });
@@ -83,6 +93,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
       plugin: s.plugin,
       source: 'branch' as const,
       shadowed: false,
+      scripts: scriptRows(s),
     })),
     ...adminSkills.map((s) => ({
       name: s.name,
@@ -90,6 +101,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
       plugin: s.plugin,
       source: 'admin' as const,
       shadowed: branchNames.has(s.name.toLowerCase()),
+      scripts: scriptRows(s),
     })),
     ...reg.skills.map((s) => ({
       name: s.name,
@@ -97,6 +109,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
       plugin: s.plugin,
       source: 'plugin' as const,
       shadowed: upperNames.has(s.name.toLowerCase()),
+      scripts: scriptRows(s),
     })),
   ];
 

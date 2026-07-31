@@ -131,8 +131,9 @@ function bwrapArgs(sb: SandboxState, opts: SandboxRunOptions): string[] {
     // shells / env resolver for shebangs + npm lifecycle scripts
     '--ro-bind', path.join(sb.envRootHost, 'bin/bash'), '/bin/sh',
     '--ro-bind', path.join(sb.envRootHost, 'bin/env'), '/usr/bin/env',
-    // the only writable host location: the chat's worktree
-    '--bind', worktree, '/work',
+    // the only writable host location: the chat's worktree — unless the
+    // caller asked for it read-only (skill scripts that declare no `write`)
+    opts.readOnlyWorktree ? '--ro-bind' : '--bind', worktree, '/work',
     '--bind', home, '/home/sandbox',
     '--tmpfs', '/tmp',
     '--proc', '/proc',
@@ -146,7 +147,10 @@ function bwrapArgs(sb: SandboxState, opts: SandboxRunOptions): string[] {
     '--setenv', 'NODE_EXTRA_CA_CERTS', `${sb.envRootInJail}/etc/ssl/certs/ca-bundle.crt`,
   ];
 
-  if (env().SANDBOX_ALLOW_NETWORK) {
+  // Per-run override: a caller may drop the network even where the env
+  // allows it (skill scripts are off unless they declare `network`). It can
+  // never ADD network the env withheld.
+  if (env().SANDBOX_ALLOW_NETWORK && opts.network !== false) {
     // DNS resolution needs a resolver config + hosts (bound read-only from the
     // host; nsswitch is our minimal one so no host NSS modules are required).
     args.push('--ro-bind', path.join(sandboxEtc(), 'nsswitch.conf'), '/etc/nsswitch.conf');
@@ -154,6 +158,10 @@ function bwrapArgs(sb: SandboxState, opts: SandboxRunOptions): string[] {
     args.push('--ro-bind-try', '/etc/hosts', '/etc/hosts');
   } else {
     args.push('--unshare-net');
+  }
+
+  for (const [host, jail] of opts.extraRoBinds ?? []) {
+    args.push('--ro-bind', host, jail);
   }
 
   for (const [k, v] of Object.entries(opts.extraEnv ?? {})) {
@@ -169,6 +177,12 @@ export interface SandboxRunOptions {
   sessionKey?: string;
   extraEnv?: Record<string, string>;
   nodeEnv?: 'development' | 'production';
+  /** Bind /work read-only instead of writable. */
+  readOnlyWorktree?: boolean;
+  /** false = no network even when SANDBOX_ALLOW_NETWORK is on. */
+  network?: boolean;
+  /** Extra read-only mounts, [hostPath, jailPath] — e.g. a skill's own dir. */
+  extraRoBinds?: Array<[string, string]>;
 }
 
 /** Shell-quote for the none-mode command lines. */
@@ -356,29 +370,58 @@ export function runSandboxed(
   command: string,
   opts: SandboxRunOptions & { timeoutMs?: number },
 ): Promise<SandboxResult> {
+  return capture(
+    sb.mode === 'none'
+      ? spawn('/bin/sh', ['-c', command], {
+          cwd: opts.cwd,
+          env: noneEnv(sb, opts),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+      : spawn('bwrap', [...bwrapArgs(sb, opts), '/bin/sh', '-lc', command], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }),
+    opts.timeoutMs,
+  );
+}
+
+/**
+ * Run one-shot ARGV in the sandbox — no shell, so arguments cannot be
+ * reinterpreted as syntax. Used for skill scripts, where the model supplies
+ * the arguments.
+ */
+export function execSandboxed(
+  sb: SandboxState,
+  argv: string[],
+  opts: SandboxRunOptions & { timeoutMs?: number },
+): Promise<SandboxResult> {
+  const [cmd, ...rest] = argv;
+  return capture(
+    sb.mode === 'none'
+      ? spawn(cmd, rest, {
+          cwd: opts.cwd,
+          env: noneEnv(sb, opts),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+      : spawn('bwrap', [...bwrapArgs(sb, opts), ...argv], { stdio: ['ignore', 'pipe', 'pipe'] }),
+    opts.timeoutMs,
+  );
+}
+
+/** Shared output capture: cap, timeout, exit code. */
+function capture(child: ChildProcess, timeoutMs?: number): Promise<SandboxResult> {
   return new Promise((resolve, reject) => {
-    const child =
-      sb.mode === 'none'
-        ? spawn('/bin/sh', ['-c', command], {
-            cwd: opts.cwd,
-            env: noneEnv(sb, opts),
-            stdio: ['ignore', 'pipe', 'pipe'],
-          })
-        : spawn('bwrap', [...bwrapArgs(sb, opts), '/bin/sh', '-lc', command], {
-            stdio: ['ignore', 'pipe', 'pipe'],
-          });
     let stdout = '';
     let stderr = '';
     let timedOut = false;
     const cap = (s: string, add: string) =>
       s.length >= MAX_OUTPUT_CHARS ? s : (s + add).slice(0, MAX_OUTPUT_CHARS);
-    child.stdout.on('data', (d: Buffer) => (stdout = cap(stdout, d.toString())));
-    child.stderr.on('data', (d: Buffer) => (stderr = cap(stderr, d.toString())));
-    const timer = opts.timeoutMs
+    child.stdout?.on('data', (d: Buffer) => (stdout = cap(stdout, d.toString())));
+    child.stderr?.on('data', (d: Buffer) => (stderr = cap(stderr, d.toString())));
+    const timer = timeoutMs
       ? setTimeout(() => {
           timedOut = true;
           child.kill('SIGKILL');
-        }, opts.timeoutMs)
+        }, timeoutMs)
       : null;
     child.on('error', (err) => {
       if (timer) clearTimeout(timer);
