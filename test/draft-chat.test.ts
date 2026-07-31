@@ -35,6 +35,8 @@ vi.mock('@/components/chat/actions/chat/sse', () => ({
 import { store } from '@/components/chat/app/store';
 import { startDraftChat } from '@/components/chat/actions/chat';
 import { sendChatMessage } from '@/components/chat/actions/chat/stateMachine';
+import { renderRail } from '@/components/workspace/rail';
+import { canEnterEditMode } from '@/components/workspace/preview';
 import {
   clearAttachments,
   getStagedAttachments,
@@ -74,6 +76,18 @@ describe('draft chat', () => {
     expect(store.state.workflowPhase).toBe('plan');
     // The composer needs its container, empty — that is the first-run view.
     expect(store.state.chat?.aiChat?.messages).toEqual([]);
+  });
+
+  it('keeps preview tools enabled before the chat gets a work branch', () => {
+    startDraftChat('b1');
+
+    expect(canEnterEditMode(store.state)).toBe(true);
+    const rail = renderRail(store.state);
+    for (const action of ['ws-edit-mode', 'ws-element-pick']) {
+      expect(rail.match(new RegExp(`<button[^>]*data-action="${action}"[^>]*>`))?.[0]).not.toContain(
+        'disabled',
+      );
+    }
   });
 
   it('creates the chat on the first message, then sends it', async () => {

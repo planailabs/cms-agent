@@ -13,6 +13,7 @@ export interface OverlayConfig {
     pickInstruction: string;
     editInstruction: string;
     commentPlaceholder: string;
+    editComment: string;
   };
 }
 
@@ -23,6 +24,7 @@ export const cfg: OverlayConfig = {
     pickInstruction: 'Click the element you want to discuss. Press Esc to cancel.',
     editInstruction: 'Drag elements, draw, or click to comment. Esc discards your annotations and exits.',
     commentPlaceholder: 'Comment…',
+    editComment: 'Edit comment',
   },
 };
 

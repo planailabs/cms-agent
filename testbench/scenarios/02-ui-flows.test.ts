@@ -60,6 +60,8 @@ describe('ui flows', () => {
       !/\/chat\//.test(new URL(s.page.url()).pathname),
       s.page.url(),
     );
+    ok('draft edit tool is enabled', await dataAction(s.page, 'ws-edit-mode').isEnabled());
+    ok('draft element picker is enabled', await dataAction(s.page, 'ws-element-pick').isEnabled());
     // Collapse the panel again — expanded it overlays the header dropdowns.
     await dataAction(s.page, 'ws-branch-list-toggle').first().click();
     await s.page.waitForTimeout(300);

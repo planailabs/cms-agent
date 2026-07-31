@@ -76,7 +76,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Stop button while the agent works (composer card → turn ends, transcript note) | — | 🟡 the endpoint and loop behaviour are covered in 03 + test/turn-stop.test.ts; the button itself is not clicked in a browser |
 | Chat transcript scroll preserved across rerenders (tool-use jump fix) | 05 | ✅ |
 | Element picker from the icon rail in the compare window (arm → live preview on diff route → cancel returns to compare) | 05 | ✅ |
-| Edit mode from the icon rail; toolbar offers swap tool; exit returns to diff viewer | 05 | ✅ |
+| Edit mode from the icon rail; toolbar offers swap tool; comment target highlights blue; comments can be edited; exit returns to diff viewer | 05 | ✅ |
 | Chat visibility setting (restricted hides foreign chats, admin bypass) | 07 | ✅ |
 | Picker/edit hint banner closeable, dismissal persists | 02 | ✅ |
 | Language switch en↔de (judged screenshot) | 02 | ✅ |
@@ -84,7 +84,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Workspace URL routing (/chat/<id>?window=…: mirror, browser back, deep-link boot) | 02 | ✅ |
 | Preview device presets (viewport-sized iframe + proxy UA override + navigator patch) | 02 | ✅ |
 | Compare window: eye button opens/closes it, flyout lists the four views, outside click closes the list only | 02 | ✅ |
-| Draft chats: new-chat/one-click create no Chat row; opening an existing chat leaves the draft | 02 | ✅ |
+| Draft chats: preview tools enabled before materialization; new-chat/one-click create no Chat row; opening an existing chat leaves the draft | 02 | ✅ |
 | Task list in the chat snapshot (agent notes stay server-side) | 01 | ✅ |
 | Orphan sweeper (hourly: worktrees + sandbox homes of deleted chats, keeps pooled/serving branches, never deletes a foreign git ref) | — | 🟡 unit-covered (test/worktree-cleanup.test.ts); bench-driving needs an hour of wall clock or an admin trigger |
 | Warm previews (pinned primary branches + adopted spare work branch) | 02 | 🟡 02 waits on `/api/admin/previews` reporting the chat's branch ready, which only passes when warming works; pinning/eviction rules are unit-covered (test/draft-chat.test.ts) |

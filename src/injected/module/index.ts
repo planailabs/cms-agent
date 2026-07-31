@@ -52,7 +52,9 @@ const STYLE =
   '.cms-ov-bin{position:absolute;z-index:2147483646;width:26px;height:26px;padding:0;' +
   'border-radius:50%;border:1px solid #e5484d;background:#1e1e1e;font:13px/24px system-ui,sans-serif;' +
   'text-align:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35)}' +
-  '.cms-ov-bin:hover{background:#3a1d1f}';
+  '.cms-ov-bin:hover{background:#3a1d1f}' +
+  '.cms-ov-edit{border-color:#7852ee;color:#eee}' +
+  '.cms-ov-edit:hover{background:#2a2340}';
 
 export default function cmsAgentModule(agent: AgentApi): void {
   const style = document.createElement('style');

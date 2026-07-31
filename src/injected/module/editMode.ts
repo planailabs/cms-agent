@@ -132,6 +132,33 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     return b;
   };
 
+  const makeEdit = (x: number, y: number, index: number): HTMLButtonElement => {
+    const SIZE = 26;
+    const doc = document.documentElement;
+    const b = chromeNode('button', 'cms-ov-bin cms-ov-edit');
+    b.type = 'button';
+    b.textContent = '✎';
+    b.title = cfg.labels.editComment;
+    b.setAttribute('aria-label', cfg.labels.editComment);
+    b.style.left = `${Math.min(Math.max(4, x), Math.max(doc.scrollWidth, doc.clientWidth) - SIZE - 4)}px`;
+    b.style.top = `${Math.min(Math.max(4, y), Math.max(doc.scrollHeight, doc.clientHeight) - SIZE - 4)}px`;
+    b.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+    });
+    b.addEventListener(
+      'click',
+      agent.safe((ev: Event) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const comment = ann.comments[index];
+        if (comment) openCommentBox(comment.x, comment.y, null, index);
+      }) as EventListener,
+    );
+    document.body.appendChild(b);
+    return b;
+  };
+
   const makeRing = (
     x: number,
     y: number,
@@ -164,7 +191,11 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       bub.style.left = `${c.x + 16}px`;
       bub.style.top = `${c.y + 14}px`;
       document.body.appendChild(bub);
-      allChrome.push(bub, makeBin(c.x + 16, c.y - 30, { kind: 'comment', index: i }));
+      allChrome.push(
+        bub,
+        makeBin(c.x + 16, c.y - 30, { kind: 'comment', index: i }),
+        makeEdit(c.x + 46, c.y - 30, i),
+      );
     });
     ann.strokes.forEach((s, i) => {
       const box = strokeBbox(s);
@@ -364,6 +395,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     target: Element | null;
     box: HTMLDivElement;
     input: HTMLInputElement;
+    index?: number;
   }
   let pending: PendingComment | null = null;
 
@@ -376,11 +408,16 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
    *  empty → just close. */
   const commitPendingComment = agent.safe((): void => {
     if (!pending) return;
-    const { x, y, target, input } = pending;
+    const { x, y, target, input, index } = pending;
     const text = input.value.trim();
     closeCommentBox();
     if (!text) return;
     snapshot();
+    if (index !== undefined) {
+      ann.comments[index].text = text;
+      render();
+      return;
+    }
     const n = ann.comments.length + 1;
     const comment: EditAnnotations['comments'][number] = { n, x, y, text };
     if (target && !isOurs(target)) {
@@ -391,13 +428,14 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     render();
   }) as () => void;
 
-  const openCommentBox = (x: number, y: number, target: Element | null): void => {
+  const openCommentBox = (x: number, y: number, target: Element | null, index?: number): void => {
     closeCommentBox();
     const box = chromeNode('div', `cms-ov-edit-input${cfg.theme === 'light' ? ' cms-ov-light' : ''}`);
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = cfg.labels.commentPlaceholder;
     input.maxLength = 2000;
+    input.value = index === undefined ? '' : ann.comments[index]?.text ?? '';
     box.appendChild(input);
     box.style.left = `${Math.max(4, x)}px`;
     box.style.top = `${Math.max(4, y + 8)}px`;
@@ -412,7 +450,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
     box.addEventListener('click', (ev) => ev.stopPropagation());
 
     document.body.appendChild(box);
-    pending = { x, y, target, box, input };
+    pending = { x, y, target, box, input, index };
     input.focus();
   };
 
@@ -476,6 +514,7 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       pending.box.classList.toggle('cms-ov-light', cfg.theme === 'light');
       pending.input.placeholder = cfg.labels.commentPlaceholder;
     }
+    if (active && tool === 'cursor') showAllChrome();
   });
 
   // ── Pointer handlers (registered once; guarded on `active`) ────────────────
@@ -604,8 +643,8 @@ export const initEditMode = (agent: AgentApi, listen: Listen): void => {
       else hideHl();
       return;
     }
-    // Hover highlight for the move and swap tools
-    if (tool !== 'move' && tool !== 'swap') return;
+    // Hover highlight for tools that act on a page element.
+    if (tool !== 'move' && tool !== 'swap' && tool !== 'comment') return;
     const el = ev.target as Element | null;
     if (!el || el.nodeType !== 1 || isOurs(el)) return;
     showHl(el);

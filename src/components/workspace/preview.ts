@@ -65,8 +65,9 @@ const renderTabStrip = (ws: AppState['workspace']): string => {
     </div>`;
 };
 
-/** True when the edit-mode entry button shows: a workflow chat, not published. */
+/** True when the branch preview can be edited: drafts included. */
 export const canEnterEditMode = (state: AppState): boolean => {
+  if (!state.activeChatId) return !!state.activeBranchId;
   const chat = activeChatSummary(state);
   return !!chat && (chat.kind ?? 'workflow') === 'workflow' && state.workflowPhase !== 'published';
 };
@@ -141,4 +142,3 @@ export const renderPreviewToolbar = (state: AppState): string => {
           target="_blank" rel="noopener" title="${escapeHtml(t(locale, 'workspace.preview.openNewTab'))}">↗</a>
       </div>`;
 };
-

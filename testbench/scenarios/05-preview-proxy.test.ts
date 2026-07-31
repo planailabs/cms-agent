@@ -361,6 +361,32 @@ describe('preview + proxy', () => {
         .locator('.ws-mini-button--handoff[data-action="ws-edit-handoff"]')
         .count();
       ok('handoff button carries the secondary accent style', handoffSecondary === 1);
+      await s.page.locator('[data-action="ws-edit-tool"][data-tool="comment"]').click();
+      const preview = await s.page.locator('#preview-frame-region iframe').first().elementHandle();
+      const frame = await preview?.contentFrame();
+      const target = frame?.locator('main, body > *').first();
+      await target?.hover();
+      const commentHighlight = frame?.locator('.cms-ov-hl');
+      const highlighted =
+        (await commentHighlight?.isVisible()) === true &&
+        (await commentHighlight.evaluate((el) => getComputedStyle(el).backgroundColor)) !==
+          'rgba(0, 0, 0, 0)';
+      ok('comment tool highlights its target in blue', highlighted);
+      await target?.click();
+      const commentInput = frame?.locator('.cms-ov-edit-input input');
+      await commentInput?.fill('Bench comment');
+      await commentInput?.press('Enter');
+      await s.page.locator('[data-action="ws-edit-tool"][data-tool="cursor"]').click();
+      const editComment = frame?.getByRole('button', { name: 'Edit comment' });
+      ok('comments expose a pencil edit button', (await editComment?.isVisible()) === true);
+      await editComment?.click();
+      ok('comment edit pre-fills the old text', (await commentInput?.inputValue()) === 'Bench comment');
+      await commentInput?.fill('Updated bench comment');
+      await commentInput?.press('Enter');
+      ok(
+        'comment edit saves the new text',
+        (await frame?.locator('.cms-ov-bubble').filter({ hasText: 'Updated bench comment' }).count()) === 1,
+      );
       // Two exit buttons exist in edit mode (rail + edit toolbar)
       await s.page.locator('[data-action="ws-edit-exit"]').first().click();
       await s.page.locator('.ws-diff').first().waitFor({ timeout: 30_000 });

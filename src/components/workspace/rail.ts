@@ -56,7 +56,7 @@ export const renderRail = (state: AppState): string => {
     )}
     ${railButton('ws-element-pick', ICONS.pick, t(locale, 'workspace.preview.pickTitle'), {
       active: ws.pickerActive,
-      disabled: editing || !state.activeChatId,
+      disabled: editing || !state.activeBranchId,
     })}
     <span class="ws-rail__sep" aria-hidden="true"></span>
     ${windows}

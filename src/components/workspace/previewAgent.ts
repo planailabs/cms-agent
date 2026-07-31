@@ -140,6 +140,7 @@ const pushConfig = (): void => {
       pickInstruction: t(locale, 'workspace.injected.pickInstruction'),
       editInstruction: t(locale, 'workspace.injected.editInstruction'),
       commentPlaceholder: t(locale, 'workspace.injected.commentPlaceholder'),
+      editComment: t(locale, 'workspace.injected.editComment'),
     },
   };
   for (const iframe of getPreviewIframes()) postToPreview(msg, iframe);
