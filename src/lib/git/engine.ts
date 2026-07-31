@@ -184,10 +184,14 @@ export async function ensureWorktree(branch: string, base?: string): Promise<str
   if (branch === (await defaultBranch())) return repoPath;
 
   const dir = worktreeDir(branch);
-  if (fs.existsSync(path.join(dir, '.git'))) return dir;
-
+  // In-flight FIRST, and never the existsSync shortcut while one is running:
+  // `git worktree add` writes the `.git` file and only then checks the tree
+  // out, so for the length of that checkout the shortcut would hand a caller
+  // an EMPTY directory. The preview manager then finds no package.json,
+  // skips `npm install`, and the dev server dies on a missing astro.
   const inflight = worktreeCreating.get(branch);
   if (inflight) return inflight;
+  if (fs.existsSync(path.join(dir, '.git'))) return dir;
   const creating = (async () => {
     fs.mkdirSync(path.dirname(dir), { recursive: true });
     // Prune stale registrations (e.g. VAR_DIR wiped) before adding

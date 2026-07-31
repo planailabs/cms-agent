@@ -104,7 +104,7 @@ values, hostnames and build identity (the test pins that too).
 ## Sandbox (all site shell calls)
 
 Every command run against the managed site — `npm install`, the preview dev
-server (`npx astro dev`), publish builds, and the `run_command` tool — runs
+server (`npx --no astro dev`), publish builds, and the `run_command` tool — runs
 inside a bubblewrap jail (`src/lib/sandbox/`), never raw `child_process`.
 
 - The jail is deny-by-default: only the per-major node env's `/nix/store`

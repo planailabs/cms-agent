@@ -89,7 +89,8 @@ describe('astro backend', () => {
       allowedHost: 'branch.cms.example.com',
     });
     expect(cmd.argv).toEqual([
-      'npx', 'astro', 'dev',
+      // --no: never let npx download an astro the site does not depend on
+      'npx', '--no', 'astro', 'dev',
       '--config', '.astro/cms-preview.config.mjs',
       '--port', '4567',
       '--host', '::1',
@@ -115,7 +116,7 @@ describe('astro backend', () => {
 
   it('defaults the build command and requires dist/', () => {
     useRepo(tmp());
-    expect(astroBackend.buildCommand()).toBe('npx astro build');
+    expect(astroBackend.buildCommand()).toBe('npx --no astro build');
 
     const build = tmp();
     expect(() => astroBackend.resolveDist(build)).toThrow(/no dist/);

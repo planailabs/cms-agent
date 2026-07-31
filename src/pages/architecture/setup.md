@@ -13,7 +13,7 @@ lead: Prerequisites, every environment variable, DNS, the first admin, and how t
 - An OIDC identity provider (Keycloak, Authentik, Dex, Google, …)
 - Any OpenAI-compatible model endpoint
 - The target site as a local git repository. Astro sites need their own
-  `node_modules` installed (the CMS runs `npx astro dev` inside them);
+  `node_modules` installed (the CMS runs `npx --no astro dev` inside them, so a missing dependency fails loudly instead of pulling a different astro);
   static HTML sites need nothing.
 
 ## Environment variables
@@ -40,8 +40,8 @@ lead: Prerequisites, every environment variable, DNS, the first admin, and how t
 | `PROXY_NATIVE_PATH` | outside Nix | Required path to the embedded Pingora `.node` addon; Nix packages set it automatically |
 | `REPO_PATH` | yes | Path to the managed site git repo |
 | `SITE_BACKEND` | no | `astro` \| `static`; auto-detected (`astro.config.*` or an `astro` dependency → astro, else static) |
-| `REPO_DEV_COMMAND` | no | Override the backend's dev command (astro default `npx astro dev`; split on spaces, no shell) |
-| `REPO_BUILD_COMMAND` | no | Override the backend's build command (astro default `npx astro build`; static default: no build) |
+| `REPO_DEV_COMMAND` | no | Override the backend's dev command (astro default `npx --no astro dev`; split on spaces, no shell) |
+| `REPO_BUILD_COMMAND` | no | Override the backend's build command (astro default `npx --no astro build`; static default: no build) |
 | `ROUTE_MAPPINGS` | no | JSON `[{"files":"src/content/blog/*.md","route":"/blog/:slug/"}]` for the visual diff |
 | `DEPLOY_FLOW` | no | `git-push` (default) \| `web-agency` \| `github-ci` \| `cloudflare-pages` |
 | `DEPLOY_GIT_REMOTE` | flow | Remote for git-push / github-ci (default `origin`) |

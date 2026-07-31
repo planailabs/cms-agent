@@ -33,7 +33,7 @@ Requirements on the host:
 
 - DNS: `baseDomain` **and** `*.baseDomain` → this machine.
 - The managed site repo must exist at `repoPath` with its `node_modules`
-  installed (the CMS spawns `npx astro dev` inside it) and be writable by
+  installed (the CMS spawns `npx --no astro dev` inside it) and be writable by
   the `cms-agent` user.
 - Playwright (visual diff) downloads no browsers at runtime; the module wires
   `PLAYWRIGHT_BROWSERS_PATH` to the nixpkgs browsers.

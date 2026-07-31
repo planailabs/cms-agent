@@ -1,6 +1,6 @@
 /**
  * Astro site backend — verbatim extraction of the previously hardcoded
- * behavior: `npx astro dev|build` defaults, injected route-graph integration,
+ * behavior: `npx --no astro dev|build` defaults, injected route-graph integration,
  * dist/ output, src/pages + src/content conventions.
  */
 import fs from 'node:fs';
@@ -117,7 +117,11 @@ export const astroBackend: SiteBackend = {
     fs.rmSync(path.join(worktree, '.astro', 'dev.json'), { force: true });
     const graphConfig = prepareRouteGraphConfig(worktree);
     // REPO_DEV_COMMAND is split on whitespace (document: no shell quoting)
-    const base = (env().REPO_DEV_COMMAND ?? 'npx astro dev').split(/\s+/);
+    // `--no`: run the site's OWN astro or fail. Without it npx downloads the
+    // latest astro when node_modules has none and starts THAT against the
+    // site's config — which fails as "Cannot find module 'astro/config'",
+    // a version mismatch wearing the mask of a broken site.
+    const base = (env().REPO_DEV_COMMAND ?? 'npx --no astro dev').split(/\s+/);
     return {
       argv: [...base, '--config', graphConfig, '--port', String(port), '--host', host],
       // The proxy preserves the public Host header (<branch>.<BASE_DOMAIN>),
@@ -126,7 +130,10 @@ export const astroBackend: SiteBackend = {
     };
   },
 
-  buildCommand: () => env().REPO_BUILD_COMMAND ?? 'npx astro build',
+  // `--no` for the same reason as devCommand: publishing a site built by a
+  // different astro major than the one it was written for is worse than a
+  // build that stops and says the dependencies are missing.
+  buildCommand: () => env().REPO_BUILD_COMMAND ?? 'npx --no astro build',
 
   resolveDist(buildDir) {
     const dist = path.join(buildDir, 'dist');
