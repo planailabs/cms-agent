@@ -6,6 +6,7 @@
  * results are stored as one batch message per round.
  */
 import type { TranslatedMessage } from '@/lib/i18n';
+import type { DisplayBlock } from '@/lib/messageBlocks';
 import type OpenAI from 'openai';
 
 /** Turn phase persisted on Chat.turnPhase (same machine as chat/). */
@@ -68,6 +69,9 @@ export type StoredMessage =
       attachments?: AttachmentMeta[];
       /** Command the message was sent with (lib/commands) — a chip in the UI. */
       command?: string;
+      /** Things this message SHOWS (lib/messageBlocks). The model reads
+       *  `content`; blocks are for the person looking at the transcript. */
+      blocks?: DisplayBlock[];
     }
   | { id?: string; role: 'assistant'; content: string; toolCalls?: ToolCall[] }
   | { id?: string; role: 'tool'; results: ToolResult[] }
@@ -98,4 +102,7 @@ export interface IncomingChatMessage {
   attachmentIds?: string[];
   /** Command parsed off the text by the endpoint (lib/commands). */
   command?: string;
+  /** What the message SHOWS in the transcript (lib/messageBlocks). Server-set
+   *  only — the browser sends none of these. */
+  blocks?: DisplayBlock[];
 }

@@ -9,6 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/db';
 import { acquireTurnLock, broadcast, releaseTurnLock, withBranchLock } from './bus';
 import { emitChatState, emitChatStatesForBranch } from './chatState';
+import type { DisplayBlock } from '@/lib/messageBlocks';
 import { handleChatMessage } from './handler';
 import { canSeeOthersChats } from '@/lib/chatAccess';
 import {
@@ -247,7 +248,7 @@ export async function requestChanges(opts: TransitionOpts & { feedback: string }
  * pre-publish phase and the message carries attachments.
  */
 export async function handoffToPlan(
-  opts: TransitionOpts & { text: string; attachmentIds: string[] },
+  opts: TransitionOpts & { text: string; attachmentIds: string[]; blocks?: DisplayBlock[] },
 ): Promise<void> {
   const chat = await loadChat(opts.chatId, opts.actor);
   if (chat.workflowPhase === 'published') {
@@ -274,6 +275,7 @@ export async function handoffToPlan(
     type: 'message',
     text: opts.text,
     attachmentIds: opts.attachmentIds,
+    blocks: opts.blocks,
   })
     .catch((err) => console.error('[workflow] handoff error:', err))
     .finally(() => releaseTurnLock(opts.chatId, lockId));

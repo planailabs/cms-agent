@@ -4,6 +4,7 @@
  */
 
 import { store } from '../../app/store';
+import type { DisplayBlock } from '@/lib/messageBlocks';
 import { chatStorageKey } from '../../constants';
 import type { TranslatedMessage } from '@/lib/i18n';
 
@@ -37,6 +38,9 @@ export type StoredMessage = {
   attachments?: AttachmentDisplay[];
   /** role 'user': the /command it was sent with (lib/commands) — a chip. */
   command?: string;
+  /** Server-authored things this message SHOWS (lib/messageBlocks): the
+   *  element-edit handoff card, images, labelled facts. */
+  blocks?: DisplayBlock[];
   tool?: ToolCallInfo;
   /** role 'execution': commit sha, resolved against workspace.executions. */
   sha?: string;

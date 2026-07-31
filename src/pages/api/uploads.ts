@@ -1,9 +1,11 @@
 /**
  * POST /api/uploads — multipart upload (field "file").
- * GET  /api/uploads?id=… — metadata.
+ * GET  /api/uploads?id=… — metadata; &mode=raw serves the bytes (chat-scoped,
+ * which is what message image blocks render).
  */
 export const prerender = false;
 
+import fs from 'node:fs';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
 import { chatAccessDenied } from '@/lib/chatAccess';
@@ -61,13 +63,59 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 };
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ url, locals }) => {
   const id = url.searchParams.get('id');
   if (!id) return json({ error: 'id required' }, 400);
+  const raw = url.searchParams.get('mode') === 'raw';
   const upload = await prisma.upload.findUnique({
     where: { id },
-    select: { id: true, filename: true, mime: true, size: true, sha256: true, createdAt: true },
+    select: {
+      id: true,
+      filename: true,
+      mime: true,
+      size: true,
+      sha256: true,
+      createdAt: true,
+      ...(raw ? { storedPath: true, chatId: true } : {}),
+    },
   });
   if (!upload) return json({ error: 'Not found' }, 404);
-  return json({ upload });
+  if (!raw) {
+    const { storedPath: _p, chatId: _c, ...meta } = upload as typeof upload & {
+      storedPath?: string;
+      chatId?: string | null;
+    };
+    return json({ upload: meta });
+  }
+
+  // Bytes: this is what a message's image blocks point at (lib/messageBlocks),
+  // so it is behind the same door as the chat that owns the upload. An upload
+  // with no chat belongs to whoever is signed in — it never reached a
+  // transcript to be shown in.
+  const owned = upload as typeof upload & { storedPath: string; chatId: string | null };
+  if (owned.chatId) {
+    const chat = await prisma.chat.findUnique({
+      where: { id: owned.chatId },
+      select: { id: true, createdById: true, archivedAt: true },
+    });
+    if (!chat) return json({ error: 'Not found' }, 404);
+    const denied = await chatAccessDenied(locals.user!, chat);
+    if (denied) return denied;
+  }
+  let bytes: Buffer;
+  try {
+    bytes = fs.readFileSync(owned.storedPath);
+  } catch {
+    return json({ error: 'The stored file is gone' }, 410);
+  }
+  return new Response(new Uint8Array(bytes), {
+    headers: {
+      'Content-Type': upload.mime,
+      'Content-Length': String(bytes.length),
+      // Content-addressed by sha in the store: safe to keep, private to the
+      // viewer who was allowed to fetch it.
+      'Cache-Control': 'private, max-age=3600',
+      'Content-Disposition': `inline; filename="${encodeURIComponent(upload.filename)}"`,
+    },
+  });
 };

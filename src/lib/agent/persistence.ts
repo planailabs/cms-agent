@@ -3,6 +3,7 @@
  * for skipPersistence test mode. Ported from chat/'s persistence.ts.
  */
 import { dbNull, prisma } from '@/lib/db';
+import { blockEnvelope } from '@/lib/messageBlocks';
 import type { TranslatedMessage } from '@/lib/i18n';
 import type {
   AttachmentMeta,
@@ -170,6 +171,10 @@ export function createDbAdapter(
         msg.role === 'assistant' ? (msg.toolCalls as object[] | undefined) ?? null
         : msg.role === 'tool' ? (msg.results as object[])
         : msg.role === 'cancel' ? (msg.tm as object | undefined) ?? null
+        // Display blocks travel in the same column, wrapped in a versioned
+        // envelope so a reader can tell them from the role-specific shapes
+        // above (lib/messageBlocks).
+        : msg.role === 'user' && msg.blocks?.length ? (blockEnvelope(msg.blocks) as unknown as object)
         : null;
       // Ordinals come from an in-memory counter; an automatism message can
       // land mid-turn and take the next ordinal — on collision resync the

@@ -231,6 +231,8 @@ export async function handleChatMessage(
       pageContext: body.pageContext,
       attachments,
       command: body.command,
+      // Server-authored display blocks (the element-edit handoff card).
+      ...(body.blocks?.length ? { blocks: body.blocks } : {}),
     });
     await setPhase('idle');
   } else if (body.type === 'continue') {

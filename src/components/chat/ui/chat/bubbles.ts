@@ -4,6 +4,7 @@
  */
 
 import { escapeHtml } from '../../utils/html';
+import { renderMessageBlocks } from './blocks';
 import { renderMarkdown } from '../../utils/markdown';
 import { renderExecutionCard } from './cards';
 import { commandChipHtml } from './commands';
@@ -151,8 +152,12 @@ const renderMessage = (
     // The /command the message was sent with, beside it — so the transcript
     // still explains why the chat behaved differently from here on.
     const commandRow = msg.command ? `<div class="msg-command">${commandChipHtml(msg.command)}</div>` : '';
+    // Blocks first: the card is what this message is about (a handoff shows
+    // its shots), the sentence underneath is the part the agent reads.
+    const blocksRow = renderMessageBlocks(msg.blocks);
     return `
             <div class="flex flex-col items-end gap-1">
+              ${blocksRow}
               ${attachmentsRow}
               ${commandRow}
               ${textRow}

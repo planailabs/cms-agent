@@ -1,5 +1,6 @@
 import { delegateEvent } from '../utils/dom';
 import { store } from '../app/store';
+import { openShotViewer } from '../ui/chat/blocks';
 import {
   sendChatMessage,
   answerChatQuestion,
@@ -22,6 +23,12 @@ import {
 } from '../actions/chat/attachments';
 
 export const registerChatEvents = (app: HTMLElement) => {
+  // A shot in a message card opens full size (blocks.ts renders the button).
+  delegateEvent(app, 'click', '[data-action="msg-shot"]', (_event, target) => {
+    const src = target.getAttribute('data-src');
+    if (src) openShotViewer(src, target.getAttribute('data-label') ?? '');
+  });
+
   // Chat: helpers for contenteditable input
   const getMachineConfigInput = () =>
     app.querySelector<HTMLElement>('[data-action="machine-config-input"]');

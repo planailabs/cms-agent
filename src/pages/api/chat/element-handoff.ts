@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { chatAccessDenied } from '@/lib/chatAccess';
 import { annotationCount, type EditAnnotations } from '@/injected/annotate';
+import type { DisplayBlock } from '@/lib/messageBlocks';
 import { captureAnnotatedRoute } from '@/lib/diff/screenshot';
 import { editAnnotationsSchema, handoffMessageText } from '@/lib/handoff/elementEdit';
 import { handoffToPlan, WorkflowError } from '@/lib/agent/workflow';
@@ -101,7 +102,30 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const annotated = await store('annotated', shots.annotated);
     const uploads = { before, edited, annotated };
 
+    // The transcript shows the handoff as a card — the page it is about, what
+    // was drawn, and the shots themselves (lib/messageBlocks). The agent still
+    // reads the text above; blocks are for the person scrolling back.
+    const blocks: DisplayBlock[] = [
+      {
+        kind: 'handoff',
+        route: annotations.route,
+        ...(note ? { note } : {}),
+        shots: [
+          { uploadId: before, label: 'before' },
+          ...(edited ? [{ uploadId: edited, label: 'requested' }] : []),
+          { uploadId: annotated, label: 'annotated' },
+        ],
+        counts: {
+          moves: annotations.moves.length,
+          swaps: annotations.swaps?.length ?? 0,
+          strokes: annotations.strokes.length,
+          comments: annotations.comments.length,
+        },
+      },
+    ];
+
     await handoffToPlan({
+      blocks,
       chatId: chat.id,
       actor: {
         id: user.id,

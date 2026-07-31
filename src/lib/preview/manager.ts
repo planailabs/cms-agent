@@ -221,6 +221,16 @@ export function packageManagerFor(worktree: string): { lockfile: string | null; 
   return { lockfile: null, install: PACKAGE_MANAGERS[PACKAGE_MANAGERS.length - 1].install };
 }
 
+/** Does node_modules still look like something an install produced? Executables
+ *  are what the dev command reaches for, so an empty .bin is not "installed". */
+function hasInstalledBinaries(worktree: string): boolean {
+  try {
+    return fs.readdirSync(path.join(worktree, 'node_modules', '.bin')).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Fingerprint of what an install would produce: the manifest and the lockfile
  *  that pins it. package.json alone misses `npm install` writing a new lock. */
 export function depsFingerprint(worktree: string, lockfile: string | null): string {
@@ -253,11 +263,15 @@ async function ensureDeps(
   const hash = depsFingerprint(worktree, lockfile);
   const stampPath = path.join(worktree, 'node_modules', '.cms-deps-hash');
   const stamp = readDepsStamp(stampPath); // null = never installed by us
-  if (!force && stamp === hash) return;
+  // The stamp says what WAS installed; it cannot say the tree survived. A
+  // half-deleted node_modules still carries it, and the next boot then skips
+  // the install and dies on "Cannot find module" from the dev server instead —
+  // a failure that reads like a broken site and is not one.
+  if (!force && stamp === hash && hasInstalledBinaries(worktree)) return;
   await queueInstall(async () => {
     // The queue may have been long — another install for this worktree could
     // have finished it meanwhile.
-    if (!force && readDepsStamp(stampPath) === hash) return;
+    if (!force && readDepsStamp(stampPath) === hash && hasInstalledBinaries(worktree)) return;
     console.log(`[preview] installing site dependencies in ${worktree} (${install})…`);
     const r = await runSandboxed(sb, install, {
       cwd: worktree,

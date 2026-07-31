@@ -7,6 +7,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
 import { chatAccessDenied } from '@/lib/chatAccess';
+import { normalizeBlocks } from '@/lib/messageBlocks';
 import { buildChatState } from '@/lib/agent/chatState';
 
 export const GET: APIRoute = async ({ url, locals }) => {
@@ -107,6 +108,13 @@ export const GET: APIRoute = async ({ url, locals }) => {
         : {}),
       ...(m.role === 'user' && attachmentsByMsg.has(m.id)
         ? { attachments: attachmentsByMsg.get(m.id) }
+        : {}),
+      // What this message shows, as opposed to what it says (messageBlocks).
+      ...(m.role === 'user' && m.contentBlocks
+        ? (() => {
+            const blocks = normalizeBlocks(m.contentBlocks);
+            return blocks.length > 0 ? { blocks } : {};
+          })()
         : {}),
       // The /command the message was sent with — rendered as a chip beside it.
       ...(m.role === 'user' && m.command ? { command: m.command } : {}),

@@ -2132,6 +2132,150 @@ html.is-first-visit #app {
     max-width: 28rem;
   }
 
+  /* ── Message display blocks (lib/messageBlocks) ─────────────────────── */
+  .msg-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-width: 85%;
+  }
+
+  .msg-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid var(--ws-border, rgba(255, 255, 255, 0.12));
+    border-radius: 0.75rem;
+    background: var(--surface-elevated, rgba(255, 255, 255, 0.04));
+  }
+
+  .msg-card__head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .msg-card__title {
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .msg-card__route,
+  .msg-card__summary {
+    font-size: 0.72rem;
+    color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  }
+
+  .msg-card__note {
+    font-size: 0.82rem;
+  }
+
+  .msg-shots {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .msg-shot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0;
+    border: 1px solid var(--ws-border, rgba(255, 255, 255, 0.12));
+    border-radius: 0.5rem;
+    background: transparent;
+    cursor: zoom-in;
+    overflow: hidden;
+  }
+
+  .msg-shot:hover {
+    border-color: var(--ws-accent, #7852ee);
+  }
+
+  .msg-shot__img {
+    display: block;
+    width: 8.5rem;
+    height: 5.5rem;
+    object-fit: cover;
+    object-position: top center;
+  }
+
+  .msg-shot__label {
+    padding: 0.1rem 0.3rem 0.2rem;
+    font-size: 0.68rem;
+    color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  }
+
+  .msg-block__note {
+    font-size: 0.82rem;
+  }
+
+  .msg-block__facts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .msg-fact {
+    display: flex;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+  }
+
+  .msg-fact__label {
+    color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  }
+
+  .msg-shot-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    padding: 2.5rem;
+    background: rgba(0, 0, 0, 0.72);
+    cursor: zoom-out;
+  }
+
+  .msg-shot-viewer__frame {
+    margin: 0;
+    max-width: 100%;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: center;
+  }
+
+  .msg-shot-viewer__img {
+    max-width: 100%;
+    /* Room for the caption under it, whatever the viewport. */
+    max-height: calc(100vh - 7rem);
+    object-fit: contain;
+    border-radius: 0.5rem;
+    cursor: default;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  .msg-shot-viewer__caption {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  .msg-shot-viewer__close {
+    position: absolute;
+    top: 0.8rem;
+    right: 1rem;
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 1.1rem;
+    cursor: pointer;
+  }
+
   .ws-nav__reload,
   .ws-nav__restart,
   .ws-nav__back,
