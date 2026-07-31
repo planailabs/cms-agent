@@ -20,7 +20,7 @@ export function registerImageTools(): void {
     }),
     phases: ALL_PHASES,
     async execute(input, ctx) {
-      assertWritable(ctx, input.path);
+      await assertWritable(ctx, input.path);
       const destination = jail(ctx, input.path);
       const e = env();
       const openai = new OpenAI({ baseURL: e.OPENAI_BASE_URL, apiKey: e.OPENAI_API_KEY });

@@ -8,6 +8,8 @@
  */
 import { z } from 'zod';
 import { ensureSandbox, runSandboxed } from '@/lib/sandbox';
+import { findPausedAutomatism } from '@/lib/automatism';
+import { DEPLOY_WRITE_REFUSAL } from './fsTools';
 import { registerTool, type ToolDef } from './registry';
 
 const runCommandTool: ToolDef = {
@@ -25,6 +27,11 @@ const runCommandTool: ToolDef = {
   phases: ['execute'],
   kinds: ['workflow', 'deployment'],
   async execute(input, ctx) {
+    // The worktree is writable in here, so a deployment chat needs the same
+    // "only while the deploy is paused" gate the file tools apply.
+    if (ctx.chatKind === 'deployment' && !(await findPausedAutomatism(ctx.chatId))) {
+      return JSON.stringify({ error: DEPLOY_WRITE_REFUSAL });
+    }
     const sb = await ensureSandbox();
     const r = await runSandboxed(sb, input.command, {
       cwd: ctx.worktreePath,

@@ -40,6 +40,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `POST/GET /api/uploads` (+400, CSRF pass behind TLS termination via forwarded headers) | 01 | ✅ |
 | `GET/PUT/DELETE /api/window-sessions[/id]` (+ownership) | 01 (API), 02 (restore UX) | ✅ |
 | `GET /api/agent/capabilities` (incl. per-skill scripts + origin) | 01 | ✅ |
+| Deployment chats refuse site writes unless their deploy is paused (files, images, run_command; `.scratch/` exempt) | — | 🟡 unit-covered (test/deploy-chat-writes.test.ts); bench-driving needs an agent turn in a deployment chat asking for a page change |
 | Skill scripts (declared/derived/overlay resolution, jail limits) | — | 🟡 unit-covered (test/skill-scripts.test.ts) + real-jail limits in test/integration/skill-scripts.test.ts; bench-driving needs a bench-installed skill that ships one |
 | `GET/POST /api/memory` | 01 | 🟡 approve/reject of a real candidate needs the agent to propose one |
 | `GET /api/publications` (list + detail) | 01, 03 | ✅ |

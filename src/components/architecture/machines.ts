@@ -473,6 +473,15 @@ sequenceDiagram
       <li><strong>Deploy flows only run for the default branch.</strong>
         Publishing into any other long-lived branch is a pure merge, recorded as
         a merge-only publication.</li>
+      <li><strong>The deployment chat only unblocks the publish.</strong> It runs
+        with EXECUTE tools on the source chat's worktree so it can resolve a
+        conflict or fix a broken build, which would otherwise make it a second
+        place to edit the site — on a branch whose review is over, from a chat
+        that publishes nothing. So its site writes (files, images,
+        <code>run_command</code>) are refused unless its own automatism is
+        <code>paused</code> on a failure, and the prompt sends editorial
+        requests back to the branch's editorial chat. <code>.scratch/</code>
+        stays writable: it is neither committed nor published.</li>
       <li><strong>Finalize cycles the branch.</strong> The work branch is reset
         onto the updated target so its preview keeps working from the archive,
         both the workflow chat and the deployment chat are archived, and the next

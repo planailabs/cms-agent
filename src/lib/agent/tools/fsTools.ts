@@ -16,6 +16,7 @@ import {
   showCommit,
   worktreeStatus,
 } from '@/lib/git/engine';
+import { findPausedAutomatism } from '@/lib/automatism';
 import { imageMimeForPath } from '../messageUtils';
 import { registerTool, type ToolContext, type ToolDef } from './registry';
 import { activeBackend } from '@/lib/site';
@@ -39,10 +40,29 @@ export function isScratchPath(p: string): boolean {
   return norm === SCRATCH_DIR || norm.startsWith(`${SCRATCH_DIR}/`);
 }
 
-/** Writes outside EXECUTE are restricted to the scratch area. */
-export function assertWritable(ctx: ToolContext, ...paths: string[]): void {
+/**
+ * A deployment chat exists to unblock one publish, not to edit the site: it
+ * runs with EXECUTE tools on the source chat's worktree, so without this the
+ * agent could take "and make the hero blue" as work to do — on a branch whose
+ * review is already over, in a chat nobody publishes from.
+ */
+export const DEPLOY_WRITE_REFUSAL =
+  'This is a deployment chat: it may only fix the deploy that is currently paused, and nothing ' +
+  'is paused. Page and content changes belong in the editorial chat for this branch — tell the ' +
+  'user to make the change there and publish again.';
+
+/**
+ * Writes outside EXECUTE are restricted to the scratch area, and a deployment
+ * chat may touch the site only while its own deploy is paused on a failure.
+ */
+export async function assertWritable(ctx: ToolContext, ...paths: string[]): Promise<void> {
+  const scratchOnly = paths.every(isScratchPath);
+  // .scratch/ is never committed or published, so notes and research stay free.
+  if (ctx.chatKind === 'deployment' && !scratchOnly && !(await findPausedAutomatism(ctx.chatId))) {
+    throw new Error(DEPLOY_WRITE_REFUSAL);
+  }
   if (ctx.workflowPhase === 'execute') return;
-  if (paths.every(isScratchPath)) return;
+  if (scratchOnly) return;
   throw new Error('Only .scratch/ is writable outside the execute phase');
 }
 
@@ -264,7 +284,7 @@ const writeFileTool: ToolDef = {
   phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
-    assertWritable(ctx, input.path);
+    await assertWritable(ctx, input.path);
     const p = jail(ctx, input.path);
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, input.content);
@@ -286,7 +306,7 @@ const editFileTool: ToolDef = {
   phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
-    assertWritable(ctx, input.path);
+    await assertWritable(ctx, input.path);
     const p = jail(ctx, input.path);
     const content = fs.readFileSync(p, 'utf8');
     const occurrences = content.split(input.oldText).length - 1;
@@ -317,7 +337,7 @@ const removeFileTool: ToolDef = {
   phases: ALL_PHASES,
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
-    assertWritable(ctx, input.path);
+    await assertWritable(ctx, input.path);
     const p = jail(ctx, input.path);
     if (p === fs.realpathSync(ctx.worktreePath)) {
       return JSON.stringify({ error: 'Cannot remove the repository root' });
@@ -337,7 +357,7 @@ const moveFileTool: ToolDef = {
   kinds: [...REPO_KINDS],
   async execute(input, ctx) {
     // Gate the source too: moving a repo file during plan mutates the repo.
-    assertWritable(ctx, input.from, input.to);
+    await assertWritable(ctx, input.from, input.to);
     const src = jail(ctx, input.from);
     const dst = jail(ctx, input.to);
     fs.mkdirSync(path.dirname(dst), { recursive: true });
