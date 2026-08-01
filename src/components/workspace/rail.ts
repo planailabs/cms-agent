@@ -24,10 +24,11 @@ const railButton = (
   action: string,
   icon: string,
   tooltip: string,
-  opts: { active?: boolean; disabled?: boolean } = {},
+  opts: { active?: boolean; disabled?: boolean; windowKind?: string } = {},
 ): string => `<button type="button"
     class="ws-rail__btn tooltip tooltip--right ${opts.active ? 'is-active' : ''}"
     data-action="${action}" data-tooltip="${escapeHtml(tooltip)}"
+    ${opts.windowKind ? `data-window-kind="${opts.windowKind}"` : ''}
     aria-label="${escapeHtml(tooltip)}" ${opts.disabled ? 'disabled aria-disabled="true"' : ''}>${icon}</button>`;
 
 const renderEditMenu = (state: AppState): string => {
@@ -53,9 +54,13 @@ export const renderRail = (state: AppState): string => {
 
   const windows = registeredWindows()
     .map((def) => {
+      // The kind is the whole instruction: one delegated handler opens any
+      // registered window, instead of one handler per window saying the same
+      // thing with a different string.
       const btn = railButton(def.railAction, def.icon, t(locale, def.tooltipKey), {
         active: ws.window === def.kind,
         disabled: def.disabled?.(state) ?? false,
+        windowKind: def.kind,
       });
       const menu = def.railMenu?.(state);
       // The wrapper is the hover target for the flyout — without it the menu

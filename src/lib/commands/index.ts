@@ -19,8 +19,12 @@ export interface ChatCommand {
   name: string;
   /** One line, shown in the composer's autocomplete. */
   description: string;
-  /** Chat columns to set when a message carries it. */
-  effect: Record<string, unknown>;
+  /**
+   * Chat columns to set when a message carries it. Named rather than
+   * Record<string, unknown>: this goes straight into a Prisma update, where an
+   * unknown record makes any typo a valid column name.
+   */
+  effect: { planMode?: boolean };
 }
 
 export const COMMANDS: ChatCommand[] = [

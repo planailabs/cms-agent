@@ -22,6 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { env } from '@/lib/env';
+import { bridgedToolPrefix, safeName } from './names';
 import type { ChatKind } from '../tools/registry';
 import type { WorkflowPhase } from '../types';
 
@@ -29,7 +30,7 @@ import type { WorkflowPhase } from '../types';
 export const WORKTREE_CONFIG = '.mcp.json';
 
 /** Must match the bridge's tool-name prefixing (bridgeEntry.ts safe()). */
-export const safeName = (s: string): string => s.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 24);
+export { safeName } from './names';
 
 /** Known integrations we ship and configure ourselves — one group each. */
 export const CODEBASE_MEMORY_GROUP = 'codebase-memory';
@@ -192,7 +193,7 @@ export function serversForGroups(
  */
 export function toolBelongsTo(toolName: string, servers: Set<string>): boolean {
   for (const server of servers) {
-    if (toolName.startsWith(`mcp_${safeName(server)}_`)) return true;
+    if (toolName.startsWith(bridgedToolPrefix(server))) return true;
   }
   return false;
 }

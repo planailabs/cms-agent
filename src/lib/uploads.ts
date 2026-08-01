@@ -58,7 +58,6 @@ export interface StoredUpload {
   sha256: string;
   size: number;
   mime: string;
-  ext: string;
 }
 
 export class UploadError extends Error {
@@ -114,6 +113,5 @@ export function storeUpload(
     sha256: createHash('sha256').update(data).digest('hex'),
     size: data.length,
     mime: rule.mime[0],
-    ext,
   };
 }

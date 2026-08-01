@@ -59,6 +59,3 @@ export function getContentAdapters(): ContentAdapter[] {
   return [...registry.values()];
 }
 
-export function getContentAdapter(id: string): ContentAdapter | undefined {
-  return registry.get(id);
-}

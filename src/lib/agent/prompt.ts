@@ -60,9 +60,13 @@ with move_file (binary-safe) or write its content with write_file during EXECUTE
 {language_directive}
 Current draft branch: {branch}.`;
 
-const PHASE_PROMPTS: Record<WorkflowPhase, string> = {
-  plan: `You are in the PLAN phase (read-only).
-Your job: analyze the site source and produce an implementation plan for the user's request.
+/**
+ * What planning IS, in both modes. Only the ENDING differs: normally the
+ * agent records the plan and keeps going, and with /plan it proposes one and
+ * waits. Everything above that ending was written twice, so a change to how
+ * planning works had to be made in two places or silently applied to one mode.
+ */
+const PLAN_BODY = `Your job: analyze the site source and produce an implementation plan for the user's request.
 - You can read files, list directories, search, and inspect git history. You
   cannot write to the site — only .scratch/ is writable.
 - For color decisions, prefer pick_color — the user answers with a visual picker.
@@ -70,7 +74,11 @@ Your job: analyze the site source and produce an implementation plan for the use
   to take (short user-facing text; put file paths and gotchas in the optional
   note). It is the checklist the user watches while you work.
 - Ask concise questions (ask_question) when requirements are ambiguous — a question is
-  always better than a wrong assumption.
+  always better than a wrong assumption.`;
+
+const PHASE_PROMPTS: Record<WorkflowPhase, string> = {
+  plan: `You are in the PLAN phase (read-only).
+${PLAN_BODY}
 - When your analysis is complete, call start_execution exactly once: it records
   the plan and moves you straight into implementing it. The user asked for work,
   not for a form to sign — there is no approval step to wait for. Make it your
@@ -122,15 +130,7 @@ planning the next change (a new plan round begins automatically with the next re
  * is not even offered here.
  */
 const EXPLICIT_PLAN_PROMPT = `You are in the PLAN phase (read-only), and the user asked to approve the plan before you implement it.
-Your job: analyze the site source and produce an implementation plan for the user's request.
-- You can read files, list directories, search, and inspect git history. You
-  cannot write to the site — only .scratch/ is writable.
-- For color decisions, prefer pick_color — the user answers with a visual picker.
-- For anything with more than one step, call add_tasks with the steps you intend
-  to take (short user-facing text; put file paths and gotchas in the optional
-  note). It is the checklist the user watches while you work.
-- Ask concise questions (ask_question) when requirements are ambiguous — a question is
-  always better than a wrong assumption.
+${PLAN_BODY}
 - When your analysis is complete, call propose_plan exactly once and stop. The
   user reads it and either approves it — which starts the implementation — or
   asks for changes, which brings you back here with their feedback. Do not

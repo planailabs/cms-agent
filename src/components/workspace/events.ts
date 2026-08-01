@@ -13,7 +13,7 @@ import { stopChatTurn } from '../chat/actions/chat/stateMachine';
 import { registerDiffScrollSync } from './diffScroll';
 import { navigateDiffTo, reloadDiffPanes } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
-import { closeWindow, openWindow, toggleWindow } from './window';
+import { closeWindow, openWindow, registeredWindows, toggleWindow } from './window';
 import { deviceByKey } from './devices';
 import { reloadPreviewFrame } from './previewFrames';
 import type { NavScope } from './navHistory';
@@ -400,7 +400,6 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Archive modal (done chats)
-  delegateEvent(app, 'click', '[data-action="ws-archive-open"]', () => toggleWindow('archive'));
   delegateEvent(app, 'click', '[data-action="ws-archive-close"]', () => closeArchive());
   delegateEvent(app, 'click', '[data-action="ws-archive-delete"]', (_e, target) => {
     const chatId = target.getAttribute('data-chat-id');
@@ -412,7 +411,6 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Git modal (commit list + diffs)
-  delegateEvent(app, 'click', '[data-action="ws-git-open"]', () => toggleWindow('git'));
   delegateEvent(app, 'click', '[data-action="ws-git-close"]', () => closeGitModal());
   delegateEvent(app, 'click', '[data-action="ws-git-back"]', () => backToGitList());
   delegateEvent(app, 'click', '[data-action="ws-git-commit"]', (_e, target) => {
@@ -424,10 +422,8 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   });
 
   // Capabilities modal (skills + MCP status)
-  delegateEvent(app, 'click', '[data-action="ws-caps-open"]', () => toggleWindow('caps'));
   delegateEvent(app, 'click', '[data-action="ws-plan-open"]', () => openPlanModal());
   delegateEvent(app, 'click', '[data-action="ws-plan-close"]', () => closePlanModal());
-  delegateEvent(app, 'click', '[data-action="ws-cb-modal-open"]', () => toggleWindow('code'));
   delegateEvent(app, 'click', '[data-action="ws-cb-modal-close"]', () => closeCodeBrowser());
   delegateEvent(app, 'click', '[data-action="ws-cb-dir"]', (_e, target) =>
     toggleDir(target.dataset.path ?? '.'),
@@ -455,7 +451,6 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     if (target.dataset.id) void deleteWindowSession(target.dataset.id);
   });
   delegateEvent(app, 'click', '[data-action="ws-wsn-fresh"]', () => startFreshWindow());
-  delegateEvent(app, 'click', '[data-action="ws-wsn-open"]', () => toggleWindow('sessions'));
   delegateEvent(app, 'click', '[data-action="ws-wsn-close"]', () => closeWindowPicker());
   delegateEvent(app, 'click', '[data-action="ws-compare-align"]', () => {
     const ws = store.state.workspace;
@@ -600,20 +595,20 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     store.notify();
   });
 
-  // Compare window (rail eye): opening pins the tool flyout, a second click
-  // on the active button closes both.
-  delegateEvent(app, 'click', '[data-action="ws-compare-open"]', () => {
-    const ws = store.state.workspace;
-    if (ws.window === 'compare') {
-      closeWindow();
-      return;
+  // Every rail button that opens a window, by the kind it carries. Compare
+  // keeps its one difference — opening it pins the tool flyout — because that
+  // is a real behaviour, not a condition worth a registry hook to relocate.
+  delegateEvent(app, 'click', '[data-window-kind]', (_e, target) => {
+    const kind = target.getAttribute('data-window-kind');
+    const def = registeredWindows().find((w) => w.kind === kind);
+    if (!def) return; // unknown kind: render bug, not a click to act on
+    if (def.kind === 'compare' && store.state.workspace.window !== 'compare') {
+      store.state.workspace.diff.menuOpen = true;
     }
-    ws.diff.menuOpen = true;
-    openWindow('compare');
+    toggleWindow(def.kind);
   });
 
   // Cross-browser comparison overlay
-  delegateEvent(app, 'click', '[data-action="ws-bc-open"]', () => toggleWindow('browsers'));
   delegateEvent(app, 'click', '[data-action="ws-bc-close"]', () => closeBrowserCompare());
   delegateEvent(app, 'click', '[data-action="ws-bc-overlay-toggle"]', () => toggleBrowserCompareOverlay());
   delegateEvent(app, 'click', '[data-action="ws-bc-mode"]', (_e, target) => {

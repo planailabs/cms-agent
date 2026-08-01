@@ -16,6 +16,8 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { createRuntime, loadServerDefinitions } from 'mcporter';
+// Dependency-free by design — this file is bundled into the jail.
+import { bridgedToolName } from './names';
 
 // Config location: MCP_BRIDGE_CONFIG when set (the worktree bridge points it
 // at /work/.mcp.json), else HOME-relative — /home/sandbox in the jail, the
@@ -24,7 +26,6 @@ const CONFIG_PATH = process.env.MCP_BRIDGE_CONFIG ?? path.join(os.homedir(), 'mc
 /** Below the app-side SDK client's 60s default, so the inner call loses. */
 const CALL_TIMEOUT_MS = 55_000;
 
-const safe = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 24);
 
 interface Entry {
   server: string;
@@ -76,7 +77,7 @@ async function main(): Promise<void> {
       const list = await runtime.listTools(def.name, { includeSchema: true, disableOAuth: true });
       const annotations = await annotationsFor(runtime, def.name);
       for (const t of list) {
-        tools.set(`mcp_${safe(def.name)}_${safe(t.name)}`, {
+        tools.set(bridgedToolName(def.name, t.name), {
           server: def.name,
           tool: t.name,
           description: `${t.description ?? ''} (MCP server "${def.name}")`,
