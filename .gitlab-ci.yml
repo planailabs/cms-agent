@@ -12,7 +12,11 @@ test:
     # it never connects (engines come from the dev shell).
     - DATABASE_URL=postgresql://x:x@localhost/x nix develop -c pnpm exec prisma generate --config prisma.config.ts
     - nix develop -c pnpm exec tsc --noEmit
-    - sh test/update-local.test.sh && sh test/start-local.test.sh
+    # In the dev shell: start-local.test.sh runs the prepare-test-db guard with
+    # the AMBIENT node (before it stubs a PATH of its own), so this is the one
+    # step that fails outside it — with `env: 'node': No such file or directory`.
+    - nix develop -c sh test/update-local.test.sh
+    - nix develop -c sh test/start-local.test.sh
     # Self-contained: throwaway SQLite DB, no services needed (prepare-test-db).
     - nix develop -c pnpm test
     # The standalone docs build carries none of the app (no adapter, no DB, no
