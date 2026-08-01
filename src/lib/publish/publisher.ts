@@ -21,6 +21,7 @@ import {
   awaitTurnIdle,
   broadcast,
   hasActiveTurn,
+  withChatsReserved,
   withTargetBranchLock,
   withWorkBranchLock,
 } from '@/lib/agent/bus';
@@ -42,8 +43,11 @@ import {
   resetBranchOnto,
 } from '@/lib/git/engine';
 import { chatGitIdentity } from '@/lib/git/identity';
+import { createChatMessage } from '@/lib/agent/persistence';
 import {
   AutomatismFailure,
+  createAutomatismRow,
+  kickAutomatism,
   postAutomatismMessage,
   registerAutomatism,
   startAutomatism,
@@ -154,86 +158,142 @@ export async function publish(
     throw new WorkflowError(`Unknown deploy flow: ${e.DEPLOY_FLOW}`, 500);
   }
 
-  // Approval bound to the exact sha. The unique idempotency key makes a
-  // retried request fail at the database instead of recording a second
-  // approval — it does NOT replay the first attempt's outcome: the caller sees
-  // an error, not the original publicationId, and nothing here reconstructs
-  // it. Retry-safety is the automatism's, per step.
-  await prisma.approval.create({
-    data: {
-      chatId: chat.id,
-      actorId: req.actor.id,
-      action: 'publish',
-      baseSha: head,
-      targetSha: req.sha,
-      idempotencyKey: req.idempotencyKey ?? randomUUID(),
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-    },
-  });
-
-  const versionGate = await prisma.chat.updateMany({
-    where: { id: chat.id, entityVersion: req.expectedVersion ?? chat.entityVersion },
-    data: { workflowPhase: 'published', entityVersion: { increment: 1 } },
-  });
-  if (versionGate.count === 0) {
-    throw new WorkflowError('The chat changed while you were deciding — reload and retry.');
-  }
-  emitChatState(chat.id);
-
-  // The deployment chat hosts the automatism: its events, and the agent when
-  // a deploy step fails. Archived together with the workflow chat when done.
   const shortSha = req.sha.slice(0, 8);
-  const deployChat = await prisma.chat.create({
-    data: {
-      branchId: chat.branchId,
-      workBranch: newWorkBranchName(),
-      kind: 'deployment',
-      title: flow
-        ? `Deploy ${chat.branch.name} @ ${shortSha}`
-        : `Merge into ${chat.branch.name} @ ${shortSha}`,
-      workflowPhase: 'published',
-      createdById: req.actor.id,
-    },
-  });
-
-  // Publication exists before the merge so the client can track it; the merge
-  // step rebinds sha to the actual merge commit.
-  const publication = await prisma.publication.create({
-    data: {
-      chatId: chat.id,
-      branchId: chat.branchId,
-      sha: req.sha,
-      flow: flow?.id ?? 'merge-only',
-      status: 'running',
-    },
-  });
-
-  const data: DeployData = {
-    actorId: req.actor.id,
-    workflowChatId: chat.id,
-    deployChatId: deployChat.id,
+  const startedMessage = tmsg(flow ? 'deploy.startedFlow' : 'deploy.startedMergeOnly', {
+    title: chat.title,
+    actor: req.actor.name,
     workBranch: chat.workBranch,
-    targetName: chat.branch.name,
-    targetBranchId: chat.branchId,
-    publicationId: publication.id,
-    flowId: flow?.id ?? null,
-    approvedSha: req.sha,
-  };
+    sha: shortSha,
+    target: chat.branch.name,
+    ...(flow ? { flow: flow.id } : {}),
+  });
 
-  await postAutomatismMessage(
-    deployChat.id,
-    tmsg(flow ? 'deploy.startedFlow' : 'deploy.startedMergeOnly', {
-      title: chat.title,
-      actor: req.actor.name,
-      workBranch: chat.workBranch,
-      sha: shortSha,
-      target: chat.branch.name,
-      ...(flow ? { flow: flow.id } : {}),
-    }),
+  /**
+   * Everything that makes a publish exist, in one commit.
+   *
+   * These six rows are one fact — this chat is being published, by this
+   * person, at this sha — and they used to be written one after another with
+   * a version gate in the middle. A gate that lost left an approval for a
+   * publish that never happened; a crash between the deployment chat and the
+   * publication left a chat nothing would ever finish. Either all of it is
+   * there or none of it is.
+   *
+   * The chats are reserved first, for the whole transaction: checking that no
+   * turn is running and then writing is a race the message endpoint wins by
+   * starting one in the gap.
+   *
+   * Deliberately outside: the git head check above (external state), the
+   * emit, the broadcast and the kick below (nothing may observe this publish
+   * before it is durable). A crash between commit and kick is covered by boot
+   * recovery, which advances rows left `running`.
+   */
+  const { publicationId, deployChatId, automatismId } = await withChatsReserved(
+    [chat.id],
+    async () =>
+      prisma.$transaction(async (tx) => {
+        // The unique idempotency key makes a retried request fail here rather
+        // than record a second approval. It does NOT replay the first
+        // attempt's outcome: the caller sees a conflict, not the original
+        // publicationId, and nothing reconstructs it. Retry-safety is the
+        // automatism's, per step.
+        await tx.approval.create({
+          data: {
+            chatId: chat.id,
+            actorId: req.actor.id,
+            action: 'publish',
+            baseSha: head,
+            targetSha: req.sha,
+            idempotencyKey: req.idempotencyKey ?? randomUUID(),
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          },
+        });
+
+        const versionGate = await tx.chat.updateMany({
+          where: { id: chat.id, entityVersion: req.expectedVersion ?? chat.entityVersion },
+          data: { workflowPhase: 'published', entityVersion: { increment: 1 } },
+        });
+        if (versionGate.count === 0) {
+          throw new WorkflowError('The chat changed while you were deciding — reload and retry.');
+        }
+
+        // The deployment chat hosts the automatism: its events, and the agent
+        // when a deploy step fails. Archived with the workflow chat when done.
+        const deployChat = await tx.chat.create({
+          data: {
+            branchId: chat.branchId,
+            workBranch: newWorkBranchName(),
+            kind: 'deployment',
+            title: flow
+              ? `Deploy ${chat.branch.name} @ ${shortSha}`
+              : `Merge into ${chat.branch.name} @ ${shortSha}`,
+            workflowPhase: 'published',
+            createdById: req.actor.id,
+          },
+          select: { id: true },
+        });
+
+        // Exists before the merge so the client can track it; the merge step
+        // rebinds sha to the actual merge commit.
+        const publication = await tx.publication.create({
+          data: {
+            chatId: chat.id,
+            branchId: chat.branchId,
+            sha: req.sha,
+            flow: flow?.id ?? 'merge-only',
+            status: 'running',
+          },
+          select: { id: true },
+        });
+
+        const data: DeployData = {
+          actorId: req.actor.id,
+          workflowChatId: chat.id,
+          deployChatId: deployChat.id,
+          workBranch: chat.workBranch,
+          targetName: chat.branch.name,
+          targetBranchId: chat.branchId,
+          publicationId: publication.id,
+          flowId: flow?.id ?? null,
+          approvedSha: req.sha,
+        };
+
+        // The chat is new, so its first message is ordinal 0 — no read-back,
+        // no collision, and no retry inside a transaction (which PostgreSQL
+        // would not allow anyway).
+        await createChatMessage(
+          tx,
+          {
+            chatId: deployChat.id,
+            role: 'automatism',
+            content: startedMessage.fallback,
+            contentBlocks: startedMessage,
+          },
+          0,
+        );
+
+        return {
+          publicationId: publication.id,
+          deployChatId: deployChat.id,
+          automatismId: await createAutomatismRow(
+            tx,
+            deployAutomatismType(flow ?? null),
+            deployChat.id,
+            data,
+          ),
+        };
+      }),
   );
-  await startAutomatism(deployAutomatismType(flow ?? null), deployChat.id, data);
 
-  return { publicationId: publication.id, deployChatId: deployChat.id };
+  // Durable now: tell the browsers, then start the flow.
+  emitChatState(chat.id);
+  broadcast(deployChatId, 'automatism', {
+    type: 'automatism',
+    content: startedMessage.fallback,
+    tm: startedMessage,
+  });
+  kickAutomatism(automatismId);
+
+  return { publicationId, deployChatId };
 }
 
 // ─── The 'pull' automatism (Sync button) ─────────────────────────────────────

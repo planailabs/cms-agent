@@ -82,6 +82,35 @@ export const releaseTurnLock = (chatId: string, id: string): void => {
 export const hasActiveTurn = (chatId: string): boolean => activeTurns.has(chatId);
 
 /**
+ * Hold every listed chat idle while `fn` runs, or fail.
+ *
+ * Checking hasActiveTurn() and then acting is a race: the message endpoint can
+ * start a turn in the gap, and a publish that merges a branch a turn is still
+ * writing to merges a half-finished tree. Reserving takes the same lock a turn
+ * takes, so the two cannot both win.
+ *
+ * Chats are locked in sorted order — a publish reserves the workflow chat and
+ * its deployment chat, and two flows taking them in opposite orders would
+ * deadlock. Every acquired lock is released even when fn throws.
+ */
+export async function withChatsReserved<T>(chatIds: string[], fn: () => Promise<T>): Promise<T> {
+  const ordered = [...new Set(chatIds)].sort();
+  const held: Array<[string, string]> = [];
+  try {
+    for (const chatId of ordered) {
+      const lockId = acquireTurnLock(chatId);
+      if (!lockId) {
+        throw new Error('The agent is working in this chat — wait for the turn to finish, then try again.');
+      }
+      held.push([chatId, lockId]);
+    }
+    return await fn();
+  } finally {
+    for (const [chatId, lockId] of held) releaseTurnLock(chatId, lockId);
+  }
+}
+
+/**
  * Ask the running turn to stop. The loop checks between streamed chunks and
  * between tool calls, so a stop lands at the next boundary — a tool already
  * executing (a build, an install) still runs to completion. Returns false when

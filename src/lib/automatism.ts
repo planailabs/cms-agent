@@ -201,7 +201,6 @@ export async function startAutomatism(
   chatId: string,
   data: AutomatismData,
 ): Promise<string> {
-  if (!types.has(type)) throw new Error(`Unknown automatism type: ${type}`);
   // An automatism rewrites the very worktree a running turn is editing — a
   // sync rebases the branch under the agent's feet, a deploy merges a tree it
   // is still writing to. The steps hold the branch lock for their git calls,
@@ -214,9 +213,37 @@ export async function startAutomatism(
       );
     }
   }
-  const row = await prisma.automatism.create({ data: { chatId, type, data: data as object } });
-  void advance(row.id);
+  const id = await createAutomatismRow(prisma, type, chatId, data);
+  kickAutomatism(id);
+  return id;
+}
+
+/**
+ * The durable half: write the row, run nothing.
+ *
+ * `client` may be a transaction, which is the point — a publish creates the
+ * approval, the phase flip, the deployment chat, the publication, its first
+ * message and this row as ONE unit. Starting the flow from inside that
+ * transaction would run steps against rows no other connection can see yet.
+ */
+export async function createAutomatismRow(
+  client: { automatism: { create: typeof prisma.automatism.create } },
+  type: string,
+  chatId: string,
+  data: AutomatismData,
+): Promise<string> {
+  if (!types.has(type)) throw new Error(`Unknown automatism type: ${type}`);
+  const row = await client.automatism.create({
+    data: { chatId, type, data: data as object },
+    select: { id: true },
+  });
   return row.id;
+}
+
+/** Start running a durable automatism. Safe after a crash: boot recovery does
+ *  the same thing for rows left `running`. */
+export function kickAutomatism(id: string): void {
+  void advance(id);
 }
 
 /** Resume a paused automatism: the failed step re-runs, then the rest. */
