@@ -106,7 +106,6 @@ describe('open_compare', () => {
     const events: Array<{ event: string; data: unknown }> = [];
     const remove = addConnection('c-compare', {
       write: (event, data) => events.push({ event, data }),
-      end: () => {},
     });
     try {
       const result = await executeTool(

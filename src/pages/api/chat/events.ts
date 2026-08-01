@@ -45,13 +45,6 @@ export const GET: APIRoute = async ({ request, url, locals }) => {
             // stream closed
           }
         },
-        end() {
-          try {
-            controller.close();
-          } catch {
-            // already closed
-          }
-        },
       };
 
       const unsubscribe = addConnection(chatId, writer);

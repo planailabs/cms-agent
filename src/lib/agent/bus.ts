@@ -5,9 +5,11 @@
  * only one chat writes to a branch worktree at a time.
  */
 
+/** A live browser connection. Closing is the transport's business — the
+ *  stream ends when the request is aborted — so there is nothing to call:
+ *  end() had no caller anywhere and only suggested a shutdown path exists. */
 export interface SSEWriter {
   write(event: string, data: unknown): void;
-  end(): void;
 }
 
 // globalThis-backed: Vite HMR reloads this module's graph in dev; plain

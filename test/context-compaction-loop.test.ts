@@ -59,7 +59,6 @@ const run = async (
 ) => {
   const remove = addConnection('compact-loop', {
     write: (event) => events.push(event),
-    end: () => {},
   });
   try {
     await runToolLoop({

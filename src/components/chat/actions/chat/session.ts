@@ -220,10 +220,10 @@ export const applyChatState = (
 
   store.notify();
 
-  // Per-user tabs — user/echo filtering lives in onRemoteTabsUpdated.
+  // Per-user tabs — user/echo filtering lives in applyRemoteTabs.
   if (snapshot.tabs) {
-    void import('../../../workspace/tabsSync').then(({ onRemoteTabsUpdated }) =>
-      onRemoteTabsUpdated({
+    void import('../../../workspace/tabsSync').then(({ applyRemoteTabs }) =>
+      applyRemoteTabs({
         userId: snapshot.tabs!.byUserId,
         tabs: snapshot.tabs!.tabs,
         activeIndex: snapshot.tabs!.activeIndex,

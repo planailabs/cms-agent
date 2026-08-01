@@ -210,7 +210,6 @@ describe('phase gating', () => {
     const events: Array<{ event: string; data: unknown }> = [];
     const remove = addConnection('c1', {
       write: (event, data) => events.push({ event, data }),
-      end: () => {},
     });
     try {
       const result = await executeTool(

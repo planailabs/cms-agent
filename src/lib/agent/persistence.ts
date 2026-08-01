@@ -53,15 +53,38 @@ export const extractDisplayText = (msg: StoredMessage): string => {
 
 // ─── DB operations ───────────────────────────────────────────────────────────
 
-export async function loadChatRecord(chatId: string): Promise<{
+/**
+ * Everything a turn needs about the chat it runs in. The row was already
+ * being read in full here while the handler queried Chat and Branch again for
+ * fields sitting in that same row — three round trips for one turn's context.
+ *
+ * These are the values a run is BUILT from, snapshotted once. Anything that
+ * mutates state (a phase flip, a recovery) still re-reads and compares
+ * versions at its own boundary; this is not a cache to write through.
+ */
+export interface ChatTurnContext {
   phase: TurnPhase;
   pendingQuestion: ClientToolPrompt | null;
   messages: StoredMessage[];
   branchId: string;
   workflowPhase: string;
   nextOrdinal: number;
-} | null> {
-  const chat = await prisma.chat.findUnique({ where: { id: chatId } });
+  /** The chat's own work branch (worktree + preview subdomain). */
+  workBranch: string;
+  /** Branch this chat merges into. */
+  targetBranchName: string;
+  kind: string;
+  title: string;
+  planJson: unknown;
+  planMode: boolean;
+  loadedMcpGroups: string[];
+}
+
+export async function loadChatRecord(chatId: string): Promise<ChatTurnContext | null> {
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    include: { branch: { select: { name: true } } },
+  });
   if (!chat) return null;
   const checkpoint = await prisma.message.findFirst({
     where: { chatId, role: 'compaction' },
@@ -87,7 +110,12 @@ export async function loadChatRecord(chatId: string): Promise<{
         id: row.id,
         role: 'assistant',
         content: row.content,
-        toolCalls: (row.contentBlocks as ToolCall[] | null) ?? undefined,
+        // The column holds EITHER tool calls or display blocks (a guard-rail
+        // notice). Handing the envelope to the model as toolCalls would make
+        // the next request malformed.
+        toolCalls: Array.isArray(row.contentBlocks)
+          ? (row.contentBlocks as unknown as ToolCall[])
+          : undefined,
       };
     }
     if (row.role === 'tool') {
@@ -138,6 +166,17 @@ export async function loadChatRecord(chatId: string): Promise<{
     branchId: chat.branchId,
     workflowPhase: chat.workflowPhase,
     nextOrdinal: last ? last.ordinal + 1 : 0,
+    workBranch: chat.workBranch,
+    targetBranchName: chat.branch.name,
+    kind: chat.kind,
+    title: chat.title,
+    planJson: chat.planJson ?? undefined,
+    planMode: chat.planMode,
+    // A config that dropped a group simply forgets it — the bridge adds the
+    // phase defaults back.
+    loadedMcpGroups: Array.isArray(chat.loadedMcpGroups)
+      ? (chat.loadedMcpGroups as unknown[]).filter((g): g is string => typeof g === 'string')
+      : [],
   };
 }
 

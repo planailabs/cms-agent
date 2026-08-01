@@ -202,19 +202,14 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
     case 'question': {
       const mc2 = store.state.chat?.aiChat;
       if (!mc2) return;
-      // Finalize any pending streaming text before showing question
-      if (mc2.streamingText?.full) {
-        mc2.messages.push({ role: 'assistant', content: mc2.streamingText.full });
-      }
-      mc2.streamingText = undefined;
-
       const toolName = data.toolName as string;
       const input = data.input as Record<string, unknown>;
 
-      // Generic: store the prompt
-      mc2.phase = 'question';
-      mc2.clientPrompt = { toolName, input };
-      mc2.toolName = undefined;
+      // One place decides what leaving a phase means: finalize streamed text,
+      // drop transient state, cancel a pending tool→waiting timer. Doing it
+      // by hand here is how the two drift.
+      transition(mc2, 'question');
+      mc2.clientPrompt = { toolName, input }; // transition() clears it first
 
       // Tool-specific initialization
       if (toolName === 'ask_question') {
@@ -252,13 +247,9 @@ export const handleServerEvent = (type: string, data: Record<string, unknown>) =
     case 'done': {
       const mc2 = store.state.chat?.aiChat;
       if (mc2) {
-        // Finalize any pending streaming text that wasn't closed by text_done
-        if (mc2.streamingText?.full) {
-          mc2.messages.push({ role: 'assistant', content: mc2.streamingText.full });
-          mc2.streamingText = undefined;
-        }
-        mc2.phase = 'idle';
-        mc2.toolName = undefined;
+        // Same edge as every other ending, including text the stream never
+        // closed and a tool→waiting timer that must not fire after the turn.
+        transition(mc2, 'idle');
         cacheAIChatMessages(mc2.messages);
         store.notify();
       }

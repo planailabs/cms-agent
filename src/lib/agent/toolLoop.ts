@@ -141,9 +141,10 @@ export interface ToolLoopInput {
  * the new phase; the user sees one continuous turn.
  */
 export type ToolLoopOutcome =
+  /** The turn is over — answered, stopped or out of rounds. The handler
+   *  treats all three the same: no new run. (The live 'stopped' SSE event is
+   *  a different thing and stays: it tells the browser its Stop landed.) */
   | { type: 'finished' }
-  /** The user pressed stop — like 'finished' for the handler: no new run. */
-  | { type: 'stopped' }
   /** The contract this run was built for changed: the workflow phase moved,
    *  or the turn entered or left an automatism repair (which brings its own
    *  tools). Either way the handler starts a fresh run. */
@@ -329,6 +330,19 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
     };
 
     /**
+     * The ordinary end of a turn: go idle, close the stream, settle the token
+     * counters. The stop and question endings do these in a different order
+     * (a stop announces itself first; a question does not go idle at all), so
+     * they stay written out.
+     */
+    const endTurn = async (): Promise<ToolLoopOutcome> => {
+      await setPhase('idle');
+      finishTurn();
+      await flushTokens();
+      return { type: 'finished' };
+    };
+
+    /**
      * End the turn where the user asked it to. Whatever the model already said
      * is kept — it is what happened — and the transcript gets a note of its
      * own, carried as a TranslatedMessage so every viewer reads it in their
@@ -346,7 +360,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       broadcast(chatId, 'stopped', { type: 'stopped' });
       finishTurn();
       await flushTokens();
-      return { type: 'stopped' };
+      return { type: 'finished' };
     };
 
     // ── Pre-step: resume from tool_pending (crash/restart recovery) ─────────
@@ -517,10 +531,7 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       // ── Final response ─────────────────────────────────────────────────────
       if (toolCalls.length === 0) {
         if (text) await appendMsg({ role: 'assistant', content: text });
-        await setPhase('idle');
-        finishTurn();
-        await flushTokens();
-        return { type: 'finished' };
+        return await endTurn();
       }
 
       // Store full assistant response including tool calls
@@ -558,7 +569,6 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       // ── Client-side tool → pause for the browser ──────────────────────────
       const clientCall = toolCalls.find((c) => isClientSideTool(c.function.name));
       if (clientCall) {
-        rounds--; // questions don't count as tool rounds
         const prompt: ClientToolPrompt = {
           toolName: clientCall.function.name,
           input: safeParseArgs(clientCall.function.arguments),
@@ -630,11 +640,8 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
         `${stats.blockedRepeats} repeats blocked`,
     );
     await appendMsg({ role: 'assistant', content: msg, blocks: notice.blocks });
-    await setPhase('idle');
     broadcast(chatId, 'text_done', { type: 'text_done', content: msg, blocks: notice.blocks });
-    finishTurn();
-    await flushTokens();
-    return { type: 'finished' };
+    return await endTurn();
   } finally {
     await flushTokens();
     await bridge.close();

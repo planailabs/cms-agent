@@ -137,38 +137,20 @@ export async function handleChatMessage(
       broadcast(chatId, 'error', { type: 'error', message: 'Chat not found' });
       return;
     }
+    // One read: loadChatRecord already had the whole row open (persistence.ts).
     phase = record.phase;
     pendingQuestion = record.pendingQuestion;
     messages = record.messages;
     branchId = record.branchId;
     workflowPhase = record.workflowPhase as WorkflowPhase;
     nextOrdinal = record.nextOrdinal;
-
-    const [branch, chat] = await Promise.all([
-      prisma.branch.findUniqueOrThrow({ where: { id: record.branchId } }),
-      prisma.chat.findUniqueOrThrow({
-        where: { id: chatId },
-        select: {
-          planJson: true,
-          planMode: true,
-          workBranch: true,
-          kind: true,
-          title: true,
-          loadedMcpGroups: true,
-        },
-      }),
-    ]);
-    targetBranchName = branch.name;
-    branchName = chat.workBranch; // the chat's own work branch
-    chatKind = chat.kind as ChatKind;
-    planJson = chat.planJson ?? undefined;
-    planMode = chat.planMode;
-    needsTitle = isDefaultChatTitle(chat.title);
-    // Groups the agent loaded in an earlier turn — the phase defaults are
-    // added by the bridge, so a config that dropped a group simply forgets it.
-    loadedMcpGroups = Array.isArray(chat.loadedMcpGroups)
-      ? (chat.loadedMcpGroups as unknown[]).filter((g): g is string => typeof g === 'string')
-      : [];
+    targetBranchName = record.targetBranchName;
+    branchName = record.workBranch; // the chat's own work branch
+    chatKind = record.kind as ChatKind;
+    planJson = record.planJson;
+    planMode = record.planMode;
+    needsTitle = isDefaultChatTitle(record.title);
+    loadedMcpGroups = record.loadedMcpGroups;
   }
 
   const ordinalRef = { value: nextOrdinal };

@@ -118,7 +118,6 @@ describe('streamed chat state', () => {
     const events: Array<{ event: string; data: Record<string, unknown> }> = [];
     const remove = addConnection(chatId, {
       write: (event, data) => events.push({ event, data: data as Record<string, unknown> }),
-      end: () => {},
     });
     try {
       // same-tick calls coalesce into ONE snapshot
@@ -190,7 +189,6 @@ describe('streamed chat state', () => {
       write: (event, data) => {
         if (event === 'state') events.push(data as Record<string, unknown>);
       },
-      end: () => {},
     });
     const actor = { id: 'state-trans-user', name: 'Transitioner', email: 'trans@example.com' };
     const lastSnapshot = () =>
@@ -266,7 +264,6 @@ describe('streamed chat state', () => {
         write: (event) => {
           if (event === 'state') got.push(id);
         },
-        end: () => {},
       }),
     );
     try {

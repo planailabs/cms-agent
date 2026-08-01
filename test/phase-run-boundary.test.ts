@@ -98,7 +98,7 @@ const request = (i: number) => {
 
 const run = async (chatId: string) => {
   const events: string[] = [];
-  const remove = addConnection(chatId, { write: (event) => events.push(event), end: () => {} });
+  const remove = addConnection(chatId, { write: (event) => events.push(event) });
   try {
     await handleChatMessage(
       'phase-user',

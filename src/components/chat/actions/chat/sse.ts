@@ -29,6 +29,23 @@ let connectPromise: Promise<void> | null = null;
 /**
  * POST a message/answer to the server. Events arrive via SSE.
  */
+/**
+ * Exactly the events the server sends (every broadcast() call site). A
+ * listener for an event nobody emits is not harmless: it reads as a live
+ * path, so the state it was supposed to update looks handled when the 'state'
+ * snapshot is in fact the only thing carrying it. The reverse is worse — a
+ * broadcast nobody listens for vanishes silently. test/sse-parity.test.ts
+ * holds both directions.
+ */
+export const SSE_EVENTS = [
+  'thinking', 'text_delta', 'text_done', 'tool_start', 'tool_end',
+  'compaction_start', 'compaction',
+  'question', 'stopped', 'done', 'error',
+  // Workspace events (execution/publish lifecycle, chat meta)
+  'state', 'ui_language', 'open_compare', 'execution_committed', 'publish_log',
+  'automatism', 'compare_stale',
+] as const;
+
 export const postMessage = async (payload: {
   type: 'message' | 'answer';
   text: string;
@@ -111,20 +128,8 @@ export const connectEvents = (): Promise<void> => {
       connectedChatId = chatId;
 
       // Register event listeners BEFORE waiting for open — avoids missing
-      // events that arrive between onopen and listener registration
-      // Exactly the events the server sends (see broadcast() call sites). A
-      // listener for an event nobody emits is not harmless: it reads as a live
-      // path, so the state it was supposed to update looks handled when the
-      // 'state' snapshot is in fact the only thing carrying it.
-      const eventTypes = [
-        'thinking', 'text_delta', 'text_done', 'tool_start', 'tool_end',
-        'compaction_start', 'compaction',
-        'question', 'stopped', 'done', 'error',
-        // Workspace events (execution/publish lifecycle, chat meta)
-        'state', 'ui_language', 'open_compare', 'execution_committed', 'publish_log',
-        'automatism', 'compare_stale',
-      ];
-      for (const type of eventTypes) {
+      // events that arrive between onopen and listener registration.
+      for (const type of SSE_EVENTS) {
         es.addEventListener(type, (event) => {
           try {
             const raw = (event as MessageEvent).data as string | undefined;

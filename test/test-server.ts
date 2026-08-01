@@ -80,13 +80,6 @@ export async function startServer(opts: TestServerOptions = {}): Promise<TestSer
             /* closed */
           }
         },
-        end() {
-          try {
-            res.end();
-          } catch {
-            /* already ended */
-          }
-        },
       };
       const unsubscribe = addConnection(chatId, writer);
 

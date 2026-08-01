@@ -81,7 +81,7 @@ export const loadChatTabs = async (chatId: string): Promise<void> => {
 };
 
 /** Snapshot tabs — apply when they are this user's, from another session. */
-export const onRemoteTabsUpdated = (data: Record<string, unknown>): void => {
+export const applyRemoteTabs = (data: Record<string, unknown>): void => {
   if (data.clientId === TABS_CLIENT_ID) return;
   if (data.userId !== store.state.user?.id) return;
   if (!Array.isArray(data.tabs) || data.tabs.length === 0) return;

@@ -84,7 +84,6 @@ const run = async (chatId: string) => {
   const events: Array<{ event: string; data: unknown }> = [];
   const remove = addConnection(chatId, {
     write: (event, data) => events.push({ event, data }),
-    end: () => {},
   });
   const lockId = acquireTurnLock(chatId)!;
   expect(lockId, 'the turn lock was already held').toBeTruthy();

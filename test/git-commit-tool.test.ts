@@ -77,7 +77,6 @@ describe('git_commit', () => {
       write: (event, data) => {
         if (event === 'state') stateEvents.push(data as Record<string, unknown>);
       },
-      end: () => {},
     });
 
     fs.writeFileSync(path.join(repo, 'about.md'), '# About\n');
