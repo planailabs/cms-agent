@@ -12,10 +12,10 @@
  *   cost while the user waits.
  *
  * ponytail: exactly ONE spare work branch, primed at boot and refilled after
- * it is claimed. Unlike the primary branches it is not pinned, so the idle
- * sweeper may stop its dev server — the expensive part, the installed
- * worktree, survives that. Grow into a real pool only if new chats start
- * arriving faster than one warms.
+ * it is claimed. It has no dev server of its own — an unclaimed branch would
+ * hold a port and a preview slot for nobody — only the installed worktree,
+ * which is the part that takes minutes. Grow into a real pool only if new
+ * chats start arriving faster than one warms.
  */
 import { startTicker, stopTicker } from '@/lib/ticker';
 import { newWorkBranchName } from '@/lib/git/engine';
@@ -42,9 +42,11 @@ const newWorkBranch = newWorkBranchName;
 
 async function warm(branch: string): Promise<void> {
   const { defaultBranch, ensureBranch } = await import('@/lib/git/engine');
-  const { ensureInstance } = await import('./manager');
+  const { prepareWorktreeDeps } = await import('./manager');
   await ensureBranch(branch, await defaultBranch());
-  await ensureInstance(branch); // worktree + npm install + dev server
+  // Worktree + install, but no dev server: see prepareWorktreeDeps. The chat
+  // that claims this branch starts one, which is the first thing it does.
+  await prepareWorktreeDeps(branch);
 }
 
 /**

@@ -116,27 +116,33 @@ export async function buildChatState(
   });
   if (!chat) return null;
 
-  // Step names come from registered automatism defs — publisher registers them
-  await import('@/lib/publish/publisher');
-  const { automatismStateFor } = await import('@/lib/automatism');
-  const automatism = await automatismStateFor(chatId);
+  // What applies is decided by the row above; the three reads that follow do
+  // not depend on each other, and one of them shells out to git. Serially
+  // they were the snapshot's whole latency — and this builder runs on every
+  // persisted mutation.
+  const [automatism, targetAhead, publication] = await Promise.all([
+    // Step names come from registered automatism defs — publisher registers
+    // them (startRuntimeServices imports it at boot; this covers every other
+    // caller).
+    import('@/lib/publish/publisher')
+      .then(() => import('@/lib/automatism'))
+      .then(({ automatismStateFor }) => automatismStateFor(chatId)),
 
-  let targetAhead = false;
-  if (chat.kind === 'workflow') {
-    const { branchAheadCount } = await import('@/lib/git/engine');
-    targetAhead = await branchAheadCount(chat.workBranch, chat.branch.name)
-      .then((n) => n > 0)
-      .catch(() => false);
-  }
+    chat.kind === 'workflow'
+      ? import('@/lib/git/engine')
+          .then(({ branchAheadCount }) => branchAheadCount(chat.workBranch, chat.branch.name))
+          .then((n) => n > 0)
+          .catch(() => false)
+      : Promise.resolve(false),
 
-  const publication =
     chat.workflowPhase === 'published'
-      ? await prisma.publication.findFirst({
+      ? prisma.publication.findFirst({
           where: { chatId },
           orderBy: { createdAt: 'desc' },
           select: { id: true, sha: true, status: true, log: true, externalUrl: true },
         })
-      : null;
+      : Promise.resolve(null),
+  ]);
 
   const publishable = chat.executions.filter((e) => !e.revertedBySha);
 

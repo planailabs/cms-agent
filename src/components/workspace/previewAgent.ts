@@ -18,66 +18,32 @@ import type { AgentEnvelope } from '@/injected/protocol';
 import { t, uiLocale } from '@/lib/i18n';
 import { store } from '../chat/app/store';
 import { getPreviewIframe, getPreviewIframes } from './previewFrames';
+import { createFrameRpc } from './frameRpc';
 
 export { getPreviewIframe } from './previewFrames';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
-const previewOrigin = (iframe: HTMLIFrameElement): string | null => {
-  try {
-    return new URL(iframe.src).origin;
-  } catch {
-    return null;
-  }
-};
+// Transport only (ids, timeouts, origin pinning) — see frameRpc.ts.
+const rpc = createFrameRpc({
+  prefix: 'req',
+  timeoutMs: REQUEST_TIMEOUT_MS,
+  unavailable: 'Preview iframe is not available',
+  timedOut: (msg) => `Preview agent request timed out: ${String(msg.type)}`,
+});
 
 /** Post to a specific iframe (default: the active tab's). */
 const postToPreview = (
   msg: Record<string, unknown>,
   iframe: HTMLIFrameElement | null = getPreviewIframe(),
-): boolean => {
-  const origin = iframe ? previewOrigin(iframe) : null;
-  if (!iframe?.contentWindow || !origin) return false;
-  iframe.contentWindow.postMessage(msg, origin);
-  return true;
-};
-
-// ── Request/response (cms:eval, cms:load-module) ────────────────────────────
-
-interface Pending {
-  resolve: (value: unknown) => void;
-  reject: (err: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
-}
-
-const pending = new Map<string, Pending>();
-let seq = 0;
+): boolean => rpc.post(iframe, msg);
 
 const request = (
   msg: Record<string, unknown>,
   iframe: HTMLIFrameElement | null = getPreviewIframe(),
-): Promise<unknown> =>
-  new Promise((resolve, reject) => {
-    const id = `req-${++seq}`;
-    if (!postToPreview({ ...msg, id }, iframe)) {
-      reject(new Error('Preview iframe is not available'));
-      return;
-    }
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error(`Preview agent request timed out: ${String(msg.type)}`));
-    }, REQUEST_TIMEOUT_MS);
-    pending.set(id, { resolve, reject, timer });
-  });
+): Promise<unknown> => rpc.request(iframe, msg);
 
-const settle = (id: string, ok: boolean, value: unknown, error?: string): void => {
-  const entry = pending.get(id);
-  if (!entry) return;
-  pending.delete(id);
-  clearTimeout(entry.timer);
-  if (ok) entry.resolve(value);
-  else entry.reject(new Error(error || 'Preview agent request failed'));
-};
+const settle = rpc.settle;
 
 /** Evaluate code inside the preview page. `code` is an async function body —
  *  it may use `await` and must `return` to produce a value. */
@@ -208,11 +174,8 @@ export const registerPreviewAgent = (): void => {
   window.addEventListener('message', (event: MessageEvent) => {
     // Accept messages ONLY from one of the managed per-tab preview iframes,
     // at that iframe's own origin.
-    const iframe = event.source
-      ? getPreviewIframes().find((f) => f.contentWindow === event.source)
-      : undefined;
+    const iframe = rpc.senderOf(event, getPreviewIframes());
     if (!iframe) return;
-    if (event.origin !== previewOrigin(iframe)) return;
 
     const data = event.data as AgentEnvelope | null;
     if (!data || typeof data !== 'object' || typeof data.type !== 'string') return;

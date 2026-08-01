@@ -34,8 +34,8 @@ export interface PreviewInstance {
 interface ManagerState {
   instances: Map<string, { info: PreviewInstance; child: ChildProcess }>;
   starting: Map<string, Promise<PreviewInstance>>;
-  /** Boot-page wait streams notified when preview availability changes. */
-  routesListeners: Set<() => void>;
+  /** Boot-page wait streams, notified when a branch's preview state moves. */
+  branchListeners: Set<(branch: string, state: BranchState) => void>;
   /** Last failed start per branch, surfaced on the boot page. */
   startErrors: Map<string, { message: string; at: number }>;
   /** Current phase of an in-flight start, streamed to the boot page. */
@@ -54,7 +54,7 @@ const state: ManagerState =
   (g.__previewManager = {
     instances: new Map(),
     starting: new Map(),
-    routesListeners: new Set(),
+    branchListeners: new Set(),
     startErrors: new Map(),
     startPhases: new Map(),
     pinned: new Set(),
@@ -64,7 +64,7 @@ state.pinned ??= new Set();
 state.logs ??= new Map();
 state.startErrors ??= new Map();
 state.startPhases ??= new Map();
-state.routesListeners ??= new Set();
+state.branchListeners ??= new Set();
 
 /**
  * Dev-server output is kept in memory per branch, and outlives the process
@@ -142,9 +142,37 @@ export function currentRoutesJson(): string {
   return JSON.stringify(buildRoutes());
 }
 
-export function subscribeRoutes(listener: () => void): () => void {
-  state.routesListeners.add(listener);
-  return () => state.routesListeners.delete(listener);
+/**
+ * Where a branch's preview is, as far as anyone waiting for it cares.
+ * 'gone' covers stopped, evicted and crashed — from a waiting browser they
+ * are the same fact: nothing is serving this branch right now.
+ */
+export type BranchState = 'deps' | 'server' | 'ready' | 'failed' | 'gone';
+
+/**
+ * Subscribe to preview state changes for every branch.
+ *
+ * The manager knows the moment a start moves; a waiting browser used to
+ * discover it by re-reading this module's maps every 500 ms, once per client.
+ * That is work proportional to how many people are waiting, to learn
+ * something one place already knew.
+ */
+export function subscribeBranchState(
+  listener: (branch: string, state: BranchState) => void,
+): () => void {
+  state.branchListeners.add(listener);
+  return () => state.branchListeners.delete(listener);
+}
+
+function notifyBranch(branch: string, next: BranchState): void {
+  for (const listener of state.branchListeners) {
+    try {
+      listener(branch, next);
+    } catch (err) {
+      // A broken listener must not take the start path down with it.
+      console.error('[preview] branch-state listener failed:', err);
+    }
+  }
 }
 
 function writeRoutesFile(): void {
@@ -157,7 +185,6 @@ function writeRoutesFile(): void {
   fs.renameSync(tmp, routesFile());
 
   updateProxyRoutes(JSON.stringify(routes));
-  for (const listener of state.routesListeners) listener();
 }
 
 function freePort(): Promise<number> {
@@ -252,6 +279,21 @@ export function depsFingerprint(worktree: string, lockfile: string | null): stri
  * lockfile changed since the last install (the agent can edit site deps
  * mid-chat), or when `force` is set (boot-page retry = repair).
  */
+/**
+ * The expensive half of warming a branch — checkout plus install — without
+ * starting a dev server for it.
+ *
+ * A spare branch nobody has claimed yet does not need a running server: it
+ * would hold a port, memory and one of PREVIEW_MAX_INSTANCES slots until a
+ * chat adopts it, and the first thing a claim does is start one anyway. The
+ * install is what takes minutes and what survives into the adopted worktree.
+ */
+export async function prepareWorktreeDeps(branch: string): Promise<void> {
+  const sb = await ensureSandbox();
+  const worktree = await ensureWorktree(branch);
+  await ensureDeps(sb, worktree, branch);
+}
+
 async function ensureDeps(
   sb: SandboxState,
   worktree: string,
@@ -395,6 +437,7 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     existing.child.kill('SIGTERM');
     state.instances.delete(branch);
     writeRoutesFile();
+    notifyBranch(branch, 'gone');
   }
 
   const startPromise = (async () => {
@@ -404,8 +447,10 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     const sb = await ensureSandbox();
     const worktree = await ensureWorktree(branch);
     state.startPhases.set(branch, 'deps');
+    notifyBranch(branch, 'deps');
     await ensureDeps(sb, worktree, branch, repair);
     state.startPhases.set(branch, 'server');
+    notifyBranch(branch, 'server');
     const port = await freePort();
 
     // The active site backend builds the full dev-server argv (and may
@@ -452,6 +497,7 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
       if (cur?.child === child) {
         state.instances.delete(branch);
         writeRoutesFile();
+        notifyBranch(branch, 'gone');
       }
     });
 
@@ -474,11 +520,15 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
       child.kill('SIGTERM');
       state.instances.delete(branch);
       writeRoutesFile();
+      // 'failed' follows once the error is recorded below — this is the
+      // instance disappearing, which a waiter may already act on.
+      notifyBranch(branch, 'gone');
       throw err;
     }
 
     info.status = 'ready';
     writeRoutesFile();
+    notifyBranch(branch, 'ready');
     startSweeper();
     console.log(`[preview] ${branch} ready on port ${port} (worktree ${worktree})`);
     return info;
@@ -492,6 +542,8 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
       message: err instanceof Error ? err.message : String(err),
       at: Date.now(),
     });
+    // Recorded, so the boot page can render it — tell the waiters now.
+    notifyBranch(branch, 'failed');
   });
 
   state.starting.set(branch, startPromise);
@@ -503,6 +555,7 @@ export async function stopInstance(branch: string): Promise<void> {
   if (!entry) return;
   state.instances.delete(branch);
   writeRoutesFile();
+  notifyBranch(branch, 'gone');
   entry.info.status = 'stopped';
   entry.child.kill('SIGTERM');
   await new Promise<void>((resolve) => {

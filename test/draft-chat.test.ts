@@ -9,12 +9,16 @@ const mocks = vi.hoisted(() => ({
   ensureBranch: vi.fn(async (_branch: string, _base?: string) => {}),
   branchExists: vi.fn(async (_branch: string) => true),
   ensureInstance: vi.fn(async (_branch: string) => ({})),
+  // Warming a spare installs its worktree WITHOUT starting a dev server —
+  // an unclaimed branch would hold a port and a preview slot for nobody.
+  prepareWorktreeDeps: vi.fn(async (_branch: string) => {}),
   pinBranch: vi.fn((_branch: string) => {}),
   unpinBranch: vi.fn((_branch: string) => {}),
   pinned: [] as string[],
   postMessage: vi.fn(),
 }));
-const { branchExists, ensureBranch, ensureInstance, pinBranch, unpinBranch, postMessage } = mocks;
+const { branchExists, ensureBranch, ensureInstance, prepareWorktreeDeps, pinBranch, unpinBranch, postMessage } =
+  mocks;
 
 vi.mock('@/lib/git/engine', () => ({
   defaultBranch: async () => 'main',
@@ -28,6 +32,7 @@ vi.mock('@/lib/git/engine', () => ({
 }));
 vi.mock('@/lib/preview/manager', () => ({
   ensureInstance: mocks.ensureInstance,
+  prepareWorktreeDeps: mocks.prepareWorktreeDeps,
   isInstanceActive: () => false,
   pinBranch: mocks.pinBranch,
   unpinBranch: mocks.unpinBranch,
@@ -227,25 +232,28 @@ describe('pre-warmed work branch', () => {
     resetPrewarmForTests();
     ensureBranch.mockClear();
     ensureInstance.mockClear();
+    prepareWorktreeDeps.mockClear();
   });
 
   it('adopts the warm branch for a chat on the default branch', async () => {
     ensureSpareBranch();
-    await vi.waitFor(() => expect(ensureInstance).toHaveBeenCalled());
-    const warmed = ensureInstance.mock.calls[0][0];
+    await vi.waitFor(() => expect(prepareWorktreeDeps).toHaveBeenCalled());
+    const warmed = prepareWorktreeDeps.mock.calls[0][0];
     expect(warmed).toMatch(/^c-[0-9a-f]{12}$/);
     expect(ensureBranch).toHaveBeenCalledWith(warmed, 'main');
+    // No dev server for a branch nobody has claimed.
+    expect(ensureInstance).not.toHaveBeenCalled();
 
     expect(await claimWorkBranch('main')).toBe(warmed);
-    // Claiming starts the next one rather than handing the same branch twice.
-    await vi.waitFor(() => expect(ensureInstance).toHaveBeenCalledTimes(2));
+    // Claiming warms the next one rather than handing the same branch twice.
+    await vi.waitFor(() => expect(prepareWorktreeDeps).toHaveBeenCalledTimes(2));
     expect(await claimWorkBranch('main')).not.toBe(warmed);
   });
 
   it('never hands a main-based spare to a chat targeting another branch', async () => {
     ensureSpareBranch();
-    await vi.waitFor(() => expect(ensureInstance).toHaveBeenCalled());
-    const warmed = ensureInstance.mock.calls[0][0];
+    await vi.waitFor(() => expect(prepareWorktreeDeps).toHaveBeenCalled());
+    const warmed = prepareWorktreeDeps.mock.calls[0][0];
 
     const claimed = await claimWorkBranch('release');
     expect(claimed).not.toBe(warmed);

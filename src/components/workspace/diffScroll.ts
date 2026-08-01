@@ -32,20 +32,13 @@ import {
 import { store } from "../chat/app/store";
 import type { AppState } from "../chat/app/state";
 import { onDiffFrameNavigated } from "./diffViewer";
+import { createFrameRpc } from "./frameRpc";
 
 /** Marker docs per iframe id (repopulated on every document load). */
 const markerDocs = new Map<string, MarkerDoc>();
 /** Bracketed anchors keyed by direction ("srcId>dstId"), invalidated on
  *  marker updates. */
 let anchorCache = new Map<string, Anchor[]>();
-const pending = new Map<
-  string,
-  {
-    resolve: (value: unknown) => void;
-    reject: (err: Error) => void;
-    timer: ReturnType<typeof setTimeout>;
-  }
->();
 const REQUEST_TIMEOUT_MS = 15_000;
 let appliedSig: string | null = null;
 let aligningSig: string | null = null;
@@ -111,16 +104,15 @@ if (!window.__cmsScrollSync) {
 
 const iframeById = (id: string) =>
   document.getElementById(id) as HTMLIFrameElement | null;
-const originOf = (f: HTMLIFrameElement): string | null => {
-  try {
-    return new URL(f.src).origin;
-  } catch {
-    return null;
-  }
-};
+// Transport only (ids, timeouts, origin pinning) — see frameRpc.ts.
+const rpc = createFrameRpc({
+  prefix: "diff-scroll",
+  timeoutMs: REQUEST_TIMEOUT_MS,
+  unavailable: "Diff iframe is not available",
+  timedOut: (_msg, iframe) => `Diff iframe request timed out: ${iframe.id}`,
+});
 const postTo = (f: HTMLIFrameElement, msg: Record<string, unknown>): void => {
-  const origin = originOf(f);
-  if (f.contentWindow && origin) f.contentWindow.postMessage(msg, origin);
+  rpc.post(f, msg);
 };
 const currentSig = (): string | null => {
   const a = iframeById(IFRAME_IDS[0]);
@@ -131,34 +123,8 @@ const currentSig = (): string | null => {
 const requestEval = (
   iframe: HTMLIFrameElement,
   code: string,
-): Promise<unknown> =>
-  new Promise((resolve, reject) => {
-    const origin = originOf(iframe);
-    if (!iframe.contentWindow || !origin) {
-      reject(new Error("Diff iframe is not available"));
-      return;
-    }
-    const id = `diff-scroll-${++seq}`;
-    const timer = setTimeout(() => {
-      pending.delete(id);
-      reject(new Error(`Diff iframe request timed out: ${iframe.id}`));
-    }, REQUEST_TIMEOUT_MS);
-    pending.set(id, { resolve, reject, timer });
-    iframe.contentWindow.postMessage({ type: "cms:eval", id, code }, origin);
-  });
-const settle = (
-  id: string,
-  ok: boolean,
-  value: unknown,
-  error?: string,
-): void => {
-  const entry = pending.get(id);
-  if (!entry) return;
-  pending.delete(id);
-  clearTimeout(entry.timer);
-  if (ok) entry.resolve(value);
-  else entry.reject(new Error(error || "Diff iframe eval failed"));
-};
+): Promise<unknown> => rpc.request(iframe, { type: "cms:eval", code });
+const settle = rpc.settle;
 const collectDoc = (iframe: HTMLIFrameElement): Promise<MarkerDoc> =>
   requestEval(iframe, `return ${COLLECT_MARKERS_JS};`) as Promise<MarkerDoc>;
 const applyAndCollect = (
@@ -272,9 +238,10 @@ export const registerDiffScrollSync = (): void => {
 
   window.addEventListener("message", (ev: MessageEvent) => {
     const frames = IFRAME_IDS.map(iframeById);
-    const src = frames.find((f) => f && f.contentWindow === ev.source);
-    if (!src) return; // not one of the diff iframes
-    if (ev.origin !== originOf(src)) return; // origin pin
+    // One of the two diff iframes, at its own origin — anything else is
+    // ignored (frameRpc.senderOf).
+    const src = rpc.senderOf(ev, frames);
+    if (!src) return;
 
     const data = ev.data as {
       type?: string;
