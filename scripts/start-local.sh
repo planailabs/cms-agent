@@ -85,25 +85,7 @@ bash scripts/launch-with-sandbox.sh pnpm dev -- --host ::1 --port "$internal_por
 child=$!
 
 ready_deadline=$((SECONDS + 600))
-until node --input-type=module -e '
-  import http from "node:http";
-  const req = http.get({
-    host: "127.0.0.1",
-    port: 8080,
-    path: "/architecture",
-    headers: { host: `${process.env.BASE_DOMAIN}:8080` },
-  }, (res) => {
-    let body = "";
-    res.setEncoding("utf8");
-    res.on("data", (chunk) => { body += chunk; });
-    res.on("end", () => {
-      const cms = body.includes("<title>Architecture — CMS Agent</title>");
-      process.exit(res.statusCode === 200 && cms ? 0 : 1);
-    });
-  });
-  req.setTimeout(500, () => req.destroy());
-  req.on("error", () => process.exit(1));
-'; do
+until INTERNAL_PORT="$internal_port" node scripts/wait-for-proxy.mjs; do
   kill -0 "$child" 2>/dev/null || {
     wait "$child" || true
     echo "The development server exited before becoming ready." >&2
