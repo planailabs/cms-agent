@@ -60,10 +60,18 @@ async function loadChat(chatId: string, viewer?: TransitionOpts['actor']) {
   return chat;
 }
 
+/** What a phase transition may write. Record<string, unknown> went straight
+ *  into Prisma — a typo there was an unchecked column name. */
+interface PhaseUpdate {
+  workflowPhase: WorkflowPhase;
+  /** The approved plan; only the two PLAN → EXECUTE paths write it. */
+  planJson?: object;
+}
+
 async function updatePhase(
   chatId: string,
   fromVersion: number,
-  data: Record<string, unknown>,
+  data: PhaseUpdate,
 ): Promise<void> {
   const res = await prisma.chat.updateMany({
     where: { id: chatId, entityVersion: fromVersion },
@@ -103,6 +111,53 @@ function resumeTurn(
   })();
 }
 
+/**
+ * The PLAN → EXECUTE move itself, shared by both ways in: the approval card
+ * (approvePlan) and the agent recording the plan it would have proposed
+ * (startExecution). They differ in who decides and what the caller may pass;
+ * hashing the plan, preparing the branch, flipping the phase under the version
+ * gate, writing the audit record and emitting state are the same both times.
+ *
+ * Ordering matters and is the reason this is one function: git preparation
+ * happens BEFORE the phase flip, because a failure after it would leave the
+ * chat in EXECUTE with no approval and a paused turn nobody resumes. The
+ * approval is written after, and a failure there is logged rather than
+ * thrown — it is an audit record, and losing it must not strand the chat.
+ */
+async function enterExecute(args: {
+  chat: { id: string; workBranch: string; branch: { name: string } };
+  plan: object;
+  actorId: string;
+  expectedVersion: number;
+  idempotencyKey?: string;
+}): Promise<void> {
+  const planHash = createHash('sha256').update(JSON.stringify(args.plan)).digest('hex');
+  // The work branch may not exist yet before the first turn.
+  await ensureBranch(args.chat.workBranch, args.chat.branch.name);
+  const baseSha = await branchSha(args.chat.workBranch);
+  await updatePhase(args.chat.id, args.expectedVersion, {
+    workflowPhase: 'execute',
+    planJson: args.plan,
+  });
+  try {
+    await prisma.approval.create({
+      data: {
+        chatId: args.chat.id,
+        actorId: args.actorId,
+        action: 'plan',
+        planHash,
+        baseSha,
+        idempotencyKey: args.idempotencyKey ?? randomUUID(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+  } catch (err) {
+    // Audit record only — failing to write it must not strand the transition.
+    console.error('[workflow] approval record failed:', err);
+  }
+  emitChatState(args.chat.id);
+}
+
 // ─── Transitions ─────────────────────────────────────────────────────────────
 
 /**
@@ -118,35 +173,19 @@ export async function approvePlan(opts: TransitionOpts): Promise<void> {
 
   const pending = chat.pendingQuestion as { toolName: string; input: object } | null;
   const plan = pending?.toolName === 'propose_plan' ? pending.input : chat.planJson;
-  if (!plan) throw new WorkflowError('There is no proposed plan to approve yet.');
-
-  const planHash = createHash('sha256').update(JSON.stringify(plan)).digest('hex');
-  // Git prep BEFORE the phase flip — a failure after updatePhase would leave
-  // the chat in execute with no approval and the paused turn never resumed.
-  // (The work branch may not exist yet before the first turn.)
-  await ensureBranch(chat.workBranch, chat.branch.name);
-  const baseSha = await branchSha(chat.workBranch);
-  await updatePhase(opts.chatId, opts.expectedVersion ?? chat.entityVersion, {
-    workflowPhase: 'execute',
-    planJson: plan,
-  });
-  try {
-    await prisma.approval.create({
-      data: {
-        chatId: chat.id,
-        actorId: opts.actor.id,
-        action: 'plan',
-        planHash,
-        baseSha,
-        idempotencyKey: opts.idempotencyKey ?? randomUUID(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      },
-    });
-  } catch (err) {
-    // Audit record only — failing to write it must not strand the transition.
-    console.error('[workflow] approval record failed:', err);
+  // A plan is an object. The column is JSON, so a scalar left there by
+  // something else is not one, and approving it would store nonsense.
+  if (!plan || typeof plan !== 'object') {
+    throw new WorkflowError('There is no proposed plan to approve yet.');
   }
-  emitChatState(opts.chatId);
+
+  await enterExecute({
+    chat,
+    plan,
+    actorId: opts.actor.id,
+    expectedVersion: opts.expectedVersion ?? chat.entityVersion,
+    idempotencyKey: opts.idempotencyKey,
+  });
 
   if (chat.turnPhase === 'waiting_for_answer') {
     resumeTurn(
@@ -173,31 +212,12 @@ export async function startExecution(opts: {
   if (chat.workflowPhase !== 'plan') {
     throw new WorkflowError(`Cannot start execution from the ${chat.workflowPhase} phase.`);
   }
-  const planHash = createHash('sha256').update(JSON.stringify(opts.plan)).digest('hex');
-  // Same ordering as approvePlan: git prep before the phase flip.
-  await ensureBranch(chat.workBranch, chat.branch.name);
-  const baseSha = await branchSha(chat.workBranch);
-  await updatePhase(opts.chatId, chat.entityVersion, {
-    workflowPhase: 'execute',
-    planJson: opts.plan,
+  await enterExecute({
+    chat,
+    plan: opts.plan,
+    actorId: opts.actorId,
+    expectedVersion: chat.entityVersion,
   });
-  try {
-    await prisma.approval.create({
-      data: {
-        chatId: chat.id,
-        actorId: opts.actorId,
-        action: 'plan',
-        planHash,
-        baseSha,
-        idempotencyKey: randomUUID(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      },
-    });
-  } catch (err) {
-    // Audit record only — failing to write it must not strand the transition.
-    console.error('[workflow] shadow-plan approval record failed:', err);
-  }
-  emitChatState(opts.chatId);
 }
 
 /** EXECUTE → PLAN without starting another turn or discarding worktree changes. */

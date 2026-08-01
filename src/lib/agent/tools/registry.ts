@@ -75,19 +75,49 @@ export function getTool(name: string): ToolDef | undefined {
   return registry.get(name);
 }
 
+/**
+ * Why a tool is not available. The two enforcement points — hiding a tool
+ * from the model and refusing a call to it — are deliberately separate (a
+ * hallucinated call must fail even though the tool was never offered), but
+ * they must never disagree about WHAT is allowed. This is the one predicate
+ * both ask; only the wording of the refusal belongs to the executor.
+ */
+export type ToolRefusal = 'kind' | 'flow' | 'repair' | 'planMode' | 'phase';
+
+/** Everything the policy looks at, without the rest of a turn's context. */
+export interface ToolScope {
+  workflowPhase: WorkflowPhase;
+  chatKind: ChatKind;
+  deployFlowId?: string;
+  planMode: boolean;
+  /** A repair turn: the paused step's own set REPLACES the phase and
+   *  plan-mode gates (see toolsForTurn). Chat-kind and flow scoping still
+   *  apply — a repair cannot reach tools that chat kind never has. */
+  repairTools?: ReadonlySet<string>;
+}
+
+/** null = available. */
+export function toolRefusal(tool: ToolDef, scope: ToolScope): ToolRefusal | null {
+  if (!(tool.kinds ?? ['workflow']).includes(scope.chatKind)) return 'kind';
+  if (tool.flows && (scope.deployFlowId == null || !tool.flows.includes(scope.deployFlowId))) {
+    return 'flow';
+  }
+  if (scope.repairTools) return scope.repairTools.has(tool.name) ? null : 'repair';
+  if (!allowedInMode(tool, scope.planMode)) return 'planMode';
+  if (!tool.phases.includes(scope.workflowPhase)) return 'phase';
+  return null;
+}
+
+const availableIn = (scope: ToolScope): ToolDef[] =>
+  [...registry.values()].filter((t) => toolRefusal(t, scope) === null);
+
 export function toolsForPhase(
   phase: WorkflowPhase,
   kind: ChatKind = 'workflow',
   deployFlowId?: string,
   planMode = false,
 ): ToolDef[] {
-  return [...registry.values()].filter(
-    (t) =>
-      t.phases.includes(phase) &&
-      (t.kinds ?? ['workflow']).includes(kind) &&
-      (!t.flows || (deployFlowId != null && t.flows.includes(deployFlowId))) &&
-      allowedInMode(t, planMode),
-  );
+  return availableIn({ workflowPhase: phase, chatKind: kind, deployFlowId, planMode });
 }
 
 /**
@@ -101,17 +131,17 @@ export function toolsForPhase(
  * a repair cannot reach tools that chat kind never has.
  */
 export function toolsForTurn(ctx: ToolContext): ToolDef[] {
-  if (!ctx.repair) {
-    return toolsForPhase(ctx.workflowPhase, ctx.chatKind, ctx.deployFlowId, ctx.planMode);
-  }
-  const wanted = ctx.repair.tools;
-  return [...registry.values()].filter(
-    (t) =>
-      wanted.has(t.name) &&
-      (t.kinds ?? ['workflow']).includes(ctx.chatKind) &&
-      (!t.flows || (ctx.deployFlowId != null && t.flows.includes(ctx.deployFlowId))),
-  );
+  return availableIn(scopeOf(ctx));
 }
+
+/** The policy view of a turn. */
+const scopeOf = (ctx: ToolContext): ToolScope => ({
+  workflowPhase: ctx.workflowPhase,
+  chatKind: ctx.chatKind,
+  deployFlowId: ctx.deployFlowId,
+  planMode: ctx.planMode ?? false,
+  repairTools: ctx.repair?.tools,
+});
 
 const allowedInMode = (tool: ToolDef, planMode: boolean): boolean =>
   tool.planMode === 'only' ? planMode : tool.planMode === 'never' ? !planMode : true;
@@ -121,9 +151,32 @@ export function isClientSideTool(name: string): boolean {
   return !!t && !t.execute;
 }
 
+/** Each refusal says what is wrong AND what to do instead — a bare "not
+ *  allowed" makes the model retry the same call. */
+function refusalMessage(reason: ToolRefusal, name: string, ctx: ToolContext): string {
+  switch (reason) {
+    case 'kind':
+      return `Tool "${name}" is not available in this chat.`;
+    case 'flow':
+      return `Tool "${name}" belongs to another deploy flow.`;
+    case 'repair':
+      return (
+        `Tool "${name}" is not part of repairing step "${ctx.repair?.stepName}" of the ` +
+        `${ctx.repair?.type} automatism. Fix that step, then call resume_automatism.`
+      );
+    case 'planMode':
+      return ctx.planMode
+        ? `Tool "${name}" is not available while this chat is in plan mode — propose_plan instead.`
+        : `Tool "${name}" needs the /plan command to be active in this chat.`;
+    case 'phase':
+      return `Tool "${name}" is not allowed in the ${ctx.workflowPhase} phase.`;
+  }
+}
+
 /**
- * Execute a server-side tool with phase gating enforced here — a tool outside
- * the current phase is rejected even if the model hallucinated it.
+ * Execute a server-side tool with the same gating that decided its exposure —
+ * a tool outside the current phase is rejected even if the model hallucinated
+ * it.
  */
 export async function executeTool(
   name: string,
@@ -132,37 +185,11 @@ export async function executeTool(
 ): Promise<string> {
   const tool = registry.get(name);
   if (!tool) return JSON.stringify({ error: `Unknown tool: ${name}` });
-  if (!(tool.kinds ?? ['workflow']).includes(ctx.chatKind)) {
-    return JSON.stringify({ error: `Tool "${name}" is not available in this chat.` });
-  }
-  if (tool.flows && (!ctx.deployFlowId || !tool.flows.includes(ctx.deployFlowId))) {
-    return JSON.stringify({ error: `Tool "${name}" belongs to another deploy flow.` });
-  }
-  // A repair turn is authorized by its step, not by the phase: the same list
-  // that produced the tool set is re-checked here, so a hallucinated call to
-  // something the step did not ask for is refused like any other.
-  if (ctx.repair) {
-    if (!ctx.repair.tools.has(name)) {
-      return JSON.stringify({
-        error:
-          `Tool "${name}" is not part of repairing step "${ctx.repair.stepName}" of the ` +
-          `${ctx.repair.type} automatism. Fix that step, then call resume_automatism.`,
-      });
-    }
-  } else {
-    if (!allowedInMode(tool, ctx.planMode ?? false)) {
-      return JSON.stringify({
-        error: ctx.planMode
-          ? `Tool "${name}" is not available while this chat is in plan mode — propose_plan instead.`
-          : `Tool "${name}" needs the /plan command to be active in this chat.`,
-      });
-    }
-    if (!tool.phases.includes(ctx.workflowPhase)) {
-      return JSON.stringify({
-        error: `Tool "${name}" is not allowed in the ${ctx.workflowPhase} phase.`,
-      });
-    }
-  }
+  // Same predicate that decided whether to offer the tool at all — a
+  // hallucinated call is refused here, in the words that tell the model what
+  // to do instead. (A repair turn is authorized by its step, not the phase.)
+  const refusal = toolRefusal(tool, scopeOf(ctx));
+  if (refusal) return JSON.stringify({ error: refusalMessage(refusal, name, ctx) });
   if (!tool.execute) {
     return JSON.stringify({ error: `Tool "${name}" is client-side and cannot be executed here.` });
   }
