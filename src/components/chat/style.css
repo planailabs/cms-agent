@@ -4652,7 +4652,17 @@ html.is-first-visit #app {
 }
 
 .chat-automatism--gate .chat-automatism__body {
-  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  color: var(--text-primary);
+}
+
+.chat-automatism--gate {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-muted));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-elevated));
 }
 
 .ws-phase-actions {

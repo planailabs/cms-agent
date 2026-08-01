@@ -87,7 +87,9 @@ commit under the branch lock; the record is marked `revertedBySha`.
 
 **Publish** (`POST …/publish {sha}`) → refused if the chat's work branch moved
 since review (stale approval); otherwise: publish approval bound to the exact
-sha → **pre-validation**: the tree the merge would produce is written as a
+sha. The UI shows the working state immediately on click, then follows the
+deployment chat's live agent/step status while the request and automatism run.
+Next comes **pre-validation**: the tree the merge would produce is written as a
 dangling commit and built with the site backend's own build (`astro build` for
 Astro, none for static) plus the dist validators — for every flow, before
 anything moves; a failure leaves both branches untouched → the work branch

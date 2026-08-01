@@ -96,7 +96,7 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.attention.head': 'Needs human attention',
     'chat.attention.done': 'Done',
     // Automatism input gate
-    'chat.automatism.gate': 'Automatism running ({step}) — chat opens when it pauses or finishes.',
+    'chat.automatism.gate': 'The agent is working: {step}',
     // Archived chats take no input
     'chat.archived.note': 'This chat is archived — it can no longer receive messages.',
     // Sidebar chrome
@@ -207,7 +207,7 @@ export const chatCatalogs: AreaCatalogs = {
     'chat.attention.head': 'Braucht menschliche Aufmerksamkeit',
     'chat.attention.done': 'Erledigt',
     // Automatism input gate
-    'chat.automatism.gate': 'Automatismus läuft ({step}) — der Chat öffnet sich, sobald er pausiert oder fertig ist.',
+    'chat.automatism.gate': 'Der Agent arbeitet: {step}',
     // Archivierte Chats nehmen keine Eingaben an
     'chat.archived.note': 'Dieser Chat ist archiviert — er kann keine Nachrichten mehr empfangen.',
     // Sidebar chrome

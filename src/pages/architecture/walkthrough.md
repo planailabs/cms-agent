@@ -73,7 +73,9 @@ new plan round.
 Click **Publish**. The CMS refuses if the branch moved since your review;
 otherwise it merges to main, builds the exact sha in a clean checkout, seals
 the artifact (tarball + per-file sha256 manifest under `var/artifacts/`),
-runs your `PUBLISH_COMMAND`, and streams the log into the chat. On success
+runs your `PUBLISH_COMMAND`, and streams the log into the chat. A working
+indicator appears as soon as you click and stays visible with the current
+deployment step while this runs. On success
 the branch resets onto the new main and the chat is archived — the next
 change starts a new chat.
 

@@ -53,14 +53,11 @@ describe('renderNavigation', () => {
     expect(renderNavigation('preview', '/"><script>x</script>')).not.toContain('<script>');
   });
 
-  // Reload re-requests the page; restart bounces the dev server serving it.
-  // Both need the scope, because both act on whichever window they sit in.
-  it('offers the server restart next to the page reload, in both windows', () => {
+  it('leaves preview-server recovery to the agent', () => {
     for (const scope of ['preview', 'diff'] as const) {
       const html = renderNavigation(scope, '/');
-      expect(html).toMatch(
-        new RegExp(`data-action="ws-nav-restart"[^>]*data-scope="${scope}"`),
-      );
+      expect(html).not.toContain('ws-nav-restart');
+      expect(html).toMatch(new RegExp(`data-action="ws-nav-reload"[^>]*data-scope="${scope}"`));
     }
   });
 });

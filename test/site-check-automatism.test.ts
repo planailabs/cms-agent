@@ -28,7 +28,7 @@ vi.mock('@/lib/git/engine', async () => {
 
 import { prisma } from '@/lib/db';
 import { activeRepair, findPausedAutomatism, resumeAutomatism } from '@/lib/automatism';
-import { startSiteCheck } from '@/lib/publish/publisher';
+import { queueDetectedSiteCheck, startSiteCheck } from '@/lib/publish/publisher';
 
 const broken: ValidationIssue = {
   validator: 'astro-dev',
@@ -78,6 +78,13 @@ beforeEach(async () => {
 });
 
 describe('the site-check step', () => {
+  it('starts after the normal agent reports a backend error', async () => {
+    checkSiteHealth.mockResolvedValue([broken]);
+    await queueDetectedSiteCheck(chatId, 'sitecheck-user');
+    await waitFor(async () => !!(await findPausedAutomatism(chatId)));
+    expect((await findPausedAutomatism(chatId))?.lastError).toContain('Hero.astro');
+  });
+
   it('passes a healthy draft through without touching the chat', async () => {
     checkSiteHealth.mockResolvedValue([]);
     const id = await startSiteCheck(chatId, 'sitecheck-user');

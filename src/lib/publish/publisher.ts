@@ -132,6 +132,13 @@ export async function publish(
   if (chat.workflowPhase !== 'execute') {
     throw new WorkflowError(`Cannot publish from the ${chat.workflowPhase} phase.`);
   }
+  const activeCheck = await prisma.automatism.findFirst({
+    where: { chatId: chat.id, type: 'site-check', status: { in: ['running', 'paused'] } },
+    select: { status: true },
+  });
+  if (activeCheck) {
+    throw new WorkflowError(`The site check is ${activeCheck.status} — publish after it finishes.`, 409);
+  }
 
   // Publishing merges the work branch; a turn still writing to it would put
   // uncommitted or half-finished work behind the reviewed sha. The usual
@@ -594,6 +601,36 @@ export async function startSiteCheck(chatId: string, actorId: string): Promise<s
     workBranch: chat.workBranch,
     targetName: chat.branch.name,
   } satisfies PullData);
+}
+
+const publisherGlobals = globalThis as typeof globalThis & {
+  __cmsQueuedSiteChecks?: Set<string>;
+};
+const queuedSiteChecks = (publisherGlobals.__cmsQueuedSiteChecks ??= new Set());
+
+/** Start the existing checkpoint once the agent turn that found the error is done. */
+export async function queueDetectedSiteCheck(chatId: string, actorId: string): Promise<void> {
+  if (queuedSiteChecks.has(chatId)) return;
+  queuedSiteChecks.add(chatId);
+  try {
+    if (!(await awaitTurnIdle(chatId, 10 * 60_000))) return;
+    const [chat, existing] = await Promise.all([
+      prisma.chat.findUnique({
+        where: { id: chatId },
+        select: { kind: true, archivedAt: true },
+      }),
+      prisma.automatism.findFirst({
+        where: { chatId, type: 'site-check', status: { in: ['running', 'paused'] } },
+        select: { id: true },
+      }),
+    ]);
+    if (chat?.kind !== 'workflow' || chat.archivedAt || existing) return;
+    await startSiteCheck(chatId, actorId);
+  } catch (err) {
+    console.error(`[site-check] could not start detected-error check for ${chatId}:`, err);
+  } finally {
+    queuedSiteChecks.delete(chatId);
+  }
 }
 
 // ─── The 'deploy' automatism ─────────────────────────────────────────────────

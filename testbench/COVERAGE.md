@@ -91,9 +91,9 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Code browser (tree, open file — judged) | 02 | ✅ |
 | Code browser image preview (svg renders inline, naturalWidth > 0) | 02 | ✅ |
 | Preview tabs new/switch/close | 02 | ✅ |
-| Shared navigation bar (route input + reload) in preview and compare | 02 (preview reload), 05 (compare address + reload) | ✅ |
+| Shared navigation bar (route input + reload; no manual server restart) in preview and compare | 02 (preview reload + restart absence), 05 (compare address + reload) | ✅ |
 | Sidebar collapse/resize | 02 | 🟡 collapse only; drag-resize not simulated |
-| Plan/execution/publish cards | — | 🟡 exercised via API in 03; card DOM not driven (approve via endpoint, not button) |
+| Plan/execution/publish cards + immediate publishing/agent-working state | 03 (live deployment steps) | 🟡 card DOM is real-browser unit-covered; approve still uses the endpoint |
 | Element-edit overlay (draw/move/comment in-iframe) | — | 🟡 handoff covered API-side in 03; in-iframe drawing not driven |
 | Browser compare UI, diff-viewer modes UI | — | 🟡 endpoints covered (03/05); overlay UIs not driven |
 | Attachments upload + send with image; upload from a draft materializes the chat | 01 (API), 02 (draft composer) | ✅ |
@@ -111,7 +111,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | Capability router (SKILL_ROUTER_MODEL picks the skills/MCP groups the prompt carries; a failure fails the turn, never falls back to the full list) | — | 🟡 unit-covered (test/skill-router.test.ts, test/capability-tools.test.ts); every bench turn exercises it implicitly — a broken router fails 01/03 outright, which is the intended visibility |
 | Lazy MCP loading (defaults only at turn start; load_mcp/unload_mcp per group; an unloaded group's server never starts; phase policy still narrows a freshly loaded group) | — | 🟡 unit-covered (test/mcp-lazy-load.test.ts, test/mcp-groups.test.ts); bench-driving needs a configured custom MCP server in the bench environment, same blocker as the phase gate above |
 
-| Post-sync site check (backend error detection → automatism pause → agent fix → re-check on resume) + restart_preview | — | 🟡 unit-covered (test/site-health.test.ts drives a real HTTP dev-server stub, test/site-check-automatism.test.ts drives the flow against the DB); bench-driving it needs a sync that deliberately breaks the draft, which 06 does not do |
+| Post-sync/agent-detected site check (backend error detection → automatism pause → agent fix → re-check on resume) + restart_preview | — | 🟡 unit-covered (test/site-health.test.ts, test/site-check-automatism.test.ts, test/preview-tools.test.ts); bench-driving it needs a deliberately broken draft |
 
 | Compare shot staleness (generation bumped by the turn loop, in the cache key and the shot URL, `compare_stale` reload) | — | 🟡 unit-covered (test/compare-staleness.test.ts) |
 | Automatism repair turn (waits out a running turn, folds duplicate failures, reports when it cannot start, re-invokes abandoned repairs on boot) | 06 (real conflict → repair turn) | 🟡 partly: 06 drives the happy path; the busy/dedupe/give-up paths are unit-covered (test/automatism-repair-turn.test.ts) |

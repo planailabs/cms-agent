@@ -8,15 +8,17 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { checkSiteHealth, stopInstance } = vi.hoisted(() => ({
+const { checkSiteHealth, stopInstance, queueDetectedSiteCheck } = vi.hoisted(() => ({
   checkSiteHealth: vi.fn(),
   stopInstance: vi.fn(),
+  queueDetectedSiteCheck: vi.fn(),
 }));
 
 vi.mock('@/lib/site/health', async () => {
   const actual = await vi.importActual<typeof import('@/lib/site/health')>('@/lib/site/health');
   return { ...actual, checkSiteHealth, chatPreviewRoutes: vi.fn(async () => ['/']) };
 });
+vi.mock('@/lib/publish/publisher', () => ({ queueDetectedSiteCheck }));
 
 import {
   appendPreviewLog,
@@ -58,6 +60,7 @@ beforeEach(() => {
   clearPreviewLogs(BRANCH);
   checkSiteHealth.mockReset().mockResolvedValue([]);
   stopInstance.mockReset().mockResolvedValue(undefined);
+  queueDetectedSiteCheck.mockReset();
 });
 
 describe('the dev-server log buffer', () => {
@@ -124,6 +127,9 @@ describe('site_status', () => {
     expect(result.healthy).toBe(false);
     expect(result.issues[0].failureClass).toBe('AGENT_FIXABLE');
     expect(result.summary).toContain('Hero.astro');
+    await vi.waitFor(() =>
+      expect(queueDetectedSiteCheck).toHaveBeenCalledWith('preview-tools', 'u1'),
+    );
   });
 });
 

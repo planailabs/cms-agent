@@ -158,11 +158,20 @@ describe('e2e agent journey', () => {
     // finalize resumes the paused agent to close its finish_execution card.
     // A human reviews the preview before pressing Publish; a test that posts
     // immediately would be racing that wrap-up turn.
-    const idleBy = Date.now() + 120_000;
-    while (Date.now() < idleBy && (await chatState(J.chatId!)).turnPhase !== 'idle') {
+    const idleBy = Date.now() + 300_000;
+    let ready = false;
+    let stableSince = 0;
+    while (Date.now() < idleBy) {
+      const state = await chatState(J.chatId!);
+      const idle =
+        state.turnPhase === 'idle' &&
+        (!state.automatism || state.automatism.status === 'done' || state.automatism.status === 'failed');
+      stableSince = idle ? stableSince || Date.now() : 0;
+      ready = stableSince > 0 && Date.now() - stableSince >= 1_000;
+      if (ready) break;
       await new Promise((r) => setTimeout(r, 1000));
     }
-    ok('the wrap-up turn finished before publish', (await chatState(J.chatId!)).turnPhase === 'idle');
+    ok('agent work and its detected-error check finished before publish', ready);
 
     const publish = await client.req('POST', `/api/chats/${J.chatId}/publish`, {
       sha: J.previewSha,
@@ -175,6 +184,13 @@ describe('e2e agent journey', () => {
     );
     J.publicationId = pubJson.publicationId;
     J.deployChatId = pubJson.deployChatId;
+
+    const deployState = await flowChatState(J.deployChatId!);
+    ok(
+      'deployment exposes live work steps for the visible agent status',
+      (deployState.automatism?.steps.length ?? 0) > 0,
+      JSON.stringify(deployState.automatism),
+    );
 
     const deployDiff = await client.get(`/api/diff/${J.deployChatId}/pages`);
     const deployDiffJson = deployDiff.json as { branch?: string };

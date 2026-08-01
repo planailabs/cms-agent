@@ -20,6 +20,25 @@ import {
 import { registerTool, type ToolDef } from './registry';
 import { ALL_PHASES } from '../types';
 
+const queueBackendErrorCheck = async (
+  issues: Awaited<ReturnType<typeof checkSiteHealth>>,
+  ctx: Parameters<NonNullable<ToolDef['execute']>>[1],
+): Promise<void> => {
+  if (
+    ctx.chatKind !== 'workflow' ||
+    !issues.some(
+      (issue) =>
+        issue.validator !== 'preview-start' &&
+        issue.severity === 'error' &&
+        issue.failureClass !== 'RETRYABLE_INFRA',
+    )
+  ) {
+    return;
+  }
+  const { queueDetectedSiteCheck } = await import('@/lib/publish/publisher');
+  void queueDetectedSiteCheck(ctx.chatId, ctx.userId);
+};
+
 const restartPreviewTool: ToolDef = {
   name: 'restart_preview',
   description:
@@ -46,6 +65,7 @@ const restartPreviewTool: ToolDef = {
       worktree: ctx.worktreePath,
       routes: await chatPreviewRoutes(ctx.chatId),
     });
+    await queueBackendErrorCheck(issues, ctx);
     return JSON.stringify(
       hasErrors(issues)
         ? {
@@ -126,6 +146,7 @@ const siteStatusTool: ToolDef = {
         worktree: ctx.worktreePath,
         routes: await chatPreviewRoutes(ctx.chatId),
       });
+      await queueBackendErrorCheck(issues, ctx);
       return JSON.stringify({
         checked: 'just now',
         healthy: !hasErrors(issues),
@@ -140,6 +161,7 @@ const siteStatusTool: ToolDef = {
         note: 'The site has not been checked in this server process — call again with recheck=true.',
       });
     }
+    await queueBackendErrorCheck(report.issues, ctx);
     return JSON.stringify({
       checkedSecondsAgo: Math.round((Date.now() - report.at) / 1000),
       routes: report.routes,

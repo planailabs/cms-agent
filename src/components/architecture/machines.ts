@@ -479,7 +479,9 @@ sequenceDiagram
       <li><strong>The publish card stays honest while paused.</strong> The
         publication row remains <code>running</code> and the conflict is appended
         to its log, so the UI shows work in progress rather than a success that
-        has not happened.</li>
+        has not happened. The working card appears optimistically on the click,
+        before the publish request itself finishes, and the deployment chat
+        keeps a prominent live agent/step status on screen.</li>
       <li><strong>The merge moves the target for everyone.</strong> After it
         lands, a state snapshot is emitted for every live chat on that branch —
         each of them just became "target ahead" and needs its Sync button
@@ -553,8 +555,14 @@ stateDiagram-v2
       <li><strong>Double-clicks are handled in process.</strong> The database
         guard is check-then-create, so an in-flight set of chat ids stops a
         second click from starting a parallel sync.</li>
+      <li><strong>Detected runtime errors enter the same checkpoint.</strong>
+        The normal workflow agent has <code>site_status</code>,
+        <code>preview_logs</code>, and <code>restart_preview</code> in every
+        phase. When its backend-specific monitor finds a real site error, the
+        existing site-check automatism starts after that agent turn releases
+        the chat lock and re-checks before pausing for repair.</li>
     </ul>`,
-    source: ['src/lib/publish/publisher.ts', 'src/lib/git/engine.ts', 'src/lib/agent/tools/conflictTools.ts'],
+    source: ['src/lib/publish/publisher.ts', 'src/lib/git/engine.ts', 'src/lib/agent/tools/conflictTools.ts', 'src/lib/agent/tools/previewTools.ts'],
   },
 
   {

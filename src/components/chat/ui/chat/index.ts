@@ -92,8 +92,8 @@ export const renderChatSection = (
           <div class="chat-automatism__body">📦 ${t(uiLocale(), 'chat.archived.note')}</div>
         </div>`
       : automatismRunning
-        ? `<div class="chat-automatism chat-automatism--gate">
-          <div class="chat-automatism__body">⚙ ${t(uiLocale(), 'chat.automatism.gate', { step: escapeHtml(auto.steps[auto.step] ?? '…') })}</div>
+        ? `<div class="chat-automatism chat-automatism--gate" role="status" aria-live="polite">
+          <div class="chat-automatism__body"><span class="ws-spinner" aria-hidden="true"></span><strong>${t(uiLocale(), 'chat.automatism.gate', { step: escapeHtml(auto.steps[auto.step] ?? '…') })}</strong></div>
         </div>`
         : renderChatComposer(mc, locale, modeLocale);
     const emptyState = renderEmptyState(mc, modeLocale);

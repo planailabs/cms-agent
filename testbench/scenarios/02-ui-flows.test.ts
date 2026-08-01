@@ -309,6 +309,10 @@ describe('ui flows', () => {
   });
 
   it('the navigation reload button re-requests the preview page', async () => {
+    ok(
+      'preview recovery has no manual server-restart button',
+      (await s.page.locator('[data-action="ws-nav-restart"]').count()) === 0,
+    );
     const frame = async () => {
       const el = await s.page.$('#preview-frame-region iframe.is-active');
       return (await el?.contentFrame()) ?? null;
