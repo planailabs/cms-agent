@@ -176,6 +176,14 @@ describe('e2e agent journey', () => {
     J.publicationId = pubJson.publicationId;
     J.deployChatId = pubJson.deployChatId;
 
+    const deployDiff = await client.get(`/api/diff/${J.deployChatId}/pages`);
+    const deployDiffJson = deployDiff.json as { branch?: string };
+    ok(
+      'deployment diff resolves the source work branch',
+      deployDiff.status === 200 && deployDiffJson.branch === J.workBranch,
+      `status=${deployDiff.status} branch=${deployDiffJson.branch}`,
+    );
+
     let status = 'queued';
     const deadline = Date.now() + 300_000;
     while (Date.now() < deadline) {

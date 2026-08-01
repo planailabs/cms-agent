@@ -34,7 +34,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `POST /api/branches/[id]/restore` | 03 (roundtrip) | ✅ |
 | `POST /api/branches/[id]/revert` | 03 (guards), 06 (positive revert on its own journey) | ✅ |
 | `GET /api/git/commits` / `GET /api/git/commit` | 02 (UI), 03 (API) | ✅ |
-| `GET /api/diff/[chatId]/pages` | 03 | ✅ |
+| `GET /api/diff/[chatId]/pages` | 03 (workflow + deployment source branch) | ✅ |
 | `GET /api/diff/[chatId]/shot` (after/diff/meta) | 03 | 🟡 kinds before/aligned/markers not probed |
 | `GET /api/preview/browsers-shot` (incl. `device=` emulation + unknown-device 400) | 05 | ✅ |
 | `GET /api/files/[chatId]` (dir/file/jail) | 01 | 🟡 mode=download/raw not probed |

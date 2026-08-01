@@ -24,17 +24,34 @@ export const GET: APIRoute = async ({ params, locals }) => {
   const denied = await chatAccessDenied(locals.user!, chat);
   if (denied) return denied;
 
-  const files = await changedFiles(chat.workBranch, chat.branch.name);
+  let workBranch = chat.workBranch;
+  if (chat.kind === 'deployment') {
+    const automatism = await prisma.automatism.findFirst({
+      where: { chatId: chat.id },
+      orderBy: { createdAt: 'desc' },
+      select: { data: true },
+    });
+    const source = (automatism?.data as { workBranch?: unknown } | null)?.workBranch;
+    if (typeof source !== 'string' || !source) {
+      return new Response(JSON.stringify({ error: 'Deployment source branch not found' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    workBranch = source;
+  }
+
+  const files = await changedFiles(workBranch, chat.branch.name);
   const plan = chat.planJson as { pages?: Array<{ url: string }> } | null;
   const plannedUrls = plan?.pages?.map((p) => p.url) ?? [];
   let inferredPages: Array<{ route: string; file: string }> = [];
   const graph = activeBackend().routeGraph;
   if (graph) {
     try {
-      await Promise.all([ensureInstance(chat.branch.name), ensureInstance(chat.workBranch)]);
+      await Promise.all([ensureInstance(chat.branch.name), ensureInstance(workBranch)]);
       const [before, after] = await Promise.all([
         ensureWorktree(chat.branch.name),
-        ensureWorktree(chat.workBranch),
+        ensureWorktree(workBranch),
       ]);
       inferredPages = affectedGraphRoutes(files, [graph.read(before), graph.read(after)]);
     } catch (err) {
@@ -45,11 +62,11 @@ export const GET: APIRoute = async ({ params, locals }) => {
 
   return new Response(
     JSON.stringify({
-      branch: chat.workBranch,
+      branch: workBranch,
       targetBranch: chat.branch.name,
       changedFiles: files,
       // Part of every shot URL the client builds — see diffViewer.shotUrl.
-      generation: compareGeneration(chat.workBranch),
+      generation: compareGeneration(workBranch),
       ...resolution,
     }),
     { headers: { 'Content-Type': 'application/json' } },
