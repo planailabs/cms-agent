@@ -99,12 +99,17 @@ sealed `Artifact` where the flow builds).
 Historical versions of the branch are browsable at `v-<sha>.BASE_DOMAIN`; old
 versions can be restored as new commits.
 
-## PUBLISHED → PLAN
+## After PUBLISHED
 
-On verified success the work branch resets onto the updated target and the
-chat returns to PLAN for the next request. On failure main stays merged, the
-publication is marked failed, and retrying reuses the same sha and sealed
-artifact — no blind re-uploads (flows reconcile by commit sha first).
+On verified success the work branch resets onto the updated target and BOTH
+chats — the workflow chat and the deployment chat that ran the automatism —
+are archived. The chat is done; the next change starts a new one. (An
+archived chat stays readable and keeps its history; it just accepts no
+further messages.)
+
+On failure the target stays merged, the publication is marked failed, and
+retrying reuses the same sha and sealed artifact — no blind re-uploads (flows
+reconcile by commit sha first).
 
 ## Commands
 

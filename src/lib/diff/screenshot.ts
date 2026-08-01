@@ -24,9 +24,11 @@ import {
 import { spacingPlan, type Spacer } from "@/lib/compare/layout";
 import {
   ALIGN_CONFIDENCE_MIN,
+  ALIGN_CORRECTIVE_ROUNDS,
   ALIGN_CORRECTIVE_THRESHOLD,
   runCorrectiveAlignment,
 } from "@/lib/compare/converge";
+import { reportAlignment } from "@/lib/compare/telemetry";
 import {
   INJECT_SPACERS,
   PROBE_SPACER_OWNERS,
@@ -372,6 +374,7 @@ async function alignedShots(
     // the structural seed and let the diff read as coarse rather than confidently
     // misaligned. Graceful degradation, per the matcher-confidence council.
     const conf = matchConfidence(markersA, markersB);
+    const alignStarted = Date.now();
     const aligned = await runCorrectiveAlignment(
       openedA.markers,
       openedB.markers,
@@ -394,6 +397,24 @@ async function alignedShots(
         },
       },
     );
+    reportAlignment({
+      source: 'server',
+      route,
+      markersA: markersA.m.length,
+      markersB: markersB.m.length,
+      confidence: conf.score,
+      matchRate: conf.matchRate,
+      trustedRate: conf.trustedRate,
+      truncated: conf.truncated,
+      spacers: plan.a.length + plan.b.length,
+      rounds: aligned.rounds,
+      maxRounds: ALIGN_CORRECTIVE_ROUNDS,
+      driftBefore: aligned.start,
+      driftAfter: aligned.end.max,
+      aborted: aligned.aborted,
+      regressed: aligned.regressed,
+      ms: Date.now() - alignStarted,
+    });
     if (conf.score < ALIGN_CONFIDENCE_MIN || conf.truncated) {
       console.warn(
         `[align] ${route}: low match confidence ${conf.score.toFixed(2)}` +

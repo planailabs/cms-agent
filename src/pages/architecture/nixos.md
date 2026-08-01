@@ -27,14 +27,16 @@ The flake provides `packages.default` (CMS plus embedded Pingora),
 ```
 
 One `cms-agent.service` runs migrations, Astro, and the embedded public proxy.
-`/var/lib/cms-agent` contains routes/access files, worktrees, artifacts, and uploads.
+`/var/lib/cms-agent` contains the routes fallback file, worktrees, artifacts,
+and uploads.
 
 Requirements on the host:
 
 - DNS: `baseDomain` **and** `*.baseDomain` → this machine.
-- The managed site repo must exist at `repoPath` with its `node_modules`
-  installed (the CMS spawns `npx --no astro dev` inside it) and be writable by
-  the `cms-agent` user.
+- The managed site repo must exist at `repoPath` and be writable by the
+  `cms-agent` user. Dependencies are NOT a prerequisite: the preview manager
+  installs them per worktree (with the site's own package manager) before it
+  starts a dev server.
 - Playwright (visual diff) downloads no browsers at runtime; the module wires
   `PLAYWRIGHT_BROWSERS_PATH` to the nixpkgs browsers.
 

@@ -1,7 +1,7 @@
 ---
 layout: ../../components/architecture/Shell.astro
 title: Setup
-lead: Prerequisites, every environment variable, DNS, the first admin, and how to run it in development.
+lead: Prerequisites, configuration, DNS, the first admin, and how to run it in development.
 ---
 
 ## Prerequisites
@@ -12,51 +12,49 @@ lead: Prerequisites, every environment variable, DNS, the first admin, and how t
 - PostgreSQL (production; tests use a throwaway SQLite automatically)
 - An OIDC identity provider (Keycloak, Authentik, Dex, Google, …)
 - Any OpenAI-compatible model endpoint
-- The target site as a local git repository. Astro sites need their own
-  `node_modules` installed (the CMS runs `npx --no astro dev` inside them, so a missing dependency fails loudly instead of pulling a different astro);
-  static HTML sites need nothing.
+- The target site as a local git repository. Its dependencies are installed
+  per worktree by the preview manager, with the site's own package manager —
+  nothing to prepare by hand. (The Astro dev server runs as `npx --no astro
+  dev`, so a site whose dependencies are genuinely broken fails loudly
+  instead of silently running a different astro.)
 
 ## Environment variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | yes | PostgreSQL connection string |
-| `BETTER_AUTH_SECRET` | yes | ≥16 chars, session signing |
-| `BETTER_AUTH_URL` | yes | Public URL of the CMS (e.g. `https://cms.example.com`) |
-| `OIDC_ISSUER` | yes | Issuer URL; discovery via `/.well-known/openid-configuration` |
-| `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | yes | OAuth client for the CMS |
-| `ALLOWED_EMAILS` | no | Comma-separated sign-in allowlist |
-| `ALLOWED_EMAIL_DOMAIN` | no | Domain allowlist (e.g. `example.com`) |
-| `OPENAI_BASE_URL` | yes | OpenAI-compatible API base (e.g. `https://api.openai.com/v1`) |
-| `OPENAI_API_KEY` | yes | API key for that endpoint |
-| `OPENAI_MODEL` | yes | Model name |
-| `SKILL_ROUTER_MODEL` | yes | Small model that picks the skills and MCP groups each turn is hinted with; a routing failure fails the turn (no full-list fallback) |
-| `OPENAI_IMAGE_MODEL` | no | Image generation model (default `gpt-image-1`) |
-| `OPENAI_MAX_TOKENS` | no | Response cap (default 4096) |
-| `DEFAULT_COMMUNICATION_MODE` | no | `non-technical` (default) or `technical`; used when a user selects “Default” |
-| `BASE_DOMAIN` | yes | CMS domain; previews live at `<branch>.BASE_DOMAIN` |
-| `HOST` / `PORT` | no | Internal CMS bind (default 127.0.0.1:4321) |
-| `FIRECRAWL_NATIVE_PATH` | outside Nix | Path to the Firecrawl napi-rs `.node` addon; Nix packages set it automatically |
-| `PROXY_NATIVE_PATH` | outside Nix | Required path to the embedded Pingora `.node` addon; Nix packages set it automatically |
-| `REPO_PATH` | yes | Path to the managed site git repo |
-| `SITE_BACKEND` | no | `astro` \| `static`; auto-detected (`astro.config.*` or an `astro` dependency → astro, else static) |
-| `REPO_DEV_COMMAND` | no | Override the backend's dev command (astro default `npx --no astro dev`; split on spaces, no shell) |
-| `REPO_BUILD_COMMAND` | no | Override the backend's build command (astro default `npx --no astro build`; static default: no build) |
-| `ROUTE_MAPPINGS` | no | JSON `[{"files":"src/content/blog/*.md","route":"/blog/:slug/"}]` for the visual diff |
-| `DEPLOY_FLOW` | no | `git-push` (default) \| `web-agency` \| `github-ci` \| `cloudflare-pages` |
-| `DEPLOY_GIT_REMOTE` | flow | Remote for git-push / github-ci (default `origin`) |
-| `PUBLISH_COMMAND` | flow | web-agency script; receives `TARBALL_PATH`, `DIST_DIR`, `GIT_SHA` (runs through a shell) |
-| `GITHUB_TOKEN` / `GITHUB_REPO` | flow | github-ci check polling (`owner/repo`) |
-| `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_PAGES_PROJECT` | flow | cloudflare-pages direct upload |
-| `CONTEXT7_API_KEY` | no | Offer the Context7 docs MCP (mcp.context7.com) as a loadable group in agent chats |
-| `VAR_DIR` | yes | Runtime state: worktrees, previews, artifacts, uploads, proxy files |
-| `INPUT_TOKEN_BUDGET_PER_HOUR` / `OUTPUT_TOKEN_BUDGET_PER_HOUR` | no | Per-user hourly budgets (0 = unlimited) |
-| `PREVIEW_IDLE_TIMEOUT_MS` | no | Stop idle previews (default 10 min) |
-| `PREVIEW_MAX_INSTANCES` | no | LRU cap on running previews (default 5) |
+**`.env.example` is the complete list** — every variable the app reads, with
+its default and a line on what it does, grouped the way you configure them.
+A test keeps it in step with the schema in `src/lib/env.ts`, so it cannot
+quietly fall behind. Copy it and fill in what your deployment needs.
 
-Embedded proxy: `PROXY_LISTEN` (default `0.0.0.0:8080`), optional
-`PREVIEW_REQUIRE_AUTH` (defaults off with `SKIP_AUTH`), `PUBLIC_SCHEME`, and
-`CMS_UPSTREAM` — see `proxy/README.md`.
+The ones with no sensible default, which the server refuses to start without:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `BETTER_AUTH_SECRET` | ≥16 chars, session signing |
+| `BETTER_AUTH_URL` | Public URL of the CMS (e.g. `https://cms.example.com`) |
+| `OIDC_ISSUER` | Issuer URL; discovery via `/.well-known/openid-configuration` |
+| `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | OAuth client for the CMS |
+| `OPENAI_BASE_URL` / `OPENAI_API_KEY` / `OPENAI_MODEL` | Any OpenAI-compatible endpoint |
+| `SKILL_ROUTER_MODEL` | Small model that picks the skills and MCP groups each turn is hinted with. A routing failure fails the turn — there is no full-list fallback, because a prompt that quietly grows back to every skill hides a broken router |
+| `BASE_DOMAIN` | CMS domain; previews live at `<branch>.BASE_DOMAIN` |
+| `REPO_PATH` | Path to the managed site git repo (a repository of its own) |
+| `VAR_DIR` | Runtime state: worktrees, previews, artifacts, uploads, proxy files |
+| `PROXY_NATIVE_PATH` | Path to the embedded Pingora addon — outside Nix only; Nix packages set it |
+
+Worth knowing about the rest:
+
+- **Deployment** is selected by `DEPLOY_FLOW` (`git-push` | `web-agency` |
+  `github-ci` | `cloudflare-pages`); each flow reads its own credentials.
+- **The site backend** is auto-detected (`astro.config.*` or an `astro`
+  dependency → astro, else static). `SITE_BACKEND`, `REPO_DEV_COMMAND` and
+  `REPO_BUILD_COMMAND` override that.
+- **The sandbox** (`SANDBOX_*`) has working defaults everywhere; production
+  refuses `SANDBOX_MODE=none`.
+- **Budgets** (`*_TOKEN_BUDGET_PER_HOUR`) and **preview limits**
+  (`PREVIEW_IDLE_TIMEOUT_MS`, `PREVIEW_MAX_INSTANCES`) are off/generous by
+  default.
+
+The embedded proxy has its own notes in `proxy/README.md`.
 
 ## DNS
 

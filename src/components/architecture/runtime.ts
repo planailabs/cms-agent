@@ -569,13 +569,25 @@ flowchart TD
         ends the process on the previous result. Low structural confidence skips
         alignment altogether rather than inventing a correspondence: the
         unaligned panes are honest, a wrong alignment is not.</li>
+      <li><strong>Every run reports itself.</strong> One
+        <code>[align-metrics]</code> line per alignment, from both the live
+        panes and the server screenshots: marker counts, match confidence,
+        spacers injected, corrective rounds, residual drift before and after,
+        and whether it aborted or regressed. The two paths run the same engine
+        on the same pages, so a divergence between them is a bug in one
+        environment — and no heuristic here should be changed on a hunch when
+        the numbers are this cheap to collect.</li>
     </ul>`,
     source: [
       'src/lib/compare/markers.ts',
       'src/lib/compare/layout.ts',
       'src/lib/compare/converge.ts',
       'src/lib/compare/inject.ts',
+      'src/lib/compare/telemetry.ts',
       'src/lib/diff/screenshot.ts',
+      'src/components/workspace/diffScroll.ts',
+      'src/components/workspace/onionAlign.ts',
+      'src/components/workspace/highlightAlign.ts',
     ],
   },
 

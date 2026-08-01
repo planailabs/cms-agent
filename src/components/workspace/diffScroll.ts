@@ -23,8 +23,10 @@ import {
 import { spacingPlan, type Spacer } from "@/lib/compare/layout";
 import {
   ALIGN_CONFIDENCE_MIN,
+  ALIGN_CORRECTIVE_ROUNDS,
   runCorrectiveAlignment,
 } from "@/lib/compare/converge";
+import { reportAlignment } from "@/lib/compare/telemetry";
 import {
   INJECT_SPACERS,
   PROBE_SPACER_OWNERS,
@@ -175,6 +177,8 @@ const alignLiveFrames = async (sig: string): Promise<void> => {
     if (currentSig() !== sig || store.state.workspace.compareMode !== "content")
       return;
     const confidence = matchConfidence(a, b);
+    const markerCounts = [a.m.length, b.m.length] as const;
+    const alignStarted = performance.now();
     const plan = spacingPlan(a.m, a.h, b.m, b.h);
     [a, b] = (await Promise.all([
       applyAndCollect(before, plan.a),
@@ -206,6 +210,24 @@ const alignLiveFrames = async (sig: string): Promise<void> => {
         },
       },
     );
+    reportAlignment({
+      source: "live",
+      route: sig,
+      markersA: markerCounts[0],
+      markersB: markerCounts[1],
+      confidence: confidence.score,
+      matchRate: confidence.matchRate,
+      trustedRate: confidence.trustedRate,
+      truncated: confidence.truncated,
+      spacers: plan.a.length + plan.b.length,
+      rounds: aligned.rounds,
+      maxRounds: ALIGN_CORRECTIVE_ROUNDS,
+      driftBefore: aligned.start,
+      driftAfter: aligned.end.max,
+      aborted: aligned.aborted,
+      regressed: aligned.regressed,
+      ms: performance.now() - alignStarted,
+    });
     if (aligned.aborted) return;
     if (aligned.regressed) {
       correctiveSkipSig = sig;

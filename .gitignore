@@ -62,5 +62,9 @@ result*
 
 # scratch browser-verification scripts (ui-verify skill)
 *.local.mjs
-/plugins/
+
+# nix-store symlinks the dev shell materializes — at the root, and in any
+# subdirectory `nix develop` is entered from (e.g. proxy/)
+plugins/
+
 testbench/results/

@@ -13,15 +13,23 @@ full deploy log.
 ## Runbooks
 
 ### Preview won't start / branch shows the boot page forever
-`journalctl -u cms-agent` → look for `[preview:<branch>]` output. Common:
-the target repo's `node_modules` missing (install them in `REPO_PATH`), or
-the port probe failing. `rm -rf $VAR_DIR/worktrees/<branch>` is safe — the
-worktree is re-created from git (`git worktree prune` runs automatically).
+The boot page shows the failure and a **Retry** link; retrying forces a fresh
+dependency install in that worktree, which is the fix for most of them.
+`journalctl -u cms-agent` → `[preview:<branch>]` has the dev server's own
+output, and the agent can read it in-chat with `preview_logs` / restart the
+server with `restart_preview`.
+
+The manager installs dependencies per worktree itself, so a missing
+`node_modules` is not something to fix by hand. If a worktree is genuinely
+wedged, deleting it is still safe (`rm -rf $VAR_DIR/worktrees/<branch>`) — it
+is re-created from git and re-installed on the next start, at the cost of that
+install.
 
 ### Branch worktree and DB disagree / worktree corrupted
-Worktrees are disposable. Stop the preview (idle-stop or restart the
-service), delete `$VAR_DIR/worktrees/<branch>`, reload — state is recreated
-from the git branch. Committed work is never in VAR_DIR only.
+Worktrees are disposable. Stop the preview (idle-stop, `restart_preview`, or
+restart the service), delete `$VAR_DIR/worktrees/<branch>`, reload — state is
+recreated from the git branch and the dependencies reinstalled. Committed
+work is never in VAR_DIR only.
 
 ### Publish failed after merge ("main ahead of published")
 The Publication is `failed` but main contains the merge. Fix the external

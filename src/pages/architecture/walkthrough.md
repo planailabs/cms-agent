@@ -26,7 +26,10 @@ PUBLISH_COMMAND=./scripts/demo-publish.sh   # e.g. `cp "$TARBALL_PATH" /tmp/publ
 nix develop --command overmind s # CMS on :4321 + proxy entrypoint on :8080
 ```
 
-Open `http://cms.localtest.me:8080`, sign in via your OIDC provider.
+Open `http://cms.localtest.me:8080`. The Procfile enables **SKIP_AUTH**, so
+there is no sign-in in development — every request is `admin@localhost`.
+(Configuring OIDC is a deployment step, not a prerequisite for this
+walkthrough — see [Setup](/architecture/setup).)
 
 ## 3. Plan
 
@@ -35,14 +38,20 @@ Create a branch (`summer-posts`) and a chat on it. Ask:
 > Add a new blog post announcing our summer office hours (shorter Fridays in
 > July and August). Link it from the front page list as usual.
 
-The agent reads the site (watch the tool activity), possibly asks a question,
-then presents a **plan card** (files, pages, risk). Try asking it to change a
-file now — the write tool is rejected: plan phase is read-only.
+The agent reads the site (watch the tool activity) and possibly asks a
+question. By default it records the plan and keeps going — `start_execution`
+moves it into EXECUTE in the same turn, because you asked for work, not for a
+form to sign. Try asking it to change a file before that happens: the write
+tool is rejected, because the plan phase is read-only.
+
+To see the approval card instead, send the request with the **`/plan`**
+command: that is the explicit mode where the agent calls `propose_plan` and
+waits.
 
 ## 4. Execute
 
-Click **Approve plan** (or, for a plan the agent judged unambiguous, it never
-stopped to ask — `start_execution` records the plan and continues). The agent
+With `/plan`, click **Approve plan**; otherwise the agent is already
+implementing. The agent
 writes
 `src/content/blog/summer-office-hours.md` in the branch worktree — the
 preview at `summer-posts.cms.localtest.me:8080` updates live via HMR. When
@@ -65,10 +74,12 @@ Click **Publish**. The CMS refuses if the branch moved since your review;
 otherwise it merges to main, builds the exact sha in a clean checkout, seals
 the artifact (tarball + per-file sha256 manifest under `var/artifacts/`),
 runs your `PUBLISH_COMMAND`, and streams the log into the chat. On success
-the branch resets onto the new main and the chat starts the next PLAN round.
+the branch resets onto the new main and the chat is archived — the next
+change starts a new chat.
 
 ## 7. Multi-user
 
-Open a second browser (second OIDC user): the same branches and chats are
+Open a second browser (`POST /api/dev/impersonate {"email":"user@localhost"}`
+switches identity in SKIP_AUTH mode): the same branches and chats are
 visible, live. Two chats can plan in parallel on one branch; only one at a
 time can execute (branch mutation lock).
