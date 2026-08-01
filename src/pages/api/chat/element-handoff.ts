@@ -17,10 +17,9 @@ import { prisma } from '@/lib/db';
 import { chatAccessDenied } from '@/lib/chatAccess';
 import { annotationCount, type EditAnnotations } from '@/injected/annotate';
 import type { DisplayBlock } from '@/lib/messageBlocks';
-import { captureAnnotatedRoute } from '@/lib/diff/screenshot';
-import { editAnnotationsSchema, handoffMessageText } from '@/lib/handoff/elementEdit';
+import { captureElementEditUploads, editAnnotationsSchema, handoffMessageText } from '@/lib/handoff/elementEdit';
 import { handoffToPlan, WorkflowError } from '@/lib/agent/workflow';
-import { ATTACHMENT_KINDS, storeUpload, UploadError } from '@/lib/uploads';
+import { UploadError } from '@/lib/uploads';
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -68,39 +67,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   try {
-    const shots = await captureAnnotatedRoute(chat.workBranch, annotations.route, annotations);
-    if (shots.status !== null && shots.status >= 400) {
-      return json(
-        { error: `The preview returned HTTP ${shots.status} for ${annotations.route}.` },
-        422,
-      );
-    }
-
-    const slug =
-      annotations.route.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'home';
-    const store = async (kind: 'before' | 'edited' | 'annotated', buffer: Buffer) => {
-      const filename = `element-edit-${slug}-${kind}.png`;
-      const stored = storeUpload(filename, 'image/png', Buffer.from(buffer), ATTACHMENT_KINDS);
-      const upload = await prisma.upload.create({
-        data: {
-          userId: user.id,
-          chatId: chat.id,
-          filename,
-          storedPath: stored.storedPath,
-          mime: stored.mime,
-          size: stored.size,
-          sha256: stored.sha256,
-        },
-      });
-      return upload.id;
-    };
-
-    // Order matters: the agent reads them in the order the message lists them,
-    // and the story is before → requested → marked up.
-    const before = await store('before', shots.before);
-    const edited = shots.edited ? await store('edited', shots.edited) : undefined;
-    const annotated = await store('annotated', shots.annotated);
-    const uploads = { before, edited, annotated };
+    const uploads = await captureElementEditUploads({
+      chatId: chat.id,
+      userId: user.id,
+      workBranch: chat.workBranch,
+      annotations,
+    });
+    const { before, edited, annotated } = uploads;
 
     // The transcript shows the handoff as a card — the page it is about, what
     // was drawn, and the shots themselves (lib/messageBlocks). The agent still

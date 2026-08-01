@@ -8,8 +8,8 @@
 
 import { store } from '../chat/app/store';
 import { t, uiLocale } from '@/lib/i18n';
-import { annotationCount, type EditAnnotations, type EditTool } from '@/injected/annotate';
-import { materializeDraftChat, transition } from '../chat/actions/chat/stateMachine';
+import type { EditAnnotations, EditTool } from '@/injected/annotate';
+import { transition } from '../chat/actions/chat/stateMachine';
 import {
   createBranch,
   loadBranches,
@@ -503,30 +503,6 @@ export const onEditChanged = (annotations: EditAnnotations, undoDepth: number, c
   ws.elementEdit.undoDepth = undoDepth;
   ws.elementEdit.canRedo = canRedo;
   store.notify();
-};
-
-/** Handoff: annotated screenshot is rendered server-side from this set. */
-export const handoffEditAction = async (note: string): Promise<void> => {
-  const ws = store.state.workspace;
-  const annotations = ws.elementEdit.annotations;
-  if (!annotations || annotationCount(annotations) === 0 || ws.elementEdit.busy) return;
-  if (!store.state.activeChatId && !(await materializeDraftChat())) return;
-  const chatId = store.state.activeChatId;
-  if (!chatId) return;
-  ws.elementEdit.busy = true;
-  store.notify();
-  const res = await postJson('/api/chat/element-handoff', {
-    chatId,
-    note: note.trim(),
-    annotations,
-  });
-  ws.elementEdit.busy = false;
-  if (res.ok) {
-    stopEditMode();
-    enterWaiting();
-  } else {
-    store.notify();
-  }
 };
 
 /**

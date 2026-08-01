@@ -5,6 +5,9 @@
  */
 import { z } from 'zod';
 import { strokeBbox, type EditAnnotations } from '@/injected/annotate';
+import { captureAnnotatedRoute } from '@/lib/diff/screenshot';
+import { prisma } from '@/lib/db';
+import { ATTACHMENT_KINDS, storeUpload, UploadError } from '@/lib/uploads';
 
 const coord = z.number().finite().min(-1_000_000).max(1_000_000);
 
@@ -105,6 +108,42 @@ export interface HandoffUploads {
   edited?: string;
   /** The same page with the marks on it. */
   annotated: string;
+}
+
+/** Capture and store the three views used to understand pending element edits. */
+export async function captureElementEditUploads(opts: {
+  chatId: string;
+  userId: string;
+  workBranch: string;
+  annotations: EditAnnotations;
+}): Promise<HandoffUploads> {
+  const shots = await captureAnnotatedRoute(
+    opts.workBranch,
+    opts.annotations.route,
+    opts.annotations,
+  );
+  if (shots.status !== null && shots.status >= 400) {
+    throw new UploadError(
+      `The preview returned HTTP ${shots.status} for ${opts.annotations.route}.`,
+      422,
+    );
+  }
+  const slug =
+    opts.annotations.route.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'home';
+  const save = async (kind: 'before' | 'edited' | 'annotated', buffer: Buffer) => {
+    const filename = `element-edit-${slug}-${kind}.png`;
+    const stored = storeUpload(filename, 'image/png', Buffer.from(buffer), ATTACHMENT_KINDS);
+    const upload = await prisma.upload.create({
+      data: { userId: opts.userId, chatId: opts.chatId, filename, ...stored },
+      select: { id: true },
+    });
+    return upload.id;
+  };
+  return {
+    before: await save('before', shots.before),
+    ...(shots.edited ? { edited: await save('edited', shots.edited) } : {}),
+    annotated: await save('annotated', shots.annotated),
+  };
 }
 
 export const handoffMessageText = (opts: {

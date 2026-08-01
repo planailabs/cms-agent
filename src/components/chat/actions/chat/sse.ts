@@ -43,7 +43,7 @@ export const SSE_EVENTS = [
   'question', 'stopped', 'done', 'error',
   // Workspace events (execution/publish lifecycle, chat meta)
   'state', 'ui_language', 'open_compare', 'execution_committed', 'publish_log',
-  'automatism', 'compare_stale',
+  'automatism', 'compare_stale', 'element_edits_used',
 ] as const;
 
 export const postMessage = async (payload: {

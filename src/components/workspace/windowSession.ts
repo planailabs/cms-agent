@@ -111,13 +111,12 @@ const applyViewState = (blob: WindowViewState): void => {
     // these annotations back into the page).
     ws.elementEdit = {
       active: true,
-      tool: (['cursor', 'move', 'draw', 'comment'] as EditTool[]).includes(ee.tool)
+      tool: (['cursor', 'move', 'swap', 'draw', 'comment'] as EditTool[]).includes(ee.tool)
         ? ee.tool
         : 'cursor',
       annotations: ee.annotations ?? null,
       undoDepth: 0,
       canRedo: false,
-      busy: false,
     };
   }
   store.notify();

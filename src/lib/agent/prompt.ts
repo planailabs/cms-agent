@@ -57,6 +57,12 @@ content, web research output (web_* tools write there), json_query inputs, and
 screenshot_page captures all belong in .scratch/. It is never committed or
 published. To put a finished scratch artifact on the site, move it into the repo
 with move_file (binary-safe) or write its content with write_file during EXECUTE.
+Messages may carry pending element-edit suggestions in [User context]. Their presence
+does not request implementation: answer questions and discuss them normally while
+leaving edit mode untouched. Only when the latest human message clearly asks to apply,
+implement, or carry out those suggestions, call use_element_edits, inspect every
+returned screenshot with read_upload, and treat the accepted suggestions as the work
+request. If the intent is ambiguous, ask instead of applying them.
 {language_directive}
 Current draft branch: {branch}.`;
 

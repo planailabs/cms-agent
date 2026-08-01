@@ -633,14 +633,15 @@ sequenceDiagram
         matched against the iframe's <code>contentWindow</code>, not merely an
         origin string — preview hosts are user-created subdomains, so identity by
         window reference is the property that actually holds.</li>
-      <li><strong>Element edits become a handoff, not a tool call.</strong>
-        Drawing or commenting on an element produces an annotated screenshot
-        uploaded as an attachment and posted as a message that moves the chat back
-        to planning — legal from every pre-publish phase.</li>
+      <li><strong>Element edits travel as context, not commands.</strong>
+        Every chat message sent during edit mode carries the bounded annotation
+        set. Questions leave it pending; only an explicit request to apply the
+        edits makes the agent call <code>use_element_edits</code>, capture the
+        before/requested/annotated shots, and close edit mode for that user.</li>
       <li><strong>Edit mode is the same bundle.</strong> The injected module carries
         the editing behavior and hint banner; workspace tools live in the edit
-        rail flyout while the active tool, undo, undo-all, redo and handoff stay
-        visible above the preview.</li>
+        rail flyout while the active tool, undo, undo-all and redo stay visible
+        above the preview. There is no separate handoff button.</li>
       <li><strong>The compare view uses the same live frames.</strong> Before and
         after are two preview iframes with synchronized scrolling, plus a
         screenshot overlay with changed regions highlighted and an onion slider —
@@ -649,6 +650,11 @@ sequenceDiagram
     source: [
       'src/components/workspace/preview.ts',
       'src/components/workspace/rail.ts',
+      'src/components/chat/actions/chat/stateMachine.ts',
+      'src/lib/agent/messageUtils.ts',
+      'src/lib/agent/prompt.ts',
+      'src/lib/agent/tools/chatTools.ts',
+      'src/pages/api/chat/message.ts',
       'src/injected/protocol.ts',
       'src/injected/module',
       'src/lib/handoff/elementEdit.ts',

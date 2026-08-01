@@ -27,6 +27,11 @@ import {
 } from '@/lib/handoff/elementEdit';
 import type { EditAnnotations } from '@/injected/annotate';
 import { POST } from '@/pages/api/chat/element-handoff';
+import { registerChatTools } from '@/lib/agent/tools/chatTools';
+import { executeTool } from '@/lib/agent/tools/registry';
+import { addConnection } from '@/lib/agent/bus';
+
+registerChatTools();
 
 const ACTOR = { id: 'el-handoff-user', name: 'Edit Tester', email: 'el-handoff@example.com' };
 
@@ -64,6 +69,7 @@ const WORK_BRANCHES = [
   'c-elhand4',
   'c-elhand-wait',
   'c-elhand-nolayout',
+  'c-elhand-tool',
 ];
 
 const makeChat = (workBranch: string, data: Record<string, unknown> = {}) =>
@@ -224,5 +230,43 @@ describe('POST /api/chat/element-handoff', () => {
     expect(msg.attachmentIds).toHaveLength(3);
     const after = await prisma.chat.findUniqueOrThrow({ where: { id: chat.id } });
     expect(after.workflowPhase).toBe('plan');
+  });
+
+  it('uses the latest attached edits only when the agent calls the tool', async () => {
+    const chat = await makeChat('c-elhand-tool');
+    await prisma.message.create({
+      data: {
+        chatId: chat.id,
+        role: 'user',
+        content: 'Setz das jetzt bitte um',
+        ordinal: 0,
+        pageContext: JSON.parse(JSON.stringify({ url: annotations().url, editAnnotations: annotations() })),
+      },
+    });
+    const events: Array<{ event: string; data: unknown }> = [];
+    const remove = addConnection(chat.id, { write: (event, data) => events.push({ event, data }) });
+    try {
+      const result = JSON.parse(
+        await executeTool('use_element_edits', {}, {
+          chatId: chat.id,
+          branchId,
+          branchName: chat.workBranch,
+          userId: ACTOR.id,
+          workflowPhase: 'plan',
+          chatKind: 'workflow',
+          worktreePath: '/tmp',
+          userContext: new Map(),
+          modifiedPaths: new Set(),
+        }),
+      );
+      expect(result.ok).toBe(true);
+      expect(Object.keys(result.uploads)).toEqual(['before', 'edited', 'annotated']);
+      expect(events).toContainEqual({
+        event: 'element_edits_used',
+        data: { userId: ACTOR.id },
+      });
+    } finally {
+      remove();
+    }
   });
 });

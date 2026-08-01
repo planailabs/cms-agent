@@ -95,14 +95,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.preview.editUndo': '↩ Undo',
     'workspace.preview.editClear': 'Undo all',
     'workspace.preview.editRedo': 'Redo',
-    'workspace.preview.handoff': '🤝 Handoff to agent',
-    'workspace.preview.handoffTitle':
-      'Send a screenshot + your annotations to the agent to plan the change',
     'workspace.preview.exitEdit': 'Exit edit mode',
-    'workspace.handoff.title': 'Handoff to agent',
-    'workspace.handoff.hint':
-      'Optional note for the agent — it also gets the annotated screenshot and metadata.',
-    'workspace.handoff.placeholder': 'Anything to add? (optional)',
 
     // ── generic input modal + its callers ──
     'workspace.modal.close': 'Close',
@@ -329,14 +322,7 @@ export const workspaceCatalogs: AreaCatalogs = {
     'workspace.preview.editUndo': '↩ Rückgängig',
     'workspace.preview.editClear': 'Alles rückgängig',
     'workspace.preview.editRedo': 'Wiederholen',
-    'workspace.preview.handoff': '🤝 An Agent übergeben',
-    'workspace.preview.handoffTitle':
-      'Screenshot + Annotationen an den Agenten senden, damit er die Änderung plant',
     'workspace.preview.exitEdit': 'Bearbeitungsmodus beenden',
-    'workspace.handoff.title': 'An Agent übergeben',
-    'workspace.handoff.hint':
-      'Optionale Notiz für den Agenten — er erhält außerdem den annotierten Screenshot und die Metadaten.',
-    'workspace.handoff.placeholder': 'Noch etwas dazu? (optional)',
 
     // ── Eingabe-Dialog + Aufrufer ──
     'workspace.modal.close': 'Schließen',

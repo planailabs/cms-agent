@@ -45,6 +45,8 @@ export interface PageContext {
   selection?: PageContextSelection;
   element?: PageContextElement;
   code?: PageContextCode;
+  /** Pending preview edits: context only until the agent calls use_element_edits. */
+  editAnnotations?: EditAnnotations;
 }
 
 /** A pending context chip shown above the composer. */
@@ -237,8 +239,6 @@ export interface ElementEditState {
   undoDepth: number;
   /** An undo can be restored until the next edit. */
   canRedo: boolean;
-  /** Handoff POST in flight. */
-  busy: boolean;
 }
 
 export const createInitialElementEditState = (): ElementEditState => ({
@@ -247,7 +247,6 @@ export const createInitialElementEditState = (): ElementEditState => ({
   annotations: null,
   undoDepth: 0,
   canRedo: false,
-  busy: false,
 });
 
 export interface DiffState {
@@ -357,7 +356,12 @@ export interface WorkspaceState {
   automatism: AutomatismProgress | null;
 
   /** Generic composer-style input modal (null = closed). */
-  inputModal: { title: string; hint?: string; placeholder: string; allowEmpty?: boolean } | null;
+  inputModal: {
+    title: string;
+    hint?: string;
+    placeholder: string;
+    allowEmpty?: boolean;
+  } | null;
 
   /** Target branch has commits the work branch lacks (Sync button shows). */
   targetAhead: boolean;

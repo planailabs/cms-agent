@@ -6,6 +6,12 @@ import { emitChatState } from '../chatState';
 import { registerTool } from './registry';
 import { planSchema } from './clientTools';
 import { ALL_PHASES } from '../types';
+import { annotationCount, type EditAnnotations } from '@/injected/annotate';
+import {
+  annotationSummaryForAgent,
+  captureElementEditUploads,
+  editAnnotationsSchema,
+} from '@/lib/handoff/elementEdit';
 
 export function registerChatTools(): void {
   registerTool({
@@ -40,6 +46,45 @@ export function registerChatTools(): void {
       // Deliberate SSE-only exception: this preference must not persist or replay.
       broadcast(ctx.chatId, 'ui_language', { locale, userId: ctx.userId });
       return JSON.stringify({ ok: true, locale, persisted: false });
+    },
+  });
+
+  registerTool({
+    name: 'use_element_edits',
+    description:
+      'Accept the pending element-edit suggestions attached to the latest user message and capture ' +
+      'their before/requested/annotated screenshots. Call this ONLY when the latest human message ' +
+      'clearly asks to apply, implement, or carry out those edits. Never call it merely because edits ' +
+      'are present, or when the user asks a question or wants to discuss them.',
+    schema: z.object({}),
+    phases: ['plan', 'execute'],
+    kinds: ['workflow'],
+    execute: async (_input, ctx) => {
+      const row = await prisma.message.findFirst({
+        where: { chatId: ctx.chatId, role: 'user' },
+        orderBy: { ordinal: 'desc' },
+        select: { pageContext: true },
+      });
+      const parsed = editAnnotationsSchema.safeParse(
+        (row?.pageContext as { editAnnotations?: unknown } | null)?.editAnnotations,
+      );
+      if (!parsed.success || annotationCount(parsed.data as EditAnnotations) === 0) {
+        return JSON.stringify({ error: 'No pending element edits were attached to the latest message.' });
+      }
+      const annotations = parsed.data as EditAnnotations;
+      const uploads = await captureElementEditUploads({
+        chatId: ctx.chatId,
+        userId: ctx.userId,
+        workBranch: ctx.branchName,
+        annotations,
+      });
+      broadcast(ctx.chatId, 'element_edits_used', { userId: ctx.userId });
+      return JSON.stringify({
+        ok: true,
+        annotations: annotationSummaryForAgent(annotations),
+        uploads,
+        next: 'Call read_upload on every upload id before planning or implementing the edits.',
+      });
     },
   });
 

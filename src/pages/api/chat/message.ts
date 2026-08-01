@@ -12,6 +12,7 @@ import { handleChatMessage } from '@/lib/agent/handler';
 import { prisma } from '@/lib/db';
 import { chatAccessDenied } from '@/lib/chatAccess';
 import { parseMessage } from '@/lib/commands';
+import { editAnnotationsSchema } from '@/lib/handoff/elementEdit';
 import type { IncomingChatMessage } from '@/lib/agent/types';
 
 const json = (data: unknown, status = 200) =>
@@ -28,6 +29,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   if (!body.chatId || !body.type || typeof body.text !== 'string') {
     return json({ error: 'Invalid body: need { chatId, type, text }' }, 400);
+  }
+  if (body.pageContext?.editAnnotations) {
+    const parsed = editAnnotationsSchema.safeParse(body.pageContext.editAnnotations);
+    if (!parsed.success) return json({ error: 'Invalid element-edit annotations.' }, 400);
+    body.pageContext.editAnnotations = parsed.data;
   }
 
   // Validate attachments: chat-scoped, owned by this user, within the cap.

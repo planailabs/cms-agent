@@ -44,7 +44,6 @@ import {
   stopEditMode,
   setEditTool,
   onEditChanged,
-  handoffEditAction,
   closeBrowserCompare,
   toggleBrowserCompareOverlay,
   setBrowserCompareMode,
@@ -540,17 +539,6 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
   delegateEvent(app, 'click', '[data-action="ws-edit-undo"]', () => postEditUndo());
   delegateEvent(app, 'click', '[data-action="ws-edit-clear"]', () => postEditClear());
   delegateEvent(app, 'click', '[data-action="ws-edit-redo"]', () => postEditRedo());
-  delegateEvent(app, 'click', '[data-action="ws-edit-handoff"]', () =>
-    openInputModal(
-      {
-        title: t(uiLocale(), 'workspace.handoff.title'),
-        hint: t(uiLocale(), 'workspace.handoff.hint'),
-        placeholder: t(uiLocale(), 'workspace.handoff.placeholder'),
-        allowEmpty: true,
-      },
-      (note) => void handoffEditAction(note),
-    ),
-  );
 
   // Retry a failed turn / continue an interrupted session
   delegateEvent(app, 'click', '[data-action="chat-continue"]', () => void continueChatSession());

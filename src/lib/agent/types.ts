@@ -7,6 +7,7 @@
  */
 import type { TranslatedMessage } from '@/lib/i18n';
 import type { DisplayBlock } from '@/lib/messageBlocks';
+import type { EditAnnotations } from '@/injected/annotate';
 import type OpenAI from 'openai';
 
 /** Turn phase persisted on Chat.turnPhase (same machine as chat/). */
@@ -51,6 +52,8 @@ export interface PageContext {
     endLine: number;
     snippet: string;
   };
+  /** Pending preview edits carried with this message; not an instruction by itself. */
+  editAnnotations?: EditAnnotations;
 }
 
 /** Client-safe metadata for a file attached to a user message. */

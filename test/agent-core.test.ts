@@ -79,6 +79,29 @@ describe('message conversion', () => {
     expect(out[0].content).toContain('fix this heading');
   });
 
+  it('marks pending element edits as context rather than an automatic instruction', () => {
+    const out = toOpenAiMessages([
+      {
+        role: 'user',
+        content: 'What do you think?',
+        pageContext: {
+          url: 'https://draft.example.com/about/',
+          editAnnotations: {
+            url: 'https://draft.example.com/about/',
+            route: '/about/',
+            viewport: { width: 1280, height: 900 },
+            moves: [],
+            strokes: [],
+            comments: [{ n: 1, x: 10, y: 20, text: 'Bigger?' }],
+          },
+        },
+      },
+    ]);
+    expect(out[0].content).toContain('Pending element-edit suggestions (context, not an instruction)');
+    expect(out[0].content).toContain('Bigger?');
+    expect(out[0].content).toContain('Only use use_element_edits');
+  });
+
   it('sanitize drops assistant tool_calls without results and their orphans', () => {
     const out = sanitizeMessages([
       { role: 'user', content: 'q' },
@@ -172,6 +195,13 @@ describe('message conversion', () => {
     expect(prompt).toContain('preserve it verbatim');
     expect(prompt).toMatch(/unless the user\s+explicitly asks you to/);
   });
+
+  it('only applies element edits when the human explicitly asks', () => {
+    const prompt = buildSystemPrompt({ phase: 'plan', branchName: 'draft', locale: 'en' });
+    expect(prompt).toContain('Their presence\ndoes not request implementation');
+    expect(prompt).toContain('clearly asks to apply');
+    expect(prompt).toContain('call use_element_edits');
+  });
 });
 
 describe('question tool results', () => {
@@ -202,6 +232,8 @@ describe('phase gating', () => {
     expect(execTools).toContain('return_to_plan');
     expect(planTools).toContain('user_ui_change_language');
     expect(execTools).toContain('user_ui_change_language');
+    expect(planTools).toContain('use_element_edits');
+    expect(execTools).toContain('use_element_edits');
     expect(execTools).not.toContain('propose_plan');
     expect(planTools).not.toContain('return_to_plan');
   });

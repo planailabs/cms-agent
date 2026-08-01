@@ -123,7 +123,7 @@ describe('draft chat', () => {
     expect(toolbar).toContain('data-action="ws-edit-clear"');
     expect(toolbar).toContain('data-action="ws-edit-clear"><svg');
     expect(toolbar).toContain('Undo all');
-    expect(toolbar).toContain('data-action="ws-edit-handoff"');
+    expect(toolbar).not.toContain('data-action="ws-edit-handoff"');
 
     store.state.workspace.elementEdit.undoDepth = 0;
     expect(renderPreviewToolbar(store.state)).not.toContain('data-action="ws-edit-undo"');

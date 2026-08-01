@@ -6,7 +6,6 @@
 
 import { escapeHtml } from '../chat/utils/html';
 import { t, uiLocale } from '@/lib/i18n';
-import { annotationCount } from '@/injected/annotate';
 import type { AppState, ChatSummary } from '../chat/app/state';
 import { branchPreviewUrl } from './config';
 import { renderNavigation } from './navigation';
@@ -75,11 +74,10 @@ export const canEnterEditMode = (state: AppState): boolean => {
   return !!chat && (chat.kind ?? 'workflow') === 'workflow' && state.workflowPhase !== 'published';
 };
 
-/** Toolbar while edit mode is active: the handoff stays persistently visible. */
+/** Toolbar while edit mode is active. Pending edits travel with chat messages. */
 const renderEditToolbar = (state: AppState): string => {
   const locale = uiLocale();
   const ee = state.workspace.elementEdit;
-  const canHandoff = !!ee.annotations && annotationCount(ee.annotations) > 0 && !ee.busy;
   return `<div class="ws-toolbar">
       <span class="ws-toolbar__branch">${escapeHtml(t(locale, 'workspace.preview.editMode'))}</span>
       <span class="ws-mini-button is-active" data-edit-active-tool="${ee.tool}">${escapeHtml(t(locale, `workspace.preview.tool.${ee.tool}`))}</span>
@@ -87,10 +85,6 @@ const renderEditToolbar = (state: AppState): string => {
       ${ee.undoDepth >= 1 ? `<button type="button" class="ws-mini-button" data-action="ws-edit-undo">${escapeHtml(t(locale, 'workspace.preview.editUndo'))}</button>` : ''}
       ${ee.undoDepth >= 2 ? `<button type="button" class="ws-mini-button" data-action="ws-edit-clear">${UNDO_ALL_ICON}${escapeHtml(t(locale, 'workspace.preview.editClear'))}</button>` : ''}
       ${ee.canRedo ? `<button type="button" class="ws-mini-button" data-action="ws-edit-redo">${REDO_ICON}${escapeHtml(t(locale, 'workspace.preview.editRedo'))}</button>` : ''}
-      <button type="button" class="ws-mini-button ws-mini-button--handoff" data-action="ws-edit-handoff"
-        title="${escapeHtml(t(locale, 'workspace.preview.handoffTitle'))}" ${canHandoff ? '' : 'disabled aria-disabled="true"'}>
-        ${escapeHtml(t(locale, 'workspace.preview.handoff'))}${ee.busy ? '…' : ''}
-      </button>
     </div>`;
 };
 

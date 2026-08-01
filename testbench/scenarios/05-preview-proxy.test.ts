@@ -363,10 +363,7 @@ describe('preview + proxy', () => {
       const tools = await editMenu.locator('[data-action="ws-edit-tool"]').count();
       ok('edit icon flyout lists all five tools', tools === 5, `${tools} tools`);
       ok('undo controls stay hidden before the first edit', (await s.page.locator('#preview-toolbar-region [data-action^="ws-edit-"]').filter({ hasText: 'Undo' }).count()) === 0);
-      const handoffSecondary = await s.page
-        .locator('.ws-mini-button--handoff[data-action="ws-edit-handoff"]')
-        .count();
-      ok('handoff stays visible in the toolbar', handoffSecondary === 1);
+      ok('edit mode has no separate handoff button', (await s.page.locator('[data-action="ws-edit-handoff"]').count()) === 0);
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="comment"]').click();
       const activeTool = s.page.locator('[data-edit-active-tool="comment"]');
       ok('toolbar shows the active comment mode', (await activeTool.count()) === 1);
@@ -421,6 +418,17 @@ describe('preview + proxy', () => {
         'comment edit saves the new text',
         (await frame?.locator('.cms-ov-bubble').filter({ hasText: 'Updated bench comment' }).count()) === 1,
       );
+      let sentContext: { editAnnotations?: { comments?: Array<{ text?: string }> } } | undefined;
+      await s.page.route('**/api/chat/message', async (route) => {
+        sentContext = (route.request().postDataJSON() as { pageContext?: typeof sentContext }).pageContext;
+        await route.fulfill({ status: 202, contentType: 'application/json', body: '{"status":"accepted"}' });
+      });
+      const composer = s.page.locator('[data-action="machine-config-input"]');
+      await composer.fill('What do you think about these edits?');
+      await composer.press('Enter');
+      await s.page.waitForFunction(() => document.querySelector('[data-action="machine-config-input"]')?.textContent === '');
+      ok('chat messages carry pending edit annotations as context', sentContext?.editAnnotations?.comments?.[0]?.text === 'Updated bench comment');
+      ok('asking about pending edits leaves edit mode active', (await s.page.locator('[data-edit-active-tool]').count()) === 1);
       await s.page.locator('.ws-rail__btn[data-action="ws-edit-exit"]').hover();
       await editMenu.locator('[data-action="ws-edit-exit"]').click();
       await s.page.locator('.ws-diff').first().waitFor({ timeout: 30_000 });

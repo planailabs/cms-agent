@@ -45,6 +45,12 @@ const handleWorkspaceEvent = (type: string, data: Record<string, unknown>): bool
       applyOpenCompare(data.mode, data.userId, data.chatId);
       return true;
 
+    case 'element_edits_used':
+      if (data.userId === store.state.user?.id) {
+        void import('../../../workspace/actions').then(({ stopEditMode }) => stopEditMode());
+      }
+      return true;
+
     case 'compare_stale':
       // The agent touched the site, so the shots on screen are of a page that
       // no longer exists. Refetch if someone is looking; otherwise mark it, so

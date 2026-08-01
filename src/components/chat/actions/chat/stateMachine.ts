@@ -9,6 +9,7 @@ import { t, uiLocale } from '@/lib/i18n';
 import { cacheAIChatMessages, type AttachmentDisplay } from './cache';
 import { connectEvents, postMessage } from './sse';
 import type { PageContext } from '../../../workspace/state';
+import { annotationCount } from '@/injected/annotate';
 
 /**
  * Turn the open draft into a real chat: create the row (the server adopts a
@@ -154,6 +155,15 @@ export const sendChatMessage = async (
 
   // Attach the pending context chip (selection/element from the preview)
   pageContext = pageContext ?? takeContextChip();
+  const edits = state.workspace.elementEdit.annotations;
+  if (edits && annotationCount(edits) > 0) {
+    pageContext = {
+      ...pageContext,
+      url: pageContext?.url ?? edits.url,
+      route: pageContext?.route ?? edits.route,
+      editAnnotations: edits,
+    };
+  }
 
   transition(mc, 'waiting');
   mc.messages.push({
