@@ -77,6 +77,21 @@ function applyAccess(attachments: Array<ExternalMcp | null>, access: McpAccess):
     .filter((e) => e.toolNames.size > 0);
 }
 
+/**
+ * Native tools go through an in-memory MCP server/client pair rather than
+ * being handed to the model directly, and that hop earns its keep twice:
+ *
+ * - the SDK's registerTool() does the Zod → JSON-Schema conversion. Bypassing
+ *   it means hand-writing that converter for refinements, defaults, unions,
+ *   optionals and every future schema feature — a well-known source of subtle
+ *   wrongness, in exchange for deleting perhaps twenty lines of glue.
+ * - it is the merge point. External MCP tools (codebase memory, Context7, the
+ *   admin config, the branch's .mcp.json) arrive as MCP already, so one list
+ *   and one dispatch path serve both. A bypass would create a second of each.
+ *
+ * The transport is in-process (InMemoryTransport), so what is actually being
+ * paid for is a function call and a JSON round trip per tool call.
+ */
 export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   const server = new McpServer({ name: 'cms-agent', version: '1.0.0' });
 

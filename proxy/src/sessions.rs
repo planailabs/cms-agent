@@ -34,6 +34,19 @@ impl SessionStore {
         *self.sessions.write().expect("sessions lock poisoned") = sessions;
     }
 
+    /// Forget one session immediately (sign-out, deletion, revocation).
+    ///
+    /// Without this the only thing that ever removed a session was the CMS
+    /// replacing the whole snapshot on its reconciliation tick, so a signed-out
+    /// cookie kept opening previews until the next sweep. Revocation is a
+    /// security operation; it should not wait for a poll.
+    pub fn forget(&self, token: &str) {
+        self.sessions
+            .write()
+            .expect("sessions lock poisoned")
+            .remove(token);
+    }
+
     pub fn is_active(&self, token: &str, now_ms: u64) -> bool {
         self.sessions
             .read()
@@ -46,6 +59,21 @@ impl SessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forget_revokes_immediately() {
+        let store = SessionStore::default();
+        store.upsert(ActiveSession {
+            token: "gone".into(),
+            expires_at_ms: 9999.0,
+        });
+        assert!(store.is_active("gone", 0));
+        store.forget("gone");
+        // Not "expired later" — gone now, without waiting for a reconcile.
+        assert!(!store.is_active("gone", 0));
+        // Forgetting something absent is not an error (double sign-out).
+        store.forget("never-existed");
+    }
 
     #[test]
     fn only_current_snapshot_and_unexpired_sessions_are_active() {

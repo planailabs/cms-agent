@@ -7,6 +7,7 @@ interface NativeProxy {
   setProxyRoutes(routesJson: string): void;
   setProxySessions(sessions: Array<{ token: string; expiresAtMs: number }>): void;
   upsertProxySession(session: { token: string; expiresAtMs: number }): void;
+  dropProxySession(token: string): void;
   proxyAccessTimes(): Array<{ branch: string; atMs: number }>;
 }
 
@@ -32,6 +33,26 @@ function addon(): NativeProxy {
   state.addon = createRequire(import.meta.url)(nativePath) as NativeProxy;
   return state.addon;
 }
+
+/**
+ * Full session reconciliation interval.
+ *
+ * This used to run every 5 seconds because it was the ONLY thing that ever
+ * removed a session from the proxy — the revocation delay was the interval.
+ * Now sign-out revokes directly (revokeProxySession) and the proxy enforces
+ * expiry itself against each token's own deadline, so this tick covers only
+ * what neither can see:
+ *
+ *   - a session row deleted out of band (psql, another process)
+ *   - Better Auth's multi-session revoke endpoints, whose tokens are in a
+ *     request body this layer does not parse
+ *   - an allowlist change (env — a restart reconciles anyway)
+ *
+ * Those are rare and administrative, so a slower sweep is the right trade:
+ * their worst-case delay is this interval. Sign-out is not in the list and
+ * must never end up back in it.
+ */
+const SESSION_RECONCILE_MS = 30_000;
 
 async function refreshSessions(): Promise<void> {
   if (!state.started || !state.addon) return;
@@ -62,7 +83,7 @@ export function startEmbeddedProxy(initialRoutesJson: string): void {
   native.setProxyRoutes(initialRoutesJson);
   if (!state.sessionTimer) {
     void refreshSessions();
-    state.sessionTimer = setInterval(() => void refreshSessions(), 5_000);
+    state.sessionTimer = setInterval(() => void refreshSessions(), SESSION_RECONCILE_MS);
     state.sessionTimer.unref();
   }
 }
@@ -79,6 +100,26 @@ export function updateProxyRoutes(routesJson: string): void {
  * between two halves of the SAME process. Empty when the proxy is not
  * running, which the sweeper already handles by falling back to lastUsedAt.
  */
+/**
+ * Revoke a session in the proxy immediately.
+ *
+ * The reconciliation tick below would drop it on its next pass, but that is
+ * the wrong contract for a sign-out: until then the cookie still opens
+ * previews. With this, the tick is a backstop for what it cannot see (a row
+ * deleted by another process, an expiry) rather than the only revocation
+ * mechanism — which is what let it be slowed down.
+ */
+export function revokeProxySession(token: string): void {
+  if (!state.started) return;
+  try {
+    state.addon?.dropProxySession(token);
+  } catch (err) {
+    // The next reconcile still catches it; a failed revoke must not fail the
+    // sign-out the user asked for.
+    console.warn('[proxy] could not revoke a session:', err);
+  }
+}
+
 export function proxyAccessTimes(): Record<string, number> {
   if (!state.started) return {};
   try {

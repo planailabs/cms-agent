@@ -559,6 +559,20 @@ pub fn set_proxy_sessions(sessions: Vec<ActiveSession>) -> napi::Result<()> {
     Ok(())
 }
 
+/// Revoke one session in the proxy, now.
+///
+/// The reconciliation tick would eventually drop it, but "eventually" is the
+/// wrong contract for a sign-out: until then the cookie still opens previews.
+#[napi(js_name = "dropProxySession")]
+pub fn drop_proxy_session(token: String) -> napi::Result<()> {
+    STATE
+        .get()
+        .ok_or_else(|| napi::Error::from_reason("proxy is not started"))?
+        .sessions
+        .forget(&token);
+    Ok(())
+}
+
 /// Last-access time per preview branch, for the CMS's idle sweep.
 ///
 /// Returned as pairs rather than a map because napi-rs has no HashMap

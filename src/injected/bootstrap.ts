@@ -10,6 +10,14 @@
  * in a function scope and calls the default-export factory with the agent
  * API — nothing leaks onto the page's globals.
  *
+ * Why the module is pushed and not bundled in here: measured, 2026-08-01,
+ * this entry is 4.0 kB raw / 1.3 kB gzip and the editing module is 49.8 kB /
+ * 12.4 kB. Every injected frame pays for this file — including the two
+ * compare frames and any direct preview page, none of which open the editing
+ * UI. Folding them together would delete an endpoint, a fetch and a loader
+ * and make the common case ~9× heavier. Re-measure before revisiting; the
+ * ratio is the whole argument.
+ *
  * Security model:
  *  - dormant unless framed;
  *  - the trusted origin is derived from this script's own src (the CMS host
