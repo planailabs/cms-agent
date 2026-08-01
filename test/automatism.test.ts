@@ -122,6 +122,39 @@ describe('automatism engine', () => {
     ]);
   });
 
+  it('retries a lost ordinal race, and nothing else', async () => {
+    // The retry exists for ONE thing: an agent turn taking the ordinal this
+    // post just read. Retrying every error meant a malformed payload or a
+    // dead connection was attempted five times and then reported as a race.
+    // (Assigned directly rather than vi.spyOn: restoring a spy on the Prisma
+    // client's model proxy leaves the property undefined.)
+    const model = prisma.message as unknown as { create: (args: unknown) => Promise<unknown> };
+    const original = model.create.bind(prisma.message);
+    let calls = 0;
+    const failWith = (err: unknown, times: number) => {
+      calls = 0;
+      model.create = async (args: unknown) => {
+        calls++;
+        if (calls <= times) throw err;
+        return original(args);
+      };
+    };
+
+    try {
+      failWith(Object.assign(new Error('unique'), { code: 'P2002' }), 1);
+      await postAutomatismMessage(chatId, 'survives a collision');
+      expect(calls).toBe(2); // one lost, one won
+
+      failWith(Object.assign(new Error('connection closed'), { code: 'P1001' }), 99);
+      await expect(postAutomatismMessage(chatId, 'gives up at once')).rejects.toThrow(
+        'connection closed',
+      );
+      expect(calls).toBe(1);
+    } finally {
+      model.create = original;
+    }
+  });
+
   it('assigns sequential ordinals even with concurrent posts', async () => {
     await Promise.all(
       Array.from({ length: 5 }, (_v, i) => postAutomatismMessage(chatId, `parallel ${i}`)),

@@ -13,6 +13,7 @@
 import { prisma } from '@/lib/db';
 import { acquireTurnLock, broadcast, hasActiveTurn, releaseTurnLock } from '@/lib/agent/bus';
 import { tmsg, type TranslatedMessage } from '@/lib/i18n';
+import { createChatMessage, isOrdinalCollision } from '@/lib/agent/persistence';
 
 export type AutomatismData = Record<string, unknown> & { actorId: string };
 
@@ -146,7 +147,7 @@ export async function automatismStateFor(chatId: string): Promise<AutomatismStat
 /**
  * Append a role:'automatism' message to a chat and broadcast it. Ordinals are
  * assigned by read-back; a concurrent agent turn can race the unique
- * (chatId, ordinal) constraint — retry a few times.
+ * (chatId, ordinal) constraint — re-read and retry on THAT, and only that.
  */
 export async function postAutomatismMessage(chatId: string, msg: AutomatismMessage): Promise<void> {
   // content carries the rendered English text (LLM context, compatibility);
@@ -154,25 +155,24 @@ export async function postAutomatismMessage(chatId: string, msg: AutomatismMessa
   // localization at render time.
   const content = typeof msg === 'string' ? msg : msg.fallback;
   const tm = typeof msg === 'string' ? null : msg;
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; ; attempt++) {
+    const last = await prisma.message.findFirst({
+      where: { chatId },
+      orderBy: { ordinal: 'desc' },
+      select: { ordinal: true },
+    });
     try {
-      const last = await prisma.message.findFirst({
-        where: { chatId },
-        orderBy: { ordinal: 'desc' },
-        select: { ordinal: true },
-      });
-      await prisma.message.create({
-        data: {
-          chatId,
-          role: 'automatism',
-          content,
-          ...(tm ? { contentBlocks: tm as object } : {}),
-          ordinal: (last?.ordinal ?? -1) + 1,
-        },
-      });
+      await createChatMessage(
+        prisma,
+        { chatId, role: 'automatism', content, contentBlocks: tm },
+        (last?.ordinal ?? -1) + 1,
+      );
       break;
     } catch (err) {
-      if (attempt === 4) throw err;
+      // Only a lost race for the ordinal is worth another attempt. Retrying
+      // everything meant a broken payload or a dead connection was tried five
+      // times and then reported as if it had been a race.
+      if (!isOrdinalCollision(err) || attempt >= 4) throw err;
     }
   }
   broadcast(chatId, 'automatism', { type: 'automatism', content, tm });

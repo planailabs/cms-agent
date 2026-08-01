@@ -180,6 +180,58 @@ export async function loadChatRecord(chatId: string): Promise<ChatTurnContext | 
   };
 }
 
+/**
+ * The durable message insert, and nothing else.
+ *
+ * Two callers write messages — a turn (through the adapter below) and an
+ * automatism — and only they know what else must happen: updating the
+ * in-memory transcript, linking attachments, localizing the text, telling the
+ * browsers. What they share is this: strip NUL (Postgres text/jsonb cannot
+ * store U+0000, and binary in a tool result must not kill the insert) and
+ * write one row at a given ordinal.
+ *
+ * No retry here on purpose. `client` may be a transaction, and PostgreSQL
+ * aborts the whole transaction on a failed statement — retrying inside one
+ * without savepoints does not work. Ordinal allocation and its retry belong
+ * to the caller, outside any transaction.
+ */
+export interface ChatMessageInsert {
+  chatId: string;
+  role: string;
+  content: string;
+  contentBlocks?: object | null;
+  pageContext?: object | null;
+  command?: string | null;
+  authorId?: string | null;
+}
+
+/** Anything with a `message` model: the client, or a transaction. */
+type MessageWriter = { message: { create: typeof prisma.message.create } };
+
+export async function createChatMessage(
+  client: MessageWriter,
+  data: ChatMessageInsert,
+  ordinal: number,
+): Promise<{ id: string }> {
+  return client.message.create({
+    data: {
+      chatId: data.chatId,
+      role: data.role,
+      content: stripNul(data.content),
+      contentBlocks: data.contentBlocks ? stripNul(data.contentBlocks) : undefined,
+      pageContext: data.pageContext ? stripNul(data.pageContext) : undefined,
+      command: data.command ?? null,
+      authorId: data.authorId ?? null,
+      ordinal,
+    },
+    select: { id: true },
+  });
+}
+
+/** The unique (chatId, ordinal) collision — the ONE error worth retrying. */
+export const isOrdinalCollision = (err: unknown): boolean =>
+  (err as { code?: string })?.code === 'P2002';
+
 export function createDbAdapter(
   chatId: string,
   authorId: string | null,
@@ -223,18 +275,19 @@ export function createDbAdapter(
       for (let attempt = 0; ; attempt++) {
         const ordinal = ordinalRef.value++;
         try {
-          const row = await prisma.message.create({
-            data: {
+          const row = await createChatMessage(
+            prisma,
+            {
               chatId,
               authorId: msg.role === 'user' || msg.role === 'cancel' ? authorId : null,
               role: msg.role,
-              content: stripNul(extractDisplayText(msg)),
-              contentBlocks: contentBlocks ? stripNul(contentBlocks) : undefined,
-              pageContext: msg.role === 'user' ? (stripNul(msg.pageContext as object | undefined) ?? undefined) : undefined,
+              content: extractDisplayText(msg),
+              contentBlocks,
+              pageContext: msg.role === 'user' ? (msg.pageContext as object | undefined) ?? null : null,
               command: msg.role === 'user' ? msg.command ?? null : null,
-              ordinal,
             },
-          });
+            ordinal,
+          );
           msg.id = row.id;
           // Link chat-scoped attachments to this freshly-created user row.
           if (msg.role === 'user' && msg.attachments?.length) {
@@ -245,7 +298,9 @@ export function createDbAdapter(
           }
           return;
         } catch (err) {
-          if ((err as { code?: string })?.code !== 'P2002' || attempt >= 4) throw err;
+          // Only the ordinal collision is retryable: an automatism message can
+          // land mid-turn and take the number this counter handed out.
+          if (!isOrdinalCollision(err) || attempt >= 4) throw err;
           const last = await prisma.message.findFirst({
             where: { chatId },
             orderBy: { ordinal: 'desc' },
