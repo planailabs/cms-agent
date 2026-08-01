@@ -45,11 +45,11 @@ beforeAll(async () => {
 /** Run a flow's named steps in order (the automatism does this in prod). */
 async function runFlowSteps(
   flow: import('@/lib/publish/types').DeployFlow,
-  input: { sha: string; repoPath: string; log: (l: string) => void },
+  input: { sha: string; repoPath: string; targetBranch: string; log: (l: string) => void },
 ) {
   let result: Record<string, unknown> = {};
   const state: Record<string, unknown> = {};
-  for (const step of flow.steps ?? []) {
+  for (const step of flow.steps) {
     const r = await step.run({ ...input, state });
     if (r) result = { ...result, ...r };
   }
@@ -63,7 +63,7 @@ describe('deploy flows', () => {
     registerBuiltinFlows();
 
     const log: string[] = [];
-    await runFlowSteps(getDeployFlow('git-push')!, { sha, repoPath: repo, log: (l) => log.push(l) });
+    await runFlowSteps(getDeployFlow('git-push')!, { sha, repoPath: repo, targetBranch: 'main', log: (l) => log.push(l) });
 
     const remoteSha = (await simpleGit(bare).revparse(['main'])).trim();
     expect(remoteSha).toBe(sha);
@@ -83,6 +83,7 @@ describe('deploy flows', () => {
     const result = await runFlowSteps(getDeployFlow('web-agency')!, {
       sha,
       repoPath: repo,
+      targetBranch: 'main',
       log: (l) => log.push(l),
     });
 
@@ -102,7 +103,7 @@ describe('deploy flows', () => {
 
     // Retry reuses the sealed artifact instead of rebuilding
     const log2: string[] = [];
-    await runFlowSteps(getDeployFlow('web-agency')!, { sha, repoPath: repo, log: (l) => log2.push(l) });
+    await runFlowSteps(getDeployFlow('web-agency')!, { sha, repoPath: repo, targetBranch: 'main', log: (l) => log2.push(l) });
     expect(log2.join('\n')).toContain('Reusing sealed artifact');
   }, 300_000);
 

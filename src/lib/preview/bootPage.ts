@@ -9,7 +9,7 @@
  * until the proxy picks up the new route.
  */
 import { prisma } from '@/lib/db';
-import { ensureBranch } from '@/lib/git/engine';
+import { defaultBranch, ensureBranch, historicalRef } from '@/lib/git/engine';
 import { t } from '@/lib/i18n';
 import { ensureInstance, getStartError, clearStartError } from './manager';
 import { escapeHtml } from './html';
@@ -49,11 +49,13 @@ export async function handlePreviewBoot(
   origin = '/',
 ): Promise<Response> {
   if (retry) clearStartError(branch);
-  // v-<sha> labels are historical read-only checkouts (plan §12)
-  const isHistorical = /^v-[0-9a-f]{7,40}$/.test(branch);
-  const isMain = branch === 'main';
+  // v-<sha> labels are historical read-only checkouts (plan §12). Both rules
+  // come from the git engine: a site whose default branch is `master` has no
+  // `main` row, so assuming the name here made its own preview unbootable.
+  const isHistorical = historicalRef(branch) !== null;
+  const isDefault = branch === (await defaultBranch());
   const [known, chat] =
-    isHistorical || isMain
+    isHistorical || isDefault
       ? [null, null]
       : await Promise.all([
           prisma.branch.findUnique({ where: { name: branch } }),
@@ -63,7 +65,7 @@ export async function handlePreviewBoot(
             include: { branch: { select: { name: true } } },
           }),
         ]);
-  const bootable = !!known || !!chat || isMain || isHistorical;
+  const bootable = !!known || !!chat || isDefault || isHistorical;
   // A failed start halts the reload loop and is shown until retried.
   const startError = bootable ? getStartError(branch) : null;
 

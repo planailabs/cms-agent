@@ -99,7 +99,10 @@ const deploymentStatusTool: ToolDef = {
   phases: ALL_PHASES,
   kinds: ['workflow', 'deployment', 'deployments'],
   async execute(input) {
-    const p = await prisma.publication.findUnique({ where: { id: input.publicationId } });
+    const p = await prisma.publication.findUnique({
+      where: { id: input.publicationId },
+      include: { branch: { select: { name: true } } },
+    });
     if (!p) return JSON.stringify({ error: 'Publication not found' });
     const { getDeployFlow } = await import('@/lib/publish/types');
     await import('@/lib/publish/publisher'); // ensures flows are registered
@@ -112,7 +115,14 @@ const deploymentStatusTool: ToolDef = {
     }
     const lines: string[] = [];
     const ok = await flow.verify(
-      { sha: p.sha, repoPath: path.resolve(env().REPO_PATH), log: (l) => lines.push(l) },
+      {
+        sha: p.sha,
+        repoPath: path.resolve(env().REPO_PATH),
+        // The branch this publication actually targeted — verification of a
+        // publish to a non-default target must not look at main.
+        targetBranch: p.branch.name,
+        log: (l) => lines.push(l),
+      },
       { externalUrl: p.externalUrl ?? undefined },
     );
     return JSON.stringify({ persistedStatus: p.status, liveVerification: ok, detail: lines });

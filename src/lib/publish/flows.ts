@@ -1,8 +1,8 @@
 /**
  * Built-in deploy flows (plan §7 + §12):
- *  - git-push:        push main to a remote; downstream infra deploys.
+ *  - git-push:        push the target branch to a remote; infra deploys it.
  *  - web-agency:      sealed artifact + PUBLISH_COMMAND (script + tarball).
- *  - github-ci:       push main, then poll the commit's check runs by sha.
+ *  - github-ci:       push the target, then poll the commit's check runs.
  *  - cloudflare-pages: wrangler direct upload with commit metadata,
  *                      verify/reconcile by commit_hash via the REST API.
  */
@@ -40,9 +40,15 @@ function runScript(
   });
 }
 
-async function pushMain(repoPath: string, remote: string, log: (l: string) => void): Promise<void> {
-  log(`Pushing main to ${remote}…`);
-  await simpleGit(repoPath).push(remote, 'main');
+/** Push the branch this publish actually targeted — never a hardcoded main. */
+async function pushTarget(
+  repoPath: string,
+  remote: string,
+  branch: string,
+  log: (l: string) => void,
+): Promise<void> {
+  log(`Pushing ${branch} to ${remote}…`);
+  await simpleGit(repoPath).push(remote, branch);
   log('Push complete.');
 }
 
@@ -51,10 +57,10 @@ const gitPushFlow: DeployFlow = {
   steps: [
     {
       name: 'push',
-      async run({ repoPath, log }) {
+      async run({ repoPath, targetBranch, log }) {
         const remote = env().DEPLOY_GIT_REMOTE ?? 'origin';
-        await pushMain(repoPath, remote, log);
-        return { detail: { remote } };
+        await pushTarget(repoPath, remote, targetBranch, log);
+        return { detail: { remote, branch: targetBranch } };
       },
     },
   ],
@@ -118,10 +124,10 @@ const githubCiFlow: DeployFlow = {
   steps: [
     {
       name: 'push',
-      async run({ repoPath, log }) {
+      async run({ repoPath, targetBranch, log }) {
         const remote = env().DEPLOY_GIT_REMOTE ?? 'origin';
-        await pushMain(repoPath, remote, log);
-        return { detail: { remote } };
+        await pushTarget(repoPath, remote, targetBranch, log);
+        return { detail: { remote, branch: targetBranch } };
       },
     },
   ],
@@ -167,8 +173,8 @@ const cloudflarePagesFlow: DeployFlow = {
     },
     {
       name: 'deploy',
-      async run({ sha, log }) {
-        return cloudflareUpload(sha, log);
+      async run({ sha, targetBranch, log }) {
+        return cloudflareUpload(sha, targetBranch, log);
       },
     },
   ],
@@ -183,7 +189,7 @@ const cloudflarePagesFlow: DeployFlow = {
   },
 };
 
-async function cloudflareUpload(sha: string, log: (l: string) => void) {
+async function cloudflareUpload(sha: string, targetBranch: string, log: (l: string) => void) {
   {
     const e = env();
     const artifact = await sealArtifact(sha, log); // sealed — instant reuse
@@ -204,7 +210,9 @@ async function cloudflareUpload(sha: string, log: (l: string) => void) {
         [
           'wrangler', 'pages', 'deploy', artifact.distDir,
           '--project-name', e.CLOUDFLARE_PAGES_PROJECT!,
-          '--branch', 'main',
+          // Pages treats this as the production branch — it must be the
+          // branch that was published, not an assumption.
+          '--branch', targetBranch,
           '--commit-hash', sha,
           '--commit-dirty=false',
         ],

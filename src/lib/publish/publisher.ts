@@ -779,44 +779,26 @@ const mergeStep: AutomatismStep = {
   },
 };
 
-/** Generic one-step deploy: flows without custom steps, and merge-only. */
-const genericDeployStep: AutomatismStep = {
+/**
+ * Merge-only deploy: the target is not the default branch, so there is no
+ * deployment to run. Every real flow brings its own steps (types.ts), so this
+ * is the whole chain for "merged, nothing to publish".
+ */
+const mergeOnlyStep: AutomatismStep = {
   // Deploying is the flow's job; a failure here is read, understood, and
   // either re-run or escalated — the site is not edited from the deploy chat.
   repairTools: DEPLOY_REPAIR_TOOLS,
   name: 'deploy',
   async run(raw, post) {
     const data = raw as DeployData;
-    const e = env();
-    const flow = data.flowId ? getDeployFlow(data.flowId) : null;
-    if (data.flowId && !flow) throw new Error(`Unknown deploy flow: ${data.flowId}`);
     await prisma.publication.update({
       where: { id: data.publicationId },
       data: { status: 'running' },
     });
     const log = deployLog(data);
     try {
-      if (flow) {
-        if (!flow.publish) throw new Error(`Flow "${flow.id}" has no publish() and no steps`);
-        const sha = data.mergedSha!;
-        const result = await flow.publish({ sha, repoPath: path.resolve(e.REPO_PATH), log });
-        data.result = { ...(data.result ?? {}), ...result };
-        if (flow.verify) {
-          const verified = await flow.verify(
-            { sha, repoPath: path.resolve(e.REPO_PATH), log },
-            data.result,
-          );
-          if (!verified) throw new Error('Post-publish verification failed');
-        }
-        await recordDeploySuccess(
-          data,
-          post,
-          tmsg('deploy.flowSucceeded', { flow: flow.id, sha: sha.slice(0, 8) }),
-        );
-      } else {
-        log(`Merged into ${data.targetName} (non-default target — no deployment).`);
-        await recordDeploySuccess(data, post, tmsg('deploy.mergeOnlyDone'));
-      }
+      log(`Merged into ${data.targetName} (non-default target — no deployment).`);
+      await recordDeploySuccess(data, post, tmsg('deploy.mergeOnlyDone'));
     } catch (err) {
       if (err instanceof AutomatismFailure) throw err;
       await failDeploy(data, err);
@@ -841,6 +823,7 @@ function flowStep(flow: DeployFlow, step: DeployFlowStep): AutomatismStep {
         const result = await step.run({
           sha: data.mergedSha!,
           repoPath: path.resolve(env().REPO_PATH),
+          targetBranch: data.targetName,
           log: deployLog(data),
           state: (data.flowState ??= {}),
         });
@@ -867,6 +850,7 @@ function verifyStep(flow: DeployFlow): AutomatismStep {
             {
               sha: data.mergedSha!,
               repoPath: path.resolve(env().REPO_PATH),
+              targetBranch: data.targetName,
               log: deployLog(data),
             },
             data.result ?? {},
@@ -920,24 +904,23 @@ const finalizeStep: AutomatismStep = {
 // the publisher's, not a flow's, so a flow that only pushes still gets it.
 registerAutomatism({
   type: 'deploy',
-  steps: [prevalidateStep, mergeStep, genericDeployStep, finalizeStep],
+  steps: [prevalidateStep, mergeStep, mergeOnlyStep, finalizeStep],
 });
 for (const flow of listDeployFlows()) {
-  if (flow.steps?.length) {
-    registerAutomatism({
-      type: `deploy:${flow.id}`,
-      steps: [
-        prevalidateStep,
-        mergeStep,
-        ...flow.steps.map((s) => flowStep(flow, s)),
-        verifyStep(flow),
-        finalizeStep,
-      ],
-    });
-  }
+  registerAutomatism({
+    type: `deploy:${flow.id}`,
+    steps: [
+      prevalidateStep,
+      mergeStep,
+      ...flow.steps.map((s) => flowStep(flow, s)),
+      verifyStep(flow),
+      finalizeStep,
+    ],
+  });
 }
 
-/** Automatism type for a publish: per-flow when the flow declares steps. */
+/** Automatism type for a publish: per-flow, or the merge-only chain when the
+ *  target is not the default branch and no flow applies. */
 export function deployAutomatismType(flow: DeployFlow | null): string {
-  return flow?.steps?.length ? `deploy:${flow.id}` : 'deploy';
+  return flow ? `deploy:${flow.id}` : 'deploy';
 }
