@@ -17,28 +17,8 @@ import { buildQuestionToolResults, runToolLoop } from './toolLoop';
 import { phaseFlipNotice } from './turnNotices';
 import { isDefaultChatTitle } from '@/lib/chatTitle';
 import { isClientSideTool, type ChatKind, type ToolContext } from './tools/registry';
-import { registerClientTools } from './tools/clientTools';
-import { registerFsTools } from './tools/fsTools';
-import { registerUploadTools } from './tools/uploadTools';
-import { registerMemoryTools } from './tools/memoryTools';
-import { registerContentTools } from '@/lib/content/tools';
-import { registerLintTools } from './tools/lintTools';
-import { registerStructureTools } from './tools/structureTools';
-import { registerDeployTools } from './tools/deployTools';
-import { registerChatTools } from './tools/chatTools';
-import { registerTaskTools, taskListForPrompt } from './tools/taskTools';
-import { registerJsonTools } from './tools/jsonTools';
-import { registerScreenshotTools } from './tools/screenshotTools';
-import { registerCommitTools } from './tools/commitTools';
-import { registerCommandTools } from './tools/commandTools';
-import { registerAutomatismTools } from './tools/automatismTools';
-import { registerConflictTools } from './tools/conflictTools';
-import { registerSkillTools } from './tools/skillTools';
-import { registerCapabilityTools } from './tools/capabilityTools';
-import { registerPreviewTools } from './tools/previewTools';
-import { registerSkillScriptTools } from './tools/skillScriptTools';
-import { registerImageTools } from './tools/imageTools';
-import { registerFirecrawlTools } from './tools/firecrawlTools';
+import { taskListForPrompt } from './tools/taskTools';
+import { registerServerBuiltins } from '@/lib/serverRuntime';
 import { getApprovedMemories } from '@/lib/memory';
 import { activeRepair } from '@/lib/automatism';
 import { getUserContextStore } from './userContext';
@@ -52,28 +32,9 @@ import type {
   WorkflowPhase,
 } from './types';
 
-registerClientTools();
-registerFsTools();
-registerUploadTools();
-registerMemoryTools();
-registerContentTools();
-registerLintTools();
-registerStructureTools();
-registerDeployTools();
-registerChatTools();
-registerTaskTools();
-registerJsonTools();
-registerScreenshotTools();
-registerCommitTools();
-registerCommandTools();
-registerAutomatismTools();
-registerConflictTools();
-registerSkillTools();
-registerCapabilityTools();
-registerPreviewTools();
-registerSkillScriptTools();
-registerImageTools();
-registerFirecrawlTools();
+// Whatever reaches the handler first must find the registry populated —
+// registration itself belongs to lib/serverRuntime, which owns the list.
+registerServerBuiltins();
 
 /** Phase flips per turn before we stop granting fresh runs. */
 const MAX_PHASE_RUNS = 4;

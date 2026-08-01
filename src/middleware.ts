@@ -3,55 +3,32 @@
  * allowlist on every request (covers users removed after sign-up), guards
  * API routes, including preview subdomains through Better Auth's shared cookie.
  */
-import fs from 'node:fs';
-import path from 'node:path';
 import { defineMiddleware } from 'astro:middleware';
 import { auth, COOKIE_SCOPE_MARKER, sessionCookieMigrationHeaders } from '@/lib/auth';
 import { isEmailAllowed } from '@/lib/allowlist';
 import { BOOT_PATH_RE, cleanBootOrigin, handlePreviewBoot } from '@/lib/preview/bootPage';
 import { WAIT_PATH_RE, handlePreviewWait } from '@/lib/preview/waitStream';
-import { currentRoutesJson, initRoutesFile } from '@/lib/preview/manager';
-import { startEmbeddedProxy, updateProxySession } from '@/lib/proxyNative';
+import { currentRoutesJson } from '@/lib/preview/manager';
+import { updateProxySession } from '@/lib/proxyNative';
+import { startRuntimeServices } from '@/lib/serverRuntime';
 import { isFromProxy, proxyRequiredResponse } from '@/lib/proxyGuard';
 import { env } from '@/lib/env';
 
-// Publish the routing table, start the embedded proxy, and recover automatisms
-// orphaned by the previous process, once per server boot.
+// Start what a booting server owns (lib/serverRuntime).
 //
 // Gated on a server actually booting, not merely on a configured environment:
 // `astro build` evaluates this module to prerender pages, and dotenv (via
-// lib/env) fills VAR_DIR in from .env there too — so this block would run
-// inside the build, where the preview warmer has no sandbox to start previews
-// in and logged its failure on every build. server.mjs publishes the proxy
-// marker before it imports the SSR entry, and `astro dev` is the other real
-// runtime; nothing else here is a server.
+// lib/env) fills VAR_DIR in from .env there too — so this would run inside the
+// build, where the preview warmer has no sandbox to start previews in and
+// logged its failure on every build. server.mjs publishes the proxy marker
+// before it imports the SSR entry, and `astro dev` is the other real runtime;
+// nothing else here is a server.
 const proxyStartedByServer = Boolean(
   (globalThis as typeof globalThis & { __nativeProxy?: { started?: boolean } }).__nativeProxy
     ?.started,
 );
 const isServerBoot = proxyStartedByServer || (import.meta.env.DEV && !process.env.VITEST);
-if (process.env.VAR_DIR && isServerBoot) {
-  initRoutesFile();
-  // Legacy scratchpad storage (pre-.scratch/-in-worktree) — drop it once.
-  fs.rmSync(path.join(path.resolve(process.env.VAR_DIR), 'scratch'), {
-    recursive: true,
-    force: true,
-  });
-  startEmbeddedProxy(currentRoutesJson());
-  void import('@/lib/automatism')
-    .then(({ recoverAutomatisms }) => recoverAutomatisms())
-    .catch((err) => console.error('[automatism] boot recovery failed:', err));
-  // Branches chats fork from stay warm — their previews are what a draft
-  // chat shows, and nobody should wait for a dev server to boot to see one.
-  void import('@/lib/preview/prewarm')
-    .then(({ startPrimaryBranchWarmer }) => startPrimaryBranchWarmer())
-    .catch((err) => console.error('[prewarm] warmer failed to start:', err));
-  // Worktrees and sandbox homes of chats that no longer exist are pure disk
-  // cost (a checkout plus a private npm cache each) — reconcile hourly.
-  void import('@/lib/worktreeCleanup')
-    .then(({ startOrphanSweeper }) => startOrphanSweeper())
-    .catch((err) => console.error('[cleanup] sweeper failed to start:', err));
-}
+if (process.env.VAR_DIR && isServerBoot) startRuntimeServices();
 
 const PUBLIC_PATHS = [
   /^\/api\/auth\//,
