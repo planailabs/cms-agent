@@ -6,8 +6,9 @@ dev servers, serves the preview boot flow, forwards WebSocket upgrades, injects
 the preview overlay, and records preview access times.
 
 Live routes and active Better Auth sessions are replaced directly through
-N-API. `VAR_DIR/proxy-routes.json` remains a startup fallback and
-`VAR_DIR/proxy-access.json` carries idle-detection timestamps.
+N-API, and preview access times are read back the same way
+(`proxyAccessTimes()`). `VAR_DIR/proxy-routes.json` remains a startup
+fallback.
 
 Preview requests use Better Auth's normal cross-subdomain session cookie. The
 proxy verifies the cookie signature with `BETTER_AUTH_SECRET`, then requires

@@ -3,7 +3,7 @@
  * the active site backend), spawned on demand, stopped when idle. Publishes
  * the routing table for the Pingora
  * embedded proxy (VAR_DIR/proxy-routes.json) and reads its access timestamps
- * (VAR_DIR/proxy-access.json) to stop idle instances. Plan §5.
+ * (read from the proxy over N-API) to stop idle instances. Plan §5.
  */
 import { type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -20,7 +20,7 @@ import {
   type SandboxState,
 } from '@/lib/sandbox';
 import { activeBackend } from '@/lib/site';
-import { updateProxyRoutes } from '@/lib/proxyNative';
+import { proxyAccessTimes, updateProxyRoutes } from '@/lib/proxyNative';
 
 export interface PreviewInstance {
   branch: string;
@@ -110,7 +110,6 @@ export function listStartErrors(): Array<{ branch: string; message: string; at: 
 }
 
 const routesFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-routes.json');
-const accessFile = () => path.join(path.resolve(env().VAR_DIR), 'proxy-access.json');
 
 /** host:port for the routes file — IPv6 hosts get brackets. */
 function hostPort(host: string, port: number): string {
@@ -356,12 +355,9 @@ function startSweeper(): void {
 
 async function sweepIdle(): Promise<void> {
   const { PREVIEW_IDLE_TIMEOUT_MS } = env();
-  let access: Record<string, number> = {};
-  try {
-    access = JSON.parse(fs.readFileSync(accessFile(), 'utf8'));
-  } catch {
-    // no access file yet — fall back to lastUsedAt below
-  }
+  // Straight from the proxy's in-memory map (proxyNative). Empty when it is
+  // not running — lastUsedAt below is the fallback.
+  const access = proxyAccessTimes();
   const now = Date.now();
   for (const [branch, { info }] of [...state.instances]) {
     if (state.pinned.has(branch)) continue; // pinned branches never idle out

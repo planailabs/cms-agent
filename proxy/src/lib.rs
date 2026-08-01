@@ -40,6 +40,9 @@ fn ensure_listen_available(listen: &str) -> std::io::Result<()> {
 struct ProxyState {
     routes: Arc<RoutesStore>,
     sessions: Arc<SessionStore>,
+    /// Preview access times. Rust owns the map; the CMS reads it over N-API
+    /// for its idle sweep, so it lives here rather than in a file.
+    access: Arc<AccessTracker>,
 }
 
 /// HTML bodies larger than this are passed through without overlay injection.
@@ -482,13 +485,9 @@ impl ProxyHttp for CmsProxy {
 fn run_proxy(cfg: Config, state: Arc<ProxyState>) {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
     let routes_path = cfg.var_dir.join("proxy-routes.json");
-    let access_path = cfg.var_dir.join("proxy-access.json");
 
     // The file is only a boot fallback. Live updates arrive through N-API.
     state.routes.try_reload(&routes_path);
-
-    let access = AccessTracker::new();
-    access::spawn_flusher(access.clone(), access_path);
 
     let proxy = CmsProxy {
         cms_origin: format!("{}://{}", cfg.public_scheme, cfg.base_domain),
@@ -498,7 +497,7 @@ fn run_proxy(cfg: Config, state: Arc<ProxyState>) {
         auth_secret: cfg.auth_secret,
         routes: state.routes.clone(),
         sessions: state.sessions.clone(),
-        access,
+        access: state.access.clone(),
         ua_overrides: RwLock::new(HashMap::new()),
     };
 
@@ -526,6 +525,7 @@ pub fn start_proxy() -> napi::Result<()> {
     let state = Arc::new(ProxyState {
         routes: Arc::new(RoutesStore::new(Routes::fallback(&cfg.cms_upstream))),
         sessions: Arc::new(SessionStore::default()),
+        access: AccessTracker::new(),
     });
     STATE
         .set(state.clone())
@@ -557,6 +557,33 @@ pub fn set_proxy_sessions(sessions: Vec<ActiveSession>) -> napi::Result<()> {
         .sessions
         .replace(sessions);
     Ok(())
+}
+
+/// Last-access time per preview branch, for the CMS's idle sweep.
+///
+/// Returned as pairs rather than a map because napi-rs has no HashMap
+/// conversion; the caller turns them back into an object.
+#[napi(js_name = "proxyAccessTimes")]
+pub fn proxy_access_times() -> napi::Result<Vec<AccessEntry>> {
+    Ok(STATE
+        .get()
+        .ok_or_else(|| napi::Error::from_reason("proxy is not started"))?
+        .access
+        .snapshot()
+        .into_iter()
+        .map(|(branch, at_ms)| AccessEntry {
+            branch,
+            at_ms: at_ms as f64,
+        })
+        .collect())
+}
+
+/// One branch's last access. `at_ms` is f64 because JS numbers are — a
+/// millisecond timestamp is exact well past any plausible uptime.
+#[napi(object)]
+pub struct AccessEntry {
+    pub branch: String,
+    pub at_ms: f64,
 }
 
 #[napi(js_name = "upsertProxySession")]

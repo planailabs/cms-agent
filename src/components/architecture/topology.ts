@@ -55,9 +55,9 @@ flowchart TB
       <li><strong>The routing table is pushed, not polled.</strong> The preview
         manager calls into the addon whenever an instance becomes ready or
         stops. <code>VAR_DIR/proxy-routes.json</code> is written too, but only
-        as a boot/crash fallback; <code>proxy-access.json</code> flows the
-        other way and carries the per-branch last-access timestamps the idle
-        sweeper reads.</li>
+        as a boot/crash fallback. Per-branch last-access times flow the other
+        way over the same addon: Rust owns the map, the idle sweeper asks for
+        a snapshot of it.</li>
       <li><strong>Preview HTML is rewritten in flight.</strong> Responses from
         a branch dev server get the overlay bundle injected, so the preview can
         talk to the workspace (element picking, selection, navigation). WebSocket

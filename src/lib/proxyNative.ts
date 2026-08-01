@@ -7,6 +7,7 @@ interface NativeProxy {
   setProxyRoutes(routesJson: string): void;
   setProxySessions(sessions: Array<{ token: string; expiresAtMs: number }>): void;
   upsertProxySession(session: { token: string; expiresAtMs: number }): void;
+  proxyAccessTimes(): Array<{ branch: string; atMs: number }>;
 }
 
 interface NativeProxyState {
@@ -68,6 +69,26 @@ export function startEmbeddedProxy(initialRoutesJson: string): void {
 
 export function updateProxyRoutes(routesJson: string): void {
   if (state.started) state.addon?.setProxyRoutes(routesJson);
+}
+
+/**
+ * Last-access time per preview branch, straight from the proxy's own map.
+ *
+ * The idle sweep used to read a JSON file the proxy flushed every ten
+ * seconds — a writer thread, a dirty flag and an atomic rename to move state
+ * between two halves of the SAME process. Empty when the proxy is not
+ * running, which the sweeper already handles by falling back to lastUsedAt.
+ */
+export function proxyAccessTimes(): Record<string, number> {
+  if (!state.started) return {};
+  try {
+    const entries = state.addon?.proxyAccessTimes() ?? [];
+    return Object.fromEntries(entries.map((e) => [e.branch, e.atMs]));
+  } catch (err) {
+    // A sweep must not die because the proxy is mid-restart.
+    console.warn('[proxy] could not read access times:', err);
+    return {};
+  }
 }
 
 export function updateProxySession(session: { token: string; expiresAt: Date }): void {

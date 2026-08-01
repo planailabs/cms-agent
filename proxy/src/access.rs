@@ -1,24 +1,23 @@
 //! Last-access timestamps per preview branch, for the CMS's idle-stop logic.
 //!
-//! In-memory map updated on every preview request; flushed to
-//! `${VAR_DIR}/proxy-access.json` at most every 10 seconds (atomic tmp+rename).
+//! In-memory map updated on every preview request, read by the CMS over
+//! N-API. Rust already owns the map and Node already holds the addon for
+//! routes and sessions, so the timestamps travel the same way: there is no
+//! writer thread, no dirty flag, no temp-file rename and no JSON parse on the
+//! Node side for state that never left the process.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::Mutex;
+use std::sync::Arc;
 
 pub struct AccessTracker {
     map: Mutex<HashMap<String, u64>>,
-    dirty: AtomicBool,
 }
 
 impl AccessTracker {
     pub fn new() -> Arc<Self> {
         Arc::new(AccessTracker {
             map: Mutex::new(HashMap::new()),
-            dirty: AtomicBool::new(false),
         })
     }
 
@@ -28,38 +27,21 @@ impl AccessTracker {
             .lock()
             .expect("access lock poisoned")
             .insert(branch.to_string(), now_ms);
-        self.dirty.store(true, Ordering::Release);
     }
 
-    /// Write the map to `path` if anything changed since the last flush.
-    /// Atomic: writes `<path>.tmp` then renames over `path`.
-    pub fn flush_if_dirty(&self, path: &Path) -> std::io::Result<()> {
-        if !self.dirty.swap(false, Ordering::AcqRel) {
-            return Ok(());
-        }
-        let snapshot = self.map.lock().expect("access lock poisoned").clone();
-        let json = serde_json::to_vec(&snapshot).expect("map serializes");
-        let tmp = path.with_extension("json.tmp");
-        if let Err(e) = std::fs::write(&tmp, &json).and_then(|_| std::fs::rename(&tmp, path)) {
-            // retry on next tick
-            self.dirty.store(true, Ordering::Release);
-            return Err(e);
-        }
-        Ok(())
+    /// Every branch's last access, as (branch, ms) pairs.
+    ///
+    /// A snapshot rather than a drain: the CMS sweeps on its own schedule and
+    /// compares against an idle timeout, so forgetting an entry after reading
+    /// it would make the NEXT sweep believe a branch had never been touched.
+    pub fn snapshot(&self) -> Vec<(String, u64)> {
+        self.map
+            .lock()
+            .expect("access lock poisoned")
+            .iter()
+            .map(|(branch, at)| (branch.clone(), *at))
+            .collect()
     }
-}
-
-/// Flush the tracker to disk every 10 seconds on a background thread.
-pub fn spawn_flusher(tracker: Arc<AccessTracker>, path: PathBuf) {
-    std::thread::Builder::new()
-        .name("access-flusher".into())
-        .spawn(move || loop {
-            std::thread::sleep(Duration::from_secs(10));
-            if let Err(e) = tracker.flush_if_dirty(&path) {
-                log::warn!("failed to write {}: {e}", path.display());
-            }
-        })
-        .expect("failed to spawn access flusher thread");
 }
 
 #[cfg(test)]
@@ -67,28 +49,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn touch_and_flush_writes_json_atomically() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("proxy-access.json");
+    fn touch_records_the_latest_time_per_branch() {
         let tracker = AccessTracker::new();
-
-        // nothing dirty -> no file
-        tracker.flush_if_dirty(&path).unwrap();
-        assert!(!path.exists());
+        assert!(tracker.snapshot().is_empty());
 
         tracker.touch("my-branch", 1234);
         tracker.touch("other", 5678);
         tracker.touch("my-branch", 9999); // latest wins
-        tracker.flush_if_dirty(&path).unwrap();
 
-        let data = std::fs::read_to_string(&path).unwrap();
-        let map: HashMap<String, u64> = serde_json::from_str(&data).unwrap();
+        let map: HashMap<String, u64> = tracker.snapshot().into_iter().collect();
         assert_eq!(map["my-branch"], 9999);
         assert_eq!(map["other"], 5678);
-        // no leftover tmp file
-        assert!(!path.with_extension("json.tmp").exists());
+    }
 
-        // flush again without changes -> file untouched (mtime aside), no error
-        tracker.flush_if_dirty(&path).unwrap();
+    #[test]
+    fn snapshot_does_not_forget_what_it_returned() {
+        // A drain would make the next sweep think the branch was never used.
+        let tracker = AccessTracker::new();
+        tracker.touch("kept", 42);
+        assert_eq!(tracker.snapshot().len(), 1);
+        assert_eq!(tracker.snapshot().len(), 1);
     }
 }
