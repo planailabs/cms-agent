@@ -113,28 +113,51 @@ export async function awaitTurnIdle(chatId: string, timeoutMs: number): Promise<
   return !hasActiveTurn(chatId);
 }
 
-/** One mutating chat per branch worktree (EXECUTE turns, commits, reverts). */
-export const acquireBranchLock = (branchId: string) => acquire(branchLocks, branchId);
-export const releaseBranchLock = (branchId: string, id: string) => release(branchLocks, branchId, id);
+/**
+ * One mutating owner per git resource (EXECUTE turns, commits, reverts,
+ * merges, restores).
+ *
+ * The key is namespaced because this map used to receive BOTH kinds of
+ * identifier under one parameter called `branchId`: Branch database ids from
+ * the restore endpoint and the publisher, git ref names from everything else.
+ * They cannot collide today, but nothing said so, and a rename on either side
+ * would have made two different resources share a lock silently.
+ */
+const acquireResourceLock = (key: string) => acquire(branchLocks, key);
+const releaseResourceLock = (key: string, id: string) => release(branchLocks, key, id);
 
-/** Run fn holding the branch lock, waiting up to timeoutMs for it. */
-export async function withBranchLock<T>(
-  branchId: string,
+/** Run fn holding a git-resource lock, waiting up to timeoutMs for it. */
+async function withResourceLock<T>(
+  key: string,
   fn: () => Promise<T>,
   timeoutMs = 30_000,
 ): Promise<T> {
   const start = Date.now();
-  let lockId = acquireBranchLock(branchId);
+  let lockId = acquireResourceLock(key);
   while (!lockId) {
     if (Date.now() - start > timeoutMs) {
       throw new Error('Branch is busy — another change is currently being applied.');
     }
     await new Promise((r) => setTimeout(r, 250));
-    lockId = acquireBranchLock(branchId);
+    lockId = acquireResourceLock(key);
   }
   try {
     return await fn();
   } finally {
-    releaseBranchLock(branchId, lockId);
+    releaseResourceLock(key, lockId);
   }
 }
+
+/** Serialize work on a chat's own work branch, named by its git ref. */
+export const withWorkBranchLock = <T>(
+  ref: string,
+  fn: () => Promise<T>,
+  timeoutMs?: number,
+): Promise<T> => withResourceLock(`work:${ref}`, fn, timeoutMs);
+
+/** Serialize work on a target branch, named by its Branch row id. */
+export const withTargetBranchLock = <T>(
+  branchId: string,
+  fn: () => Promise<T>,
+  timeoutMs?: number,
+): Promise<T> => withResourceLock(`target:${branchId}`, fn, timeoutMs);

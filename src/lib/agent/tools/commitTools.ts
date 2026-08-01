@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { broadcast, withBranchLock } from '../bus';
+import { broadcast, withWorkBranchLock } from '../bus';
 import { emitChatState } from '../chatState';
 import { commitExecution, revertCommit } from '@/lib/git/engine';
 import { chatCommitTrailer, chatGitIdentity } from '@/lib/git/identity';
@@ -37,7 +37,7 @@ const gitCommitTool: ToolDef = {
     // Commit as the chat's creator (falling back to the acting user, then CMS).
     const identity = await chatGitIdentity(ctx.chatId, ctx.userId);
     const trailer = await chatCommitTrailer(ctx.chatId);
-    const sha = await withBranchLock(ctx.branchName, () =>
+    const sha = await withWorkBranchLock(ctx.branchName, () =>
       commitExecution(ctx.branchName, `${input.message}\n\n${trailer}`, identity),
     );
     if (!sha) return JSON.stringify({ success: false, message: 'Nothing to commit — worktree is clean.' });
@@ -70,7 +70,7 @@ const gitRevertTool: ToolDef = {
     const identity = await chatGitIdentity(ctx.chatId, ctx.userId);
     let revertSha: string;
     try {
-      revertSha = await withBranchLock(ctx.branchName, () =>
+      revertSha = await withWorkBranchLock(ctx.branchName, () =>
         revertCommit(ctx.branchName, input.sha, identity),
       );
     } catch (err) {

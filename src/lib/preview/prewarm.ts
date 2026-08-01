@@ -17,8 +17,8 @@
  * worktree, survives that. Grow into a real pool only if new chats start
  * arriving faster than one warms.
  */
-import { randomBytes } from 'node:crypto';
 import { startTicker, stopTicker } from '@/lib/ticker';
+import { newWorkBranchName } from '@/lib/git/engine';
 
 interface PrewarmState {
   /** Branch ready (or warming) for the next chat; null while none exists. */
@@ -38,7 +38,7 @@ const state: PrewarmState = (g.__cmsPrewarm ??= {
 });
 
 /** Same shape as a chat work branch, so branch listings keep hiding it. */
-const newWorkBranch = (): string => `c-${randomBytes(6).toString('hex')}`;
+const newWorkBranch = newWorkBranchName;
 
 async function warm(branch: string): Promise<void> {
   const { defaultBranch, ensureBranch } = await import('@/lib/git/engine');
@@ -106,8 +106,8 @@ export async function catchUpWithTarget(branch: string, target: string): Promise
   try {
     const { branchAheadCount, resetBranchOnto } = await import('@/lib/git/engine');
     if ((await branchAheadCount(branch, target)) === 0) return;
-    const { withBranchLock } = await import('@/lib/agent/bus');
-    await withBranchLock(branch, () => resetBranchOnto(branch, target));
+    const { withWorkBranchLock } = await import('@/lib/agent/bus');
+    await withWorkBranchLock(branch, () => resetBranchOnto(branch, target));
     console.log(`[prewarm] ${branch} reset onto ${target} before adoption`);
   } catch (err) {
     console.warn(`[prewarm] could not catch ${branch} up with ${target}:`, err);

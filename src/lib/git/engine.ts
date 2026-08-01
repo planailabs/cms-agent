@@ -2,9 +2,10 @@
  * Git engine — branches, worktrees, single-commit executions, revert/undo,
  * merge to main, changed files. One managed repo (REPO_PATH), worktrees under
  * VAR_DIR/worktrees/<branch>. All mutating callers must hold the branch
- * mutation lock (bus.withBranchLock).
+ * mutation lock (bus.withWorkBranchLock / withTargetBranchLock).
  */
 import fs from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { env } from '@/lib/env';
@@ -163,6 +164,17 @@ export async function deleteBranch(branch: string): Promise<void> {
   }
 }
 
+/**
+ * A fresh work-branch name. Three places minted these independently (the
+ * prewarm pool, branch sync and the publisher's deployment chat), so the
+ * shape of a system ref lived in three files — and validateBranchName's
+ * reserved `c-` prefix, which is what keeps them out of user branch lists,
+ * had no single owner.
+ */
+export function newWorkBranchName(): string {
+  return `c-${randomBytes(6).toString('hex')}`;
+}
+
 /** Historical read-only checkouts use the reserved v-<sha> label (plan §12). */
 export function historicalRef(name: string): string | null {
   const m = /^v-([0-9a-f]{7,40})$/.exec(name);
@@ -250,9 +262,7 @@ export async function dirStatus(dir: string): Promise<string[]> {
 
 /** Working-tree status of a branch worktree (dirty file list). */
 export async function worktreeStatus(branch: string): Promise<string[]> {
-  const dir = await ensureWorktree(branch);
-  const status = await simpleGit(dir).status();
-  return status.files.map((f) => f.path);
+  return dirStatus(await ensureWorktree(branch));
 }
 
 /** Revert a commit on the branch (new revert commit; never destructive).

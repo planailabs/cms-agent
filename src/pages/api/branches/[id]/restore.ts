@@ -7,7 +7,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db';
-import { withBranchLock } from '@/lib/agent/bus';
+import { withTargetBranchLock } from '@/lib/agent/bus';
 import { emitChatStatesForBranch } from '@/lib/agent/chatState';
 import { restoreVersion } from '@/lib/git/engine';
 
@@ -27,7 +27,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   const branch = await prisma.branch.findUnique({ where: { id: params.id! } });
   if (!branch) return new Response(JSON.stringify({ error: 'Branch not found' }), { status: 404 });
 
-  const restoreSha = await withBranchLock(params.id!, () =>
+  const restoreSha = await withTargetBranchLock(params.id!, () =>
     restoreVersion(branch.name, body.sha!, body.paths, { name: user.name, email: user.email }),
   );
 

@@ -5,9 +5,8 @@
  * (deleting would cascade chats). Also ensures the shared "Deployments"
  * system chat exists. Called lazily from GET /api/branches, throttled.
  */
-import { randomBytes } from 'node:crypto';
 import { prisma } from '@/lib/db';
-import { defaultBranch, listRepoBranches } from '@/lib/git/engine';
+import { defaultBranch, listRepoBranches, newWorkBranchName } from '@/lib/git/engine';
 
 const SYNC_INTERVAL_MS = 5_000;
 let lastSync = 0;
@@ -56,7 +55,7 @@ async function ensureDeploymentsChat(): Promise<void> {
   await prisma.chat.create({
     data: {
       branchId: main.id,
-      workBranch: `c-${randomBytes(6).toString('hex')}`,
+      workBranch: newWorkBranchName(),
       kind: 'deployments',
       title: 'Deployments',
       createdById: null, // system chat — no creator

@@ -7,7 +7,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/db';
-import { acquireTurnLock, broadcast, releaseTurnLock, withBranchLock } from './bus';
+import { acquireTurnLock, broadcast, releaseTurnLock, withWorkBranchLock } from './bus';
 import { emitChatState, emitChatStatesForBranch } from './chatState';
 import type { DisplayBlock } from '@/lib/messageBlocks';
 import { handleChatMessage } from './handler';
@@ -359,7 +359,7 @@ export async function finalizeExecution(opts: TransitionOpts & { summary?: strin
   if (dirty.length > 0) {
     const { chatCommitTrailer } = await import('@/lib/git/identity');
     const trailer = await chatCommitTrailer(chat.id, chat.title);
-    const syncSha = await withBranchLock(chat.workBranch, () =>
+    const syncSha = await withWorkBranchLock(chat.workBranch, () =>
       commitExecution(chat.workBranch, `Sync team knowledge\n\n${trailer}`, {
         name: opts.actor.name,
         email: opts.actor.email,
@@ -408,7 +408,7 @@ export async function revertExecution(opts: {
   if (!execution) throw new WorkflowError('Execution not found on this branch', 404);
   const workBranch = execution.chat.workBranch;
 
-  const revertSha = await withBranchLock(workBranch, () =>
+  const revertSha = await withWorkBranchLock(workBranch, () =>
     gitRevert(workBranch, opts.sha, { name: opts.actor.name, email: opts.actor.email }),
   );
 

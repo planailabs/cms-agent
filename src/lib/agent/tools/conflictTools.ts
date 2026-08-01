@@ -16,7 +16,7 @@ import {
   type RebaseResult,
 } from '@/lib/git/engine';
 import { chatGitIdentity } from '@/lib/git/identity';
-import { withBranchLock } from '../bus';
+import { withWorkBranchLock } from '../bus';
 import { jail } from './fsTools';
 import { registerTool, type ToolDef } from './registry';
 import { ALL_PHASES } from '../types';
@@ -160,7 +160,7 @@ const gitRebaseTool: ToolDef = {
     const base = input.base ?? ctx.targetBranchName;
     if (!base) return JSON.stringify({ error: 'No target branch known — pass base explicitly.' });
     const identity = await chatGitIdentity(ctx.chatId, ctx.userId);
-    const r = await withBranchLock(ctx.branchName, () => rebaseOnto(ctx.branchName, base, identity));
+    const r = await withWorkBranchLock(ctx.branchName, () => rebaseOnto(ctx.branchName, base, identity));
     return rebaseResult(r);
   },
 };
@@ -175,7 +175,7 @@ const gitRebaseContinueTool: ToolDef = {
   kinds: [...KINDS],
   async execute(_input, ctx) {
     const identity = await chatGitIdentity(ctx.chatId, ctx.userId);
-    const r = await withBranchLock(ctx.branchName, () => continueRebase(ctx.branchName, identity));
+    const r = await withWorkBranchLock(ctx.branchName, () => continueRebase(ctx.branchName, identity));
     return rebaseResult(r);
   },
 };
@@ -187,7 +187,7 @@ const gitRebaseAbortTool: ToolDef = {
   phases: ['execute'],
   kinds: [...KINDS],
   async execute(_input, ctx) {
-    await withBranchLock(ctx.branchName, () => abortRebase(ctx.branchName));
+    await withWorkBranchLock(ctx.branchName, () => abortRebase(ctx.branchName));
     return JSON.stringify({ ok: true, note: 'Rebase aborted (no-op if none was in progress).' });
   },
 };

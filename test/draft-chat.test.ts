@@ -22,6 +22,9 @@ vi.mock('@/lib/git/engine', () => ({
   // The warmer asks before it warms: a Branch row whose ref is gone must not
   // be recreated by warming it.
   branchExists: mocks.branchExists,
+  // Work-branch names come from the engine now (one owner for the reserved
+  // `c-` shape), so the mock has to supply them too.
+  newWorkBranchName: () => `c-${Math.random().toString(16).slice(2, 14)}`,
 }));
 vi.mock('@/lib/preview/manager', () => ({
   ensureInstance: mocks.ensureInstance,

@@ -13,11 +13,17 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { dbNull, prisma } from '@/lib/db';
 import { env } from '@/lib/env';
 import { canSeeOthersChats } from '@/lib/chatAccess';
-import { awaitTurnIdle, broadcast, hasActiveTurn, withBranchLock } from '@/lib/agent/bus';
+import {
+  awaitTurnIdle,
+  broadcast,
+  hasActiveTurn,
+  withTargetBranchLock,
+  withWorkBranchLock,
+} from '@/lib/agent/bus';
 import { emitChatState, emitChatStatesForBranch } from '@/lib/agent/chatState';
 import { WorkflowError } from '@/lib/agent/workflow';
 import {
@@ -30,6 +36,7 @@ import {
   ensureWorktree,
   mergeInto,
   mergePreviewCommit,
+  newWorkBranchName,
   rebaseInProgress,
   rebaseOnto,
   resetBranchOnto,
@@ -179,7 +186,7 @@ export async function publish(
   const deployChat = await prisma.chat.create({
     data: {
       branchId: chat.branchId,
-      workBranch: `c-${randomBytes(6).toString('hex')}`,
+      workBranch: newWorkBranchName(),
       kind: 'deployment',
       title: flow
         ? `Deploy ${chat.branch.name} @ ${shortSha}`
@@ -460,8 +467,8 @@ registerAutomatism({
           // progress (agent resolved but didn't continue) or already be done.
           const dir = await ensureWorktree(data.workBranch);
           const result = (await rebaseInProgress(dir))
-            ? await withBranchLock(data.workBranch, () => continueRebase(data.workBranch, identity))
-            : await withBranchLock(data.workBranch, () =>
+            ? await withWorkBranchLock(data.workBranch, () => continueRebase(data.workBranch, identity))
+            : await withWorkBranchLock(data.workBranch, () =>
                 rebaseOnto(data.workBranch, data.targetName, identity),
               );
           if (result.conflicts?.length) await pauseWithConflicts(result.conflicts);
@@ -726,7 +733,7 @@ const mergeStep: AutomatismStep = {
       }
     }
     try {
-      const targetSha = await withBranchLock(data.targetBranchId, () =>
+      const targetSha = await withTargetBranchLock(data.targetBranchId, () =>
         mergeInto(data.workBranch, data.targetName, identity),
       );
       data.mergedSha = targetSha;
@@ -758,7 +765,7 @@ const mergeStep: AutomatismStep = {
       // retried forward merge clean.
       await abortMerge(data.workBranch);
       data.conflictStarted = true;
-      const files = await withBranchLock(data.workBranch, () =>
+      const files = await withWorkBranchLock(data.workBranch, () =>
         beginConflictMerge(data.workBranch, data.targetName, identity),
       );
       // Keep the publish card truthful while the automatism is paused: the
@@ -877,7 +884,7 @@ const finalizeStep: AutomatismStep = {
     const data = raw as DeployData;
     // Cycle the work branch onto the updated target so its preview keeps
     // working from the archive; the chat itself is done and archives.
-    await withBranchLock(data.workBranch, () =>
+    await withWorkBranchLock(data.workBranch, () =>
       resetBranchOnto(data.workBranch, data.targetName),
     );
     const now = new Date();
