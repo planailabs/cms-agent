@@ -44,6 +44,7 @@ import { registerImageTools } from './agent/tools/imageTools';
 import { registerFirecrawlTools } from './agent/tools/firecrawlTools';
 import { currentRoutesJson, initRoutesFile } from './preview/manager';
 import { startEmbeddedProxy } from './proxyNative';
+import { startMetricsServer } from './metrics';
 
 /**
  * Every built-in the agent can be handed. Idempotent: registries are keyed
@@ -102,6 +103,9 @@ export function startRuntimeServices(): void {
     recursive: true,
     force: true,
   });
+  // The metrics listener takes an ephemeral port, so the proxy learns where
+  // it is from the routes table — republished once it is actually listening.
+  startMetricsServer(initRoutesFile);
   startEmbeddedProxy(currentRoutesJson());
 
   // Deploy flows and their automatism types, before anything recovers a

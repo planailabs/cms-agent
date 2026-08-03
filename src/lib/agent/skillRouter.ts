@@ -12,6 +12,7 @@
  */
 import OpenAI from 'openai';
 import { env } from '@/lib/env';
+import { countTokens } from '@/lib/metrics';
 import type { PluginSkill } from './plugins';
 import type { McpGroupView } from './mcp/groups';
 import { bestMatches } from './capabilityIndex';
@@ -131,6 +132,11 @@ export async function routeCapabilities(input: RouterInput): Promise<RouterVerdi
     });
     inputTokens += completion.usage?.prompt_tokens ?? 0;
     outputTokens += completion.usage?.completion_tokens ?? 0;
+    countTokens(
+      e.SKILL_ROUTER_MODEL,
+      completion.usage?.prompt_tokens ?? 0,
+      completion.usage?.completion_tokens ?? 0,
+    );
     lastRaw = completion.choices[0]?.message.content?.trim() ?? '';
     const json = lastRaw.replace(/^```(?:json)?\s*|\s*```$/g, '');
     try {

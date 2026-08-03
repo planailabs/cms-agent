@@ -26,6 +26,7 @@ import {
   withWorkBranchLock,
 } from '@/lib/agent/bus';
 import { emitChatState, emitChatStatesForBranch } from '@/lib/agent/chatState';
+import { recordDeploy } from '@/lib/metrics';
 import { WorkflowError } from '@/lib/agent/workflow';
 import {
   abortMerge,
@@ -106,6 +107,10 @@ interface DeployData extends AutomatismData {
   flowId: string | null;
   /** Work-branch head the publish approval bound (re-checked at merge time). */
   approvedSha: string;
+  /** When the publication row was created — the clock the deploy duration
+   *  metric runs on. Persisted with the rest of the payload, so it survives
+   *  the pauses (conflict, repair) a deploy can sit in for hours. */
+  startedAtMs?: number;
   /** Set once a conflict round began — the reverse-merge commit legitimately
    *  moves the work-branch head past approvedSha. */
   conflictStarted?: boolean;
@@ -262,6 +267,7 @@ export async function publish(
           publicationId: publication.id,
           flowId: flow?.id ?? null,
           approvedSha: req.sha,
+          startedAtMs: Date.now(),
         };
 
         // The chat is new, so its first message is ordinal 0 — no read-back,
@@ -655,8 +661,25 @@ const deployLog = (data: DeployData) => (line: string) => {
   });
 };
 
+/**
+ * How long this publication took, in seconds, from the row being created.
+ *
+ * A deploy is not one call: it merges, builds, pushes, verifies, and can pause
+ * for a conflict in between — so the wall clock from the durable start is the
+ * only number that matches what the person who pressed Publish waited for.
+ * Payloads written before this field existed report nothing rather than a
+ * duration measured from the epoch.
+ */
+function deploySeconds(data: DeployData): number | null {
+  return data.startedAtMs ? (Date.now() - data.startedAtMs) / 1000 : null;
+}
+
+const deployFlowLabel = (data: DeployData): string => data.flowId ?? 'merge-only';
+
 async function failDeploy(data: DeployData, err: unknown, sha?: string): Promise<never> {
   const message = err instanceof Error ? err.message : String(err);
+  const seconds = deploySeconds(data);
+  if (seconds !== null) recordDeploy(deployFlowLabel(data), 'error', seconds);
   deployLog(data)(`FAILED: ${message}`);
   await prisma.publication.update({
     where: { id: data.publicationId },
@@ -681,6 +704,8 @@ async function recordDeploySuccess(
   label: TranslatedMessage,
 ): Promise<void> {
   const e = env();
+  const seconds = deploySeconds(data);
+  if (seconds !== null) recordDeploy(deployFlowLabel(data), 'ok', seconds);
   const sha = data.mergedSha!;
   const artifactMeta = path.join(path.resolve(e.VAR_DIR), 'artifacts', `${sha}.json`);
   if (fs.existsSync(artifactMeta)) {

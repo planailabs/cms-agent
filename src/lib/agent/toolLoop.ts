@@ -21,6 +21,7 @@ import {
 } from './messageUtils';
 import type { PersistenceAdapter } from './persistence';
 import { recordTokenUsage } from './tokenBudget';
+import { countTokens } from '@/lib/metrics';
 import { reasoningEffortParam, withEffortFallback } from './reasoningEffort';
 import { buildSystemPrompt, type PromptInput } from './prompt';
 import { tmsg } from '@/lib/i18n';
@@ -318,6 +319,11 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
       }
       totalInputTokens += compacted.usage?.prompt_tokens ?? 0;
       totalOutputTokens += compacted.usage?.completion_tokens ?? 0;
+      countTokens(
+        e.OPENAI_MODEL,
+        compacted.usage?.prompt_tokens ?? 0,
+        compacted.usage?.completion_tokens ?? 0,
+      );
       const summary = compacted.choices[0]?.message.content?.trim();
       if (!summary) throw new Error('Context compaction returned an empty summary');
       const checkpoint: StoredMessage = { role: 'compaction', content: summary };
@@ -469,6 +475,9 @@ export async function runToolLoop(input: ToolLoopInput): Promise<ToolLoopOutcome
             totalInputTokens += promptTokens;
             totalOutputTokens += chunk.usage.completion_tokens ?? 0;
             if (promptTokens > 0) activeContextTokens = promptTokens;
+            // Labelled with the model this round actually used — a vision turn
+            // and a routing call are different prices under the same budget.
+            countTokens(model, promptTokens, chunk.usage.completion_tokens ?? 0);
           }
           const choice = chunk.choices?.[0];
           if (!choice) continue;

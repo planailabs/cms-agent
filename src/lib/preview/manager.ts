@@ -21,6 +21,7 @@ import {
 } from '@/lib/sandbox';
 import { activeBackend } from '@/lib/site';
 import { proxyAccessTimes, updateProxyRoutes } from '@/lib/proxyNative';
+import { metricsPort, recordPreviewStart, registerGauge, startTimer } from '@/lib/metrics';
 
 export interface PreviewInstance {
   branch: string;
@@ -65,6 +66,19 @@ state.logs ??= new Map();
 state.startErrors ??= new Map();
 state.startPhases ??= new Map();
 state.branchListeners ??= new Set();
+
+// Read at scrape time from the maps that already are the truth. The pair
+// (running, PREVIEW_MAX_INSTANCES) is what says whether evictForCapacity is
+// thrashing — a state nothing else in this process reports.
+registerGauge('cms.preview.instances', 'Preview dev servers currently registered', () =>
+  state.instances.size,
+);
+registerGauge('cms.preview.starting', 'Preview starts in flight', () => state.starting.size);
+registerGauge(
+  'cms.preview.capacity',
+  'PREVIEW_MAX_INSTANCES — the cap the gauge above is read against',
+  () => env().PREVIEW_MAX_INSTANCES,
+);
 
 /**
  * Dev-server output is kept in memory per branch, and outlives the process
@@ -124,7 +138,11 @@ function hostPort(host: string, port: number): string {
  */
 export const previewOrigin = (port: number): string => `http://${hostPort(env().HOST, port)}`;
 
-function buildRoutes(): { cms: string; previews: Record<string, string> } {
+function buildRoutes(): {
+  cms: string;
+  previews: Record<string, string>;
+  metrics?: string;
+} {
   const e = env();
   const previews: Record<string, string> = {};
   for (const [branch, { info }] of state.instances) {
@@ -132,8 +150,16 @@ function buildRoutes(): { cms: string; previews: Record<string, string> } {
     // dials this address — reaches them regardless of the v4/v6 stack.
     if (info.status === 'ready') previews[branch] = hostPort(e.HOST, info.port);
   }
+  // The metrics listener picks an ephemeral port, so the routes table is how
+  // the proxy learns where /metrics is. Omitted until it is listening — the
+  // proxy 404s the path rather than sending it to the CMS upstream.
+  const metrics = metricsPort();
   // cms upstream mirrors HOST (e.g. ::1 in dev, where astro dev binds IPv6)
-  return { cms: hostPort(e.HOST, e.PORT), previews };
+  return {
+    cms: hostPort(e.HOST, e.PORT),
+    previews,
+    ...(metrics ? { metrics: hostPort(e.HOST, metrics) } : {}),
+  };
 }
 
 /** Current routing table as single-line JSON for the embedded proxy. */
@@ -208,13 +234,27 @@ function freePort(): Promise<number> {
 // On globalThis with the rest of the manager state: two copies of this module
 // mean two queues, and two parallel `npm install` runs in the same worktree
 // starve each other into the timeout — which is the whole point of a queue.
-const installState = ((globalThis as unknown as { __previewInstallQueue?: { p: Promise<unknown> } })
-  .__previewInstallQueue ??= { p: Promise.resolve() });
+const installState = ((globalThis as unknown as {
+  __previewInstallQueue?: { p: Promise<unknown>; depth: number };
+}).__previewInstallQueue ??= { p: Promise.resolve(), depth: 0 });
+installState.depth ??= 0;
+
+// Everyone in this queue is waiting on one serialized `npm install`, so the
+// depth is the wait every one of them feels — and the number that explains a
+// slow preview start that has nothing to do with the branch being started.
+registerGauge(
+  'cms.install.queue.depth',
+  'Site dependency installs queued or running',
+  () => installState.depth,
+);
 
 export function queueInstall<T>(run: () => Promise<T>): Promise<T> {
+  installState.depth++;
   const next = installState.p.catch(() => {}).then(run);
   installState.p = next.catch(() => {}); // one failure must not break the queue
-  return next;
+  return next.finally(() => {
+    installState.depth--;
+  });
 }
 
 function readDepsStamp(stampPath: string): string | null {
@@ -444,9 +484,20 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
     const worktree = await ensureWorktree(branch);
     state.startPhases.set(branch, 'deps');
     notifyBranch(branch, 'deps');
-    await ensureDeps(sb, worktree, branch, repair);
+    // Timed per phase, not per start: "the preview is blank" is a different
+    // problem when the install took four minutes than when the dev server
+    // never accepted HTTP, and the boot page already knows which phase it is.
+    const depsTimer = startTimer();
+    try {
+      await ensureDeps(sb, worktree, branch, repair);
+    } catch (err) {
+      recordPreviewStart('deps', 'error', depsTimer());
+      throw err;
+    }
+    recordPreviewStart('deps', 'ok', depsTimer());
     state.startPhases.set(branch, 'server');
     notifyBranch(branch, 'server');
+    const serverTimer = startTimer();
     const port = await freePort();
 
     // The active site backend builds the full dev-server argv (and may
@@ -513,6 +564,7 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
       });
       await Promise.race([waitForHttp(e.HOST, port), earlyExit]);
     } catch (err) {
+      recordPreviewStart('server', 'error', serverTimer());
       child.kill('SIGTERM');
       state.instances.delete(branch);
       writeRoutesFile();
@@ -522,6 +574,7 @@ export async function ensureInstance(branch: string, repair = false): Promise<Pr
       throw err;
     }
 
+    recordPreviewStart('server', 'ok', serverTimer());
     info.status = 'ready';
     writeRoutesFile();
     notifyBranch(branch, 'ready');

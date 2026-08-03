@@ -53,6 +53,9 @@ Worth knowing about the rest:
 - **Budgets** (`*_TOKEN_BUDGET_PER_HOUR`) and **preview limits**
   (`PREVIEW_IDLE_TIMEOUT_MS`, `PREVIEW_MAX_INSTANCES`) are off/generous by
   default.
+- **Metrics** (`METRICS_*`) are on by default and need nothing configured in
+  development; production refuses to start without `METRICS_TOKEN` (see
+  [Metrics](#metrics)).
 
 The embedded proxy has its own notes in `proxy/README.md`.
 
@@ -115,6 +118,48 @@ are seeded so you can test multi-user behavior — switch identity with
 `POST /api/dev/impersonate {"email":"user@localhost"}` (GET lists them).
 Astro dev binds `::1` — the launcher sets `HOST=::1`, so the generated routes
 file and the proxy dial the same IPv6 address.
+
+## Metrics
+
+Prometheus exposition at **`/metrics` on the CMS host**, through the proxy
+like every other route — nothing extra to publish or firewall.
+
+```bash
+curl -H "Authorization: Bearer $METRICS_TOKEN" https://cms.example.com/metrics
+```
+
+It is served by a small listener the CMS starts on an **ephemeral loopback
+port**, published to the proxy in the routes file (`VAR_DIR/proxy-routes.json`,
+key `metrics`) exactly like a preview upstream. Until it is listening the key
+is absent and the proxy answers `/metrics` with a 404. One scrape covers the
+whole process: the CMS's OpenTelemetry instruments and the embedded proxy's own
+registry are concatenated into a single exposition.
+
+`METRICS_TOKEN` is required when `NODE_ENV=production` and the server refuses
+to boot without it, because the endpoint is reachable wherever the CMS is. Set
+one, or set `METRICS_ENABLED=false`. In development neither is needed.
+
+What is measured, and where it is recorded:
+
+| Metric | Type | Labels | Source |
+|---|---|---|---|
+| `cms_turn_duration_seconds` | histogram | `outcome` = ok/error/stopped | one agent turn end to end (`lib/agent/handler`) |
+| `cms_tokens_total` | counter | `model`, `kind` = input/output | every model response, including the skill router and compaction |
+| `cms_toolcall_duration_seconds` | histogram | `tool`, `outcome` | every agent tool call, built-in and MCP (`lib/agent/mcp`) |
+| `cms_preview_start_duration_seconds` | histogram | `phase` = deps/server, `outcome` | the two halves of booting a branch preview |
+| `cms_preview_instances` / `cms_preview_starting` / `cms_preview_capacity` | gauge | — | running dev servers against `PREVIEW_MAX_INSTANCES` |
+| `cms_install_queue_depth` | gauge | — | site dependency installs queued behind the serialized installer |
+| `cms_deploy_duration_seconds` | histogram | `flow`, `outcome` | a publication, from the row being created to succeeded/failed |
+| `cms_screenshot_duration_seconds` | histogram | `kind`, `outcome` | Playwright captures (compare shots, handoff, aligned) |
+| `cms_sse_streams` / `cms_turns_active` | gauge | — | open chat SSE connections; chats with a turn in flight |
+| `cms_http_server_duration_seconds` | histogram | `route`, `status` | every request, labelled by route pattern |
+| `cms_proxy_requests_total` | counter | `decision`, `status` class | the proxy: `cms`/`preview`/`boot`/`metrics`/`unauthorized`/`notfound` |
+| `cms_proxy_request_duration_seconds` | histogram | `decision` | proxy request lifetime |
+| `cms_proxy_upstream_errors_total` | counter | `decision` | proxy or upstream failures |
+
+Labels are deliberately bounded: no branch names, no chat ids, no raw paths.
+A route miss is `cms_proxy_requests_total{decision="notfound"}`; per-preview
+attribution comes from the CMS-side preview metrics instead.
 
 ## NixOS note (development)
 

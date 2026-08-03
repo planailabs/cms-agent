@@ -5,6 +5,8 @@
  * only one chat writes to a branch worktree at a time.
  */
 
+import { registerGauge } from '@/lib/metrics';
+
 /** A live browser connection. Closing is the transport's business — the
  *  stream ends when the request is aborted — so there is nothing to call:
  *  end() had no caller anywhere and only suggested a shutdown path exists. */
@@ -35,6 +37,16 @@ const connections = bus.connections;
 const activeTurns = bus.activeTurns;
 const branchLocks = bus.branchLocks;
 const stopRequests = (bus.stopRequests ??= new Set());
+
+// Counted at scrape time from the registry itself: a stream that leaks (the
+// abort handler never fired) shows up here as a count that never comes down,
+// which no per-connection counter would reveal.
+registerGauge('cms.sse.streams', 'Open chat SSE connections', () => {
+  let total = 0;
+  for (const set of connections.values()) total += set.size;
+  return total;
+});
+registerGauge('cms.turns.active', 'Chats with a turn in flight', () => activeTurns.size);
 
 export function addConnection(chatId: string, writer: SSEWriter): () => void {
   let set = connections.get(chatId);

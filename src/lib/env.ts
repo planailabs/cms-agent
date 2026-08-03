@@ -88,6 +88,21 @@ const schema = z.object({
   INPUT_TOKEN_BUDGET_PER_HOUR: z.coerce.number().int().nonnegative().default(0),
   OUTPUT_TOKEN_BUDGET_PER_HOUR: z.coerce.number().int().nonnegative().default(0),
 
+  // Metrics (lib/metrics) — Prometheus exposition at /metrics, reached
+  // through the proxy like every other route. On by default and on an
+  // ephemeral port: nothing has to be configured in development, and nothing
+  // new is bound to a predictable port. METRICS_TOKEN gates scrapes
+  // (Authorization: Bearer …) and is REQUIRED when NODE_ENV=production —
+  // there the endpoint is reachable wherever the CMS is.
+  // No .default(true): a ZodDefault substitutes BEFORE the preprocess runs,
+  // so the preprocess would receive the boolean `true` and read it as "not
+  // the string 'true'" — off. The absent case is handled in the preprocess.
+  METRICS_ENABLED: z.preprocess(
+    (v) => (v === undefined ? true : v === 'true' || v === '1'),
+    z.boolean(),
+  ),
+  METRICS_TOKEN: z.string().min(16).optional(),
+
   // Preview manager
   PREVIEW_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   PREVIEW_MAX_INSTANCES: z.coerce.number().int().positive().default(5),

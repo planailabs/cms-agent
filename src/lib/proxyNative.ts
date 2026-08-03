@@ -9,6 +9,7 @@ interface NativeProxy {
   upsertProxySession(session: { token: string; expiresAtMs: number }): void;
   dropProxySession(token: string): void;
   proxyAccessTimes(): Array<{ branch: string; atMs: number }>;
+  proxyMetricsText(): string;
 }
 
 interface NativeProxyState {
@@ -129,6 +130,21 @@ export function proxyAccessTimes(): Record<string, number> {
     // A sweep must not die because the proxy is mid-restart.
     console.warn('[proxy] could not read access times:', err);
     return {};
+  }
+}
+
+/**
+ * The proxy's Prometheus exposition, appended to the CMS's own by
+ * lib/metrics. Empty when the proxy is not running — the endpoint still
+ * serves the half that is.
+ */
+export function proxyMetricsText(): string {
+  if (!state.started) return '';
+  try {
+    return state.addon?.proxyMetricsText() ?? '';
+  } catch (err) {
+    console.warn('[proxy] could not read metrics:', err);
+    return '';
   }
 }
 

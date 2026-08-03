@@ -11,6 +11,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type OpenAI from 'openai';
 import { z } from 'zod';
 import { executeTool, isClientSideTool, toolsForTurn, type ToolContext } from '../tools/registry';
+import { recordToolCall, startTimer } from '@/lib/metrics';
 import { attachCodebaseMemory } from './codebaseMemory';
 import { attachContext7 } from './context7';
 import { attachCustomMcpsLabeled } from './custom';
@@ -254,6 +255,39 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
   };
   ctx.mcp = control;
 
+  /** The dispatch itself: a loaded external group's tool first, otherwise the
+   *  in-process server. Wrapped by callTool below, which times it. */
+  async function callToolInner(name: string, input: Record<string, unknown>): Promise<string> {
+    const ext = visible().find((e) => e.toolNames.has(name));
+    if (ext) return ext.callTool(name, input);
+    // Attached but not in a loaded group: the model is calling a tool it saw
+    // before an unload, or one it never had. Say so instead of failing blind.
+    const unloaded = [...attached.values()].find((e) => e.toolNames.has(name));
+    if (unloaded) {
+      return JSON.stringify({
+        error: `Tool "${name}" belongs to an MCP group that is not loaded — call load_mcp for it first (query_mcps finds the group).`,
+      });
+    }
+    try {
+      const result = await client.callTool({ name, arguments: input }, undefined, {
+        timeout: OWN_TOOL_TIMEOUT_MS,
+      });
+      const content = (result.content ?? []) as Array<{ type: string; text?: string }>;
+      return content
+        .filter((c) => c.type === 'text' && typeof c.text === 'string')
+        .map((c) => c.text)
+        .join('\n');
+    } catch (err) {
+      // Unknown/removed tool names (e.g. scratch_* from pre-.scratch chat
+      // histories) must not abort the turn — return an error the model can
+      // act on instead.
+      const msg = err instanceof Error ? err.message : String(err);
+      return JSON.stringify({
+        error: `Unknown or failed tool "${name}": ${msg}. Scratch files live in the .scratch/ directory — use write_file/read_file/list_dir on .scratch/ paths.`,
+      });
+    }
+  }
+
   return {
     control,
     async asOpenAiTools() {
@@ -283,34 +317,28 @@ export async function createMcpBridge(ctx: ToolContext): Promise<McpBridge> {
     promptHints() {
       return visible().map((e) => e.promptHint);
     },
+    /**
+     * Every tool call the agent makes passes through here — built-in,
+     * in-process MCP and custom stdio/web servers alike — so this is where
+     * they are timed. A stdio server that hangs is otherwise indistinguishable
+     * from a model that is thinking.
+     */
     async callTool(name, input) {
-      const ext = visible().find((e) => e.toolNames.has(name));
-      if (ext) return ext.callTool(name, input);
-      // Attached but not in a loaded group: the model is calling a tool it saw
-      // before an unload, or one it never had. Say so instead of failing blind.
-      const unloaded = [...attached.values()].find((e) => e.toolNames.has(name));
-      if (unloaded) {
-        return JSON.stringify({
-          error: `Tool "${name}" belongs to an MCP group that is not loaded — call load_mcp for it first (query_mcps finds the group).`,
-        });
-      }
+      const stop = startTimer();
+      let outcome: 'ok' | 'error' = 'ok';
       try {
-        const result = await client.callTool({ name, arguments: input }, undefined, {
-          timeout: OWN_TOOL_TIMEOUT_MS,
-        });
-        const content = (result.content ?? []) as Array<{ type: string; text?: string }>;
-        return content
-          .filter((c) => c.type === 'text' && typeof c.text === 'string')
-          .map((c) => c.text)
-          .join('\n');
+        const result = await callToolInner(name, input);
+        // A failed tool call answers with an error payload rather than
+        // throwing — the model has to be able to act on it — so that payload
+        // is what "failed" looks like from here. ponytail: prefix check; give
+        // callToolInner a typed result if anything else ever needs to know.
+        if (result.startsWith('{"error"')) outcome = 'error';
+        return result;
       } catch (err) {
-        // Unknown/removed tool names (e.g. scratch_* from pre-.scratch chat
-        // histories) must not abort the turn — return an error the model can
-        // act on instead.
-        const msg = err instanceof Error ? err.message : String(err);
-        return JSON.stringify({
-          error: `Unknown or failed tool "${name}": ${msg}. Scratch files live in the .scratch/ directory — use write_file/read_file/list_dir on .scratch/ paths.`,
-        });
+        outcome = 'error';
+        throw err;
+      } finally {
+        recordToolCall(name, outcome, stop());
       }
     },
     async close() {

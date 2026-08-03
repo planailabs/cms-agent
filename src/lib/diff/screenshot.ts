@@ -36,6 +36,27 @@ import {
 import { branchSha, defaultBranch } from "@/lib/git/engine";
 import { ensureInstance, previewOrigin } from "@/lib/preview/manager";
 import type { PreviewDevice } from "@/lib/preview/devices";
+import { recordScreenshot, startTimer } from "@/lib/metrics";
+
+/**
+ * Time one browser capture. Playwright is the heaviest thing this server
+ * runs — a launch, a page load and a full-page shot per call — and it fails
+ * by hanging rather than by throwing, which is exactly what a duration
+ * histogram shows and a log line does not.
+ *
+ * The four kinds below never nest, so they sum to the real browser time.
+ */
+async function timedCapture<T>(kind: string, run: () => Promise<T>): Promise<T> {
+  const stop = startTimer();
+  try {
+    const result = await run();
+    recordScreenshot(kind, "ok", stop());
+    return result;
+  } catch (err) {
+    recordScreenshot(kind, "error", stop());
+    throw err;
+  }
+}
 
 // Content-aligned shots: the same page re-rendered with filler <div>s injected
 // (a real reflow — no canvas slicing) so before/after content sits at the same
@@ -177,7 +198,11 @@ async function openPage(
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
 /** Capture one route of a branch's live preview (boots the preview if needed). */
-export async function captureRoute(
+export const captureRoute = (
+  ...args: Parameters<typeof captureRouteInner>
+): Promise<{ status: number | null }> => timedCapture("route", () => captureRouteInner(...args));
+
+async function captureRouteInner(
   branch: string,
   route: string,
   outFile: string,
@@ -215,7 +240,11 @@ export interface HandoffShots {
   status: number | null;
 }
 
-export async function captureAnnotatedRoute(
+export const captureAnnotatedRoute = (
+  ...args: Parameters<typeof captureAnnotatedRouteInner>
+): Promise<HandoffShots> => timedCapture("annotated", () => captureAnnotatedRouteInner(...args));
+
+async function captureAnnotatedRouteInner(
   branch: string,
   route: string,
   annotations: import("@/injected/annotate").EditAnnotations,
@@ -264,7 +293,11 @@ export async function captureAnnotatedRoute(
 }
 
 /** Raw shot: render the route, capture content markers next to it, screenshot. */
-async function screenshot(
+const screenshot = (
+  ...args: Parameters<typeof screenshotInner>
+): Promise<MarkerDoc | null> => timedCapture("shot", () => screenshotInner(...args));
+
+async function screenshotInner(
   port: number,
   route: string,
   outFile: string,
@@ -337,7 +370,11 @@ async function openAligned(
 /** Render both aligned shots (best-effort) from a computed spacing plan. If the
  *  structural reflow leaves residual drift, a last-resort corrective pass patches
  *  it geometrically before the shot. */
-async function alignedShots(
+const alignedShots = (
+  ...args: Parameters<typeof alignedShotsInner>
+): Promise<void> => timedCapture("aligned", () => alignedShotsInner(...args));
+
+async function alignedShotsInner(
   aPort: number,
   bPort: number,
   route: string,

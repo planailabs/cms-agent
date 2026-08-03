@@ -4,7 +4,8 @@
  * turn state machine, then runs the tool loop. Server is the source of truth.
  */
 import { prisma } from '@/lib/db';
-import { broadcast } from './bus';
+import { broadcast, isTurnStopRequested } from './bus';
+import { recordTurn, startTimer } from '@/lib/metrics';
 import { getLastToolCalls } from './messageUtils';
 import {
   createDbAdapter,
@@ -48,7 +49,33 @@ export interface HandleOptions {
   workflowPhase?: WorkflowPhase;
 }
 
+/**
+ * A turn, as a user experiences one: everything between their message and the
+ * agent going idle again, however many runs the phase machine needed.
+ *
+ * Timed here rather than at the endpoint because the endpoint is only one of
+ * four callers (workflow transitions and automatisms start turns too), and a
+ * stop is a separate outcome from a failure — it is the user getting what they
+ * asked for. The stop flag is still set at this point; the turn lock its
+ * caller releases afterwards is what clears it.
+ */
 export async function handleChatMessage(
+  userId: string,
+  locale: string,
+  body: IncomingChatMessage,
+  opts: HandleOptions = {},
+): Promise<void> {
+  const stop = startTimer();
+  try {
+    await runChatTurn(userId, locale, body, opts);
+    recordTurn(isTurnStopRequested(body.chatId) ? 'stopped' : 'ok', stop());
+  } catch (err) {
+    recordTurn('error', stop());
+    throw err;
+  }
+}
+
+async function runChatTurn(
   userId: string,
   locale: string,
   body: IncomingChatMessage,

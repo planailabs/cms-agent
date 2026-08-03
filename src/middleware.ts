@@ -3,7 +3,9 @@
  * allowlist on every request (covers users removed after sign-up), guards
  * API routes, including preview subdomains through Better Auth's shared cookie.
  */
+import type { APIContext, MiddlewareNext } from 'astro';
 import { defineMiddleware } from 'astro:middleware';
+import { recordHttpRequest, startTimer } from '@/lib/metrics';
 import { auth, COOKIE_SCOPE_MARKER, sessionCookieMigrationHeaders } from '@/lib/auth';
 import { isEmailAllowed } from '@/lib/allowlist';
 import { BOOT_PATH_RE, cleanBootOrigin, handlePreviewBoot } from '@/lib/preview/bootPage';
@@ -48,7 +50,29 @@ const SELF_AUTHENTICATING_PATHS = [
   /^\/injected-annotate\.js$/,
 ];
 
+/**
+ * Every request passes through here, so this is where request duration is
+ * measured — including the ones this file answers itself (401s, the signin
+ * redirect, the boot page), which never reach a route.
+ *
+ * Labelled with the ROUTE PATTERN, never the path: paths carry chat, branch
+ * and upload ids, and one series per id is how a metrics store falls over.
+ */
 export const onRequest = defineMiddleware(async (context, next) => {
+  const stop = startTimer();
+  try {
+    const response = await handle(context, next);
+    recordHttpRequest(context.routePattern, response.status, stop());
+    return response;
+  } catch (err) {
+    // What the client gets from an unhandled throw here, and the only shape
+    // the series can carry a failure in.
+    recordHttpRequest(context.routePattern, 500, stop());
+    throw err;
+  }
+});
+
+async function handle(context: APIContext, next: MiddlewareNext): Promise<Response> {
   const { pathname, search } = new URL(context.request.url);
 
   // Prerendered routes run at BUILD time, where there is no proxy and no real
@@ -165,4 +189,4 @@ export const onRequest = defineMiddleware(async (context, next) => {
     for (const header of cookieMigration) response.headers.append('Set-Cookie', header);
   }
   return response;
-});
+}
