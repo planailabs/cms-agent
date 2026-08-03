@@ -50,6 +50,8 @@ describe('mcp → openai tool schemas', () => {
         'list_pages', 'git_status', 'git_branches', 'get_user_context', 'list_conflicts',
         'resume_automatism', 'git_rebase_continue', 'git_rebase_abort',
         'list_uploads', 'content_inventory', 'site_structure', 'list_projects',
+        // Takes nothing: it acts on the edits attached to the latest message.
+        'use_element_edits',
       ]);
       const unexpected = empty.map((t) => t.function.name).filter((n) => !legitimatelyEmpty.has(n));
       expect(unexpected).toEqual([]);
