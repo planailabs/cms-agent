@@ -483,7 +483,14 @@ describe('preview + proxy', () => {
       const composer = s.page.locator('[data-action="machine-config-input"]');
       await composer.fill('What do you think about these edits?');
       await composer.press('Enter');
-      await s.page.waitForFunction(() => document.querySelector('[data-action="machine-config-input"]')?.textContent === '');
+      // The message leaving the composer looks two ways: emptied, or gone —
+      // a pending card routes it as an ANSWER, which moves the turn to
+      // 'waiting' and replaces the composer with Stop. Requiring the element
+      // to still be there AND be empty waits for a state that never comes.
+      await s.page.waitForFunction(() => {
+        const el = document.querySelector('[data-action="machine-config-input"]');
+        return !el || el.textContent === '';
+      });
       ok('chat messages carry pending edit annotations as context', sentContext?.editAnnotations?.comments?.[0]?.text === 'Updated bench comment');
       await expect
         .poll(() => s.page.locator('[data-edit-active-tool]').count(), { timeout: 5_000 })
