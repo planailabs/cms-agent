@@ -342,7 +342,7 @@ export interface WorkspaceState {
    * compare window was enough to put the card back and take the composer
    * away mid-sentence. This slice is created once per app.
    */
-  dismissedPrompt: { chatId: string; toolName: string } | null;
+  dismissedPrompt: { chatId: string; key: string } | null;
 
   /** Pending context chip (selection/element from the preview overlay). */
   contextChip: ContextChip | null;
@@ -473,16 +473,28 @@ export const createInitialBrowserCompareState = (): BrowserCompareState => ({
 
 /** Clears the chat-scoped parts of the workspace (call on chat switch). */
 /**
+ * Identity of a prompt, for remembering a decision about it.
+ *
+ * The input is part of it on purpose: the NEXT finish_execution card carries
+ * a different summary, so a dismissal cannot leak onto it — which is what
+ * lets this be remembered without a rule for when to forget it. A rule was
+ * the first attempt, and an early snapshot landing right after the click
+ * tripped it, undoing the dismissal a few hundred milliseconds later.
+ */
+export const promptKey = (toolName: string, input: unknown): string =>
+  `${toolName}:${JSON.stringify(input ?? null)}`;
+
+/**
  * Has the user waved this prompt away for now? Pure, so both the card (which
  * hides) and the composer (which takes its place) answer it the same way.
  */
 export const promptDismissed = (
-  toolName: string | undefined,
+  prompt: { toolName: string; input?: unknown } | undefined,
   chatId: string | null | undefined,
   ws: Pick<WorkspaceState, 'dismissedPrompt'>,
 ): boolean =>
-  !!toolName &&
-  ws.dismissedPrompt?.toolName === toolName &&
+  !!prompt &&
+  ws.dismissedPrompt?.key === promptKey(prompt.toolName, prompt.input) &&
   ws.dismissedPrompt.chatId === (chatId ?? '');
 
 export const resetWorkspaceChatState = (ws: WorkspaceState): void => {

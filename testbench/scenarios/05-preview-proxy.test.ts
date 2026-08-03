@@ -373,7 +373,13 @@ describe('preview + proxy', () => {
       const editBtn = s.page.locator('.ws-rail [data-action="ws-edit-mode"]:not([disabled])');
       await editBtn.waitFor({ timeout: 60_000 });
       await editBtn.click();
+      // Clicking parks the pointer on the rail slot, and hovering that slot is
+      // precisely what opens the flyout — so without moving away first, this
+      // check hovers the thing it is asserting is not hovered. Whether it saw
+      // "hidden" came down to which side of the CSS transition it sampled.
+      await s.page.mouse.move(0, 0);
       const editMenu = s.page.locator('.ws-edit-menu');
+      await expect.poll(() => editMenu.isVisible(), { timeout: 5_000 }).toBe(false);
       ok('edit tools stay hidden until the edit icon is hovered', !(await editMenu.isVisible()));
       // The rail BUTTON opens the flyout; the flyout carries an exit item of
       // its own (see rail.ts), so an unscoped .ws-rail lookup matches both.

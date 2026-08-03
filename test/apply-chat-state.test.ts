@@ -6,7 +6,11 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { store } from '@/components/chat/app/store';
-import { createInitialWorkspaceState, promptDismissed } from '@/components/workspace/state';
+import {
+  createInitialWorkspaceState,
+  promptDismissed,
+  promptKey,
+} from '@/components/workspace/state';
 import {
   applyChatState,
   type ChatStateSnapshot,
@@ -197,15 +201,16 @@ describe('applyChatState', () => {
       NonNullable<typeof store.state.chat>['aiChat']
     >;
     store.state.chat = { aiChat: mc } as never;
+    const question = { toolName: 'finish_execution', input: { summary: 'done' } };
     const pending = {
       epoch: 'dismiss-test',
       turnPhase: 'waiting_for_answer' as const,
-      pendingQuestion: { toolName: 'finish_execution', input: { summary: 'done' } },
+      pendingQuestion: question,
     };
+    const dismissed = () =>
+      promptDismissed(mc.clientPrompt, store.state.activeChatId, store.state.workspace);
 
     applyChatState(snap({ ...pending, seq: 1 }));
-    const dismissed = () =>
-      promptDismissed('finish_execution', store.state.activeChatId, store.state.workspace);
     expect(dismissed()).toBe(false);
 
     // "Not yet — keep chatting" (workspace/actions.dismissFinishExecution):
@@ -214,26 +219,32 @@ describe('applyChatState', () => {
     // later state event used to put the card back over the composer.
     store.state.workspace.dismissedPrompt = {
       chatId: 'chat-1',
-      toolName: 'finish_execution',
+      key: promptKey(question.toolName, question.input),
     };
     applyChatState(snap({ ...pending, seq: 2 }));
     expect(dismissed()).toBe(true);
 
-    // A DIFFERENT question is a new decision — never pre-dismissed.
+    // The NEXT finish_execution card is a different summary — a new decision,
+    // never pre-dismissed, and no forgetting rule was needed to get that.
     applyChatState(
       snap({
         ...pending,
         seq: 3,
+        pendingQuestion: { toolName: 'finish_execution', input: { summary: 'second run' } },
+      }),
+    );
+    expect(dismissed()).toBe(false);
+
+    // Nor does it leak onto a different question entirely.
+    applyChatState(
+      snap({
+        ...pending,
+        seq: 4,
         pendingQuestion: { toolName: 'ask_question', input: { question: 'which?' } },
       }),
     );
     expect(mc.clientPrompt?.toolName).toBe('ask_question');
-    expect(store.state.workspace.dismissedPrompt).toBeNull();
-
-    // …and so is the same card coming back after the question was resolved.
-    store.state.workspace.dismissedPrompt = { chatId: 'chat-1', toolName: 'finish_execution' };
-    applyChatState(snap({ epoch: 'dismiss-test', seq: 4 })); // idle, nothing pending
-    expect(store.state.workspace.dismissedPrompt).toBeNull();
+    expect(dismissed()).toBe(false);
   });
 
   it('drops stale sequenced snapshots entirely (sidebar included)', () => {

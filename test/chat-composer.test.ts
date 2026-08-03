@@ -50,7 +50,9 @@ describe('chat composer', () => {
   // was enough to put the card back over a composer mid-sentence.
   it('keeps the input while a workflow card is dismissed', async () => {
     const { store } = await import('@/components/chat/app/store');
-    const { createInitialWorkspaceState } = await import('@/components/workspace/state');
+    const { createInitialWorkspaceState, promptKey } = await import(
+      '@/components/workspace/state'
+    );
     const { renderWorkflowCards } = await import('@/components/chat/ui/chat/cards');
     const mc = {
       phase: 'question' as const,
@@ -69,7 +71,10 @@ describe('chat composer', () => {
     );
 
     // "Not yet — keep chatting", recorded where a snapshot cannot undo it.
-    store.state.workspace.dismissedPrompt = { chatId: 'chat-1', toolName: 'finish_execution' };
+    store.state.workspace.dismissedPrompt = {
+      chatId: 'chat-1',
+      key: promptKey('finish_execution', { summary: 'done' }),
+    };
     expect(renderChatComposer(mc, locales.en, locales.en.chatMode)).toContain(
       'data-action="machine-config-input"',
     );

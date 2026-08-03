@@ -81,7 +81,7 @@ const renderExecutionFinishedCard = (mc: AiChat, state: AppState): string => {
   if (mc.phase !== 'question' || mc.clientPrompt?.toolName !== 'finish_execution') return '';
   if (
     mc.clientPrompt.dismissed ||
-    promptDismissed('finish_execution', state.activeChatId, state.workspace)
+    promptDismissed(mc.clientPrompt, state.activeChatId, state.workspace)
   ) {
     return '';
   }

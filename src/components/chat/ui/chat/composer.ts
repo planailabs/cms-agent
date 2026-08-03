@@ -66,7 +66,7 @@ export const renderChatComposer = (
   const isDismissedCard =
     mc.phase === 'question' &&
     (prompt?.dismissed === true ||
-      promptDismissed(prompt?.toolName, store.state.activeChatId, store.state.workspace));
+      promptDismissed(prompt, store.state.activeChatId, store.state.workspace));
   const showComposer = mc.phase === 'idle' || mc.phase === 'error' || isTextQuestion || isDismissedCard;
 
   const placeholder = escapeHtml(

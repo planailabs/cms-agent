@@ -183,16 +183,13 @@ export const applyChatState = (
   // own that edge; snapshots own question/error/crash-recovery.
   const mc = st.chat?.aiChat;
   if (mc) {
-    // A dismissal ("Not yet — keep chatting") outlives the prompt object it
-    // was made about — see workspace state's dismissedPrompt. Here is where it
-    // stops being true: the question is gone, or it is a different one.
-    const ws = st.workspace;
-    if (snapshot.turnPhase !== 'waiting_for_answer' || !snapshot.pendingQuestion) {
-      ws.dismissedPrompt = null;
-    } else if (ws.dismissedPrompt && ws.dismissedPrompt.toolName !== snapshot.pendingQuestion.toolName) {
-      ws.dismissedPrompt = null;
-    }
-
+    // No forgetting rule here on purpose: a dismissal is keyed to the exact
+    // prompt it was made about (workspace state's promptKey), so the next
+    // question — including the next finish_execution card, which carries a
+    // different summary — is not covered by it. An earlier attempt cleared
+    // the flag from here and a snapshot landing right after the click undid
+    // the dismissal a few hundred milliseconds later. Chat switch resets it
+    // (resetWorkspaceChatState).
     if (snapshot.turnPhase === 'waiting_for_answer' && snapshot.pendingQuestion) {
       mc.phase = 'question';
       mc.clientPrompt = {

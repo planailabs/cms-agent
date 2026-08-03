@@ -21,6 +21,7 @@ import { publishCardReducer } from './publishCard';
 import { loadPreviewRoute, scheduleTabsSave } from './tabsSync';
 import {
   createInitialElementEditState,
+  promptKey,
   type BrowserName,
   type ContextChip,
   type DiffPage,
@@ -124,7 +125,7 @@ export const dismissFinishExecution = (): void => {
     // transitions, so the decision is recorded where neither reaches it.
     store.state.workspace.dismissedPrompt = {
       chatId: store.state.activeChatId ?? '',
-      toolName: mc.clientPrompt.toolName,
+      key: promptKey(mc.clientPrompt.toolName, mc.clientPrompt.input),
     };
     store.notify();
   }
