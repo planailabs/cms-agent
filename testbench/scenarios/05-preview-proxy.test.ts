@@ -353,13 +353,18 @@ describe('preview + proxy', () => {
       // Dismissing is client-side only (workspace/actions.dismissFinishExecution
       // just marks the prompt dismissed in the store), so the earlier test that
       // asserts the publish row still sees it in its own session.
+      // The chat's state arrives after the click (history fetch + SSE), so
+      // asking for the card straight away is a race the composer loses: the
+      // count is 0, the dismiss is skipped, and the fill at the end of this
+      // test waits 30s for an element the card is still standing in for.
+      // Whichever of the two renders IS the chat having settled — the same
+      // shape bootWorkspace uses for the composer-or-fresh-session choice.
+      const chatComposer = s.page.locator('[data-action="machine-config-input"]').first();
       const dismissFinish = s.page.locator('[data-action="ws-dismiss-finish"]').first();
-      if ((await dismissFinish.count()) > 0) {
+      await chatComposer.or(dismissFinish).waitFor({ state: 'visible', timeout: 30_000 });
+      if (await dismissFinish.isVisible()) {
         await dismissFinish.click();
-        await s.page
-          .locator('[data-action="machine-config-input"]')
-          .first()
-          .waitFor({ state: 'visible', timeout: 10_000 });
+        await chatComposer.waitFor({ state: 'visible', timeout: 10_000 });
       }
       // Reviewing is no longer a phase: the diff viewer IS the compare window,
       // and opening a chat no longer opens it — edit mode starts from there.

@@ -192,6 +192,39 @@ describe('applyChatState', () => {
     expect(mc.phase).toBe('idle');
   });
 
+  it('keeps a dismissed card dismissed across snapshots, but not across prompts', () => {
+    const mc = { phase: 'idle', messages: [] } as never as NonNullable<
+      NonNullable<typeof store.state.chat>['aiChat']
+    >;
+    store.state.chat = { aiChat: mc } as never;
+    const pending = {
+      epoch: 'dismiss-test',
+      turnPhase: 'waiting_for_answer' as const,
+      pendingQuestion: { toolName: 'finish_execution', input: { summary: 'done' } },
+    };
+
+    applyChatState(snap({ ...pending, seq: 1 }));
+    expect(mc.clientPrompt?.dismissed).toBeUndefined();
+
+    // "Not yet — keep chatting": local, and the composer takes the card's
+    // place. Any later snapshot (opening the compare window emits one) used
+    // to rebuild the prompt and put the card back over the composer.
+    mc.clientPrompt!.dismissed = true;
+    applyChatState(snap({ ...pending, seq: 2 }));
+    expect(mc.clientPrompt?.dismissed).toBe(true);
+
+    // A DIFFERENT question is a new decision — never pre-dismissed.
+    applyChatState(
+      snap({
+        ...pending,
+        seq: 3,
+        pendingQuestion: { toolName: 'ask_question', input: { question: 'which?' } },
+      }),
+    );
+    expect(mc.clientPrompt?.toolName).toBe('ask_question');
+    expect(mc.clientPrompt?.dismissed).toBeUndefined();
+  });
+
   it('drops stale sequenced snapshots entirely (sidebar included)', () => {
     applyChatState(snap({ epoch: 'stale-side', seq: 5, title: 'Fresh' }));
     applyChatState(snap({ epoch: 'stale-side', seq: 3, title: 'Old' }));

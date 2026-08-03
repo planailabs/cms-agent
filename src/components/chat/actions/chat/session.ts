@@ -184,11 +184,25 @@ export const applyChatState = (
   const mc = st.chat?.aiChat;
   if (mc) {
     if (snapshot.turnPhase === 'waiting_for_answer' && snapshot.pendingQuestion) {
-      mc.phase = 'question';
-      mc.clientPrompt = {
+      const next = {
         toolName: snapshot.pendingQuestion.toolName,
         input: snapshot.pendingQuestion.input ?? {},
       };
+      // "Not yet — keep chatting" is a local decision about THIS prompt, and
+      // snapshots replace state wholesale — so rebuilding the prompt from one
+      // used to undo it. Any later state event (opening the compare window is
+      // enough) put the card back in front of someone who had dismissed it,
+      // taking the composer away with it, because the card's action row
+      // stands where the composer would be.
+      //
+      // Carried across only while it is the SAME prompt: a new question is a
+      // new decision and must be shown.
+      const prev = mc.clientPrompt;
+      const samePrompt =
+        prev?.toolName === next.toolName &&
+        JSON.stringify(prev?.input ?? null) === JSON.stringify(next.input);
+      mc.phase = 'question';
+      mc.clientPrompt = samePrompt && prev?.dismissed ? { ...next, dismissed: true } : next;
       mc.canContinue = false;
     } else if (snapshot.turnPhase === 'idle') {
       if (snapshot.lastError) {
