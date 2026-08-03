@@ -420,6 +420,11 @@ describe('preview + proxy', () => {
       await redo.waitFor({ state: 'visible' });
       ok('redo appears after undo all', true);
       await redo.click();
+      // Redo restores the pre-clear snapshot in the IFRAME and the toolbar
+      // follows from the state it posts back — so the toolbar regaining
+      // "undo all" (two edits again) is the signal that the redo landed.
+      // Counting bubbles straight after the click races that round trip.
+      await undoAll.waitFor({ state: 'visible', timeout: 10_000 });
       ok(
         'comment edit saves the new text',
         (await frame?.locator('.cms-ov-bubble').filter({ hasText: 'Updated bench comment' }).count()) === 1,

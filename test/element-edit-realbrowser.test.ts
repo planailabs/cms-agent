@@ -79,6 +79,52 @@ describe('element edit', () => {
           ?.text;
       });
       expect(text).toBe('Updated comment');
+
+      // Undo all, then redo. clear() snapshots the annotations AND the undo
+      // stack, so one redo puts both back — the whole point of it being one
+      // entry rather than a per-edit rewind. The bench reaches this path only
+      // at the end of a long journey, where a regression reads as a flake.
+      const state = async () =>
+        page.evaluate(() => {
+          const posts = (
+            window as unknown as {
+              editTest: {
+                posts: Array<{
+                  type: string;
+                  undoDepth?: number;
+                  canRedo?: boolean;
+                  annotations?: { comments: Array<{ text: string }> };
+                }>;
+              };
+            }
+          ).editTest.posts;
+          const last = posts.findLast((message) => message.type === 'cms:edit-changed');
+          return {
+            comments: last?.annotations?.comments.map((c) => c.text) ?? [],
+            undoDepth: last?.undoDepth,
+            canRedo: last?.canRedo,
+          };
+        });
+
+      const send = (type: string) =>
+        page.evaluate((type) => {
+          const handlers = (
+            window as unknown as { editTest: Record<string, (data: Record<string, unknown>) => void> }
+          ).editTest;
+          handlers[type]({});
+        }, type);
+
+      expect(await state()).toMatchObject({ comments: ['Updated comment'], undoDepth: 2 });
+
+      await send('cms:edit-clear');
+      expect(await state()).toMatchObject({ comments: [], undoDepth: 0, canRedo: true });
+      await expect.poll(() => page.locator('.cms-ov-bubble').count()).toBe(0);
+
+      await send('cms:edit-redo');
+      expect(await state()).toMatchObject({ comments: ['Updated comment'], undoDepth: 2 });
+      await expect
+        .poll(() => page.locator('.cms-ov-bubble').filter({ hasText: 'Updated comment' }).count())
+        .toBe(1);
     } finally {
       await page.close();
     }
