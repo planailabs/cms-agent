@@ -185,7 +185,7 @@ describe('e2e agent journey', () => {
     J.publicationId = pubJson.publicationId;
     J.deployChatId = pubJson.deployChatId;
 
-    const deployState = await flowChatState(J.deployChatId!);
+    const deployState = await chatState(J.deployChatId!);
     ok(
       'deployment exposes live work steps for the visible agent status',
       (deployState.automatism?.steps.length ?? 0) > 0,

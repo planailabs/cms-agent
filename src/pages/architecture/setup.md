@@ -135,9 +135,15 @@ is absent and the proxy answers `/metrics` with a 404. One scrape covers the
 whole process: the CMS's OpenTelemetry instruments and the embedded proxy's own
 registry are concatenated into a single exposition.
 
-`METRICS_TOKEN` is required when `NODE_ENV=production` and the server refuses
-to boot without it, because the endpoint is reachable wherever the CMS is. Set
-one, or set `METRICS_ENABLED=false`. In development neither is needed.
+`METRICS_TOKEN` is **required in any production build** — the built server
+refuses to boot without it, because there the endpoint is reachable wherever
+the CMS is. That covers both deployments: the docker image (which also sets
+`NODE_ENV=production`) and the NixOS module (which does not). Set one, or set
+`METRICS_ENABLED=false`. `astro dev` and the test suite need neither.
+
+For the NixOS module it belongs in `services.cms-agent.environmentFile`
+alongside the other secrets; for the compose stack, in the `environment:`
+block of the CMS service.
 
 What is measured, and where it is recorded:
 

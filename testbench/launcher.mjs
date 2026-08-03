@@ -199,6 +199,9 @@ Object.assign(serverEnv, {
   OIDC_CLIENT_ID: 'bench',
   OIDC_CLIENT_SECRET: 'bench-secret',
   ROUTE_MAPPINGS: '',
+  // The bench boots the production build, where a metrics token is mandatory
+  // — and having one lets the probes exercise the gate rather than skip it.
+  METRICS_TOKEN: 'bench-metrics-token-0123456789',
 });
 
 // The auth phase reboots the SAME workspace/DB with the real auth stack:

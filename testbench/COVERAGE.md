@@ -49,6 +49,7 @@ locally booted production build (see `launcher.mjs`). Status legend:
 | `/api/admin/grants` | 04 (asserts it 404s) | ⛔ removed with autonomy grants |
 | `GET /dashboard` (admin gate) | 04 | ✅ |
 | `/injected-cms-agent.js`, `/injected-agent-module.js`, `/injected-annotate.js` | 01 | ✅ — also the regression guard for the proxy front door vs. prerendering: these three are prerendered, so a guard that does not step aside at build time ships its own 403 note as the bundle, and only a probe against a real production build sees it |
+| `GET /metrics` (Prometheus, token-gated) | 01 | ✅ — 401 without the token, and the 200 body must carry both halves: the CMS's OpenTelemetry instruments and the proxy's own registry, which only lines up if the ephemeral-port listener reached the proxy through the routes table |
 | `/__preview/boot/<branch>` (CMS-host redirect) | 05 | ✅ |
 | `/__preview/wait/<branch>` (SSE) | 05 | ✅ |
 | `<branch>.BASE_DOMAIN` proxy routing + injection | 05 | ✅ |

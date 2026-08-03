@@ -275,7 +275,14 @@ export function startMetricsServer(onListening: () => void): void {
   // Same shape as the sandbox's production refusal: a default that is right
   // for a laptop is wrong for a public host, and the boot is where that gets
   // said — not a scrape six months later that nobody was authenticating.
-  if (!e.METRICS_TOKEN && process.env.NODE_ENV === 'production') {
+  //
+  // Keyed on the BUILD, not only on NODE_ENV: the docker image sets
+  // NODE_ENV=production but the NixOS module does not, and "the deployment
+  // that does not happen to set a variable serves its metrics to the world"
+  // is not a distinction anyone means to make. import.meta.env.PROD is true
+  // in exactly the builds that are a deployment — `astro build` output — and
+  // false under `astro dev` and vitest.
+  if (!e.METRICS_TOKEN && (import.meta.env.PROD || process.env.NODE_ENV === 'production')) {
     throw new Error(
       'METRICS_TOKEN is required in production: /metrics is served on the CMS host. ' +
         'Set one (any 16+ character secret) and give it to the scraper, or set METRICS_ENABLED=false.',

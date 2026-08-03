@@ -241,6 +241,36 @@ describe('api probes', () => {
     ok('/injected-annotate.js exposes __cmsAnnotate', annotate.status === 200 && annotate.text.includes('__cmsAnnotate'));
   });
 
+  it('metrics: token-gated, proxied, and covers both halves of the process', async () => {
+    const { benchRun } = await import('../lib/env');
+    const token = benchRun().env.METRICS_TOKEN;
+
+    // Reached through the proxy on the CMS host like any other route, but
+    // served by the CMS's own ephemeral-port listener — a 200 here proves the
+    // routes-table handoff, not just that something is listening somewhere.
+    const anonymous = await fetch(`${client.baseUrl}/metrics`);
+    ok('/metrics without a token → 401', anonymous.status === 401, `got ${anonymous.status}`);
+
+    const res = await fetch(`${client.baseUrl}/metrics`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const body = await res.text();
+    ok('/metrics with the token → 200', res.status === 200, `got ${res.status}`);
+    // The CMS half: every request so far went through the middleware.
+    ok(
+      'exposition carries the CMS instruments',
+      body.includes('cms_http_server_duration_seconds') && body.includes('cms_preview_instances'),
+    );
+    // The proxy half: same exposition, appended over N-API. This request
+    // itself was routed by the proxy, so the counter cannot be empty.
+    ok(
+      'exposition carries the proxy registry',
+      body.includes('cms_proxy_requests_total{decision="metrics"') &&
+        body.includes('cms_proxy_request_duration_seconds_bucket'),
+      body.split('\n').filter((l) => l.startsWith('cms_proxy')).slice(0, 5).join(' | '),
+    );
+  });
+
   it('workflow transition guards without a plan', async () => {
     const approve = await client.req('POST', `/api/chats/${state.chatId}/approve-plan`, {});
     ok('approve-plan without pending plan is a 4xx', approve.status >= 400 && approve.status < 500, `got ${approve.status}`);
