@@ -332,6 +332,18 @@ export interface WorkspaceState {
   /** Publish progress card (null = no publish attempted). */
   publish: PublishCardState | null;
 
+  /**
+   * A workflow card the user answered with "Not yet — keep chatting", so the
+   * composer takes its place until the question is resolved or replaced.
+   *
+   * Lives HERE, not on mc.clientPrompt: that object is rebuilt from every
+   * chat-state snapshot and cleared by every phase transition, so a flag on
+   * it survived only until the next unrelated state event — opening the
+   * compare window was enough to put the card back and take the composer
+   * away mid-sentence. This slice is created once per app.
+   */
+  dismissedPrompt: { chatId: string; toolName: string } | null;
+
   /** Pending context chip (selection/element from the preview overlay). */
   contextChip: ContextChip | null;
 
@@ -417,6 +429,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   executionSha: null,
   executions: [],
   publish: null,
+  dismissedPrompt: null,
   contextChip: null,
   diff: createInitialDiffState(),
   navHistory: { preview: createNavHistory(), diff: createNavHistory(), navOpen: null },
@@ -459,6 +472,19 @@ export const createInitialBrowserCompareState = (): BrowserCompareState => ({
 });
 
 /** Clears the chat-scoped parts of the workspace (call on chat switch). */
+/**
+ * Has the user waved this prompt away for now? Pure, so both the card (which
+ * hides) and the composer (which takes its place) answer it the same way.
+ */
+export const promptDismissed = (
+  toolName: string | undefined,
+  chatId: string | null | undefined,
+  ws: Pick<WorkspaceState, 'dismissedPrompt'>,
+): boolean =>
+  !!toolName &&
+  ws.dismissedPrompt?.toolName === toolName &&
+  ws.dismissedPrompt.chatId === (chatId ?? '');
+
 export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.previewRoute = '/';
   ws.previewTabs = ['/'];
@@ -471,6 +497,7 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.executionSha = null;
   ws.executions = [];
   ws.publish = null;
+  ws.dismissedPrompt = null;
   ws.contextChip = null;
   ws.diff = createInitialDiffState();
   ws.browserCompare = createInitialBrowserCompareState();

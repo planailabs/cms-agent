@@ -120,6 +120,12 @@ export const dismissFinishExecution = (): void => {
   const mc = store.state.chat?.aiChat;
   if (mc?.phase === 'question' && mc.clientPrompt) {
     mc.clientPrompt.dismissed = true;
+    // The durable half: clientPrompt is rebuilt by snapshots and cleared by
+    // transitions, so the decision is recorded where neither reaches it.
+    store.state.workspace.dismissedPrompt = {
+      chatId: store.state.activeChatId ?? '',
+      toolName: mc.clientPrompt.toolName,
+    };
     store.notify();
   }
 };

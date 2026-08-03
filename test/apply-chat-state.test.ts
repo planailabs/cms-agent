@@ -6,7 +6,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { store } from '@/components/chat/app/store';
-import { createInitialWorkspaceState } from '@/components/workspace/state';
+import { createInitialWorkspaceState, promptDismissed } from '@/components/workspace/state';
 import {
   applyChatState,
   type ChatStateSnapshot,
@@ -204,14 +204,20 @@ describe('applyChatState', () => {
     };
 
     applyChatState(snap({ ...pending, seq: 1 }));
-    expect(mc.clientPrompt?.dismissed).toBeUndefined();
+    const dismissed = () =>
+      promptDismissed('finish_execution', store.state.activeChatId, store.state.workspace);
+    expect(dismissed()).toBe(false);
 
-    // "Not yet — keep chatting": local, and the composer takes the card's
-    // place. Any later snapshot (opening the compare window emits one) used
-    // to rebuild the prompt and put the card back over the composer.
-    mc.clientPrompt!.dismissed = true;
+    // "Not yet — keep chatting" (workspace/actions.dismissFinishExecution):
+    // the composer takes the card's place. Snapshots rebuild clientPrompt and
+    // transitions clear it, so the decision is recorded outside both — any
+    // later state event used to put the card back over the composer.
+    store.state.workspace.dismissedPrompt = {
+      chatId: 'chat-1',
+      toolName: 'finish_execution',
+    };
     applyChatState(snap({ ...pending, seq: 2 }));
-    expect(mc.clientPrompt?.dismissed).toBe(true);
+    expect(dismissed()).toBe(true);
 
     // A DIFFERENT question is a new decision — never pre-dismissed.
     applyChatState(
@@ -222,7 +228,12 @@ describe('applyChatState', () => {
       }),
     );
     expect(mc.clientPrompt?.toolName).toBe('ask_question');
-    expect(mc.clientPrompt?.dismissed).toBeUndefined();
+    expect(store.state.workspace.dismissedPrompt).toBeNull();
+
+    // …and so is the same card coming back after the question was resolved.
+    store.state.workspace.dismissedPrompt = { chatId: 'chat-1', toolName: 'finish_execution' };
+    applyChatState(snap({ epoch: 'dismiss-test', seq: 4 })); // idle, nothing pending
+    expect(store.state.workspace.dismissedPrompt).toBeNull();
   });
 
   it('drops stale sequenced snapshots entirely (sidebar included)', () => {

@@ -6,7 +6,7 @@
 import { escapeHtml } from '../../utils/html';
 import { t, uiLocale } from '@/lib/i18n';
 import type { AppState, ChatState } from '../../app/state';
-import type { ProposedPlan } from '../../../workspace/state';
+import { promptDismissed, type ProposedPlan } from '../../../workspace/state';
 
 type AiChat = NonNullable<ChatState['aiChat']>;
 
@@ -77,9 +77,14 @@ const renderPlanApprovalCard = (mc: AiChat): string => {
 
 // ── Execution-finished card (question: finish_execution) ────────────────
 
-const renderExecutionFinishedCard = (mc: AiChat): string => {
+const renderExecutionFinishedCard = (mc: AiChat, state: AppState): string => {
   if (mc.phase !== 'question' || mc.clientPrompt?.toolName !== 'finish_execution') return '';
-  if (mc.clientPrompt.dismissed) return '';
+  if (
+    mc.clientPrompt.dismissed ||
+    promptDismissed('finish_execution', state.activeChatId, state.workspace)
+  ) {
+    return '';
+  }
   const locale = uiLocale();
   const input = mc.clientPrompt.input as { summary?: string };
 
@@ -211,6 +216,6 @@ export const renderWorkflowCards = (state: AppState): string => {
   return [
     renderPublishCard(state),
     renderPlanApprovalCard(mc),
-    renderExecutionFinishedCard(mc),
+    renderExecutionFinishedCard(mc, state),
   ].join('');
 };

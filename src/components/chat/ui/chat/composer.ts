@@ -7,6 +7,7 @@ import { commandMenuHtml } from './commands';
 import { SEND_ICON_SVG } from '../icons';
 import { t, uiLocale } from '@/lib/i18n';
 import { store } from '../../app/store';
+import { promptDismissed } from '../../../workspace/state';
 import {
   ATTACHMENT_ACCEPT,
   composerHasContent,
@@ -60,7 +61,12 @@ export const renderChatComposer = (
   const isTextQuestion = mc.phase === 'question' && aqInput?.type === 'text';
   // A dismissed workflow card ("Not yet — keep chatting") re-opens the
   // composer; the next message is routed as the answer to the pending tool.
-  const isDismissedCard = mc.phase === 'question' && prompt?.dismissed === true;
+  // Durable half lives in the workspace slice: clientPrompt (and its
+  // transient `dismissed`) is rebuilt by every chat-state snapshot.
+  const isDismissedCard =
+    mc.phase === 'question' &&
+    (prompt?.dismissed === true ||
+      promptDismissed(prompt?.toolName, store.state.activeChatId, store.state.workspace));
   const showComposer = mc.phase === 'idle' || mc.phase === 'error' || isTextQuestion || isDismissedCard;
 
   const placeholder = escapeHtml(
