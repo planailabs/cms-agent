@@ -400,6 +400,12 @@ describe('preview + proxy', () => {
       await redo.waitFor({ state: 'visible' });
       ok('redo with a forward-history icon appears after undo', (await redo.locator('svg').isVisible()) === true);
       await redo.click();
+      // The tool list is a hover flyout (asserted above) and the pointer has
+      // been inside the preview since the comment was placed, so it closed
+      // behind us — switching tools means reopening it, the same way the exit
+      // item is reached at the end of this test.
+      await s.page.locator('.ws-rail__btn[data-action="ws-edit-exit"]').hover();
+      await editMenu.waitFor({ state: 'visible', timeout: 10_000 });
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="cursor"]').click();
       const editComment = frame?.getByRole('button', { name: 'Edit comment' });
       ok('comments expose a pencil edit button', (await editComment?.isVisible()) === true);
