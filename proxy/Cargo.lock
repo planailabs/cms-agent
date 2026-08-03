@@ -363,6 +363,7 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "pingora",
+ "prometheus",
  "serde",
  "serde_json",
  "sha2",

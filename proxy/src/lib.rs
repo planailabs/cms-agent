@@ -13,6 +13,7 @@
 mod access;
 mod auth;
 mod inject;
+mod metrics;
 mod routes;
 mod sessions;
 
@@ -23,12 +24,12 @@ use pingora::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use napi_derive::napi;
 
 use access::AccessTracker;
-use routes::{RouteDecision, Routes, RoutesStore};
+use routes::{RouteDecision, Routes, RoutesStore, METRICS_PATH};
 use sessions::{ActiveSession, SessionStore};
 
 static STATE: OnceLock<Arc<ProxyState>> = OnceLock::new();
@@ -162,6 +163,10 @@ fn strip_ua_param(path_and_query: &str) -> Option<String> {
 
 #[derive(Default)]
 struct RequestCtx {
+    /// When this request was accepted, and what routing decision it got —
+    /// the two things the logging hook needs to record it (metrics.rs).
+    started: Option<Instant>,
+    decision: &'static str,
     /// Resolved upstream "host:port"; None only when the request was answered early.
     upstream: Option<String>,
     /// True for case 2 (running preview): CSP strip + overlay injection apply.
@@ -247,11 +252,16 @@ impl ProxyHttp for CmsProxy {
     type CTX = RequestCtx;
 
     fn new_ctx(&self) -> Self::CTX {
-        RequestCtx::default()
+        RequestCtx {
+            started: Some(Instant::now()),
+            decision: "unknown",
+            ..RequestCtx::default()
+        }
     }
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
         let Some(host) = request_host(session.req_header()) else {
+            ctx.decision = "notfound";
             session.respond_error(404).await?;
             return Ok(true);
         };
@@ -261,10 +271,31 @@ impl ProxyHttp for CmsProxy {
         match routes::decide(&host, &self.base_domain, &routes) {
             RouteDecision::Cms { upstream } => {
                 // The CMS does its own auth — pass through.
-                ctx.upstream = Some(upstream);
+                ctx.decision = "cms";
+                // /metrics belongs to the CMS's metrics listener, which binds
+                // an ephemeral loopback port and publishes it in the routes
+                // table. Routed here so a scrape uses the same front door as
+                // every other route instead of a second exposed port; the
+                // listener itself enforces METRICS_TOKEN when one is set.
+                if session.req_header().uri.path() == METRICS_PATH {
+                    let Some(metrics_upstream) = routes.metrics.clone() else {
+                        // Not listening (disabled, or not up yet) — a 404 is
+                        // the honest answer. Falling through to the CMS
+                        // upstream would render the workspace at /metrics.
+                        ctx.decision = "notfound";
+                        session.respond_error(404).await?;
+                        return Ok(true);
+                    };
+                    ctx.decision = "metrics";
+                    ctx.upstream = Some(metrics_upstream);
+                } else {
+                    ctx.upstream = Some(upstream);
+                }
             }
             RouteDecision::Preview { branch, upstream } => {
+                ctx.decision = "preview";
                 if !self.is_authorized(session) {
+                    ctx.decision = "unauthorized";
                     self.redirect_signin(session, ctx.host_port.as_deref()).await?;
                     return Ok(true);
                 }
@@ -320,7 +351,9 @@ impl ProxyHttp for CmsProxy {
                 }
             }
             RouteDecision::Boot { branch, upstream } => {
+                ctx.decision = "boot";
                 if !self.is_authorized(session) {
+                    ctx.decision = "unauthorized";
                     self.redirect_signin(session, ctx.host_port.as_deref()).await?;
                     return Ok(true);
                 }
@@ -358,6 +391,7 @@ impl ProxyHttp for CmsProxy {
                 ctx.upstream = Some(upstream);
             }
             RouteDecision::NotFound => {
+                ctx.decision = "notfound";
                 session.respond_error(404).await?;
                 return Ok(true);
             }
@@ -480,6 +514,21 @@ impl ProxyHttp for CmsProxy {
         *body = Some(Bytes::from(out));
         Ok(None)
     }
+
+    /// Runs for every request, including the ones answered here without an
+    /// upstream (404, sign-in redirect) — which is why the metrics are
+    /// recorded from this hook rather than around the proxy call.
+    async fn logging(&self, session: &mut Session, e: Option<&Error>, ctx: &mut Self::CTX) {
+        let status = session
+            .response_written()
+            .map(|resp| resp.status.as_u16())
+            .unwrap_or(0);
+        let seconds = ctx
+            .started
+            .map(|started| started.elapsed().as_secs_f64())
+            .unwrap_or_default();
+        metrics::record_request(ctx.decision, status, seconds, e.is_some());
+    }
 }
 
 fn run_proxy(cfg: Config, state: Arc<ProxyState>) {
@@ -571,6 +620,15 @@ pub fn drop_proxy_session(token: String) -> napi::Result<()> {
         .sessions
         .forget(&token);
     Ok(())
+}
+
+/// The proxy's own Prometheus exposition, for the CMS to append to its.
+///
+/// Deliberately not a listener of its own: proxy and CMS are one process, so
+/// one scrape endpoint should cover both. Empty before the first request.
+#[napi(js_name = "proxyMetricsText")]
+pub fn proxy_metrics_text() -> String {
+    metrics::text()
 }
 
 /// Last-access time per preview branch, for the CMS's idle sweep.

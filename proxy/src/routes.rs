@@ -13,6 +13,12 @@ pub struct Routes {
     /// Branch name -> preview upstream, e.g. "my-branch" -> "127.0.0.1:43211".
     #[serde(default)]
     pub previews: HashMap<String, String>,
+    /// The CMS's metrics listener, which binds an ephemeral port and publishes
+    /// it here (src/lib/metrics.ts). Absent until it is up, and on any build
+    /// that does not run one — `/metrics` is a 404 until then rather than a
+    /// path that reaches the CMS upstream and renders a page.
+    #[serde(default)]
+    pub metrics: Option<String>,
 }
 
 impl Routes {
@@ -21,9 +27,13 @@ impl Routes {
         Routes {
             cms: cms_upstream.to_string(),
             previews: HashMap::new(),
+            metrics: None,
         }
     }
 }
+
+/// Path the metrics listener is reachable at, on the CMS host only.
+pub const METRICS_PATH: &str = "/metrics";
 
 pub fn parse_routes(data: &str) -> Result<Routes, serde_json::Error> {
     serde_json::from_str(data)
@@ -157,6 +167,7 @@ mod tests {
         Routes {
             cms: "127.0.0.1:4321".to_string(),
             previews,
+            metrics: Some("127.0.0.1:38211".to_string()),
         }
     }
 
@@ -269,13 +280,16 @@ mod tests {
 
     #[test]
     fn parse_routes_valid() {
-        let r =
-            parse_routes(r#"{"cms":"127.0.0.1:4321","previews":{"my-branch":"127.0.0.1:43211"}}"#)
-                .unwrap();
+        let r = parse_routes(
+            r#"{"cms":"127.0.0.1:4321","previews":{"my-branch":"127.0.0.1:43211"},"metrics":"127.0.0.1:38211"}"#,
+        )
+        .unwrap();
         assert_eq!(r, routes());
-        // previews may be omitted
+        // previews and metrics may be omitted — the metrics listener only
+        // appears in the table once it is actually up.
         let r = parse_routes(r#"{"cms":"127.0.0.1:4321"}"#).unwrap();
         assert!(r.previews.is_empty());
+        assert_eq!(r.metrics, None);
     }
 
     #[test]
