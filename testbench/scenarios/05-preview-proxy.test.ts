@@ -18,6 +18,21 @@ const ok = (name: string, pass: boolean, detail = '') => {
   expect(pass, `${name}: ${detail}`).toBe(true);
 };
 
+/**
+ * Wait for a condition, then let the ok() below say what was actually true.
+ *
+ * Not expect.poll: that throws on timeout, which kills the test before its
+ * ok() runs and leaves the report claiming every check passed. This gives the
+ * UI its frame and never decides anything itself.
+ */
+const settle = async (check: () => Promise<boolean>, timeoutMs = 5_000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await check().catch(() => false)) return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+};
+
 /** Fetch a preview route until the dev server actually serves it — the boot
  *  page is also 200 HTML ("Starting preview…"), so a site-specific marker is
  *  required. */
@@ -399,7 +414,7 @@ describe('preview + proxy', () => {
       // Every check below samples state the toolbar/overlay reaches a frame
       // after the action — poll first, then record, so a real failure still
       // lands in the report instead of killing the test before its ok().
-      await expect.poll(() => activeTool.count(), { timeout: 5_000 }).toBe(1).catch(() => {});
+      await settle(async () => (await activeTool.count()) === 1);
       ok('toolbar shows the active comment mode', (await activeTool.count()) === 1);
       ok('active mode uses the highlighted button style', await activeTool.evaluate((el) => getComputedStyle(el).color !== getComputedStyle(el.parentElement!).color));
       const preview = await s.page.locator('#preview-frame-region iframe').first().elementHandle();
@@ -407,10 +422,7 @@ describe('preview + proxy', () => {
       const target = frame?.locator('main, body > *').first();
       await target?.hover();
       const commentHighlight = frame?.locator('.cms-ov-hl');
-      await expect
-        .poll(() => commentHighlight?.isVisible() ?? false, { timeout: 5_000 })
-        .toBe(true)
-        .catch(() => {});
+      await settle(async () => (await commentHighlight?.isVisible()) === true);
       const highlighted =
         (await commentHighlight?.isVisible()) === true &&
         (await commentHighlight.evaluate((el) => getComputedStyle(el).backgroundColor)) !==
@@ -452,10 +464,7 @@ describe('preview + proxy', () => {
       await editComment?.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
       ok('comments expose a pencil edit button', (await editComment?.isVisible()) === true);
       await editComment?.click();
-      await expect
-        .poll(() => commentInput?.inputValue() ?? '', { timeout: 5_000 })
-        .toBe('Bench comment')
-        .catch(() => {});
+      await settle(async () => (await commentInput?.inputValue()) === 'Bench comment');
       ok('comment edit pre-fills the old text', (await commentInput?.inputValue()) === 'Bench comment');
       await commentInput?.fill('Updated bench comment');
       await commentInput?.press('Enter');
@@ -492,10 +501,7 @@ describe('preview + proxy', () => {
         return !el || el.textContent === '';
       });
       ok('chat messages carry pending edit annotations as context', sentContext?.editAnnotations?.comments?.[0]?.text === 'Updated bench comment');
-      await expect
-        .poll(() => s.page.locator('[data-edit-active-tool]').count(), { timeout: 5_000 })
-        .toBe(1)
-        .catch(() => {});
+      await settle(async () => (await s.page.locator('[data-edit-active-tool]').count()) === 1);
       ok('asking about pending edits leaves edit mode active', (await s.page.locator('[data-edit-active-tool]').count()) === 1);
       await s.page.locator('.ws-rail__btn[data-action="ws-edit-exit"]').hover();
       await editMenu.locator('[data-action="ws-edit-exit"]').click();
