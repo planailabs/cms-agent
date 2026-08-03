@@ -347,6 +347,20 @@ describe('preview + proxy', () => {
         .locator(`[data-action="ws-open-chat"][data-chat-id="${j.chatB}"]`)
         .first()
         .click();
+      // Journey B rests on its finish_execution card, whose decision row takes
+      // the composer's place until it is answered or dismissed — and the end of
+      // this test asks the agent about the pending edits, which needs it back.
+      // Dismissing is client-side only (workspace/actions.dismissFinishExecution
+      // just marks the prompt dismissed in the store), so the earlier test that
+      // asserts the publish row still sees it in its own session.
+      const dismissFinish = s.page.locator('[data-action="ws-dismiss-finish"]').first();
+      if ((await dismissFinish.count()) > 0) {
+        await dismissFinish.click();
+        await s.page
+          .locator('[data-action="machine-config-input"]')
+          .first()
+          .waitFor({ state: 'visible', timeout: 10_000 });
+      }
       // Reviewing is no longer a phase: the diff viewer IS the compare window,
       // and opening a chat no longer opens it — edit mode starts from there.
       await s.page.locator('[data-action="ws-compare-open"]').click();
