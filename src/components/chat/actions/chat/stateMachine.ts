@@ -132,6 +132,25 @@ export const transition = (
 // Chat Message Sending
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The marks the user left on the page ride along with whatever they say next.
+ *
+ * Both send paths need this, not just the plain one: a pending workflow card
+ * turns the next message into an ANSWER (that is what the dismissed card's
+ * composer is for), and dropping the annotations there means the agent is
+ * asked about edits it was never shown.
+ */
+const withPendingEdits = (pageContext?: PageContext): PageContext | undefined => {
+  const edits = store.state.workspace.elementEdit.annotations;
+  if (!edits || annotationCount(edits) === 0) return pageContext;
+  return {
+    ...pageContext,
+    url: pageContext?.url ?? edits.url,
+    route: pageContext?.route ?? edits.route,
+    editAnnotations: edits,
+  };
+};
+
 export const sendChatMessage = async (
   message: string,
   pageContext?: PageContext,
@@ -154,16 +173,7 @@ export const sendChatMessage = async (
   }
 
   // Attach the pending context chip (selection/element from the preview)
-  pageContext = pageContext ?? takeContextChip();
-  const edits = state.workspace.elementEdit.annotations;
-  if (edits && annotationCount(edits) > 0) {
-    pageContext = {
-      ...pageContext,
-      url: pageContext?.url ?? edits.url,
-      route: pageContext?.route ?? edits.route,
-      editAnnotations: edits,
-    };
-  }
+  pageContext = withPendingEdits(pageContext ?? takeContextChip());
 
   transition(mc, 'waiting');
   mc.messages.push({
@@ -192,7 +202,7 @@ export const answerChatQuestion = async (text: string, attachments?: AttachmentD
   const mc = store.state.chat?.aiChat;
   if (!mc) return;
 
-  const pageContext = takeContextChip();
+  const pageContext = withPendingEdits(takeContextChip());
 
   transition(mc, 'waiting');
   mc.messages.push({

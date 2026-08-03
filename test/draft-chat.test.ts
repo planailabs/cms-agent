@@ -154,6 +154,43 @@ describe('draft chat', () => {
     );
   });
 
+  // A pending workflow card routes the next message as an ANSWER — that is
+  // what its dismissed composer is for — and the marks the user left on the
+  // page are what the message is about, so they have to ride along either way.
+  it('carries pending element edits on an answer, not just a plain message', async () => {
+    store.state.activeChatId = 'chat-1';
+    store.state.chat = {
+      aiChat: {
+        phase: 'question',
+        messages: [],
+        clientPrompt: { toolName: 'finish_execution', input: { summary: 'done' } },
+      },
+    } as never;
+    store.state.workspace.elementEdit.annotations = {
+      url: 'http://main.localhost/about',
+      route: '/about',
+      viewport: { width: 1280, height: 800 },
+      moves: [],
+      strokes: [],
+      swaps: [],
+      comments: [{ n: 1, x: 10, y: 20, text: 'make this bolder' }],
+    } as never;
+
+    await sendChatMessage('what do you think about these edits?');
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'answer',
+        pageContext: expect.objectContaining({
+          route: '/about',
+          editAnnotations: expect.objectContaining({
+            comments: [expect.objectContaining({ text: 'make this bolder' })],
+          }),
+        }),
+      }),
+    );
+  });
+
   it('creates the chat before uploading the first attachment', async () => {
     startDraftChat('b1');
     const fetchMock = vi.fn(async (url: string) =>

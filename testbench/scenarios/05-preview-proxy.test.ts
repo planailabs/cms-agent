@@ -353,15 +353,20 @@ describe('preview + proxy', () => {
       // Dismissing is client-side only (workspace/actions.dismissFinishExecution
       // just marks the prompt dismissed in the store), so the earlier test that
       // asserts the publish row still sees it in its own session.
-      // The chat's state arrives after the click (history fetch + SSE), so
-      // asking for the card straight away is a race the composer loses: the
-      // count is 0, the dismiss is skipped, and the fill at the end of this
-      // test waits 30s for an element the card is still standing in for.
-      // Whichever of the two renders IS the chat having settled — the same
-      // shape bootWorkspace uses for the composer-or-fresh-session choice.
+      // Journey B rests on its finish_execution card, whose decision row takes
+      // the composer's place — and the end of this test asks the agent about
+      // the pending edits, which needs the composer back.
+      //
+      // Waiting for the CARD, not for "composer or card": the composer is
+      // what's on screen until the chat's state arrives, so the either-or
+      // resolves immediately on it, the dismiss is skipped, and the card
+      // lands a moment later — leaving the fill at the end of this test to
+      // time out against a slot the card had taken.
       const chatComposer = s.page.locator('[data-action="machine-config-input"]').first();
       const dismissFinish = s.page.locator('[data-action="ws-dismiss-finish"]').first();
-      await chatComposer.or(dismissFinish).waitFor({ state: 'visible', timeout: 30_000 });
+      await dismissFinish.waitFor({ state: 'visible', timeout: 30_000 }).catch(() => {
+        // No card for this chat — the composer is already the live one.
+      });
       if (await dismissFinish.isVisible()) {
         await dismissFinish.click();
         await chatComposer.waitFor({ state: 'visible', timeout: 10_000 });
