@@ -396,6 +396,10 @@ describe('preview + proxy', () => {
       ok('edit mode has no separate handoff button', (await s.page.locator('[data-action="ws-edit-handoff"]').count()) === 0);
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="comment"]').click();
       const activeTool = s.page.locator('[data-edit-active-tool="comment"]');
+      // Every check below samples state the toolbar/overlay reaches a frame
+      // after the action — poll first, then record, so a real failure still
+      // lands in the report instead of killing the test before its ok().
+      await expect.poll(() => activeTool.count(), { timeout: 5_000 }).toBe(1).catch(() => {});
       ok('toolbar shows the active comment mode', (await activeTool.count()) === 1);
       ok('active mode uses the highlighted button style', await activeTool.evaluate((el) => getComputedStyle(el).color !== getComputedStyle(el.parentElement!).color));
       const preview = await s.page.locator('#preview-frame-region iframe').first().elementHandle();
@@ -403,6 +407,10 @@ describe('preview + proxy', () => {
       const target = frame?.locator('main, body > *').first();
       await target?.hover();
       const commentHighlight = frame?.locator('.cms-ov-hl');
+      await expect
+        .poll(() => commentHighlight?.isVisible() ?? false, { timeout: 5_000 })
+        .toBe(true)
+        .catch(() => {});
       const highlighted =
         (await commentHighlight?.isVisible()) === true &&
         (await commentHighlight.evaluate((el) => getComputedStyle(el).backgroundColor)) !==
@@ -437,9 +445,17 @@ describe('preview + proxy', () => {
       await s.page.locator('.ws-rail__btn[data-action="ws-edit-exit"]').hover();
       await editMenu.waitFor({ state: 'visible', timeout: 10_000 });
       await s.page.locator('[data-action="ws-edit-tool"][data-tool="cursor"]').click();
+      // The bubbles re-render when the tool changes, so the pencil arrives a
+      // frame after the click — same reason every other control here is
+      // waited for rather than sampled.
       const editComment = frame?.getByRole('button', { name: 'Edit comment' });
+      await editComment?.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
       ok('comments expose a pencil edit button', (await editComment?.isVisible()) === true);
       await editComment?.click();
+      await expect
+        .poll(() => commentInput?.inputValue() ?? '', { timeout: 5_000 })
+        .toBe('Bench comment')
+        .catch(() => {});
       ok('comment edit pre-fills the old text', (await commentInput?.inputValue()) === 'Bench comment');
       await commentInput?.fill('Updated bench comment');
       await commentInput?.press('Enter');
@@ -469,6 +485,10 @@ describe('preview + proxy', () => {
       await composer.press('Enter');
       await s.page.waitForFunction(() => document.querySelector('[data-action="machine-config-input"]')?.textContent === '');
       ok('chat messages carry pending edit annotations as context', sentContext?.editAnnotations?.comments?.[0]?.text === 'Updated bench comment');
+      await expect
+        .poll(() => s.page.locator('[data-edit-active-tool]').count(), { timeout: 5_000 })
+        .toBe(1)
+        .catch(() => {});
       ok('asking about pending edits leaves edit mode active', (await s.page.locator('[data-edit-active-tool]').count()) === 1);
       await s.page.locator('.ws-rail__btn[data-action="ws-edit-exit"]').hover();
       await editMenu.locator('[data-action="ws-edit-exit"]').click();
