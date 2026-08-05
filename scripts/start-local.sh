@@ -67,6 +67,13 @@ rm -rf "${TMPDIR:-/tmp}/cms-agent-diffs"
 
 export SKIP_AUTH=true
 export HOST=::1
+# OpenTelemetry auto-instrumentation. Bare specifiers resolve against the cwd,
+# which is the repo root here (the nix wrapper uses store paths instead).
+export NODE_OPTIONS="--experimental-loader=@opentelemetry/instrumentation/hook.mjs --import @opentelemetry/auto-instrumentations-node/register${NODE_OPTIONS:+ $NODE_OPTIONS}"
+# The SDK exports over OTLP to localhost:4318 unless told otherwise, and logs
+# every failed export. Opt in with a collector: OTEL_SDK_DISABLED=false plus
+# OTEL_EXPORTER_OTLP_ENDPOINT.
+export OTEL_SDK_DISABLED="${OTEL_SDK_DISABLED:-true}"
 export PROXY_LISTEN=127.0.0.1:8080
 export DEV_PORT_CARRY=1
 

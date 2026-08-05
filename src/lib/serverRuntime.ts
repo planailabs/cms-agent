@@ -96,6 +96,14 @@ export function startRuntimeServices(): void {
   if (g.__cmsRuntimeStarted) return;
   g.__cmsRuntimeStarted = true;
 
+  // The OTel loader/register flags are ours alone. Node has already consumed
+  // NODE_OPTIONS by now, so dropping it changes nothing here — but it is
+  // inherited by every child we spawn with `...process.env` (publish scripts,
+  // wrangler, site builds), and those resolve the bare specifiers against
+  // THEIR cwd, where @opentelemetry isn't installed: ERR_MODULE_NOT_FOUND
+  // before the script's first line.
+  delete process.env.NODE_OPTIONS;
+
   registerServerBuiltins();
   initRoutesFile();
   // Legacy scratchpad storage (pre-.scratch/-in-worktree) — drop it once.

@@ -94,7 +94,7 @@ stdenv.mkDerivation (finalAttrs: {
         exit 1
       fi
     '';
-    hash = "sha256-TEaiiD6/WazUxIYmAEzPEzOIL0s2cmOzYPJhQLxNX+I=";
+    hash = "sha256-2XVraHWew7+FvFVJxRj8tksPb5aYKVEh6muWEo4hI+4=";
   };
 
   env = {
@@ -121,6 +121,7 @@ stdenv.mkDerivation (finalAttrs: {
     OPENAI_BASE_URL = "https://api.openai.invalid/v1";
     OPENAI_API_KEY = "build-only";
     OPENAI_MODEL = "build-only";
+    SKILL_ROUTER_MODEL = "build-only";
     BASE_DOMAIN = "build.invalid";
     REPO_PATH = "/build/source";
     VAR_DIR = "/build/build-var";
@@ -190,8 +191,23 @@ stdenv.mkDerivation (finalAttrs: {
 
     mkdir -p $out/bin
 
+    # OpenTelemetry auto-instrumentation, wired by ABSOLUTE path: the service
+    # runs with WorkingDirectory=VAR_DIR (module.nix) / /data (the image), and
+    # node resolves NODE_OPTIONS specifiers against the cwd — bare ones would
+    # be ERR_MODULE_NOT_FOUND at boot. Only the CMS wrapper gets them; the
+    # prisma wrapper below is a separate short-lived process with no traces to
+    # emit. Assert the two entry points exist so a package layout change fails
+    # the build instead of the service.
+    otelHook="$out/share/cms-agent/node_modules/@opentelemetry/instrumentation/hook.mjs"
+    otelRegister="$out/share/cms-agent/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js"
+    for f in "$otelHook" "$otelRegister"; do
+      [ -f "$f" ] || { echo "ERROR: OpenTelemetry entry point missing: $f" >&2; exit 1; }
+    done
+
     makeWrapper ${lib.getExe nodejs_26} $out/bin/cms-agent \
       --add-flags "$out/share/cms-agent/server.mjs" \
+      --set-default NODE_OPTIONS "--experimental-loader=$otelHook --import $otelRegister" \
+      --set-default OTEL_SDK_DISABLED "true" \
       --set-default PRISMA_SCHEMA_ENGINE_BINARY "${prisma-engines_7}/bin/schema-engine" \
       --set-default CMS_PLUGINS_ROOT "$out/share/cms-agent" \
       ${lib.optionalString (firecrawlNative != null) ''--set-default FIRECRAWL_NATIVE_PATH "${firecrawlNative}/lib/firecrawl-rs.node"''} \

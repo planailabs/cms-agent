@@ -167,6 +167,43 @@ Labels are deliberately bounded: no branch names, no chat ids, no raw paths.
 A route miss is `cms_proxy_requests_total{decision="notfound"}`; per-preview
 attribution comes from the CMS-side preview metrics instead.
 
+### OpenTelemetry auto-instrumentation
+
+Separate from the exposition above, which is *scraped* from the process:
+`@opentelemetry/auto-instrumentations-node` *pushes* traces and metrics for
+http, pg/prisma, dns and the rest to a collector. Every launch path already
+starts node with the flags that make it possible, because they cannot be added
+to a process after it has booted:
+
+```
+--experimental-loader=@opentelemetry/instrumentation/hook.mjs
+--import @opentelemetry/auto-instrumentations-node/register
+```
+
+`scripts/start-local.sh` exports them as `NODE_OPTIONS` with bare specifiers
+(cwd is the repo root); the nix wrapper — used by both the NixOS module and
+the docker image — sets the same two flags with absolute store paths, since
+the service's working directory is `VAR_DIR` / `/data` and node resolves
+specifiers against the cwd.
+
+Only the exporter is opt-in. It ships `OTEL_SDK_DISABLED=true`, because the
+SDK otherwise pushes to `localhost:4318` and logs every failed export. To turn
+it on, set `OTEL_SDK_DISABLED=false` and `OTEL_EXPORTER_OTLP_ENDPOINT`.
+
+**Not in `.env`.** Unlike every other knob in this document, `OTEL_*` has to be
+in the *process* environment: the SDK is registered by `--import` before any
+application code runs, while `.env` is read from inside the app (`dotenv`, at
+import time). Put them in `.overmind.env` in development, the compose
+`environment:` block, or `services.cms-agent.extraEnvironment`. Worth setting
+alongside them: `OTEL_NODE_RESOURCE_DETECTORS=env,host,os,process,serviceinstance`
+— the default list includes cloud detectors that probe a metadata server which
+does not answer outside GCP/AWS/Azure, and log a warning per boot.
+
+`NODE_OPTIONS` is dropped from the environment at boot (`lib/serverRuntime`)
+so it is not inherited by the processes the CMS spawns — publish scripts,
+wrangler, site builds. They run with a different working directory and no
+`@opentelemetry` in reach, and would die resolving the loader.
+
 ## NixOS note (development)
 
 Prisma CLI needs the nixpkgs engines: `source scripts/prisma-env.sh` (the

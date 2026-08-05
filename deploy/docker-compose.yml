@@ -67,6 +67,13 @@ services:
       # Optional: attach the Context7 docs MCP (mcp.context7.com) to agent
       # chats — key from context7.com/dashboard
       # CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
+      # OpenTelemetry auto-instrumentation. The image already launches node
+      # with the loader/register flags; the SDK itself ships disabled because
+      # it would otherwise export to localhost:4318 and log every failure.
+      # Point it at a collector to turn it on:
+      # OTEL_SDK_DISABLED: 'false'
+      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # OTEL_SERVICE_NAME: cms-agent
       # Sandbox: node major for site commands (22 | 24 | 26); network on so
       # `npm install` works (set 0 to isolate).
       SANDBOX_NODE_MAJOR: '22'

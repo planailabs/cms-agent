@@ -93,7 +93,15 @@ in
       type = lib.types.attrsOf lib.types.str;
       default = { };
       example = { DEPLOY_FLOW = "github-ci"; PUBLIC_SCHEME = "https"; };
-      description = "Extra environment variables merged into both units.";
+      description = ''
+        Extra environment variables merged into both units.
+
+        OpenTelemetry: the package wrapper already carries the NODE_OPTIONS
+        loader/register flags, so auto-instrumentation only needs an exporter
+        pointed somewhere — OTEL_SDK_DISABLED = "false" plus
+        OTEL_EXPORTER_OTLP_ENDPOINT. It ships disabled because the SDK
+        otherwise exports to localhost:4318 and logs every failed attempt.
+      '';
     };
   };
 

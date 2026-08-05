@@ -4,6 +4,10 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   prisma: true
+  # Pulled in by the OTLP/grpc exporter. Its postinstall only rewrites paths
+  # for the pbjs CLI, which nothing here runs — and the nix build never runs
+  # install scripts, so denying it keeps dev and the package identical.
+  protobufjs: false
   sharp: true
 onlyBuiltDependencies:
   - esbuild
