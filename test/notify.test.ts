@@ -44,6 +44,32 @@ const setEnv = (values: Partial<Record<(typeof NOTIFY_ENV)[number], string>>): v
   resetEnvCache();
 };
 
+/** Stand-in for the twilio SDK: records how it was constructed and called. */
+const twilioSdk = vi.hoisted(() => {
+  const clients: Array<{ username: string; password: string; opts: Record<string, unknown> }> = [];
+  const messages: Array<Record<string, string | undefined>> = [];
+  return {
+    clients,
+    messages,
+    reset() {
+      clients.length = 0;
+      messages.length = 0;
+    },
+    factory(username: string, password: string, opts: Record<string, unknown> = {}) {
+      clients.push({ username, password, opts });
+      return {
+        messages: {
+          create: async (params: Record<string, string>) => {
+            messages.push(params);
+            return { sid: 'SM1' };
+          },
+        },
+      };
+    },
+  };
+});
+vi.mock('twilio', () => ({ default: twilioSdk.factory }));
+
 let chatId: string;
 
 beforeAll(async () => {
@@ -151,69 +177,64 @@ describe('channel resolution', () => {
   });
 });
 
-describe('twilio credentials', () => {
+describe('twilio, through the official SDK', () => {
   /**
-   * Twilio takes two different credentials over one basic-auth field, and the
-   * REST path names the ACCOUNT either way. Signing with an API key while
-   * putting the key's own SK… in the URL is a 404 that reads like a bad phone
-   * number, so the account sid stays required in both shapes.
+   * What is worth pinning is our mapping onto the SDK, not the SDK: which
+   * credential signs, which account is acted on, and which host answers.
+   * Each of those was a live 401 or 404 before it was a line of config.
    */
-  const callTwilio = async (config: Record<string, unknown>) => {
-    const calls: Array<{ url: string; auth: string; body: string }> = [];
-    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
-      calls.push({
-        url,
-        auth: (init.headers as Record<string, string>).Authorization,
-        body: String(init.body),
-      });
-      return new Response('', { status: 201 });
-    });
+  const callTwilio = async (config: Record<string, unknown>, from = '+15550000000') => {
+    twilioSdk.reset();
     setEnv({
       NOTIFY_SMS_PROVIDER: 'twilio',
-      NOTIFY_SMS_FROM: '+15550000000',
+      NOTIFY_SMS_FROM: from,
       NOTIFY_SMS_CONFIG: JSON.stringify(config),
     });
-    try {
-      await deliver('sms', '+15551230000', { subject: 'Chat is done', body: 'b', url: 'https://cms/x' });
-      return calls[0];
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    await deliver('sms', '+15551230000', {
+      subject: 'Chat is done',
+      body: 'b',
+      url: 'https://cms/x',
+    });
+    return { client: twilioSdk.clients[0], message: twilioSdk.messages[0] };
   };
 
-  const decode = (auth: string) => Buffer.from(auth.replace('Basic ', ''), 'base64').toString();
-
   it('signs with the account auth token when that is what it was given', async () => {
-    const call = await callTwilio({ accountSid: 'AC123', authToken: 'tok' });
-    expect(call.url).toContain('/Accounts/AC123/Messages.json');
-    expect(decode(call.auth)).toBe('AC123:tok');
+    const { client, message } = await callTwilio({ accountSid: 'AC123', authToken: 'tok' });
+    expect([client.username, client.password]).toEqual(['AC123', 'tok']);
+    expect(client.opts.accountSid).toBe('AC123');
+    expect(message).toMatchObject({ from: '+15550000000', to: '+15551230000' });
     // The link is the point of the message, so it always rides along.
-    expect(call.body).toContain('Chat+is+done');
-    expect(call.body).toContain(encodeURIComponent('https://cms/x'));
+    expect(message.body).toBe('Chat is done\nhttps://cms/x');
   });
 
-  it('signs with an API key pair but still addresses the account', async () => {
-    const call = await callTwilio({ accountSid: 'AC123', apiKeySid: 'SK456', apiKeySecret: 'sec' });
-    expect(call.url).toContain('/Accounts/AC123/Messages.json');
-    expect(decode(call.auth)).toBe('SK456:sec');
-  });
-
-  it('sends through the regional host when the account is homed there', async () => {
-    const call = await callTwilio({
+  it('signs with an API key pair but still acts on the account', async () => {
+    const { client } = await callTwilio({
       accountSid: 'AC123',
       apiKeySid: 'SK456',
       apiKeySecret: 'sec',
-      region: 'ie1',
     });
-    expect(call.url.startsWith('https://api.ie1.twilio.com/')).toBe(true);
-    expect(call.url).toContain('/Accounts/AC123/Messages.json');
+    expect([client.username, client.password]).toEqual(['SK456', 'sec']);
+    // Without this the SDK cannot tell which account an SK… acts on.
+    expect(client.opts.accountSid).toBe('AC123');
   });
 
-  it('treats us1 as the default host, which is where it actually lives', async () => {
+  it('routes to the region the account is homed in', async () => {
+    const { client } = await callTwilio({ accountSid: 'AC1', authToken: 't', region: 'ie1' });
+    expect(client.opts.region).toBe('ie1');
+  });
+
+  it('treats us1 as the default, which is where it actually lives', async () => {
     // "us1" is what the console calls the default region, but there is no
     // api.us1.twilio.com — spelling it out must not break the account.
-    const call = await callTwilio({ accountSid: 'AC123', authToken: 'tok', region: 'us1' });
-    expect(call.url.startsWith('https://api.twilio.com/')).toBe(true);
+    const { client } = await callTwilio({ accountSid: 'AC1', authToken: 't', region: 'us1' });
+    expect(client.opts.region).toBeUndefined();
+  });
+
+  it('sends through a Messaging Service when the sender is one', async () => {
+    // Same field to a human, a different parameter to Twilio.
+    const { message } = await callTwilio({ accountSid: 'AC1', authToken: 't' }, 'MG9876');
+    expect(message.messagingServiceSid).toBe('MG9876');
+    expect(message.from).toBeUndefined();
   });
 
   it('names the missing field, and the variable it comes from', async () => {
@@ -225,6 +246,49 @@ describe('twilio credentials', () => {
     await expect(
       deliver('sms', '+15551230000', { subject: 's', body: 'b', url: 'u' }),
     ).rejects.toThrow(/accountSid.*NOTIFY_SMS_CONFIG/s);
+  });
+});
+
+describe('notifme-sdk, for every other vendor', () => {
+  /**
+   * notifme's own `logger` type sends for real through the whole SDK — its
+   * config parsing, provider construction and strategy — without a vendor
+   * account. That is the part this repo owns and can get wrong.
+   */
+  it('sends through a single provider descriptor', async () => {
+    setEnv({
+      NOTIFY_EMAIL_PROVIDER: 'notifme',
+      NOTIFY_EMAIL_FROM: 'cms@example.com',
+      NOTIFY_EMAIL_CONFIG: JSON.stringify({ type: 'logger' }),
+    });
+    await expect(
+      deliver('email', 'someone@example.com', { subject: 's', body: 'b', url: 'https://cms/x' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('accepts several providers and a strategy — the reason it is here', async () => {
+    setEnv({
+      NOTIFY_SMS_PROVIDER: 'notifme',
+      NOTIFY_SMS_FROM: '+15550000000',
+      NOTIFY_SMS_CONFIG: JSON.stringify({
+        providers: [{ type: 'logger' }, { type: 'logger' }],
+        multiProviderStrategy: 'fallback',
+      }),
+    });
+    await expect(
+      deliver('sms', '+15551230000', { subject: 's', body: 'b', url: 'https://cms/x' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('refuses a config with no provider type rather than sending nowhere', async () => {
+    setEnv({
+      NOTIFY_EMAIL_PROVIDER: 'notifme',
+      NOTIFY_EMAIL_FROM: 'cms@example.com',
+      NOTIFY_EMAIL_CONFIG: JSON.stringify({ apiKey: 'k' }),
+    });
+    await expect(
+      deliver('email', 'a@b.c', { subject: 's', body: 'b', url: 'u' }),
+    ).rejects.toThrow(/type.*NOTIFY_EMAIL_CONFIG/s);
   });
 });
 

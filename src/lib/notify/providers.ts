@@ -1,21 +1,30 @@
 /**
  * Built-in notification providers.
  *
- * SMS:   twilio | vonage | logger
- * Email: smtp   | resend | logger
+ * SMS:   twilio | notifme | logger
+ * Email: resend | notifme | logger
  *
- * The HTTP ones are a fetch and a status check — a vendor SDK per provider
- * would be more dependency than transaction. SMTP is the exception: speaking
- * it is a protocol, not a request, so nodemailer does it (zero dependencies,
- * and one transport already covers every provider that offers an SMTP relay).
+ * Two of these are libraries doing the work rather than hand-rolled HTTP:
  *
- * `logger` exists for the same reason a dry run does: a deployment can arm
- * notifications, watch them fire in the log, and never hand a phone number to
- * a vendor to find out whether the wiring works.
+ *  - `twilio` is the official SDK. Twilio has more surface than a POST — API
+ *    keys vs account tokens, regional accounts whose credentials the default
+ *    host rejects with a bare 401, edges, retries, typed error codes. Every
+ *    one of those was a bug found by hand here before it was a line of config.
+ *  - `notifme` is notifme-sdk, which is the same idea one level up: one config
+ *    shape over a dozen vendors per channel (smtp, sendgrid, ses, mailgun,
+ *    sparkpost, mandrill / nexmo, plivo, clickatell, infobip, ovh, …), plus
+ *    fallback and round-robin across several of them. Reaching a new vendor is
+ *    a `type` in NOTIFY_<CHANNEL>_CONFIG, not a file in this directory.
+ *
+ * `resend` stays hand-written because notifme has no Resend provider and the
+ * whole of it is one authenticated POST. `logger` is the dry run: it delivers
+ * to the server log, so a deployment can prove the wiring before handing
+ * anyone's phone number to a vendor.
  */
 import {
   registerNotifyProvider,
   requireConfig,
+  type NotifyChannelId,
   type NotifyMessage,
   type NotifyProvider,
   type NotifyProviderConfig,
@@ -32,119 +41,50 @@ async function failed(provider: string, res: Response): Promise<never> {
 /** SMS has no subject line — the link is the point, so it always rides along. */
 const smsText = (message: NotifyMessage): string => `${message.subject}\n${message.url}`;
 
+/** Email body: the sentence, then the link on its own line. */
+const emailText = (message: NotifyMessage): string => `${message.body}\n\n${message.url}\n`;
+
 // ── SMS ───────────────────────────────────────────────────────────────────
 
 const twilio: NotifyProvider = {
   id: 'twilio',
   channel: 'sms',
   async send(to, message, config) {
-    // The URL always names the ACCOUNT (AC…), whoever signs the request.
+    // The account is named separately from whoever signs the request: an API
+    // key (SK…) authenticates as itself but still acts ON an account, and an
+    // SK in the REST path is a 404 that reads like a wrong phone number.
     const accountSid = requireConfig(twilio, config, 'accountSid');
     const from = requireConfig(twilio, config, 'from');
 
-    // Twilio accepts two credentials over the same basic-auth field. An API
-    // key pair (SK… + secret) is what the console hands out and what can be
-    // revoked on its own; the account's auth token is the older form and
-    // rotating it invalidates everything at once. Neither is derivable from
-    // the other, and an SK in the username with no account sid in the path is
-    // a 404 that reads like a wrong phone number — so the two are separate
-    // fields and the account sid is required either way.
+    // Two credentials over one field. An API key pair is revocable on its
+    // own; rotating the account auth token invalidates everything at once.
     const apiKeySid = typeof config.apiKeySid === 'string' ? config.apiKeySid : '';
-    const user = apiKeySid || accountSid;
-    const pass = apiKeySid
+    const username = apiKeySid || accountSid;
+    const password = apiKeySid
       ? requireConfig(twilio, config, 'apiKeySecret')
       : requireConfig(twilio, config, 'authToken');
 
-    // Twilio Regions: an account homed outside us1 (ie1 for Ireland, au1,
-    // sg1 …) answers on its own host, and the default one rejects its
-    // credentials with the same 401 as a wrong password — indistinguishable
-    // from a typo unless you already know the account is regional.
-    const region = typeof config.region === 'string' ? config.region.trim() : '';
-    const host = region && region !== 'us1' ? `api.${region}.twilio.com` : 'api.twilio.com';
-
-    const res = await fetch(
-      `https://${host}/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({ To: to, From: from, Body: smsText(message) }),
-      },
-    );
-    if (!res.ok) await failed('Twilio', res);
-  },
-};
-
-const vonage: NotifyProvider = {
-  id: 'vonage',
-  channel: 'sms',
-  async send(to, message, config) {
-    const res = await fetch('https://rest.nexmo.com/sms/json', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        api_key: requireConfig(vonage, config, 'apiKey'),
-        api_secret: requireConfig(vonage, config, 'apiSecret'),
-        // Alphanumeric sender ids are legal here, so this is not a number.
-        from: requireConfig(vonage, config, 'from'),
-        to,
-        text: smsText(message),
-      }),
+    const { default: createClient } = await import('twilio');
+    const client = createClient(username, password, {
+      // Needed when the API key signs: the SDK cannot infer which account.
+      accountSid,
+      // An account homed outside the default region (ie1, au1, sg1 …) answers
+      // on its own host, and the default one rejects its credentials with the
+      // same 401 as a wrong password.
+      ...(typeof config.region === 'string' && config.region && config.region !== 'us1'
+        ? { region: config.region }
+        : {}),
+      ...(typeof config.edge === 'string' && config.edge ? { edge: config.edge } : {}),
     });
-    if (!res.ok) await failed('Vonage', res);
-    // Vonage answers 200 for a rejected message — the verdict is in the body.
-    const data = (await res.json().catch(() => null)) as {
-      messages?: Array<{ status?: string; 'error-text'?: string }>;
-    } | null;
-    const first = data?.messages?.[0];
-    if (first && first.status !== '0') {
-      throw new Error(
-        `Vonage rejected the message (status ${first.status}): ${first['error-text'] ?? 'no detail'}`,
-      );
-    }
+
+    // `from` doubles as a Messaging Service SID (MG…), which is a different
+    // parameter to Twilio even though it is the same field to a human.
+    const sender = from.startsWith('MG') ? { messagingServiceSid: from } : { from };
+    await client.messages.create({ ...sender, to, body: smsText(message) });
   },
 };
 
 // ── Email ─────────────────────────────────────────────────────────────────
-
-const smtp: NotifyProvider = {
-  id: 'smtp',
-  channel: 'email',
-  async send(to, message, config) {
-    const { host, port, secure, auth } = config as {
-      host?: unknown;
-      port?: unknown;
-      secure?: unknown;
-      auth?: unknown;
-    };
-    if (typeof host !== 'string' || !host) {
-      throw new Error('SMTP needs "host" — set it in NOTIFY_EMAIL_CONFIG');
-    }
-    const nodemailer = await import('nodemailer');
-    const transport = nodemailer.createTransport({
-      host,
-      port: typeof port === 'number' ? port : 587,
-      // Implicit TLS on 465, STARTTLS everywhere else — the same rule every
-      // provider's setup page states, so nobody has to pass `secure` at all.
-      secure: typeof secure === 'boolean' ? secure : port === 465,
-      ...(auth ? { auth: auth as { user: string; pass: string } } : {}),
-    });
-    try {
-      await transport.sendMail({
-        from: requireConfig(smtp, config, 'from'),
-        to,
-        subject: message.subject,
-        text: `${message.body}\n\n${message.url}\n`,
-      });
-    } finally {
-      // Long-lived pools would keep a socket open per deployment for a mail
-      // sent minutes apart at best; this is a one-shot transport.
-      transport.close();
-    }
-  },
-};
 
 const resend: NotifyProvider = {
   id: 'resend',
@@ -160,16 +100,89 @@ const resend: NotifyProvider = {
         from: requireConfig(resend, config, 'from'),
         to: [to],
         subject: message.subject,
-        text: `${message.body}\n\n${message.url}\n`,
+        text: emailText(message),
       }),
     });
     if (!res.ok) await failed('Resend', res);
   },
 };
 
+// ── Everything else, through notifme-sdk ──────────────────────────────────
+
+/**
+ * One provider id per channel that reaches every vendor notifme supports.
+ *
+ * NOTIFY_<CHANNEL>_CONFIG *is* notifme's own provider descriptor, so its
+ * documentation is the documentation:
+ *
+ *   {"type":"smtp","host":"…","port":587,"auth":{"user":"…","pass":"…"}}
+ *   {"type":"sendgrid","apiKey":"…"}
+ *   {"type":"nexmo","apiKey":"…","apiSecret":"…"}
+ *
+ * Several vendors at once — notifme's reason to exist — by giving `providers`
+ * instead, with an optional strategy:
+ *
+ *   {"providers":[{"type":"sendgrid",…},{"type":"smtp",…}],
+ *    "multiProviderStrategy":"fallback"}
+ */
+const notifme = (channel: NotifyChannelId): NotifyProvider => {
+  const provider: NotifyProvider = {
+    id: 'notifme',
+    channel,
+    async send(to, message, config) {
+      const from = requireConfig(provider, config, 'from');
+      const { from: _from, providers, multiProviderStrategy, ...single } = config;
+
+      const list = Array.isArray(providers) ? providers : [single];
+      if (list.length === 0 || !list.every((p) => p && typeof (p as { type?: unknown }).type === 'string')) {
+        throw new Error(
+          `notifme needs a "type" (e.g. {"type":"smtp",…}) or a "providers" array of them — ` +
+            `set it in NOTIFY_${channel.toUpperCase()}_CONFIG`,
+        );
+      }
+
+      const { default: NotifmeSdk } = await import('notifme-sdk');
+      const sdk = new NotifmeSdk({
+        channels: {
+          [channel]: {
+            providers: list as Array<{ type: string }>,
+            ...(typeof multiProviderStrategy === 'string' ? { multiProviderStrategy } : {}),
+          },
+        },
+      });
+      // notifme's winston logger prints every notification it handles at info
+      // level — recipient address included, which is PII this app has no
+      // reason to put in a log file — and prints failures a second time on
+      // top of the throw below. Silence beats mute(): with no transports and
+      // no silent flag, winston warns about the missing transports instead,
+      // once per send. (The dry run is our own `logger` PROVIDER id, not
+      // notifme's `{"type":"logger"}`, which goes quiet along with the rest.)
+      (sdk.logger as unknown as { configure(o: unknown): void }).configure({
+        transports: [],
+        silent: true,
+      });
+
+      const result = await sdk.send(
+        channel === 'email'
+          ? { email: { from, to, subject: message.subject, text: emailText(message) } }
+          : { sms: { from, to, text: smsText(message) } },
+      );
+      if (result.status !== 'success') {
+        // The per-channel error carries the vendor's own words; the status
+        // alone would only say that something, somewhere, did not send.
+        const err = result.errors?.[channel];
+        throw new Error(
+          `notifme could not send the ${channel}: ${err instanceof Error ? err.message : (err ?? 'no detail')}`,
+        );
+      }
+    },
+  };
+  return provider;
+};
+
 // ── Dry run ───────────────────────────────────────────────────────────────
 
-const loggerProvider = (channel: 'email' | 'sms'): NotifyProvider => ({
+const loggerProvider = (channel: NotifyChannelId): NotifyProvider => ({
   id: 'logger',
   channel,
   async send(to: string, message: NotifyMessage, _config: NotifyProviderConfig) {
@@ -179,9 +192,9 @@ const loggerProvider = (channel: 'email' | 'sms'): NotifyProvider => ({
 
 export function registerBuiltinNotifyProviders(): void {
   registerNotifyProvider(twilio);
-  registerNotifyProvider(vonage);
-  registerNotifyProvider(smtp);
   registerNotifyProvider(resend);
-  registerNotifyProvider(loggerProvider('sms'));
-  registerNotifyProvider(loggerProvider('email'));
+  for (const channel of ['sms', 'email'] as const) {
+    registerNotifyProvider(notifme(channel));
+    registerNotifyProvider(loggerProvider(channel));
+  }
 }

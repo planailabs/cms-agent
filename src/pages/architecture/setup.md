@@ -255,8 +255,19 @@ already use:
 
 | Channel | Providers | Address comes from |
 |---|---|---|
-| `sms` | `twilio`, `vonage`, `logger` | the number the user saves in the notify modal |
-| `email` | `smtp`, `resend`, `logger` | the OIDC identity — never editable here |
+| `sms` | `twilio`, `notifme`, `logger` | the number the user saves in the notify modal |
+| `email` | `resend`, `notifme`, `logger` | the OIDC identity — never editable here |
+
+Most of the delivery is libraries rather than hand-rolled HTTP. `twilio` is the
+official SDK: Twilio has far more surface than a POST — API keys versus
+account tokens, regional accounts, Messaging Services, retries, typed error
+codes — and every one of those was a live 401 or 404 here before it was a line
+of config. `notifme` is `notifme-sdk`, the same idea one level up: one config
+shape over a dozen vendors per channel, plus failover between several of them.
+`resend` stays hand-written because notifme has no Resend provider and the
+whole of it is one authenticated POST. `logger` is the dry run — it delivers
+to the server log, so a deployment can prove the wiring before handing
+anyone's phone number to a vendor.
 
 Configuration is three variables per channel: which provider, the sender
 identity, and that provider's credentials as a JSON object. Vendor-specific
@@ -265,27 +276,32 @@ ever adds.
 
 ```bash
 NOTIFY_SMS_PROVIDER=twilio
-NOTIFY_SMS_FROM=+15005550006
-NOTIFY_SMS_CONFIG='{"accountSid":"AC…","authToken":"…"}'
+NOTIFY_SMS_FROM=+15005550006          # or a Messaging Service SID (MG…)
+NOTIFY_SMS_CONFIG='{"accountSid":"AC…","apiKeySid":"SK…","apiKeySecret":"…","region":"ie1"}'
 
-NOTIFY_EMAIL_PROVIDER=smtp
+NOTIFY_EMAIL_PROVIDER=resend
 NOTIFY_EMAIL_FROM=cms@example.com
-NOTIFY_EMAIL_CONFIG='{"host":"smtp.example.com","port":587,"auth":{"user":"cms","pass":"…"}}'
+NOTIFY_EMAIL_CONFIG='{"apiKey":"re_…"}'
 ```
 
-`logger` is the dry run: it delivers to the server log, so a deployment can
-prove the wiring before handing anyone's phone number to a vendor. `smtp`
-covers every provider that offers a relay; `resend` and `vonage` are HTTP.
+Twilio takes either credential — `{"accountSid":"AC…","authToken":"…"}` or,
+preferably, the API key pair above, which can be revoked without rotating
+everything the account owns. **`accountSid` is required in both**: the SDK
+acts *on* an account whoever signs the request. `"region"` is required for an
+account homed outside the default one (`ie1`, `au1`, `sg1`, …) — the default
+host rejects a regional account's credentials with a plain 401,
+indistinguishable from a wrong password.
 
-Twilio takes either credential over the same field —
-`{"accountSid":"AC…","authToken":"…"}` or, preferably,
-`{"accountSid":"AC…","apiKeySid":"SK…","apiKeySecret":"…"}`, which can be
-revoked without rotating everything the account owns. **`accountSid` is
-required in both**: the REST path names the account whoever signs the
-request, and an `SK…` in the URL is a 404 that reads like a bad phone number.
-An account homed outside the default region needs `"region":"ie1"` (or `au1`,
-`sg1`, …) alongside — the default host answers a regional account's
-credentials with a plain 401, indistinguishable from a wrong password.
+For `notifme`, the config **is** notifme's own provider descriptor, so its
+documentation is the documentation — `{"type":"sendgrid","apiKey":"…"}`,
+`{"type":"smtp","host":…}`, `{"type":"nexmo",…}`. Several at once, which is
+the reason it is here:
+
+```bash
+NOTIFY_EMAIL_CONFIG='{"providers":[{"type":"sendgrid","apiKey":"…"},{"type":"smtp","host":"…"}],
+                      "multiProviderStrategy":"fallback"}'
+```
+
 Numbers are stored E.164 and rejected at the API if they are not — spaces,
 dashes and parentheses are stripped rather than refused.
 
