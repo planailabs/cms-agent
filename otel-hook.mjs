@@ -20,4 +20,27 @@
  */
 import { register } from 'node:module';
 
-register('@opentelemetry/instrumentation/hook.mjs', import.meta.url);
+register('@opentelemetry/instrumentation/hook.mjs', import.meta.url, {
+  data: {
+    /**
+     * openai@4 is not compatible with the hook, and fails at import time.
+     *
+     * Its shim registry keeps state in `export let` bindings and reads them
+     * back through `import * as shims`. import-in-the-middle's namespace
+     * proxy does not carry live bindings, so the read still says "no shims
+     * registered" after the write set them — and the second registration
+     * throws `you must import 'openai/shims/node' before importing anything
+     * else from openai`, taking the whole server down at boot.
+     *
+     * Excluding it costs nothing: there is no openai instrumentation to lose,
+     * and the API calls it makes are still traced by the http/undici ones.
+     * The regex matches the package directory rather than the specifier —
+     * pnpm's real path ends in `node_modules/openai/…`, and the module that
+     * actually breaks is reached by a RELATIVE import from inside it, which
+     * a bare `'openai'` entry would never match.
+     *
+     * Removable once this repo is on openai v5+, which deleted _shims.
+     */
+    exclude: [/[/\\]node_modules[/\\]openai[/\\]/],
+  },
+});

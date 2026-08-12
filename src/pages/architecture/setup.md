@@ -194,6 +194,16 @@ bare specifier inside the shim resolves against **the shim**, not the working
 directory — the service runs from `VAR_DIR` / `/data`, where `@opentelemetry`
 is nowhere in reach, so the launcher only needs an absolute path to one file.
 
+One package is excluded from the hook: **openai@4**, whose shim registry keeps
+state in `export let` bindings and reads it back through `import * as shims`.
+`import-in-the-middle`'s namespace proxy does not carry live bindings, so the
+read says "nothing registered" after the write registered it, and openai
+throws `you must import 'openai/shims/node' before importing anything else` at
+import time — the server never boots. Nothing is lost: there is no openai
+instrumentation, and its API calls are still traced as HTTP. `test/
+otel-hook.test.ts` pins both directions, so the exclusion goes away by itself
+the day this repo moves to openai v5+ (which deleted `_shims`).
+
 `--disable-warning=DEP0205` silences node 26's other complaint: it deprecates
 `module.register()` in favour of `registerHooks()`, which takes *synchronous*
 hooks — `import-in-the-middle`'s are async, so `register()` remains the only
