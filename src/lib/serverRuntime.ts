@@ -96,7 +96,7 @@ export function startRuntimeServices(): void {
   if (g.__cmsRuntimeStarted) return;
   g.__cmsRuntimeStarted = true;
 
-  // The OTel loader/register flags are ours alone. Node has already consumed
+  // The OTel hook/register flags are ours alone. Node has already consumed
   // NODE_OPTIONS by now, so dropping it changes nothing here — but it is
   // inherited by every child we spawn with `...process.env` (publish scripts,
   // wrangler, site builds), and those resolve the bare specifiers against

@@ -67,9 +67,15 @@ rm -rf "${TMPDIR:-/tmp}/cms-agent-diffs"
 
 export SKIP_AUTH=true
 export HOST=::1
-# OpenTelemetry auto-instrumentation. Bare specifiers resolve against the cwd,
-# which is the repo root here (the nix wrapper uses store paths instead).
-export NODE_OPTIONS="--experimental-loader=@opentelemetry/instrumentation/hook.mjs --import @opentelemetry/auto-instrumentations-node/register${NODE_OPTIONS:+ $NODE_OPTIONS}"
+# OpenTelemetry auto-instrumentation. otel-hook.mjs registers the ESM hook
+# (--experimental-loader does the same and warns on every boot that it may be
+# removed); the register import starts the SDK. Both resolve against the cwd,
+# which is the repo root here — the nix wrapper uses store paths instead.
+# --disable-warning: node 26 deprecates module.register() in favour of
+# registerHooks(), which takes SYNCHRONOUS hooks — import-in-the-middle's are
+# async, so register() is still the only API that fits. Silence that one code
+# rather than the whole channel (needs node >= 21.3).
+export NODE_OPTIONS="--disable-warning=DEP0205 --import ./otel-hook.mjs --import @opentelemetry/auto-instrumentations-node/register${NODE_OPTIONS:+ $NODE_OPTIONS}"
 # The SDK exports over OTLP to localhost:4318 unless told otherwise, and logs
 # every failed export. Opt in with a collector: OTEL_SDK_DISABLED=false plus
 # OTEL_EXPORTER_OTLP_ENDPOINT.

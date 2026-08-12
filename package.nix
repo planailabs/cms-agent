@@ -170,8 +170,10 @@ stdenv.mkDerivation (finalAttrs: {
     # must stay available for `prisma migrate deploy` at deploy time.
     cp -r node_modules $out/share/cms-agent/node_modules
 
-    # Production server wrapper (imports ./dist/server/entry.mjs relative to itself).
-    cp server.mjs package.json $out/share/cms-agent/
+    # Production server wrapper (imports ./dist/server/entry.mjs relative to
+    # itself) + the OpenTelemetry ESM-hook shim, which likewise resolves
+    # @opentelemetry against its own location rather than the cwd.
+    cp server.mjs otel-hook.mjs package.json $out/share/cms-agent/
 
     # Prisma schema + migrations + config for `prisma migrate deploy` at runtime.
     mkdir -p $out/share/cms-agent/prisma
@@ -196,17 +198,19 @@ stdenv.mkDerivation (finalAttrs: {
     # node resolves NODE_OPTIONS specifiers against the cwd — bare ones would
     # be ERR_MODULE_NOT_FOUND at boot. Only the CMS wrapper gets them; the
     # prisma wrapper below is a separate short-lived process with no traces to
-    # emit. Assert the two entry points exist so a package layout change fails
-    # the build instead of the service.
-    otelHook="$out/share/cms-agent/node_modules/@opentelemetry/instrumentation/hook.mjs"
+    # emit. Assert the entry points exist so a package layout change fails the
+    # build instead of the service — including hook.mjs, which nothing here
+    # names but otel-hook.mjs resolves at boot.
+    otelHook="$out/share/cms-agent/otel-hook.mjs"
     otelRegister="$out/share/cms-agent/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js"
-    for f in "$otelHook" "$otelRegister"; do
+    for f in "$otelHook" "$otelRegister" \
+      "$out/share/cms-agent/node_modules/@opentelemetry/instrumentation/hook.mjs"; do
       [ -f "$f" ] || { echo "ERROR: OpenTelemetry entry point missing: $f" >&2; exit 1; }
     done
 
     makeWrapper ${lib.getExe nodejs_26} $out/bin/cms-agent \
       --add-flags "$out/share/cms-agent/server.mjs" \
-      --set-default NODE_OPTIONS "--experimental-loader=$otelHook --import $otelRegister" \
+      --set-default NODE_OPTIONS "--disable-warning=DEP0205 --import $otelHook --import $otelRegister" \
       --set-default OTEL_SDK_DISABLED "true" \
       --set-default PRISMA_SCHEMA_ENGINE_BINARY "${prisma-engines_7}/bin/schema-engine" \
       --set-default CMS_PLUGINS_ROOT "$out/share/cms-agent" \

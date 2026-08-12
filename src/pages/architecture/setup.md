@@ -179,15 +179,31 @@ starts node with the flags that make it possible, because they cannot be added
 to a process after it has booted:
 
 ```
---experimental-loader=@opentelemetry/instrumentation/hook.mjs
+--disable-warning=DEP0205
+--import <repo>/otel-hook.mjs
 --import @opentelemetry/auto-instrumentations-node/register
 ```
 
-`scripts/start-local.sh` exports them as `NODE_OPTIONS` with bare specifiers
-(cwd is the repo root); the nix wrapper — used by both the NixOS module and
-the docker image — sets the same two flags with absolute store paths, since
-the service's working directory is `VAR_DIR` / `/data` and node resolves
-specifiers against the cwd.
+`otel-hook.mjs` is a three-line shim that calls `module.register()` on
+`@opentelemetry/instrumentation/hook.mjs`. It is a file rather than a flag for
+two reasons. `--experimental-loader=…/hook.mjs` does the same job and prints a
+warning on every boot saying it may be removed; the replacement node suggests
+is a `data:text/javascript,…` URL with quotes and semicolons in it, which then
+has to survive `NODE_OPTIONS`, a systemd unit and a docker entrypoint. And the
+bare specifier inside the shim resolves against **the shim**, not the working
+directory — the service runs from `VAR_DIR` / `/data`, where `@opentelemetry`
+is nowhere in reach, so the launcher only needs an absolute path to one file.
+
+`--disable-warning=DEP0205` silences node 26's other complaint: it deprecates
+`module.register()` in favour of `registerHooks()`, which takes *synchronous*
+hooks — `import-in-the-middle`'s are async, so `register()` remains the only
+API that fits. One warning code is suppressed, not the channel. (Needs node
+≥ 21.3; both deployments are on 26.)
+
+`scripts/start-local.sh` exports these as `NODE_OPTIONS` relative to the repo
+root; the nix wrapper — used by both the NixOS module and the docker image —
+sets the same flags with absolute store paths, and asserts at build time that
+all three files exist.
 
 Only the exporter is opt-in. It ships `OTEL_SDK_DISABLED=true`, because the
 SDK otherwise pushes to `localhost:4318` and logs every failed export. To turn
