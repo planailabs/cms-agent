@@ -38,17 +38,29 @@ const twilio: NotifyProvider = {
   id: 'twilio',
   channel: 'sms',
   async send(to, message, config) {
+    // The URL always names the ACCOUNT (AC…), whoever signs the request.
     const accountSid = requireConfig(twilio, config, 'accountSid');
-    const authToken = requireConfig(twilio, config, 'authToken');
     const from = requireConfig(twilio, config, 'from');
+
+    // Twilio accepts two credentials over the same basic-auth field. An API
+    // key pair (SK… + secret) is what the console hands out and what can be
+    // revoked on its own; the account's auth token is the older form and
+    // rotating it invalidates everything at once. Neither is derivable from
+    // the other, and an SK in the username with no account sid in the path is
+    // a 404 that reads like a wrong phone number — so the two are separate
+    // fields and the account sid is required either way.
+    const apiKeySid = typeof config.apiKeySid === 'string' ? config.apiKeySid : '';
+    const user = apiKeySid || accountSid;
+    const pass = apiKeySid
+      ? requireConfig(twilio, config, 'apiKeySecret')
+      : requireConfig(twilio, config, 'authToken');
+
     const res = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`,
       {
         method: 'POST',
         headers: {
-          // Basic auth rather than a bearer token: Twilio's REST API takes the
-          // account sid as the username and the auth token as the password.
-          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
+          Authorization: `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({ To: to, From: from, Body: smsText(message) }),

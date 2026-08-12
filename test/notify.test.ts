@@ -151,6 +151,65 @@ describe('channel resolution', () => {
   });
 });
 
+describe('twilio credentials', () => {
+  /**
+   * Twilio takes two different credentials over one basic-auth field, and the
+   * REST path names the ACCOUNT either way. Signing with an API key while
+   * putting the key's own SK… in the URL is a 404 that reads like a bad phone
+   * number, so the account sid stays required in both shapes.
+   */
+  const callTwilio = async (config: Record<string, unknown>) => {
+    const calls: Array<{ url: string; auth: string; body: string }> = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      calls.push({
+        url,
+        auth: (init.headers as Record<string, string>).Authorization,
+        body: String(init.body),
+      });
+      return new Response('', { status: 201 });
+    });
+    setEnv({
+      NOTIFY_SMS_PROVIDER: 'twilio',
+      NOTIFY_SMS_FROM: '+15550000000',
+      NOTIFY_SMS_CONFIG: JSON.stringify(config),
+    });
+    try {
+      await deliver('sms', '+15551230000', { subject: 'Chat is done', body: 'b', url: 'https://cms/x' });
+      return calls[0];
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  };
+
+  const decode = (auth: string) => Buffer.from(auth.replace('Basic ', ''), 'base64').toString();
+
+  it('signs with the account auth token when that is what it was given', async () => {
+    const call = await callTwilio({ accountSid: 'AC123', authToken: 'tok' });
+    expect(call.url).toContain('/Accounts/AC123/Messages.json');
+    expect(decode(call.auth)).toBe('AC123:tok');
+    // The link is the point of the message, so it always rides along.
+    expect(call.body).toContain('Chat+is+done');
+    expect(call.body).toContain(encodeURIComponent('https://cms/x'));
+  });
+
+  it('signs with an API key pair but still addresses the account', async () => {
+    const call = await callTwilio({ accountSid: 'AC123', apiKeySid: 'SK456', apiKeySecret: 'sec' });
+    expect(call.url).toContain('/Accounts/AC123/Messages.json');
+    expect(decode(call.auth)).toBe('SK456:sec');
+  });
+
+  it('names the missing field, and the variable it comes from', async () => {
+    setEnv({
+      NOTIFY_SMS_PROVIDER: 'twilio',
+      NOTIFY_SMS_FROM: '+15550000000',
+      NOTIFY_SMS_CONFIG: JSON.stringify({ apiKeySid: 'SK456', apiKeySecret: 'sec' }),
+    });
+    await expect(
+      deliver('sms', '+15551230000', { subject: 's', body: 'b', url: 'u' }),
+    ).rejects.toThrow(/accountSid.*NOTIFY_SMS_CONFIG/s);
+  });
+});
+
 describe('phone normalization', () => {
   it('accepts E.164 however a human spaced it', () => {
     expect(normalizePhone('+49 170 123 45 67')).toBe('+491701234567');

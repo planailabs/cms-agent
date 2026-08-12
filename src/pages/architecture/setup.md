@@ -276,6 +276,13 @@ NOTIFY_EMAIL_CONFIG='{"host":"smtp.example.com","port":587,"auth":{"user":"cms",
 `logger` is the dry run: it delivers to the server log, so a deployment can
 prove the wiring before handing anyone's phone number to a vendor. `smtp`
 covers every provider that offers a relay; `resend` and `vonage` are HTTP.
+
+Twilio takes either credential over the same field —
+`{"accountSid":"AC…","authToken":"…"}` or, preferably,
+`{"accountSid":"AC…","apiKeySid":"SK…","apiKeySecret":"…"}`, which can be
+revoked without rotating everything the account owns. **`accountSid` is
+required in both**: the REST path names the account whoever signs the
+request, and an `SK…` in the URL is a 404 that reads like a bad phone number.
 Numbers are stored E.164 and rejected at the API if they are not — spaces,
 dashes and parentheses are stripped rather than refused.
 
