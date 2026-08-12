@@ -256,7 +256,7 @@ already use:
 | Channel | Providers | Address comes from |
 |---|---|---|
 | `sms` | `twilio`, `notifme`, `logger` | the number the user saves in the notify modal |
-| `email` | `resend`, `notifme`, `logger` | the OIDC identity — never editable here |
+| `email` | `smtp2go`, `resend`, `notifme`, `logger` | the OIDC identity — never editable here |
 
 Most of the delivery is libraries rather than hand-rolled HTTP. `twilio` is the
 official SDK: Twilio has far more surface than a POST — API keys versus
@@ -264,8 +264,11 @@ account tokens, regional accounts, Messaging Services, retries, typed error
 codes — and every one of those was a live 401 or 404 here before it was a line
 of config. `notifme` is `notifme-sdk`, the same idea one level up: one config
 shape over a dozen vendors per channel, plus failover between several of them.
-`resend` stays hand-written because notifme has no Resend provider and the
-whole of it is one authenticated POST. `logger` is the dry run — it delivers
+`smtp2go` and `resend` stay hand-written because notifme covers neither and
+each is one authenticated POST. SMTP2GO answers **200 for a rejected
+recipient**, with the verdict in `data.succeeded`, so that provider reads the
+body rather than the status — a delivery reported from a status code alone is
+indistinguishable from one that never happened. `logger` is the dry run — it delivers
 to the server log, so a deployment can prove the wiring before handing
 anyone's phone number to a vendor.
 
@@ -279,9 +282,9 @@ NOTIFY_SMS_PROVIDER=twilio
 NOTIFY_SMS_FROM=+15005550006          # or a Messaging Service SID (MG…)
 NOTIFY_SMS_CONFIG='{"accountSid":"AC…","apiKeySid":"SK…","apiKeySecret":"…","region":"ie1"}'
 
-NOTIFY_EMAIL_PROVIDER=resend
-NOTIFY_EMAIL_FROM=cms@example.com
-NOTIFY_EMAIL_CONFIG='{"apiKey":"re_…"}'
+NOTIFY_EMAIL_PROVIDER=smtp2go
+NOTIFY_EMAIL_FROM=cms@example.com     # a verified sender on the account
+NOTIFY_EMAIL_CONFIG='{"apiKey":"api-…"}'   # + "region": us | eu | au to pin it
 ```
 
 Twilio takes either credential — `{"accountSid":"AC…","authToken":"…"}` or,

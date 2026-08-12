@@ -2,7 +2,7 @@
  * Built-in notification providers.
  *
  * SMS:   twilio | notifme | logger
- * Email: resend | notifme | logger
+ * Email: smtp2go | resend | notifme | logger
  *
  * Two of these are libraries doing the work rather than hand-rolled HTTP:
  *
@@ -16,10 +16,10 @@
  *    fallback and round-robin across several of them. Reaching a new vendor is
  *    a `type` in NOTIFY_<CHANNEL>_CONFIG, not a file in this directory.
  *
- * `resend` stays hand-written because notifme has no Resend provider and the
- * whole of it is one authenticated POST. `logger` is the dry run: it delivers
- * to the server log, so a deployment can prove the wiring before handing
- * anyone's phone number to a vendor.
+ * `smtp2go` and `resend` are hand-written because notifme covers neither, and
+ * each is one authenticated POST. `logger` is the dry run: it delivers to the
+ * server log, so a deployment can prove the wiring before handing anyone's
+ * phone number to a vendor.
  */
 import {
   registerNotifyProvider,
@@ -104,6 +104,44 @@ const resend: NotifyProvider = {
       }),
     });
     if (!res.ok) await failed('Resend', res);
+  },
+};
+
+const smtp2go: NotifyProvider = {
+  id: 'smtp2go',
+  channel: 'email',
+  async send(to, message, config) {
+    // Global by default: SMTP2GO routes it to whichever of us/eu/au is
+    // nearest. Naming one pins the data path for accounts that must.
+    const region = typeof config.region === 'string' ? config.region.trim() : '';
+    const host = region ? `${region}-api.smtp2go.com` : 'api.smtp2go.com';
+
+    const res = await fetch(`https://${host}/v3/email/send`, {
+      method: 'POST',
+      headers: {
+        'X-Smtp2go-Api-Key': requireConfig(smtp2go, config, 'apiKey'),
+        'Content-Type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: requireConfig(smtp2go, config, 'from'),
+        to: [to],
+        subject: message.subject,
+        text_body: emailText(message),
+      }),
+    });
+    if (!res.ok) await failed('SMTP2GO', res);
+
+    // A rejected recipient comes back 200 with failed: 1 — the status alone
+    // would report a delivery that never happened.
+    const body = (await res.json().catch(() => null)) as {
+      data?: { succeeded?: number; failed?: number; failures?: unknown[] };
+    } | null;
+    if (!body?.data?.succeeded) {
+      throw new Error(
+        `SMTP2GO accepted the request but sent nothing: ${JSON.stringify(body?.data ?? body).slice(0, 300)}`,
+      );
+    }
   },
 };
 
@@ -193,6 +231,7 @@ const loggerProvider = (channel: NotifyChannelId): NotifyProvider => ({
 export function registerBuiltinNotifyProviders(): void {
   registerNotifyProvider(twilio);
   registerNotifyProvider(resend);
+  registerNotifyProvider(smtp2go);
   for (const channel of ['sms', 'email'] as const) {
     registerNotifyProvider(notifme(channel));
     registerNotifyProvider(loggerProvider(channel));

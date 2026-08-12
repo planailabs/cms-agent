@@ -249,6 +249,86 @@ describe('twilio, through the official SDK', () => {
   });
 });
 
+describe('smtp2go', () => {
+  const callSmtp2go = async (
+    config: Record<string, unknown>,
+    reply: { status?: number; body?: unknown } = {},
+  ) => {
+    const calls: Array<{ url: string; headers: Record<string, string>; body: Record<string, unknown> }> = [];
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      calls.push({
+        url,
+        headers: init.headers as Record<string, string>,
+        body: JSON.parse(String(init.body)) as Record<string, unknown>,
+      });
+      return new Response(JSON.stringify(reply.body ?? { data: { succeeded: 1, failed: 0 } }), {
+        status: reply.status ?? 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    setEnv({
+      NOTIFY_EMAIL_PROVIDER: 'smtp2go',
+      NOTIFY_EMAIL_FROM: 'cms@example.com',
+      NOTIFY_EMAIL_CONFIG: JSON.stringify(config),
+    });
+    try {
+      const sent = deliver('email', 'someone@example.com', {
+        subject: 'Chat is done',
+        body: 'The agent finished.',
+        url: 'https://cms/x',
+      });
+      return { sent, calls };
+    } finally {
+      // Unstubbed by the caller after awaiting — see each test.
+    }
+  };
+
+  it('posts the v3 shape with the key in its own header', async () => {
+    const { sent, calls } = await callSmtp2go({ apiKey: 'api-KEY' });
+    await sent;
+    vi.unstubAllGlobals();
+    expect(calls[0].url).toBe('https://api.smtp2go.com/v3/email/send');
+    expect(calls[0].headers['X-Smtp2go-Api-Key']).toBe('api-KEY');
+    // Its field names are its own: sender/text_body, not from/text.
+    expect(calls[0].body).toMatchObject({
+      sender: 'cms@example.com',
+      to: ['someone@example.com'],
+      subject: 'Chat is done',
+    });
+    expect(String(calls[0].body.text_body)).toContain('https://cms/x');
+  });
+
+  it('pins the data path to a region when asked', async () => {
+    const { sent, calls } = await callSmtp2go({ apiKey: 'k', region: 'eu' });
+    await sent;
+    vi.unstubAllGlobals();
+    expect(calls[0].url).toBe('https://eu-api.smtp2go.com/v3/email/send');
+  });
+
+  /**
+   * The trap worth a test: a rejected recipient comes back 200. Reading only
+   * the status would report a delivery that never happened — and a
+   * notification nobody receives is indistinguishable from one nobody armed.
+   */
+  it('treats a 200 that sent nothing as a failure', async () => {
+    const { sent } = await callSmtp2go(
+      { apiKey: 'k' },
+      { body: { data: { succeeded: 0, failed: 1, failures: ['bad recipient'] } } },
+    );
+    await expect(sent).rejects.toThrow(/sent nothing.*failed/s);
+    vi.unstubAllGlobals();
+  });
+
+  it('reports the vendor body on a hard failure', async () => {
+    const { sent } = await callSmtp2go(
+      { apiKey: 'k' },
+      { status: 400, body: { data: { error: 'sender not verified' } } },
+    );
+    await expect(sent).rejects.toThrow(/HTTP 400.*sender not verified/s);
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('notifme-sdk, for every other vendor', () => {
   /**
    * notifme's own `logger` type sends for real through the whole SDK — its
