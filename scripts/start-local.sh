@@ -67,15 +67,26 @@ rm -rf "${TMPDIR:-/tmp}/cms-agent-diffs"
 
 export SKIP_AUTH=true
 export HOST=::1
-# OpenTelemetry auto-instrumentation. otel-hook.mjs registers the ESM hook
-# (--experimental-loader does the same and warns on every boot that it may be
-# removed); the register import starts the SDK. Both resolve against the cwd,
-# which is the repo root here — the nix wrapper uses store paths instead.
+# OpenTelemetry auto-instrumentation, passed as node ARGV rather than through
+# NODE_OPTIONS — which every node process below this script would inherit,
+# and the ESM hook is not harmless in all of them: it turns pnpm's "is there a
+# .pnpmfile here?" probe from "no" into a thrown ERR_MODULE_NOT_FOUND, so
+# `pnpm dev` died before astro ever started. Flags on the one process that
+# should carry them cannot leak into the tools that launch it. (In production
+# the wrapper sets NODE_OPTIONS on the server binary itself and lib/
+# serverRuntime drops it at boot, for the same reason.)
+#
+# otel-hook.mjs registers the hook; the register import starts the SDK; both
+# absolute, so the working directory never enters into it.
 # --disable-warning: node 26 deprecates module.register() in favour of
 # registerHooks(), which takes SYNCHRONOUS hooks — import-in-the-middle's are
 # async, so register() is still the only API that fits. Silence that one code
 # rather than the whole channel (needs node >= 21.3).
-export NODE_OPTIONS="--disable-warning=DEP0205 --import ./otel-hook.mjs --import @opentelemetry/auto-instrumentations-node/register${NODE_OPTIONS:+ $NODE_OPTIONS}"
+otel_flags=(
+  --disable-warning=DEP0205
+  --import "$repo_root/otel-hook.mjs"
+  --import "$repo_root/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js"
+)
 # The SDK exports over OTLP to localhost:4318 unless told otherwise, and logs
 # every failed export. Opt in with a collector: OTEL_SDK_DISABLED=false plus
 # OTEL_EXPORTER_OTLP_ENDPOINT.
@@ -94,7 +105,10 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-bash scripts/launch-with-sandbox.sh pnpm dev -- --host ::1 --port "$internal_port" &
+# `pnpm dev` is `astro dev`; astro is started directly so the otel flags land
+# on it and nothing in between.
+bash scripts/launch-with-sandbox.sh node "${otel_flags[@]}" \
+  node_modules/astro/bin/astro.mjs dev --host ::1 --port "$internal_port" &
 child=$!
 
 ready_deadline=$((SECONDS + 600))

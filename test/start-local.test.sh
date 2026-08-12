@@ -16,6 +16,8 @@ trap 'rm -rf "$test_root"' 0
 repo=$test_root/repo
 mkdir -p "$repo/scripts" "$repo/var" "$test_root/bin" "$test_root/tmp"
 cp "$source_root/scripts/start-local.sh" "$repo/scripts/start-local.sh"
+# start-local.sh points node at this by absolute path; a rename must fail here.
+cp "$source_root/otel-hook.mjs" "$repo/otel-hook.mjs"
 
 cat > "$repo/scripts/update-local.sh" <<'EOF'
 #!/bin/sh
@@ -37,17 +39,30 @@ exit 1
 EOF
 cat > "$test_root/bin/node" <<'EOF'
 #!/bin/sh
-exit 0
+# Two callers: the readiness poll, and the dev server itself.
+case "$1" in
+  scripts/wait-for-proxy.mjs) exit 0 ;;
+esac
+
+# The OpenTelemetry flags belong to THIS process. Through NODE_OPTIONS they
+# would be inherited by every node below the launcher — including pnpm, whose
+# .pnpmfile probe the ESM hook turns into a hard error.
+[ -z "${NODE_OPTIONS-}" ] || { printf 'NODE_OPTIONS leaked: %s\n' "$NODE_OPTIONS" >&2; exit 65; }
+[ "$1" = '--disable-warning=DEP0205' ] || { printf 'argv: %s\n' "$*" >&2; exit 65; }
+[ "$2" = '--import' ] && [ -f "$3" ] || { printf 'missing hook shim: %s\n' "$3" >&2; exit 65; }
+[ "$4" = '--import' ] || { printf 'argv: %s\n' "$*" >&2; exit 65; }
+case "$5" in */@opentelemetry/auto-instrumentations-node/*) ;; *) exit 65 ;; esac
+[ "$6" = 'node_modules/astro/bin/astro.mjs' ] || { printf 'argv: %s\n' "$*" >&2; exit 65; }
+[ "$7 $8 $9" = 'dev --host ::1' ] || { printf 'argv: %s\n' "$*" >&2; exit 65; }
+
+[ "$SKIP_AUTH:$HOST:$PROXY_LISTEN:$DEV_PORT_CARRY" = 'true:::1:127.0.0.1:8080:1' ]
+printf 'dev\n' >> "$START_LOG"
+sleep 2
 EOF
 cat > "$test_root/bin/pnpm" <<'EOF'
 #!/bin/sh
 case "$*" in
   'exec prisma migrate deploy') printf 'migrate\n' >> "$START_LOG" ;;
-  'dev -- --host ::1 --port 4321')
-    [ "$SKIP_AUTH:$HOST:$PROXY_LISTEN:$DEV_PORT_CARRY" = 'true:::1:127.0.0.1:8080:1' ]
-    printf 'dev\n' >> "$START_LOG"
-    sleep 2
-    ;;
   *) exit 64 ;;
 esac
 EOF

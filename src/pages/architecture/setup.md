@@ -200,10 +200,15 @@ hooks — `import-in-the-middle`'s are async, so `register()` remains the only
 API that fits. One warning code is suppressed, not the channel. (Needs node
 ≥ 21.3; both deployments are on 26.)
 
-`scripts/start-local.sh` exports these as `NODE_OPTIONS` relative to the repo
-root; the nix wrapper — used by both the NixOS module and the docker image —
-sets the same flags with absolute store paths, and asserts at build time that
-all three files exist.
+`scripts/start-local.sh` passes them as **node argv** on the `astro dev`
+process, not through `NODE_OPTIONS`. Every node process below the launcher
+inherits that variable, and the ESM hook is not harmless in all of them: it
+turns pnpm's "is there a `.pnpmfile` here?" probe from *no* into a thrown
+`ERR_MODULE_NOT_FOUND`, which killed `pnpm dev` before astro started. In
+production the wrapper does set `NODE_OPTIONS`, because there it is set *on
+the server binary itself* — and `lib/serverRuntime` deletes it at boot so the
+processes the CMS spawns do not inherit it either. The nix wrapper uses
+absolute store paths and asserts at build time that all three files exist.
 
 Only the exporter is opt-in. It ships `OTEL_SDK_DISABLED=true`, because the
 SDK otherwise pushes to `localhost:4318` and logs every failed export. To turn
