@@ -13,6 +13,12 @@ import { stopChatTurn } from '../chat/actions/chat/stateMachine';
 import { registerDiffScrollSync } from './diffScroll';
 import { navigateDiffTo, reloadDiffPanes } from './diffViewer';
 import { openInputModal, closeInputModal, submitInputModal } from './modal';
+import {
+  closeNotifyModal,
+  openNotifyModal,
+  saveNotifySettings,
+  toggleNotifyChannel,
+} from './notifyModal';
 import { closeWindow, openWindow, registeredWindows, toggleWindow } from './window';
 import { deviceByKey } from './devices';
 import { reloadPreviewFrame } from './previewFrames';
@@ -270,6 +276,12 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
     close: closeInputModal,
   });
   registerLayer({
+    id: 'ws-notify-modal',
+    priority: 110,
+    isOpen: (s) => s.workspace.notify.open,
+    close: closeNotifyModal,
+  });
+  registerLayer({
     id: 'ws-diff-routes',
     priority: 90,
     isOpen: (s) => s.workspace.diff.routesOpen,
@@ -355,6 +367,28 @@ export const registerWorkspaceEvents = (app: HTMLElement): void => {
       closeInputModal();
     }
   });
+  // Turn-end notifications ("tell me when this chat is done")
+  delegateEvent(app, 'click', '[data-action="ws-notify-open"]', () => openNotifyModal());
+  delegateEvent(app, 'click', '[data-action="ws-notify-close"]', () => closeNotifyModal());
+  delegateEvent(app, 'click', '[data-action="ws-notify-save"]', () => void saveNotifySettings());
+  delegateEvent<Event>(app, 'change', '[data-action="ws-notify-channel"]', (_e, target) => {
+    const channel = target.getAttribute('data-channel');
+    if (channel) toggleNotifyChannel(channel);
+  });
+  delegateEvent<Event>(app, 'input', '[data-action="ws-notify-phone"]', (_e, target) => {
+    // Mirror into state WITHOUT notifying: a checkbox toggle re-renders the
+    // panel, and a number that only lived in the DOM would be erased by it.
+    store.state.workspace.notify.phone = (target as HTMLInputElement).value;
+  });
+  delegateEvent<KeyboardEvent>(app, 'keydown', '[data-action="ws-notify-phone"]', (event) => {
+    // Enter in the only text field means "save", the way it does everywhere
+    // else — the alternative is typing a number and losing it to Escape.
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void saveNotifySettings();
+    }
+  });
+
   delegateEvent(app, 'click', '[data-action="ws-create-preview"]', () => void createPreviewAction());
   delegateEvent(app, 'click', '[data-action="ws-dismiss-finish"]', () => dismissFinishExecution());
   delegateEvent(app, 'click', '[data-action="ws-undo-execution"]', (_e, target) => {

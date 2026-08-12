@@ -103,6 +103,20 @@ const schema = z.object({
   ),
   METRICS_TOKEN: z.string().min(16).optional(),
 
+  // Notifications (lib/notify) — "tell me when the chat is done", by email
+  // and/or SMS. Three variables per channel: which registered provider to use
+  // (sms: twilio | vonage | logger; email: smtp | resend | logger), the
+  // sender identity, and that provider's credentials as a JSON object. A
+  // channel with no provider set is simply never offered to anyone.
+  // Validated as text here — each provider reports the field it is missing,
+  // naming itself; a schema per provider would grow with the registry.
+  NOTIFY_EMAIL_PROVIDER: z.string().min(1).optional(),
+  NOTIFY_EMAIL_FROM: z.string().min(1).optional(),
+  NOTIFY_EMAIL_CONFIG: z.string().optional(), // JSON object
+  NOTIFY_SMS_PROVIDER: z.string().min(1).optional(),
+  NOTIFY_SMS_FROM: z.string().min(1).optional(),
+  NOTIFY_SMS_CONFIG: z.string().optional(), // JSON object
+
   // Preview manager
   PREVIEW_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(10 * 60 * 1000),
   PREVIEW_MAX_INSTANCES: z.coerce.number().int().positive().default(5),

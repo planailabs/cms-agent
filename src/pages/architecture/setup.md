@@ -56,6 +56,9 @@ Worth knowing about the rest:
 - **Metrics** (`METRICS_*`) are on by default and need nothing configured in
   development; production refuses to start without `METRICS_TOKEN` (see
   [Metrics](#metrics)).
+- **Notifications** (`NOTIFY_*`) are entirely opt-in: a channel with no
+  provider configured is never offered to anyone (see
+  [Notifications](#notifications)).
 
 The embedded proxy has its own notes in `proxy/README.md`.
 
@@ -203,6 +206,55 @@ does not answer outside GCP/AWS/Azure, and log a warning per boot.
 so it is not inherited by the processes the CMS spawns — publish scripts,
 wrangler, site builds. They run with a different working directory and no
 `@opentelemetry` in reach, and would die resolving the loader.
+
+## Notifications
+
+"Tell me when this chat is done" — the bell beside the branch switcher. A turn
+can run for many minutes and the person who started it is usually elsewhere by
+the time it ends, so they can arm an email and/or an SMS for the next time it
+stops. It fires whichever way the turn ended (finished, a question, an error)
+and then **switches itself off**: a standing subscription would text somebody
+on every turn of a conversation they came back to hours ago, and that mistake
+is billed per message.
+
+Arming is per chat and per person. Two channels ship, each with a small
+registry of providers — adding one is a `registerNotifyProvider` call in
+`src/lib/notify/providers.ts`, the same shape deploy flows and site backends
+already use:
+
+| Channel | Providers | Address comes from |
+|---|---|---|
+| `sms` | `twilio`, `vonage`, `logger` | the number the user saves in the notify modal |
+| `email` | `smtp`, `resend`, `logger` | the OIDC identity — never editable here |
+
+Configuration is three variables per channel: which provider, the sender
+identity, and that provider's credentials as a JSON object. Vendor-specific
+variable names would mean the env schema grows a section per provider anyone
+ever adds.
+
+```bash
+NOTIFY_SMS_PROVIDER=twilio
+NOTIFY_SMS_FROM=+15005550006
+NOTIFY_SMS_CONFIG='{"accountSid":"AC…","authToken":"…"}'
+
+NOTIFY_EMAIL_PROVIDER=smtp
+NOTIFY_EMAIL_FROM=cms@example.com
+NOTIFY_EMAIL_CONFIG='{"host":"smtp.example.com","port":587,"auth":{"user":"cms","pass":"…"}}'
+```
+
+`logger` is the dry run: it delivers to the server log, so a deployment can
+prove the wiring before handing anyone's phone number to a vendor. `smtp`
+covers every provider that offers a relay; `resend` and `vonage` are HTTP.
+Numbers are stored E.164 and rejected at the API if they are not — spaces,
+dashes and parentheses are stripped rather than refused.
+
+Unset means off, in both directions: a channel with no provider does not
+appear in the modal, and a person with no address for a configured channel
+sees it greyed out with the reason. Delivery failures are logged and never
+fail the turn they were reporting on.
+
+Unrelated to [Metrics](#metrics) above despite both being "observability":
+that endpoint is scraped by machines, this reaches a person.
 
 ## NixOS note (development)
 

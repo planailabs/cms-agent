@@ -64,6 +64,9 @@ the embedded proxy on port `8080`.
 - New deploy targets: implement `DeployFlow` in `src/lib/publish/` and
   register it — don't special-case the publisher.
 - New site-type behaviors: implement `ContentAdapter` in `src/lib/content/`.
+- New ways to reach a person when a turn ends: implement `NotifyProvider` in
+  `src/lib/notify/providers.ts` and register it — the channel (`email`/`sms`)
+  and the arming logic stay where they are.
 
 ## Documentation upkeep (do this LAST)
 

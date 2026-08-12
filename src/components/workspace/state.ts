@@ -367,6 +367,9 @@ export interface WorkspaceState {
   /** Step progress of the active chat's automatism (deployment chats). */
   automatism: AutomatismProgress | null;
 
+  /** "Notify me when this chat is done" — per chat, per user. */
+  notify: NotifyState;
+
   /** Generic composer-style input modal (null = closed). */
   inputModal: {
     title: string;
@@ -378,6 +381,40 @@ export interface WorkspaceState {
   /** Target branch has commits the work branch lacks (Sync button shows). */
   targetAhead: boolean;
 }
+
+/**
+ * Turn-end notification state for the active chat (GET/PUT
+ * /api/chats/:id/notify). `available` is what the deployment configured,
+ * `missingAddress` which of those this person has no address on — the modal
+ * needs both to explain a channel it cannot offer.
+ */
+export interface NotifyState {
+  /** Chat the loaded values belong to; null until the first load. */
+  forChatId: string | null;
+  open: boolean;
+  loading: boolean;
+  saving: boolean;
+  error: string | null;
+  /** Armed channels — the bell is lit while this is non-empty. */
+  channels: string[];
+  available: string[];
+  missingAddress: string[];
+  phone: string | null;
+  email: string | null;
+}
+
+export const createInitialNotifyState = (): NotifyState => ({
+  forChatId: null,
+  open: false,
+  loading: false,
+  saving: false,
+  error: null,
+  channels: [],
+  available: [],
+  missingAddress: [],
+  phone: null,
+  email: null,
+});
 
 /** Mirror of the server's AutomatismState (history + chat-state snapshot). */
 export interface AutomatismProgress {
@@ -438,6 +475,7 @@ export const createInitialWorkspaceState = (): WorkspaceState => ({
   git: createInitialGitModalState(),
   caps: createInitialCapsModalState(),
   automatism: null,
+  notify: createInitialNotifyState(),
   inputModal: null,
   targetAhead: false,
 });
@@ -522,5 +560,6 @@ export const resetWorkspaceChatState = (ws: WorkspaceState): void => {
   ws.targetAhead = false;
   ws.pickerActive = false;
   ws.elementEdit = createInitialElementEditState();
+  ws.notify = createInitialNotifyState();
   ws.inputModal = null;
 };

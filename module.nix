@@ -96,6 +96,11 @@ in
       description = ''
         Extra environment variables merged into both units.
 
+        Notifications ("tell me when this chat is done") are opt-in and live
+        here: NOTIFY_SMS_PROVIDER / NOTIFY_SMS_FROM and the matching
+        NOTIFY_EMAIL_* (see docs/setup.md). The *_CONFIG blobs hold vendor
+        credentials, so put those in environmentFile instead.
+
         OpenTelemetry: the package wrapper already carries the NODE_OPTIONS
         loader/register flags, so auto-instrumentation only needs an exporter
         pointed somewhere — OTEL_SDK_DISABLED = "false" plus

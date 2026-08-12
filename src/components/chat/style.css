@@ -4710,3 +4710,78 @@ html.is-first-visit #app {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+
+/* ── Turn-end notifications (bell + modal) ── */
+
+.ws-notify__bell.is-armed {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+
+.ws-notify__channels {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.ws-notify__channel {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-muted);
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+
+.ws-notify__channel-text {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.ws-notify__channel-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ws-notify__channel-addr {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.ws-notify__field {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.ws-notify__input {
+  width: 100%;
+  border: 1px solid var(--border-muted);
+  border-radius: 0.75rem;
+  background: var(--surface-base);
+  color: var(--text-primary);
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+}
+
+.ws-notify__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ws-notify__error {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: var(--danger, #e5484d);
+}
+
+.ws-notify__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

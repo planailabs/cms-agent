@@ -29,6 +29,9 @@ model User {
   theme    String @default("system") // 'light' | 'dark' | 'system'
   language String @default("en")
   communicationMode String @default("default") // 'default' | 'technical' | 'non-technical'
+  // E.164 number for SMS notifications. Self-service (settings / the notify
+  // modal) — the IdP gives us an email, never a phone.
+  phone             String?
 
   sessions               Session[]
   accounts               Account[]
@@ -42,6 +45,7 @@ model User {
   systemPromptExtensions SystemPromptExtension[]
   chatTabs               ChatTabs[]
   windowSessions         WindowSession[]
+  chatNotifications      ChatNotification[]
 
   @@unique([email])
   @@map("user")
@@ -162,6 +166,7 @@ model Chat {
   tasks            ChatTask[]
   automatisms      Automatism[]
   uploads          Upload[]
+  notifications    ChatNotification[]
 
   @@index([branchId])
   @@map("chat")
@@ -238,6 +243,25 @@ model ChatTask {
 }
 
 // Per-user open preview tabs of a chat (synced across sessions via SSE)
+/// One user's armed "tell me when this chat stops working" request.
+/// One-shot: the row is deleted the moment it fires, so a chat left alone for
+/// a week cannot keep texting somebody who stopped caring after the first turn.
+model ChatNotification {
+  id     String @id @default(cuid())
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Channel ids to deliver on, e.g. ["email","sms"] (lib/notify)
+  channels Json
+
+  createdAt DateTime @default(now())
+
+  @@unique([chatId, userId])
+  @@index([chatId])
+  @@map("chat_notification")
+}
+
 model ChatTabs {
   id          String   @id @default(cuid())
   chatId      String

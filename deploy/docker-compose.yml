@@ -67,6 +67,15 @@ services:
       # Optional: attach the Context7 docs MCP (mcp.context7.com) to agent
       # chats — key from context7.com/dashboard
       # CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
+      # Notifications ("tell me when this chat is done"). Entirely opt-in:
+      # a channel with no provider set is never offered in the UI. Providers:
+      # sms = twilio | vonage | logger, email = smtp | resend | logger.
+      # NOTIFY_SMS_PROVIDER: twilio
+      # NOTIFY_SMS_FROM: '+15005550006'
+      # NOTIFY_SMS_CONFIG: '{"accountSid":"AC...","authToken":"..."}'
+      # NOTIFY_EMAIL_PROVIDER: smtp
+      # NOTIFY_EMAIL_FROM: cms@example.com
+      # NOTIFY_EMAIL_CONFIG: '{"host":"smtp.example.com","port":587,"auth":{"user":"cms","pass":"..."}}'
       # OpenTelemetry auto-instrumentation. The image already launches node
       # with the loader/register flags; the SDK itself ships disabled because
       # it would otherwise export to localhost:4318 and log every failure.

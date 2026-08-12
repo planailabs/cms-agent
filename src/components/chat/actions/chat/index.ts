@@ -9,6 +9,7 @@ import { disconnectEvents } from './sse';
 import { initAIChat, restoreAIChatSession } from './session';
 import { resetWorkspaceChatState } from '../../../workspace/state';
 import { loadChatTabs } from '../../../workspace/tabsSync';
+import { loadNotifyState } from '../../../workspace/notifyModal';
 
 // ─── Re-exports ─────────────────────────────────────────────────────────────
 
@@ -138,6 +139,9 @@ export const switchChat = (chatId: string): void => {
 
   // Restore the user's saved preview tabs for this chat (best-effort)
   void loadChatTabs(chatId);
+  // Whether this viewer armed "notify me when it's done" here (best-effort):
+  // the bell has to be right before it is clicked, not after.
+  void loadNotifyState(chatId);
 
   // Restore/init the new chat
   restoreAIChatSession();

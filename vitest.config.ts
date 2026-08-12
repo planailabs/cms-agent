@@ -23,6 +23,10 @@ export default defineConfig({
       'dist/**',
       'plugins/**',
       'testbench/**',
+      // `nix build` symlinks its output here; it carries the plugins' own
+      // (foreign) suites under a path the 'plugins/**' glob does not reach.
+      'result/**',
+      'result-*/**',
     ],
   },
 });

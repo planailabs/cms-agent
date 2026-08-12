@@ -69,9 +69,35 @@ export async function handleChatMessage(
   try {
     await runChatTurn(userId, locale, body, opts);
     recordTurn(isTurnStopRequested(body.chatId) ? 'stopped' : 'ok', stop());
+    await fireArmedNotifications(body.chatId, false, opts);
   } catch (err) {
     recordTurn('error', stop());
+    // The failure is what the waiting person most needs to hear about, so it
+    // is announced before it propagates — the caller persists lastError and
+    // broadcasts, but only after this returns.
+    await fireArmedNotifications(body.chatId, true, opts);
     throw err;
+  }
+}
+
+/**
+ * Anyone who armed "tell me when this is done" hears about it here, at the
+ * one place every turn passes through — endpoint, workflow transition and
+ * automatism alike. Delivery failures are already swallowed inside; this
+ * guard is for the unreachable-database case, which must not convert a
+ * finished turn into a failed one.
+ */
+async function fireArmedNotifications(
+  chatId: string,
+  failed: boolean,
+  opts: HandleOptions,
+): Promise<void> {
+  if (opts.skipPersistence) return;
+  try {
+    const { notifyTurnFinished } = await import('@/lib/notify/chatNotify');
+    await notifyTurnFinished(chatId, failed);
+  } catch (err) {
+    console.warn(`[notify] turn-end notification for ${chatId} failed:`, err);
   }
 }
 

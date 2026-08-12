@@ -31,6 +31,8 @@ import { bootWindowSession, hasWindowId, renderWindowPicker } from '../workspace
 import { renderActiveWindow } from '../workspace/window';
 import { startUpdateWatcher } from '../workspace/appUpdate';
 import { renderInputModal } from '../workspace/modal';
+import { renderNotifyBell, renderNotifyModal } from '../workspace/notifyModal';
+import { startPageTitleWatcher } from './ui/pageTitle';
 import { registerWorkspaceEvents } from '../workspace/events';
 
 /**
@@ -140,6 +142,7 @@ const initApp = () => {
           <div class="ws-sidebar-top">
             <div class="ws-sidebar-top__row">
               ${renderBranchSwitcher(state)}
+              ${renderNotifyBell(state)}
               <button type="button" class="ws-mini-button ws-sidebar-collapse" data-action="ws-sidebar-toggle"
                 title="${t(uiLocale(), 'chat.sidebar.collapse')}" aria-label="${t(uiLocale(), 'chat.sidebar.collapse')}">⇥</button>
             </div>
@@ -174,7 +177,8 @@ const initApp = () => {
         renderSettingsOverlay({ state, locale }) +
         renderPlanModal(state) +
         (hasWindowId() ? '' : renderWindowPicker(state)) +
-        renderInputModal(state);
+        renderInputModal(state) +
+        renderNotifyModal(state);
       if (overlayRegion.innerHTML !== overlayMarkup) {
         overlayRegion.innerHTML = overlayMarkup;
       }
@@ -200,6 +204,9 @@ const initApp = () => {
   void bootWindowSession();
   // Reload + restore this window when a newer build is deployed.
   startUpdateWatcher();
+  // The tab title reports whether the agent is still working — the only part
+  // of this app visible from whatever tab the user went to instead.
+  startPageTitleWatcher();
 
   store.notify(); // Initial render via subscription (since render is subscribed)
   render();
