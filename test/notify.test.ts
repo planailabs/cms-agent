@@ -198,6 +198,24 @@ describe('twilio credentials', () => {
     expect(decode(call.auth)).toBe('SK456:sec');
   });
 
+  it('sends through the regional host when the account is homed there', async () => {
+    const call = await callTwilio({
+      accountSid: 'AC123',
+      apiKeySid: 'SK456',
+      apiKeySecret: 'sec',
+      region: 'ie1',
+    });
+    expect(call.url.startsWith('https://api.ie1.twilio.com/')).toBe(true);
+    expect(call.url).toContain('/Accounts/AC123/Messages.json');
+  });
+
+  it('treats us1 as the default host, which is where it actually lives', async () => {
+    // "us1" is what the console calls the default region, but there is no
+    // api.us1.twilio.com — spelling it out must not break the account.
+    const call = await callTwilio({ accountSid: 'AC123', authToken: 'tok', region: 'us1' });
+    expect(call.url.startsWith('https://api.twilio.com/')).toBe(true);
+  });
+
   it('names the missing field, and the variable it comes from', async () => {
     setEnv({
       NOTIFY_SMS_PROVIDER: 'twilio',

@@ -55,8 +55,15 @@ const twilio: NotifyProvider = {
       ? requireConfig(twilio, config, 'apiKeySecret')
       : requireConfig(twilio, config, 'authToken');
 
+    // Twilio Regions: an account homed outside us1 (ie1 for Ireland, au1,
+    // sg1 …) answers on its own host, and the default one rejects its
+    // credentials with the same 401 as a wrong password — indistinguishable
+    // from a typo unless you already know the account is regional.
+    const region = typeof config.region === 'string' ? config.region.trim() : '';
+    const host = region && region !== 'us1' ? `api.${region}.twilio.com` : 'api.twilio.com';
+
     const res = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`,
+      `https://${host}/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`,
       {
         method: 'POST',
         headers: {

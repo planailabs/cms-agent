@@ -283,6 +283,9 @@ Twilio takes either credential over the same field —
 revoked without rotating everything the account owns. **`accountSid` is
 required in both**: the REST path names the account whoever signs the
 request, and an `SK…` in the URL is a 404 that reads like a bad phone number.
+An account homed outside the default region needs `"region":"ie1"` (or `au1`,
+`sg1`, …) alongside — the default host answers a regional account's
+credentials with a plain 401, indistinguishable from a wrong password.
 Numbers are stored E.164 and rejected at the API if they are not — spaces,
 dashes and parentheses are stripped rather than refused.
 
